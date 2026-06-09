@@ -1,25 +1,29 @@
 import { pageFormats } from "../constants/page-sizes";
 import { PageElement } from "../elements/page-element";
-import { PDFElement } from "../elements/pdf-element";
 import { PDFObjectManager } from "../utils/pdf-object-manager";
 import { RendererRegistry } from "../utils/renderer-registry";
 import { Orientation } from "./pdf-document-class";
+import { IRNode } from "../ir/display-list";
+import { PdfBackend } from "./pdf-backend";
 
 export class PageRenderer {
   static async render(
     page: PageElement,
     objectManager: PDFObjectManager
   ): Promise<number> {
-    let pageContent = "";
     const { children, config } = page.getProps();
 
-    // Pick the content of all elements of the page
-    for (let element of children) {
+    // Collect the whole page as a display list, then serialize it once. Serializing
+    // is what registers the fonts/images used below, so it must run before the
+    // resource section.
+    const nodes: IRNode[] = [];
+    for (const element of children) {
       const renderer = RendererRegistry.getRenderer(element);
       if (renderer) {
-        pageContent += await renderer(element, objectManager);
+        nodes.push(...(await renderer(element, objectManager)));
       }
     }
+    const pageContent = PdfBackend.serialize(nodes, objectManager);
 
     // Add the page content as a new object (content stream)
     const contentObjectNumber = objectManager.addObject(

@@ -2,6 +2,7 @@ import { Color } from "../common/color";
 import { HorizontalAlignment } from "../elements/pdf-element";
 import { TextElement, TextSegment } from "../elements/text-element";
 import { FontStyle, PDFObjectManager } from "../utils/pdf-object-manager";
+import { IRNode, TextRun } from "../ir/display-list";
 
 export class TextRenderer {
   public static calculateTextHeight(
@@ -36,7 +37,7 @@ export class TextRenderer {
         // Split the segment content into words
         const words = segment.content.split(" ");
 
-        words.forEach((word, index) => {
+        words.forEach((word, _index) => {
           // Calculate the current string width by afm and its kernings
           const wordWidth = objectManager.getStringWidth(
             word,
@@ -142,7 +143,7 @@ export class TextRenderer {
   static async render(
     textElement: TextElement,
     objectManager: PDFObjectManager
-  ): Promise<string> {
+  ): Promise<IRNode[]> {
     const {
       x,
       y,
@@ -154,10 +155,11 @@ export class TextRenderer {
       fontStyle,
       textAlignment,
     } = textElement.getProps();
-    const colorString = color.toPDFColorString();
 
-    // Private function to render the content
-    const renderedContent = TextRenderer._renderContent(
+    // Component -> display list. Wrapping and positioning stay here; the backend
+    // turns each run into BT/Tf/Td/Tj/ET. The wrapping algorithm is unchanged from
+    // the original renderer - unifying it into the engine is Phase 3.
+    return TextRenderer._buildRuns(
       content,
       fontSize,
       fontFamily,
@@ -169,24 +171,26 @@ export class TextRenderer {
       x,
       y
     );
-
-    return `BT\n${colorString} rg ${renderedContent.maxFontSize} TL ${renderedContent.content} ET\n`;
   }
 
-  // Private function to check if content is a string or a `TextSegment[]`
-  private static _renderContent(
+  // Lay the content out into absolutely-positioned text runs. Glyph positions match
+  // the previous hand-written operators exactly (verified by pixel-identical render);
+  // only the output form changed from PDF strings to `TextRun`s.
+  private static _buildRuns(
     content: string | TextSegment[],
     fontSize: number,
     fontFamily: string,
     fontStyle: FontStyle,
     objectManager: PDFObjectManager,
     maxWidth: number,
-    textAlignment: HorizontalAlignment, // New alignment parameter
+    textAlignment: HorizontalAlignment,
     color: Color,
-    initialX: number, // Original x position for left alignment
+    initialX: number,
     yPosition: number
-  ): { content: string; maxFontSize: number } {
-    // Function to wrap text with word breaks
+  ): TextRun[] {
+    const runs: TextRun[] = [];
+
+    // Word-wrap a plain string by width (unchanged from the original).
     const wrapText = (
       text: string,
       fontFamily: string,
@@ -232,281 +236,157 @@ export class TextRenderer {
       return lines;
     };
 
-    const generateTextCommand = (
+    // Horizontal offset of a line of the given width under the current alignment.
+    const alignmentOffset = (lineWidth: number): number => {
+      if (textAlignment === HorizontalAlignment.center)
+        return (maxWidth - lineWidth) / 2;
+      if (textAlignment === HorizontalAlignment.right)
+        return maxWidth - lineWidth;
+      return 0;
+    };
+
+    // Advance width WITHOUT kerning. This is how Tj moves the text cursor, so
+    // segments flowing after each other land here. (Standard-14 fonts carry no
+    // /Widths array; the viewer advances by the AFM widths - same source as below.)
+    const advanceNoKerning = (
       text: string,
-      xPosition: number, // We calculated the x position by the current text alignment - use it here
-      yPosition: number,
-      fontFamily: string,
-      fontSize: number,
-      maxFontSize: number,
-      fontStyle: FontStyle,
-      addPosition: boolean,
-      fontColor?: Color
-    ): string => {
-      // Get the currunt font from PDF Object Manager
-      const fontData = objectManager.registerFont(fontFamily, fontStyle);
-
-      // Setze die Schriftfarbe (falls vorhanden, sonst Standardfarbe)
-      let colorCommand = "";
-      if (fontColor) {
-        colorCommand = fontColor.toPDFColorString() + " rg "; // Change text color
+      family: string,
+      size: number,
+      style: FontStyle
+    ): number => {
+      let width = 0;
+      for (const ch of text) {
+        width += objectManager.getCharWidth(ch, size, undefined, family, style);
       }
-
-      // Generiere den finalen PDF-Befehl für das Segment
-      let result = `${colorCommand}/F${fontData.fontIndex} ${fontSize} Tf ${maxFontSize} TL`;
-
-      // Position the text only if addPosition is true
-      if (addPosition) {
-        result += ` ${xPosition.toFixed(3)} ${yPosition.toFixed(3)} Td`;
-      }
-
-      // Add the actual text
-      result += ` (${text}) Tj\n`;
-      return result;
+      return width;
     };
 
-    const renderLine = (
-      lineSegments: { lineWidth: number; segments: TextSegment[] },
-      initialX: number,
-      yPosition: number,
-      maxWidth: number,
-      textAlignment: HorizontalAlignment,
-      addPositions: boolean,
-      maxFontSize: number,
-      fontFamily: string,
-      fontSize: number
-    ): string => {
-      let lineWidth = 0;
-      let lineCommand = "";
-
-      lineWidth = lineSegments.lineWidth;
-
-      // Adjust initialX based on the alignment of the entire line
-      let adjustedX = initialX;
-      if (textAlignment === HorizontalAlignment.center) {
-        adjustedX = initialX + (maxWidth - lineWidth) / 2;
-      } else if (textAlignment === HorizontalAlignment.right) {
-        adjustedX = initialX + maxWidth - lineWidth;
-      }
-
-      // Render each segment in the line with the adjusted X position
-      lineSegments.segments.forEach((segment, index) => {
-        lineCommand += generateTextCommand(
-          segment.content,
-          adjustedX,
-          yPosition,
-          segment.fontFamily || fontFamily,
-          segment.fontSize || fontSize,
-          maxFontSize,
-          segment.fontStyle || fontStyle,
-          addPositions && index === 0,
-          segment.fontColor || color
+    // --- Plain string: one run per wrapped line. ---
+    if (typeof content === "string") {
+      const lines = wrapText(content, fontFamily, fontSize, fontStyle, maxWidth);
+      lines.forEach((line, index) => {
+        const lineWidth = objectManager.getStringWidth(
+          line,
+          fontFamily,
+          fontSize,
+          fontStyle
         );
-
-        adjustedX += objectManager.getStringWidth(
-          segment.content,
-          segment.fontFamily || fontFamily,
-          segment.fontSize || fontSize,
-          segment.fontStyle || fontStyle
-        );
+        runs.push({
+          type: "text",
+          x: initialX + alignmentOffset(lineWidth),
+          y: yPosition - fontSize * index,
+          text: line,
+          fontFamily,
+          fontStyle,
+          fontSize,
+          color,
+        });
       });
+      return runs;
+    }
 
-      return lineCommand;
+    // --- Segments: keep the original line-accumulation, emit one run per segment. ---
+    // Emit the collected line as runs; segment 0 starts at the aligned line origin and
+    // each following segment is offset by the previous segment's (kerning-free) advance.
+    const pushLine = (
+      lineSegments: { lineWidth: number; segments: TextSegment[] },
+      lineY: number
+    ): void => {
+      let x = initialX + alignmentOffset(lineSegments.lineWidth);
+      lineSegments.segments.forEach((segment) => {
+        const family = segment.fontFamily || fontFamily;
+        const size = segment.fontSize || fontSize;
+        const style = segment.fontStyle || fontStyle;
+        runs.push({
+          type: "text",
+          x,
+          y: lineY,
+          text: segment.content,
+          fontFamily: family,
+          fontStyle: style,
+          fontSize: size,
+          color: segment.fontColor || color,
+        });
+        x += advanceNoKerning(segment.content, family, size, style);
+      });
     };
 
-    const renderTextSegments = (
-      textSegments: TextSegment[],
-      maxWidth: number,
-      initialX: number,
-      yPosition: number,
-      textAlignment: HorizontalAlignment,
-      fontFamily: string,
-      fontSize: number,
-      fontStyle: FontStyle
-    ): { content: string; maxFontSize: number } => {
-      let commands = "";
-      let currentLineWidth = 0;
-      let currentX = initialX;
-      let maxFontSize = fontSize;
-      let currentLineSegments: { lineWidth: number; segments: TextSegment[] } =
-        { lineWidth: 0, segments: [] }; // Store segments for the current line
+    let currentLineWidth = 0;
+    let maxFontSize = fontSize;
+    let currentLineSegments: { lineWidth: number; segments: TextSegment[] } = {
+      lineWidth: 0,
+      segments: [],
+    };
+    let combinedSegment = "";
 
-      let combinedSegment = "";
-      let firstLine = true;
-      textSegments.forEach((segment) => {
-        const _fontFamily = segment.fontFamily || fontFamily;
-        const _fontSize = segment.fontSize || fontSize;
-        const _fontStyle = segment.fontStyle || fontStyle;
-        const words = segment.content.split(" ");
+    content.forEach((segment) => {
+      const _fontFamily = segment.fontFamily || fontFamily;
+      const _fontSize = segment.fontSize || fontSize;
+      const _fontStyle = segment.fontStyle || fontStyle;
+      const words = segment.content.split(" ");
 
-        const spaceWidth = objectManager.getCharWidth(
-          " ",
-          _fontSize,
-          undefined,
+      const spaceWidth = objectManager.getCharWidth(
+        " ",
+        _fontSize,
+        undefined,
+        _fontFamily,
+        _fontStyle
+      );
+
+      currentLineSegments.segments.push({ ...segment, fontFamily: _fontFamily });
+      combinedSegment = "";
+
+      if (maxFontSize < _fontSize) maxFontSize = _fontSize;
+
+      words.forEach((word, wordIndex) => {
+        const wordWidth = objectManager.getStringWidth(
+          word,
           _fontFamily,
+          _fontSize,
           _fontStyle
         );
 
-        currentLineSegments.segments.push({
-          ...segment,
-          fontFamily: _fontFamily,
-        });
-        combinedSegment = "";
+        if (currentLineWidth + wordWidth > maxWidth) {
+          currentLineSegments.lineWidth = currentLineWidth;
+          pushLine(currentLineSegments, yPosition);
 
-        if (maxFontSize < _fontSize) maxFontSize = _fontSize;
+          // Advance to the next line. Leading is the line's max font size, matching
+          // the original `yPosition -= maxFontSize`.
+          yPosition -= maxFontSize;
+          currentLineWidth = 0;
+          currentLineSegments = { lineWidth: 0, segments: [] };
+          combinedSegment = "";
 
-        words.forEach((word, wordIndex) => {
-          const wordWidth = objectManager.getStringWidth(
-            word,
-            _fontFamily,
-            _fontSize,
-            _fontStyle
-          );
-
-          if (currentLineWidth + wordWidth > maxWidth) {
-            // Render the collected segments for the current line before starting a new line
-            commands += renderLine(
-              currentLineSegments,
-              currentX,
-              yPosition,
-              maxWidth,
-              textAlignment,
-              firstLine || textAlignment !== HorizontalAlignment.left,
-              maxFontSize,
-              _fontFamily,
-              _fontSize
-            );
-            // If alignment is left we using `T*` for line break. Otherwise we must set the position
-            // manually by hand, so we use `ET` and `BT` to create a new text element.
-            if (textAlignment !== HorizontalAlignment.left)
-              commands += "ET \nBT\n"; // Line break
-            else commands += "T*\n";
-
-            // Update position for the next line
-            currentLineSegments.lineWidth = currentLineWidth;
-            yPosition -= maxFontSize;
-            currentX = initialX;
-            currentLineWidth = 0;
-            currentLineSegments = { lineWidth: 0, segments: [] }; // Clear current line segments
-            combinedSegment = "";
-
-            // Add the current word to the new line
-            combinedSegment += word;
-            currentLineWidth += wordWidth + spaceWidth;
+          combinedSegment += word;
+          currentLineWidth += wordWidth + spaceWidth;
+          currentLineSegments.segments.push({
+            ...segment,
+            content: combinedSegment,
+          });
+        } else {
+          combinedSegment += wordIndex === 0 ? word : " " + word;
+          currentLineWidth += wordWidth + spaceWidth;
+          if (currentLineSegments.segments.length === 0) {
             currentLineSegments.segments.push({
               ...segment,
+              fontFamily: _fontFamily,
               content: combinedSegment,
             });
-            firstLine = false;
-          } else {
-            combinedSegment += wordIndex === 0 ? word : " " + word;
-            currentLineWidth += wordWidth + spaceWidth;
-            if (currentLineSegments.segments.length === 0) {
-              currentLineSegments.segments.push({
-                ...segment,
-                fontFamily: _fontFamily,
-                content: combinedSegment,
-              });
-            }
-            currentLineSegments.segments[
-              currentLineSegments.segments.length - 1
-            ].content = combinedSegment;
-            currentLineSegments.lineWidth = currentLineWidth;
           }
-        });
+          currentLineSegments.segments[
+            currentLineSegments.segments.length - 1
+          ].content = combinedSegment;
+          currentLineSegments.lineWidth = currentLineWidth;
+        }
       });
+    });
 
-      // Render the last collected line
-      if (currentLineSegments.segments.length > 0) {
-        commands += renderLine(
-          currentLineSegments,
-          currentX,
-          yPosition,
-          maxWidth,
-          textAlignment,
-          firstLine || textAlignment !== HorizontalAlignment.left,
-          maxFontSize,
-          fontFamily,
-          fontSize
-        );
-      }
-
-      return { content: commands, maxFontSize };
-    };
-
-    const alignText = (
-      line: string,
-      fontFamily: string,
-      fontSize: number,
-      fontStyle: FontStyle,
-      maxWidth: number
-    ) => {
-      const lineWidth = objectManager.getStringWidth(
-        line,
-        fontFamily,
-        fontSize,
-        fontStyle
-      );
-
-      // Calculate new x position based on alignment
-      let xPosition = initialX;
-      if (textAlignment === HorizontalAlignment.center) {
-        xPosition = initialX + (maxWidth - lineWidth) / 2;
-      } else if (textAlignment === HorizontalAlignment.right) {
-        xPosition = initialX + maxWidth - lineWidth;
-      }
-
-      return +xPosition.toFixed(3);
-    };
-
-    // Handle simple string content
-    if (typeof content === "string") {
-      const fontData = objectManager.registerFont(fontFamily, fontStyle);
-      const lines = wrapText(
-        content,
-        fontFamily,
-        fontSize,
-        fontStyle,
-        maxWidth
-      );
-
-      return {
-        content: lines
-          .map((line, index) => {
-            const xPosition = alignText(
-              line,
-              fontFamily,
-              fontSize,
-              fontStyle,
-              maxWidth
-            );
-            const textCommand = `/F${
-              fontData.fontIndex
-            } ${fontSize} Tf ${xPosition.toFixed(3)} ${(
-              yPosition -
-              fontSize * index
-            ).toFixed(3)} Td (${line}) Tj`;
-            // return index === 0 ? textCommand : `T* (${line}) Tj`;
-            return index === 0
-              ? textCommand
-              : textAlignment === HorizontalAlignment.left
-              ? `T* (${line}) Tj`
-              : `ET\nBT\n${textCommand}`;
-          })
-          .join("\n"),
-        maxFontSize: fontSize,
-      };
+    // Emit the last collected line.
+    if (currentLineSegments.segments.length > 0) {
+      currentLineSegments.lineWidth = currentLineWidth;
+      pushLine(currentLineSegments, yPosition);
     }
 
-    return renderTextSegments(
-      content,
-      maxWidth,
-      initialX,
-      yPosition,
-      textAlignment,
-      fontFamily,
-      fontSize,
-      fontStyle
-    );
+    return runs;
   }
 }

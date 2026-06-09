@@ -6,12 +6,13 @@ import {
   applyFitNone,
 } from "../utils/image-helper";
 import { PDFObjectManager } from "../utils/pdf-object-manager";
+import { IRNode, Image } from "../ir/display-list";
 
 export class ImageRenderer {
   static async render(
     imageElement: ImageElement,
-    objectManager: PDFObjectManager
-  ): Promise<string> {
+    _objectManager: PDFObjectManager
+  ): Promise<IRNode[]> {
     // Load the image and convert it in a binary string
     let { x, y, width, height, image, fit } = imageElement.getProps();
     await image.init(); // Load and initialize the image
@@ -74,29 +75,30 @@ export class ImageRenderer {
         height = fitFillResult.height;
     }
 
-    const imageObjectNumber = objectManager.registerImage(
-      dimensions.width,
-      dimensions.height,
+    // The fitted geometry becomes a display-list primitive; the backend registers
+    // the XObject and emits the placement (and clip, for cover/contain).
+    const node: Image = {
+      type: "image",
+      x,
+      y,
+      width: width!,
+      height: height!,
+      intrinsicWidth: dimensions.width,
+      intrinsicHeight: dimensions.height,
+      data: fileData,
       imageType,
-      fileData
-    );
+      ...(mustCreateOverflowContainer
+        ? {
+            clip: {
+              x: containerDimensions.x,
+              y: containerDimensions.y,
+              width: containerDimensions.width,
+              height: containerDimensions.height,
+            },
+          }
+        : {}),
+    };
 
-    // Now we can render the image... create the image placement code
-    const imagePlacement = mustCreateOverflowContainer
-      ? `q
-${containerDimensions.x} ${containerDimensions.y} ${containerDimensions.width} ${containerDimensions.height} re 
-W n 
-q
-${width} 0 0 ${height} ${x} ${y} cm
-/IM${imageObjectNumber} Do
-Q
-Q
-`
-      : `q
-${width} 0 0 ${height} ${x} ${y} cm
-/IM${imageObjectNumber} Do
-Q
-`;
-    return imagePlacement;
+    return [node];
   }
 }

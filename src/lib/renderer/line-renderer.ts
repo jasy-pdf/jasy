@@ -1,27 +1,24 @@
 import { PDFObjectManager } from "../utils/pdf-object-manager";
 import { LineElement } from "../elements";
+import { IRNode, Line } from "../ir/display-list";
 
 export class LineRenderer {
   static async render(
-    LineElement: LineElement,
-    objectManager: PDFObjectManager
-  ): Promise<string> {
-    const { x, y, xEnd, yEnd, color, strokeWidth } = LineElement.getProps();
-    let renderedContent = "";
+    lineElement: LineElement,
+    _objectManager: PDFObjectManager
+  ): Promise<IRNode[]> {
+    const { x, y, xEnd, yEnd, color, strokeWidth } = lineElement.getProps();
 
-    // Convert to coloer...
-    const _color = color?.toPDFColorString();
+    const node: Line = {
+      type: "line",
+      x1: x,
+      y1: y,
+      x2: xEnd,
+      y2: yEnd!,
+      stroke: color!,
+      strokeWidth: strokeWidth!,
+    };
 
-    renderedContent += `q
-${strokeWidth} w
-${_color} RG
-[] 0 d
-${x} ${y} m
-${xEnd} ${yEnd!} l
-S
-Q
-`;
-
-    return renderedContent;
+    return [node];
   }
 }

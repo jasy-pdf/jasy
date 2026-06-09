@@ -2,12 +2,13 @@ import { PDFObjectManager } from "../utils/pdf-object-manager";
 
 import { RectangleElement } from "../elements/rectangle-element";
 import { RendererRegistry } from "../utils/renderer-registry";
+import { IRNode, Rect } from "../ir/display-list";
 
 export class RectangleRenderer {
   static async render(
     rectangleElement: RectangleElement,
     objectManager: PDFObjectManager
-  ): Promise<string> {
+  ): Promise<IRNode[]> {
     const {
       x,
       y,
@@ -18,29 +19,30 @@ export class RectangleRenderer {
       backgroundColor,
       borderWidth,
     } = rectangleElement.getProps();
-    let renderedContent = "";
 
-    // Beginne das Zeichnen eines Rechtecks, das die Größe der Box darstellt
-    const _color = color.toPDFColorString();
+    // The box itself becomes a display-list primitive. A background means a filled
+    // box; otherwise it is stroked only. Children follow the box (Rectangle is also a
+    // container), so their nodes are appended after it.
+    const node: Rect = {
+      type: "rect",
+      x,
+      y,
+      width,
+      height: height!,
+      stroke: color,
+      strokeWidth: borderWidth!,
+      ...(backgroundColor ? { fill: backgroundColor } : {}),
+    };
+    const nodes: IRNode[] = [node];
 
-    // Background color is optional, so we set the `rg` flag directly here
-    const _backgroundColor = backgroundColor
-      ? backgroundColor.toPDFColorString() + " rg\n"
-      : "";
-
-    // The `B` draws a filled rect, the `S` draws a stroked rect only
-    renderedContent += `${borderWidth} w\n${_color} RG\n${_backgroundColor}${x} ${y} ${width} ${height} re ${
-      backgroundColor ? "B" : "S"
-    }\n`;
     if (children)
-      for (let child of children) {
-        // Pick the content of all elements of the page
+      for (const child of children) {
         const renderer = RendererRegistry.getRenderer(child);
         if (renderer) {
-          renderedContent += await renderer(child, objectManager);
+          nodes.push(...(await renderer(child, objectManager)));
         }
       }
 
-    return renderedContent;
+    return nodes;
   }
 }
