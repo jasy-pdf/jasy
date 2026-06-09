@@ -13,9 +13,17 @@ export class PageRenderer {
   ): Promise<number> {
     const { children, config } = page.getProps();
 
-    // Collect the whole page as a display list, then serialize it once. Serializing
-    // is what registers the fonts/images used below, so it must run before the
-    // resource section.
+    // Page geometry (also the MediaBox below). Needed up front because flipping the
+    // display list to PDF coordinates uses the page height. config is fully resolved
+    // by the layout pass; fall back to the document default rather than asserting.
+    let [width, height] = pageFormats[config?.pageSize ?? PageSize.A4];
+    if (config?.orientation === Orientation.landscape) {
+      [width, height] = [height, width];
+    }
+
+    // Collect the whole page as a display list (top-left coordinates), flip it to PDF
+    // coordinates at this one seam, then serialize once. Serializing registers the
+    // fonts/images used below, so it must run before the resource section.
     const nodes: IRNode[] = [];
     for (const element of children) {
       const renderer = RendererRegistry.getRenderer(element);
@@ -23,7 +31,10 @@ export class PageRenderer {
         nodes.push(...(await renderer(element, objectManager)));
       }
     }
-    const pageContent = PdfBackend.serialize(nodes, objectManager);
+    const pageContent = PdfBackend.serialize(
+      PdfBackend.flipY(nodes, height),
+      objectManager
+    );
 
     // Add the page content as a new object (content stream)
     const contentObjectNumber = objectManager.addObject(
@@ -54,13 +65,6 @@ export class PageRenderer {
           imageReferences.join("\n") +
           "\n>>\n"
         : "";
-
-    // config is fully resolved by the layout pass; fall back to the document default
-    // size rather than asserting, so the optional type stays honest.
-    let [width, height] = pageFormats[config?.pageSize ?? PageSize.A4];
-    if (config?.orientation === Orientation.landscape) {
-      [width, height] = [height, width];
-    }
 
     const pageObject = `<< /Type /Page /Parent ${parentObjectNumber} 0 R /Contents ${contentObjectNumber} 0 R /Resources <<\n/Font <<\n${fontReferences.join(
       "\n"

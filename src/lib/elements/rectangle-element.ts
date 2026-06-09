@@ -1,6 +1,4 @@
 import { Color } from "../common/color";
-import { pageFormats } from "../constants/page-sizes";
-import { Orientation } from "../renderer/pdf-config";
 import {
   LayoutConstraints,
   LayoutContext,
@@ -9,7 +7,6 @@ import {
   SizedPDFElement,
   WithChildren,
 } from "./pdf-element";
-import type { PDFPageConfig } from "./page-element";
 
 interface RectangleElementParams extends SizedElement, WithChildren {
   color?: Color;
@@ -49,7 +46,7 @@ export class RectangleElement extends SizedPDFElement {
 
   calculateLayout(
     parentConstraints: LayoutConstraints | undefined,
-    ctx: LayoutContext
+    _ctx: LayoutContext
   ): LayoutConstraints {
     if (parentConstraints) {
       if (parentConstraints.width) {
@@ -69,16 +66,8 @@ export class RectangleElement extends SizedPDFElement {
       height: (this.height || 0) + this.borderWidth, // The rectangle goes bigger with its border width
     };
 
-    this.normalizeCoordinates(ctx.pageConfig);
+    // Top-left coordinates; the Y-flip happens once at the IR -> backend seam.
     return result;
-  }
-
-  normalizeCoordinates(pageConfig: PDFPageConfig) {
-    const pageHeight =
-      pageFormats[pageConfig.pageSize!][
-        pageConfig.orientation === Orientation.landscape ? 0 : 1
-      ];
-    this.y = pageHeight - this.y - (this.height || 0);
   }
 
   override getProps() {

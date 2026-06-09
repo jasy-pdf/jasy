@@ -9,8 +9,8 @@ export interface SegmentDefaults {
   fontStyle: FontStyle;
 }
 
-/** One laid-out line of segments. `maxFontSize` is the tallest font ON THIS LINE — its
- *  leading — matching how real engines (and this lib's plain-string path) space lines. */
+/** One laid-out line of segments. `maxFontSize` is the tallest font ON THIS LINE - its
+ *  leading - matching how real engines (and this lib's plain-string path) space lines. */
 export interface SegmentLine {
   segments: TextSegment[];
   width: number; // sum of word widths incl. spaces, used for alignment

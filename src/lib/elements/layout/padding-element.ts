@@ -1,5 +1,3 @@
-import { pageFormats } from "../../constants/page-sizes";
-import { Orientation } from "../../renderer/pdf-config";
 import { Validator } from "../../validators/element-validator";
 import {
   PDFElement,
@@ -8,7 +6,6 @@ import {
   WithChild,
   SizedPDFElement,
 } from "../pdf-element";
-import type { PDFPageConfig } from "../page-element";
 
 // Padding sizes itself from its child + margin, so it takes no x/y of its own.
 interface PaddingElementParams extends WithChild {
@@ -58,7 +55,7 @@ export class PaddingElement extends SizedPDFElement {
 
     Validator.validateSizedElement(this);
 
-    this.normalizeCoordinates(ctx.pageConfig);
+    // Top-left coordinates; the Y-flip now happens once at the IR -> backend seam.
     return result;
   }
 
@@ -83,14 +80,6 @@ export class PaddingElement extends SizedPDFElement {
       width: adjustedWidth,
       height: adjustedHeight,
     };
-  }
-
-  normalizeCoordinates(pageConfig: PDFPageConfig) {
-    const pageHeight =
-      pageFormats[pageConfig.pageSize!][
-        pageConfig.orientation === Orientation.landscape ? 0 : 1
-      ];
-    this.y = pageHeight - this.y - (this.height || 0);
   }
 
   override getProps() {

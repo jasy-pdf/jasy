@@ -1,13 +1,10 @@
 import { Color } from "../common/color";
-import { pageFormats } from "../constants/page-sizes";
-import { Orientation } from "../renderer/pdf-config";
 import {
   LayoutConstraints,
   LayoutContext,
   SizedElement,
   SizedPDFElement,
 } from "./pdf-element";
-import type { PDFPageConfig } from "./page-element";
 
 interface LineElementParams extends SizedElement {
   color?: Color;
@@ -52,7 +49,7 @@ export class LineElement extends SizedPDFElement {
 
   calculateLayout(
     parentConstraints: LayoutConstraints | undefined,
-    ctx: LayoutContext
+    _ctx: LayoutContext
   ): LayoutConstraints {
     if (parentConstraints) {
       // Set relative to parent
@@ -80,18 +77,8 @@ export class LineElement extends SizedPDFElement {
       height: this.height,
     };
 
-    this.normalizeCoordinates(ctx.pageConfig);
+    // Top-left coordinates; the Y-flip happens once at the IR -> backend seam.
     return result;
-  }
-
-  normalizeCoordinates(pageConfig: PDFPageConfig) {
-    const pageHeight =
-      pageFormats[pageConfig.pageSize!][
-        pageConfig.orientation === Orientation.landscape ? 0 : 1
-      ];
-
-    this.y = pageHeight - this.y;
-    this.yEnd = pageHeight - this.yEnd;
   }
 
   override getProps() {

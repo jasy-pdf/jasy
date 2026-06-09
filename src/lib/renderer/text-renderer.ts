@@ -10,6 +10,10 @@ import {
   SegmentLine,
 } from "../text/line-breaker";
 
+// Distance from the top of a line down to its baseline, as a fraction of the font
+// size. ~0.683 is the standard-14 ascent ratio used to seat the first baseline.
+const BASELINE_RATIO = 683 / 1000;
+
 export class TextRenderer {
   // Measuring only needs metrics, not the full object manager. (The render pass below
   // still receives the manager because it also registers fonts/images.)
@@ -129,6 +133,9 @@ export class TextRenderer {
         maxWidth,
         objectManager
       );
+      // yPosition is the top of the text box (top-left); seat line 0's baseline below
+      // it, then step DOWN per line. The seam flips the whole thing to PDF space.
+      const baseline = yPosition + fontSize * BASELINE_RATIO;
       lines.forEach((line, index) => {
         const lineWidth = objectManager.getStringWidth(
           line,
@@ -139,7 +146,7 @@ export class TextRenderer {
         runs.push({
           type: "text",
           x: initialX + alignmentOffset(lineWidth),
-          y: yPosition - fontSize * index,
+          y: baseline + fontSize * index,
           text: line,
           fontFamily,
           fontStyle,
@@ -175,7 +182,16 @@ export class TextRenderer {
       });
     };
 
-    let lineY = yPosition;
+    // The overall tallest font seats the first baseline; each line then steps DOWN by
+    // its own leading. yPosition is the top of the text box (top-left); the seam flips
+    // the whole thing to PDF space.
+    let overallMaxFont = fontSize;
+    for (const segment of content) {
+      const size = segment.fontSize || fontSize;
+      if (size > overallMaxFont) overallMaxFont = size;
+    }
+
+    let lineY = yPosition + overallMaxFont * BASELINE_RATIO;
     for (const line of breakSegmentsIntoLines(
       content,
       { fontFamily, fontSize, fontStyle },
@@ -183,7 +199,7 @@ export class TextRenderer {
       objectManager
     )) {
       pushLine(line, lineY);
-      lineY -= line.maxFontSize;
+      lineY += line.maxFontSize;
     }
 
     return runs;

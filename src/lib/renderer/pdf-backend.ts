@@ -10,6 +10,37 @@ import { PDFObjectManager } from "../utils/pdf-object-manager";
  * the renderers are migrated onto the IR one at a time.
  */
 export class PdfBackend {
+  /**
+   * Flip a display list from the engine's top-left origin (y grows downward) to PDF's
+   * bottom-left origin (y grows upward). This is the ONE place the Y axis is flipped -
+   * elements above this seam are coordinate-system-blind. Each primitive flips around
+   * its own anchor: a rect/image around its bottom edge, a text baseline / line point
+   * directly. (image is migrated in a later slice and still arrives pre-flipped.)
+   */
+  static flipY(nodes: IRNode[], pageHeight: number): IRNode[] {
+    return nodes.map((node) => {
+      switch (node.type) {
+        case "rect":
+          return { ...node, y: pageHeight - node.y - node.height };
+        case "line":
+          return {
+            ...node,
+            y1: pageHeight - node.y1,
+            y2: pageHeight - node.y2,
+          };
+        case "text":
+          // node.y is the baseline measured from the page top; flip it directly.
+          return { ...node, y: pageHeight - node.y };
+        case "image":
+          return node; // still flipped by its element (migrated in a later slice)
+        default: {
+          const unknown: never = node;
+          return unknown;
+        }
+      }
+    });
+  }
+
   /** Serialize a whole display list into one content stream (page-level entry point). */
   static serialize(nodes: IRNode[], om: PDFObjectManager): string {
     return nodes.map((node) => PdfBackend.serializeNode(node, om)).join("");

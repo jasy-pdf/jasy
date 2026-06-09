@@ -1,5 +1,3 @@
-import { pageFormats } from "../../constants/page-sizes";
-import { Orientation } from "../../renderer/pdf-config";
 import {
   SizedElement,
   WithChildren,
@@ -8,7 +6,6 @@ import {
   LayoutConstraints,
   LayoutContext,
 } from "../pdf-element";
-import type { PDFPageConfig } from "../page-element";
 
 interface ContainerElementParams extends SizedElement, WithChildren {
   color?: [number, number, number];
@@ -46,16 +43,8 @@ export class SizedContainerElement extends SizedPDFElement {
     if (this.children)
       this.children.forEach((child) => child.calculateLayout(result, ctx));
 
-    this.normalizeCoordinates(ctx.pageConfig);
+    // Top-left coordinates; the Y-flip now happens once at the IR -> backend seam.
     return result;
-  }
-
-  normalizeCoordinates(pageConfig: PDFPageConfig) {
-    const pageHeight =
-      pageFormats[pageConfig.pageSize!][
-        pageConfig.orientation === Orientation.landscape ? 0 : 1
-      ];
-    this.y = pageHeight - this.y - (this.height || 0);
   }
 
   override getProps(): ContainerElementParams {

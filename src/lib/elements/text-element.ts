@@ -1,6 +1,4 @@
 import { Color } from "../common/color";
-import { pageFormats } from "../constants/page-sizes";
-import { Orientation } from "../renderer/pdf-config";
 import { TextRenderer } from "../renderer";
 import { FontStyle } from "../utils/pdf-object-manager";
 import {
@@ -9,7 +7,6 @@ import {
   LayoutContext,
   SizedPDFElement,
 } from "./pdf-element";
-import type { PDFPageConfig } from "./page-element";
 export interface TextSegment {
   content: string;
   fontStyle?: FontStyle;
@@ -77,25 +74,10 @@ export class TextElement extends SizedPDFElement {
       this.height = textHeight;
     }
 
-    this.normalizeCoordinates(ctx.pageConfig);
-
+    // Top-left coordinates (y = top of the text box). The baseline offset and the
+    // Y-flip are applied downstream (the line-builder positions baselines, the seam
+    // flips to PDF), so the element stays coordinate-system-blind.
     return { x: this.x, y: this.y, width: this.width, height: this.height };
-  }
-
-  normalizeCoordinates(pageConfig: PDFPageConfig) {
-    const pageHeight =
-      pageFormats[pageConfig.pageSize!][
-        pageConfig.orientation === Orientation.landscape ? 0 : 1
-      ];
-    let maxLineHeight = this.fontSize;
-    if (Array.isArray(this.content)) {
-      this.content.forEach((segment) => {
-        if ((segment.fontSize || this.fontSize) > maxLineHeight)
-          maxLineHeight = segment.fontSize || this.fontSize;
-      });
-    }
-
-    this.y = pageHeight - this.y - maxLineHeight * (683 / 1000);
   }
 
   override getProps() {
