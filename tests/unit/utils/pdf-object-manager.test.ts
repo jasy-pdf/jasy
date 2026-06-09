@@ -1,6 +1,6 @@
 import { describe, it, expect, vitest } from "vitest";
-import { PDFObjectManager, FontStyle } from "./pdf-object-manager";
-import { AFMParser } from "./afm-parser";
+import { PDFObjectManager, FontStyle } from "../../../src/lib/utils/pdf-object-manager";
+import { AFMParser } from "../../../src/lib/utils/afm-parser";
 import * as fs from "fs";
 
 describe("PDFObjectManager", () => {

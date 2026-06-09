@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { PDFDocumentRenderer } from "./pdf-document-renderer";
-import { PDFObjectManager } from "../utils/pdf-object-manager";
-import { PageRenderer } from "./page-renderer";
-import { PDFDocumentElement } from "../elements/pdf-document-element";
+import { PDFDocumentRenderer } from "../../../src/lib/renderer/pdf-document-renderer";
+import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager";
+import { PageRenderer } from "../../../src/lib/renderer/page-renderer";
+import { PDFDocumentElement } from "../../../src/lib/elements/pdf-document-element";
 
 // Mock PageRenderer.render to return mock page numbers
 vi.spyOn(PageRenderer, "render").mockImplementation(async () => 1);

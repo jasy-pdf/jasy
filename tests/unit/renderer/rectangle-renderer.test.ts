@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { RectangleRenderer } from "./rectangle-renderer";
-import { PDFObjectManager } from "../utils/pdf-object-manager";
-import { RendererRegistry } from "../utils/renderer-registry";
-import { RectangleElement } from "../elements/rectangle-element";
-import { Color } from "../common/color";
-import { PdfBackend } from "./pdf-backend";
+import { RectangleRenderer } from "../../../src/lib/renderer/rectangle-renderer";
+import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager";
+import { RendererRegistry } from "../../../src/lib/utils/renderer-registry";
+import { RectangleElement } from "../../../src/lib/elements/rectangle-element";
+import { Color } from "../../../src/lib/common/color";
+import { PdfBackend } from "../../../src/lib/renderer/pdf-backend";
 
 describe("RectangleRenderer", () => {
   let mockObjectManager: PDFObjectManager;

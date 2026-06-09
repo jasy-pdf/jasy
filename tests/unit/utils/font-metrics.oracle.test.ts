@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { PDFObjectManager, FontStyle } from "./pdf-object-manager";
+import { PDFObjectManager, FontStyle } from "../../../src/lib/utils/pdf-object-manager";
 
 // Independently-verified font-metric oracle - the refactor safety net.
 //

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { AFMParser } from "./afm-parser";
+import { AFMParser } from "../../../src/lib/utils/afm-parser";
 import fs from "fs";
 import path from "path";
 

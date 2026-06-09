@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { FlexLayoutHelper } from "./flex-layout";
+import { FlexLayoutHelper } from "../../../src/lib/utils/flex-layout";
 import {
   PDFElement,
   LayoutConstraints,
   FlexiblePDFElement,
   VerticalAlignment,
-} from "../elements/pdf-element";
+} from "../../../src/lib/elements/pdf-element";
 import { X } from "vitest/dist/chunks/reporters.WnPwkmgA";
 
 // Mock-Klassen für PDFElement und FlexiblePDFElement

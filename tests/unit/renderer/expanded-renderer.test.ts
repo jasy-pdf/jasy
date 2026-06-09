@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
-import { ExpandedRenderer } from "./expanded-renderer";
-import { RendererRegistry } from "../utils/renderer-registry";
-import { PDFObjectManager } from "../utils/pdf-object-manager";
-import { ExpandedElement } from "../elements";
-import { PDFElement } from "../elements/pdf-element";
+import { ExpandedRenderer } from "../../../src/lib/renderer/expanded-renderer";
+import { RendererRegistry } from "../../../src/lib/utils/renderer-registry";
+import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager";
+import { ExpandedElement } from "../../../src/lib/elements";
+import { PDFElement } from "../../../src/lib/elements/pdf-element";
 
 describe("ExpandedRenderer", () => {
   it("should render the child element using its registered renderer", async () => {

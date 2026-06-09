@@ -1,14 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { PDFRenderer } from "./pdf-renderer";
-import { PDFDocumentElement } from "../elements/pdf-document-element";
-import { PDFObjectManager } from "../utils/pdf-object-manager";
-import { RendererRegistry } from "../utils/renderer-registry";
-import { TextElement } from "../elements/text-element";
-import { ContainerElement } from "../elements/container-element";
-import { RectangleElement } from "../elements/rectangle-element";
-import { ImageElement } from "../elements/image-element";
-import { ExpandedElement, PaddingElement } from "../elements";
-import { PDFDocumentRenderer } from "./pdf-document-renderer";
+import { PDFRenderer } from "../../../src/lib/renderer/pdf-renderer";
+import { PDFDocumentElement } from "../../../src/lib/elements/pdf-document-element";
+import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager";
+import { RendererRegistry } from "../../../src/lib/utils/renderer-registry";
+import { TextElement } from "../../../src/lib/elements/text-element";
+import { ContainerElement } from "../../../src/lib/elements/container-element";
+import { RectangleElement } from "../../../src/lib/elements/rectangle-element";
+import { ImageElement } from "../../../src/lib/elements/image-element";
+import { ExpandedElement, PaddingElement } from "../../../src/lib/elements";
+import { PDFDocumentRenderer } from "../../../src/lib/renderer/pdf-document-renderer";
 
 describe("PDFRenderer", () => {
   let mockObjectManager: PDFObjectManager;
@@ -16,17 +16,16 @@ describe("PDFRenderer", () => {
   beforeEach(() => {
     vi.clearAllMocks(); // Clear all mocks
 
-    // Mock PDFObjectManager methods
+    // Mock PDFObjectManager methods. getPDFConfig seeds the layout context.
     mockObjectManager = {
       addObject: vi.fn().mockReturnValue(1),
       getRenderedObjects: vi.fn().mockReturnValue("mocked rendered objects\n"),
       getXRefTable: vi.fn().mockReturnValue("xref table\n"),
       getTrailerAndXRef: vi.fn().mockReturnValue("trailer\nstartxref\n33"),
       getParentObjectNumber: vi.fn().mockReturnValue(1),
+      getPDFConfig: vi.fn().mockReturnValue({}),
     } as unknown as PDFObjectManager;
 
-    // Inject mockObjectManager
-    PDFRenderer["_objectManager"] = mockObjectManager;
     vi.spyOn(PDFDocumentRenderer, "render").mockResolvedValue(1);
 
     // Mock RendererRegistry registration
@@ -39,7 +38,7 @@ describe("PDFRenderer", () => {
       getProps: vi.fn().mockReturnValue({ children: [] }),
     } as unknown as PDFDocumentElement;
 
-    await PDFRenderer.render(mockDocumentElement);
+    await PDFRenderer.render(mockDocumentElement, mockObjectManager);
 
     // Check that all the renderers are registered
     expect(RendererRegistry.register).toHaveBeenCalledWith(
@@ -73,7 +72,7 @@ describe("PDFRenderer", () => {
       calculateLayout: vi.fn(),
     } as unknown as PDFDocumentElement;
 
-    await PDFRenderer.render(mockDocumentElement);
+    await PDFRenderer.render(mockDocumentElement, mockObjectManager);
 
     // Check that calculateLayout was called
     expect(mockDocumentElement.calculateLayout).toHaveBeenCalled();
@@ -84,7 +83,7 @@ describe("PDFRenderer", () => {
       calculateLayout: vi.fn(),
     } as unknown as PDFDocumentElement;
 
-    const result = await PDFRenderer.render(mockDocumentElement);
+    const result = await PDFRenderer.render(mockDocumentElement, mockObjectManager);
 
     // Verify the structure of the generated PDF content
     expect(result).toContain("%PDF-1.4\n");
@@ -98,7 +97,7 @@ describe("PDFRenderer", () => {
       calculateLayout: vi.fn(),
     } as unknown as PDFDocumentElement;
 
-    await PDFRenderer.render(mockDocumentElement);
+    await PDFRenderer.render(mockDocumentElement, mockObjectManager);
 
     expect(mockObjectManager.addObject).toHaveBeenCalledWith(
       "<< /Type /Catalog /Pages 1 0 R >>"
@@ -110,7 +109,7 @@ describe("PDFRenderer", () => {
       calculateLayout: vi.fn(),
     } as unknown as PDFDocumentElement;
 
-    const result = await PDFRenderer.render(mockDocumentElement);
+    const result = await PDFRenderer.render(mockDocumentElement, mockObjectManager);
 
     // Check that XRef and trailer are appended correctly
     const startxref = result.indexOf("xref table");
@@ -125,7 +124,7 @@ describe("PDFRenderer", () => {
       calculateLayout: vi.fn(),
     } as unknown as PDFDocumentElement;
 
-    const result = await PDFRenderer.render(mockDocumentElement);
+    const result = await PDFRenderer.render(mockDocumentElement, mockObjectManager);
 
     // Check that an empty document is handled correctly
     expect(result).toContain("%PDF-1.4\n");

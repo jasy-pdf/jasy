@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { RendererRegistry } from "./renderer-registry";
+import { RendererRegistry } from "../../../src/lib/utils/renderer-registry";
 
 // Beispiel-Renderer-Funktion
 const exampleRenderer = () => "Rendered";

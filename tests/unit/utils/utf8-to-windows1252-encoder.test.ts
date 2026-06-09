@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getArrayBuffer } from "./utf8-to-windows1252-encoder";
+import { getArrayBuffer } from "../../../src/lib/utils/utf8-to-windows1252-encoder";
 
 describe("getArrayBuffer", () => {
   it("should convert a string to an ArrayBuffer", () => {

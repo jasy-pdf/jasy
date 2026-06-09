@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { PageRenderer } from "./page-renderer";
-import { PageElement } from "../elements/page-element";
-import { PDFObjectManager } from "../utils/pdf-object-manager";
-import { RendererRegistry } from "../utils/renderer-registry";
-import { PageSize } from "../constants/page-sizes";
+import { PageRenderer } from "../../../src/lib/renderer/page-renderer";
+import { PageElement } from "../../../src/lib/elements/page-element";
+import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager";
+import { RendererRegistry } from "../../../src/lib/utils/renderer-registry";
+import { PageSize } from "../../../src/lib/constants/page-sizes";
 
 // Mock RendererRegistry.getRenderer method. Renderers now return an IRNode[]; these
 // tests only check page structure (object count, references), so an empty list is fine.

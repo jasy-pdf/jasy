@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { Color } from "./color";
+import { Color } from "../../../src/lib/common/color";
 
 describe("Color Class", () => {
   it("should initialize with valid RGB values", () => {

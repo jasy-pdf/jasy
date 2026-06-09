@@ -1,10 +1,10 @@
-import { TextRenderer } from "./text-renderer";
-import { PdfBackend } from "./pdf-backend";
-import { FontStyle, PDFObjectManager } from "../utils/pdf-object-manager";
+import { TextRenderer } from "../../../src/lib/renderer/text-renderer";
+import { PdfBackend } from "../../../src/lib/renderer/pdf-backend";
+import { FontStyle, PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager";
 import { describe, it, vi, expect } from "vitest";
-import { TextElement } from "../elements";
-import { HorizontalAlignment } from "../elements/pdf-element";
-import { Color } from "../common/color";
+import { TextElement } from "../../../src/lib/elements";
+import { HorizontalAlignment } from "../../../src/lib/elements/pdf-element";
+import { Color } from "../../../src/lib/common/color";
 
 describe("TextRenderer - calculateTextHeight", () => {
   it("should calculate the correct text height for a simple string", () => {

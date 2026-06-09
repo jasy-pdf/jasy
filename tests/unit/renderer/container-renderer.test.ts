@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
-import { ContainerRenderer } from "./container-renderer";
-import { RendererRegistry } from "../utils/renderer-registry";
-import { PDFObjectManager } from "../utils/pdf-object-manager";
-import { ContainerElement } from "../elements/container-element";
-import { PDFElement } from "../elements/pdf-element";
+import { ContainerRenderer } from "../../../src/lib/renderer/container-renderer";
+import { RendererRegistry } from "../../../src/lib/utils/renderer-registry";
+import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager";
+import { ContainerElement } from "../../../src/lib/elements/container-element";
+import { PDFElement } from "../../../src/lib/elements/pdf-element";
 
 describe("ContainerRenderer", () => {
   it("should render children elements using their respective renderers", async () => {

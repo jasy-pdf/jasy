@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
-import { PaddingRenderer } from "./padding-renderer";
-import { PaddingElement } from "../elements/layout/padding-element";
-import { PDFObjectManager } from "../utils/pdf-object-manager";
-import { RendererRegistry } from "../utils/renderer-registry";
+import { PaddingRenderer } from "../../../src/lib/renderer/padding-renderer";
+import { PaddingElement } from "../../../src/lib/elements/layout/padding-element";
+import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager";
+import { RendererRegistry } from "../../../src/lib/utils/renderer-registry";
 
 // Mock RendererRegistry.getRenderer method. Renderers now return an IRNode[];
 // "rendered child content" stands in for a node passed straight through.

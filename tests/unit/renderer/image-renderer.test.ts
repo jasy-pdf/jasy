@@ -1,15 +1,15 @@
 import { describe, it, expect, vi, vitest } from "vitest";
-import { ImageRenderer } from "./image-renderer";
-import { ImageElement, BoxFit } from "../elements/image-element";
-import { PDFObjectManager } from "../utils/pdf-object-manager";
-import { PdfBackend } from "./pdf-backend";
-import * as imageHelper from "../utils/image-helper";
+import { ImageRenderer } from "../../../src/lib/renderer/image-renderer";
+import { ImageElement, BoxFit } from "../../../src/lib/elements/image-element";
+import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager";
+import { PdfBackend } from "../../../src/lib/renderer/pdf-backend";
+import * as imageHelper from "../../../src/lib/utils/image-helper";
 import {
   applyContainFit,
   applyCoverFit,
   applyFillFit,
   applyFitNone,
-} from "../utils/image-helper";
+} from "../../../src/lib/utils/image-helper";
 
 describe("ImageRenderer", () => {
   it("should render an image with the correct placement and size for 'cover' fit", async () => {
