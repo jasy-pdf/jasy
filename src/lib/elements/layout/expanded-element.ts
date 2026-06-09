@@ -1,15 +1,15 @@
 import { pageFormats } from "../../constants/page-sizes";
-import { Orientation } from "../../renderer";
-import { PDFObjectManager } from "../../utils/pdf-object-manager";
-import { InjectObjectManager } from "../../utils/pdf-object-manager-decorator";
+import { Orientation } from "../../renderer/pdf-config";
 import { Validator } from "../../validators/element-validator";
 import {
   PDFElement,
   LayoutConstraints,
+  LayoutContext,
   FlexiblePDFElement,
   WithChild,
   FlexibleElement,
 } from "../pdf-element";
+import type { PDFPageConfig } from "../page-element";
 
 interface ExpandedElementParams extends FlexibleElement, WithChild {}
 
@@ -20,16 +20,16 @@ export class ExpandedElement extends FlexiblePDFElement {
   private width: number = 0;
   private height: number = 0;
 
-  @InjectObjectManager()
-  private _objectManager!: PDFObjectManager;
-
   constructor({ flex, child }: ExpandedElementParams) {
     super({ flex });
 
     this.child = child;
   }
 
-  calculateLayout(parentConstraints?: LayoutConstraints): LayoutConstraints {
+  calculateLayout(
+    parentConstraints: LayoutConstraints | undefined,
+    ctx: LayoutContext
+  ): LayoutConstraints {
     if (parentConstraints) {
       if (parentConstraints.width) this.width = parentConstraints.width;
       if (parentConstraints.height) this.height = parentConstraints.height;
@@ -46,14 +46,13 @@ export class ExpandedElement extends FlexiblePDFElement {
       height: this.height,
     };
 
-    this.child.calculateLayout(result);
+    this.child.calculateLayout(result, ctx);
 
-    this.normalizeCoordinates();
+    this.normalizeCoordinates(ctx.pageConfig);
     return result;
   }
 
-  normalizeCoordinates() {
-    const pageConfig = this._objectManager.getCurrentPageConfig();
+  normalizeCoordinates(pageConfig: PDFPageConfig) {
     const pageHeight =
       pageFormats[pageConfig.pageSize!][
         pageConfig.orientation === Orientation.landscape ? 0 : 1

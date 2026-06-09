@@ -1,14 +1,12 @@
 import { pageFormats, PageSize } from "../constants/page-sizes";
+import { Orientation } from "../renderer/pdf-config";
+import type { ColorMode, DefaultFont, Margin } from "../renderer";
 import {
-  ColorMode,
-  DefaultFont,
-  Margin,
-  Orientation,
-  PDFConfig,
-} from "../renderer";
-import { PDFObjectManager } from "../utils/pdf-object-manager";
-import { InjectObjectManager } from "../utils/pdf-object-manager-decorator";
-import { LayoutConstraints, PDFElement, WithChildren } from "./pdf-element";
+  LayoutConstraints,
+  LayoutContext,
+  PDFElement,
+  WithChildren,
+} from "./pdf-element";
 import { TextElement } from "./text-element";
 
 export interface PDFPageConfig {
@@ -23,22 +21,29 @@ interface PDFPageParams extends WithChildren {
   config?: PDFPageConfig;
 }
 export class PageElement extends PDFElement {
-  @InjectObjectManager()
-  private _objectManager!: PDFObjectManager;
-
-  private config!: PDFPageConfig;
+  // This page's own (partial) config; merged with the document defaults during layout.
+  private config: PDFPageConfig;
   private children: PDFElement[];
 
   constructor({ children, config }: PDFPageParams) {
     super();
     this.children = children;
-    this.config = this._objectManager.getPDFConfig();
-    if (config) this.config = { ...this.config, ...config };
-    this._objectManager.setCurrentPageConfig(this.config);
+    this.config = config ?? {};
   }
 
-  calculateLayout(parentConstraints: LayoutConstraints): LayoutConstraints {
-    // We know that we set a minimum standard pdf config inside the PDFObjectManager. So margin must have a value!
+  calculateLayout(
+    _parentConstraints: LayoutConstraints | undefined,
+    ctx: LayoutContext
+  ): LayoutConstraints {
+    // Merge the document defaults (carried in the context) with this page's overrides,
+    // then hand descendants a context bound to THIS page's geometry. This is what
+    // fixes the old last-page-wins global page-config bug.
+    this.config = { ...ctx.pageConfig, ...this.config };
+    const pageCtx: LayoutContext = {
+      metrics: ctx.metrics,
+      pageConfig: this.config,
+    };
+
     const result = {
       x: 0 + this.config.margin!.left,
       y: 0 + this.config.margin!.top,
@@ -56,8 +61,7 @@ export class PageElement extends PDFElement {
       result.width = result.height;
       result.height = _width;
     }
-    // Update 30.09.2024. Now we have some settings and we must do something! Starting with the dimensions/margins:
-    this.children.forEach((child) => child.calculateLayout(result));
+    this.children.forEach((child) => child.calculateLayout(result, pageCtx));
     return result;
   }
 

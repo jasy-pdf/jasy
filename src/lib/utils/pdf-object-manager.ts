@@ -2,8 +2,11 @@ import { pageFormats, PageSize } from "../constants/page-sizes";
 import * as fs from "fs";
 import * as path from "path";
 import { AFMParser } from "./afm-parser";
-import { ColorMode, Orientation, PDFConfig } from "../renderer";
-import { PDFPageConfig } from "../elements";
+// Enums come from the leaf config module (never in a cycle); the config type is
+// erased at runtime so it can come from the cyclic module safely.
+import { ColorMode, Orientation } from "../renderer/pdf-config";
+import type { PDFConfig } from "../renderer/pdf-document-class";
+import type { FontMetrics } from "./font-metrics";
 
 interface FontIndexes {
   fontIndex: number;
@@ -108,14 +111,13 @@ class FontManager {
   }
 }
 
-export class PDFObjectManager {
+export class PDFObjectManager implements FontMetrics {
   private objects: string[] = [];
   private objectPositions: number[] = [];
   private parentObjectNumber: number = 0;
   private fonts: FontManager = new FontManager(); // Stores the fonts
   private images: ImageManager = new ImageManager(); // Stores the images (object numbers and names)
   private pdfConfig!: PDFConfig;
-  private pdfPageConfig?: PDFPageConfig;
   public pageFormat = pageFormats[PageSize.A4];
 
   private afmParsers: {
@@ -152,17 +154,6 @@ export class PDFObjectManager {
 
   getPDFConfig(): PDFConfig {
     return this.pdfConfig;
-  }
-
-  setCurrentPageConfig(config: PDFPageConfig) {
-    this.pdfPageConfig = config;
-  }
-
-  getCurrentPageConfig(): PDFPageConfig {
-    if (!this.pdfPageConfig) {
-      this.pdfPageConfig = { ...this.pdfConfig };
-    }
-    return this.pdfPageConfig;
   }
 
   private fillConfigWithStandardValues() {

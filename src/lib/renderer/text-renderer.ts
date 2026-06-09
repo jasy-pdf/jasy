@@ -2,15 +2,18 @@ import { Color } from "../common/color";
 import { HorizontalAlignment } from "../elements/pdf-element";
 import { TextElement, TextSegment } from "../elements/text-element";
 import { FontStyle, PDFObjectManager } from "../utils/pdf-object-manager";
+import type { FontMetrics } from "../utils/font-metrics";
 import { IRNode, TextRun } from "../ir/display-list";
 
 export class TextRenderer {
+  // Measuring only needs metrics, not the full object manager. (The render pass below
+  // still receives the manager because it also registers fonts/images.)
   public static calculateTextHeight(
     content: string | TextSegment[],
     fontSize: number,
     fontFamily: string,
     fontStyle: FontStyle,
-    objectManager: PDFObjectManager,
+    objectManager: FontMetrics,
     maxWidth: number
   ): number {
     const calculateWrappedLineHeightForSegments = (

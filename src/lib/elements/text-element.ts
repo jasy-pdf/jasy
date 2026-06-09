@@ -1,13 +1,15 @@
 import { Color } from "../common/color";
 import { pageFormats } from "../constants/page-sizes";
-import { Orientation, TextRenderer } from "../renderer";
-import { FontStyle, PDFObjectManager } from "../utils/pdf-object-manager";
-import { InjectObjectManager } from "../utils/pdf-object-manager-decorator";
+import { Orientation } from "../renderer/pdf-config";
+import { TextRenderer } from "../renderer";
+import { FontStyle } from "../utils/pdf-object-manager";
 import {
   HorizontalAlignment,
   LayoutConstraints,
+  LayoutContext,
   SizedPDFElement,
 } from "./pdf-element";
+import type { PDFPageConfig } from "./page-element";
 export interface TextSegment {
   content: string;
   fontStyle?: FontStyle;
@@ -35,9 +37,6 @@ export class TextElement extends SizedPDFElement {
   private content: string | TextSegment[];
   private textAlignment: HorizontalAlignment;
 
-  @InjectObjectManager()
-  private _objectManager!: PDFObjectManager;
-
   constructor({
     fontSize,
     content,
@@ -56,7 +55,10 @@ export class TextElement extends SizedPDFElement {
     this.textAlignment = textAlignment;
   }
 
-  calculateLayout(parentConstraints?: LayoutConstraints): LayoutConstraints {
+  calculateLayout(
+    parentConstraints: LayoutConstraints | undefined,
+    ctx: LayoutContext
+  ): LayoutConstraints {
     if (parentConstraints) {
       this.x = parentConstraints.x;
       this.y = parentConstraints.y;
@@ -68,20 +70,19 @@ export class TextElement extends SizedPDFElement {
         this.fontSize,
         this.fontFamily,
         this.fontStyle,
-        this._objectManager,
+        ctx.metrics,
         this.width || 0
       );
 
       this.height = textHeight;
     }
 
-    this.normalizeCoordinates();
+    this.normalizeCoordinates(ctx.pageConfig);
 
     return { x: this.x, y: this.y, width: this.width, height: this.height };
   }
 
-  normalizeCoordinates() {
-    const pageConfig = this._objectManager.getCurrentPageConfig();
+  normalizeCoordinates(pageConfig: PDFPageConfig) {
     const pageHeight =
       pageFormats[pageConfig.pageSize!][
         pageConfig.orientation === Orientation.landscape ? 0 : 1

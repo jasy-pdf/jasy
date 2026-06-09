@@ -1,5 +1,10 @@
 import { PageElement } from "./page-element";
-import { LayoutConstraints, PDFElement, WithChildren } from "./pdf-element";
+import {
+  LayoutConstraints,
+  LayoutContext,
+  PDFElement,
+  WithChildren,
+} from "./pdf-element";
 
 interface PDFDocumentParams extends WithChildren {
   children: PageElement[];
@@ -12,9 +17,12 @@ export class PDFDocumentElement extends PDFElement {
     this.children = children;
   }
 
-  calculateLayout(parentConstraints?: LayoutConstraints): LayoutConstraints {
+  calculateLayout(
+    _parentConstraints: LayoutConstraints | undefined,
+    ctx: LayoutContext
+  ): LayoutConstraints {
     const result = { x: 0, y: 0 };
-    this.children.forEach((child) => child.calculateLayout(result));
+    this.children.forEach((child) => child.calculateLayout(result, ctx));
     return result;
   }
 

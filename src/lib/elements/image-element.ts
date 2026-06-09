@@ -1,12 +1,14 @@
 import { pageFormats } from "../constants/page-sizes";
-import { Orientation } from "../renderer";
+import { Orientation } from "../renderer/pdf-config";
 import {
-  convertImageToGrayscaleBuffer,
   getImageDimensions,
 } from "../utils/image-helper";
-import { PDFObjectManager } from "../utils/pdf-object-manager";
-import { InjectObjectManager } from "../utils/pdf-object-manager-decorator";
-import { LayoutConstraints, SizedPDFElement } from "./pdf-element";
+import {
+  LayoutConstraints,
+  LayoutContext,
+  SizedPDFElement,
+} from "./pdf-element";
+import type { PDFPageConfig } from "./page-element";
 
 export enum BoxFit {
   none = "NONE",
@@ -101,9 +103,6 @@ export class ImageElement extends SizedPDFElement {
   private image: CustomImage;
   private fit: BoxFit;
 
-  @InjectObjectManager()
-  private _objectManager!: PDFObjectManager;
-
   constructor({
     image,
     width = Number.NaN,
@@ -118,7 +117,10 @@ export class ImageElement extends SizedPDFElement {
     this.fit = fit;
   }
 
-  calculateLayout(parentConstraints?: LayoutConstraints): LayoutConstraints {
+  calculateLayout(
+    parentConstraints: LayoutConstraints | undefined,
+    ctx: LayoutContext
+  ): LayoutConstraints {
     if (parentConstraints) {
       this.x = parentConstraints.x || this.x;
       this.y = parentConstraints.y || this.y;
@@ -126,12 +128,11 @@ export class ImageElement extends SizedPDFElement {
       this.height = parentConstraints.height || this.height || 0;
     }
 
-    this.normalizeCoordinates();
+    this.normalizeCoordinates(ctx.pageConfig);
     return { x: this.x, y: this.y, width: this.width, height: this.height };
   }
 
-  normalizeCoordinates() {
-    const pageConfig = this._objectManager.getCurrentPageConfig();
+  normalizeCoordinates(pageConfig: PDFPageConfig) {
     const pageHeight =
       pageFormats[pageConfig.pageSize!][
         pageConfig.orientation === Orientation.landscape ? 0 : 1

@@ -16,15 +16,15 @@ import { ContainerRenderer } from "./container-renderer";
 import { RectangleRenderer } from "./rectangle-renderer";
 import { ExpandedRenderer } from "./expanded-renderer";
 import { PaddingRenderer } from "./padding-renderer";
-import { InjectObjectManager } from "../utils/pdf-object-manager-decorator";
 import { ImageRenderer } from "./image-renderer";
 import { LineRenderer } from "./line-renderer";
+import { LayoutContext } from "../elements/pdf-element";
 
 export class PDFRenderer {
-  @InjectObjectManager()
-  private static _objectManager: PDFObjectManager;
-
-  static async render(document: PDFDocumentElement): Promise<string> {
+  static async render(
+    document: PDFDocumentElement,
+    objectManager: PDFObjectManager
+  ): Promise<string> {
     // Register all Renderer
     RendererRegistry.register(TextElement, TextRenderer.render);
     RendererRegistry.register(ContainerElement, ContainerRenderer.render);
@@ -39,21 +39,28 @@ export class PDFRenderer {
     // Header
     pdfContent += "%PDF-1.4\n";
 
-    document.calculateLayout();
+    // Layout pass: thread the context explicitly. The seed page config is the document
+    // default; each PageElement overrides it for its own subtree.
+    const ctx: LayoutContext = {
+      metrics: objectManager,
+      pageConfig: objectManager.getPDFConfig(),
+    };
+    document.calculateLayout(undefined, ctx);
+
     // Render pages and contents
-    await PDFDocumentRenderer.render(document, PDFRenderer._objectManager);
+    await PDFDocumentRenderer.render(document, objectManager);
 
     // Add catalog objects
-    const catalogObject = `<< /Type /Catalog /Pages ${PDFRenderer._objectManager.getParentObjectNumber()} 0 R >>`;
-    PDFRenderer._objectManager.addObject(catalogObject);
+    const catalogObject = `<< /Type /Catalog /Pages ${objectManager.getParentObjectNumber()} 0 R >>`;
+    objectManager.addObject(catalogObject);
 
     // Add rendered objects
-    pdfContent += PDFRenderer._objectManager.getRenderedObjects();
+    pdfContent += objectManager.getRenderedObjects();
 
     // Add XRef table and trailer
     const startxref = pdfContent.length;
-    pdfContent += PDFRenderer._objectManager.getXRefTable();
-    pdfContent += PDFRenderer._objectManager.getTrailerAndXRef(startxref);
+    pdfContent += objectManager.getXRefTable();
+    pdfContent += objectManager.getTrailerAndXRef(startxref);
 
     return pdfContent;
   }

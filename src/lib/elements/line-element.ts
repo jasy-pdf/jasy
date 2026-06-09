@@ -1,13 +1,13 @@
 import { Color } from "../common/color";
-import { pageFormats, PageSize } from "../constants/page-sizes";
-import { Orientation } from "../renderer";
-import { PDFObjectManager } from "../utils/pdf-object-manager";
-import { InjectObjectManager } from "../utils/pdf-object-manager-decorator";
+import { pageFormats } from "../constants/page-sizes";
+import { Orientation } from "../renderer/pdf-config";
 import {
   LayoutConstraints,
+  LayoutContext,
   SizedElement,
   SizedPDFElement,
 } from "./pdf-element";
+import type { PDFPageConfig } from "./page-element";
 
 interface LineElementParams extends SizedElement {
   color?: Color;
@@ -31,9 +31,6 @@ export class LineElement extends SizedPDFElement {
     height?: number;
   };
 
-  @InjectObjectManager()
-  private _objectManager!: PDFObjectManager;
-
   constructor({
     color = new Color(0, 0, 0),
     strokeWidth,
@@ -53,10 +50,12 @@ export class LineElement extends SizedPDFElement {
     this.sizeMemory = { x, y, width: xEnd, height: yEnd };
   }
 
-  calculateLayout(parentConstraints?: LayoutConstraints): LayoutConstraints {
+  calculateLayout(
+    parentConstraints: LayoutConstraints | undefined,
+    ctx: LayoutContext
+  ): LayoutConstraints {
     if (parentConstraints) {
       // Set relative to parent
-      console.log("PARENT", parentConstraints);
       this.x = this.sizeMemory.x + parentConstraints.x;
       this.y = this.sizeMemory.y + parentConstraints.y;
       // Now calc the end position relative to parent:
@@ -81,12 +80,11 @@ export class LineElement extends SizedPDFElement {
       height: this.height,
     };
 
-    this.normalizeCoordinates();
+    this.normalizeCoordinates(ctx.pageConfig);
     return result;
   }
 
-  normalizeCoordinates() {
-    const pageConfig = this._objectManager.getCurrentPageConfig();
+  normalizeCoordinates(pageConfig: PDFPageConfig) {
     const pageHeight =
       pageFormats[pageConfig.pageSize!][
         pageConfig.orientation === Orientation.landscape ? 0 : 1

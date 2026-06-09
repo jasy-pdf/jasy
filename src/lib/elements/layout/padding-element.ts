@@ -1,17 +1,17 @@
 import { pageFormats } from "../../constants/page-sizes";
-import { Orientation } from "../../renderer";
-import { PDFObjectManager } from "../../utils/pdf-object-manager";
-import { InjectObjectManager } from "../../utils/pdf-object-manager-decorator";
+import { Orientation } from "../../renderer/pdf-config";
 import { Validator } from "../../validators/element-validator";
 import {
   PDFElement,
   LayoutConstraints,
+  LayoutContext,
   WithChild,
-  SizedElement,
   SizedPDFElement,
 } from "../pdf-element";
+import type { PDFPageConfig } from "../page-element";
 
-interface PaddingElementParams extends SizedElement, WithChild {
+// Padding sizes itself from its child + margin, so it takes no x/y of its own.
+interface PaddingElementParams extends WithChild {
   margin: [number, number, number, number];
 }
 
@@ -19,23 +19,17 @@ export class PaddingElement extends SizedPDFElement {
   private child: PDFElement;
   private margin: [number, number, number, number];
 
-  @InjectObjectManager()
-  private _objectManager!: PDFObjectManager;
-
-  constructor({
-    margin,
-    child,
-  }: {
-    margin: [number, number, number, number];
-    child: PDFElement;
-  }) {
+  constructor({ margin, child }: PaddingElementParams) {
     super({ x: 0, y: 0 });
 
     this.child = child;
     this.margin = margin;
   }
 
-  calculateLayout(parentConstraints?: LayoutConstraints): LayoutConstraints {
+  calculateLayout(
+    parentConstraints: LayoutConstraints | undefined,
+    ctx: LayoutContext
+  ): LayoutConstraints {
     let result = {
       x: this.x,
       y: this.y,
@@ -56,15 +50,15 @@ export class PaddingElement extends SizedPDFElement {
       );
     }
 
-    const childResult = this.child.calculateLayout(result);
-    const [marginTop, marginRight, marginBottom, marginLeft] = this.margin;
+    const childResult = this.child.calculateLayout(result, ctx);
+    const [marginTop, _marginRight, marginBottom, _marginLeft] = this.margin;
     this.height = (childResult.height || 0) + marginTop + marginBottom;
 
     result.height = this.height;
 
     Validator.validateSizedElement(this);
 
-    this.normalizeCoordinates();
+    this.normalizeCoordinates(ctx.pageConfig);
     return result;
   }
 
@@ -91,8 +85,7 @@ export class PaddingElement extends SizedPDFElement {
     };
   }
 
-  normalizeCoordinates() {
-    const pageConfig = this._objectManager.getCurrentPageConfig();
+  normalizeCoordinates(pageConfig: PDFPageConfig) {
     const pageHeight =
       pageFormats[pageConfig.pageSize!][
         pageConfig.orientation === Orientation.landscape ? 0 : 1

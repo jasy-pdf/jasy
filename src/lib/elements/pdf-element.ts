@@ -1,8 +1,23 @@
+import type { FontMetrics } from "../utils/font-metrics";
+import type { PDFPageConfig } from "./page-element";
+
+/**
+ * Everything the layout pass needs, threaded explicitly (no global singleton):
+ * font metrics for measuring, and the geometry of the page currently being laid out.
+ * `PageElement` sets `pageConfig` for its subtree, so each page flips against its own
+ * height. The PDF byte writer is deliberately absent - layout must not touch it.
+ */
+export interface LayoutContext {
+  metrics: FontMetrics;
+  pageConfig: PDFPageConfig;
+}
+
 export abstract class PDFElement {
   abstract getProps(): { [key: string]: any };
 
   abstract calculateLayout(
-    parentConstraints?: LayoutConstraints
+    parentConstraints: LayoutConstraints | undefined,
+    ctx: LayoutContext
   ): LayoutConstraints;
 }
 

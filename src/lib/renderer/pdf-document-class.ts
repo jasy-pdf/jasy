@@ -1,18 +1,11 @@
 import { PageSize } from "../constants/page-sizes";
 import { PDFDocumentElement } from "../elements";
 import { FontStyle, PDFObjectManager } from "../utils/pdf-object-manager";
-import { InjectObjectManager } from "../utils/pdf-object-manager-decorator";
 import { PDFRenderer } from "./pdf-renderer";
+import { ColorMode, Orientation } from "./pdf-config";
 
-export enum Orientation {
-  portrait = "PORTRAIT",
-  landscape = "LANDSCAPE",
-}
-
-export enum ColorMode {
-  color = "COLOR",
-  grayscale = "GRAYSCALE",
-}
+// Re-exported so existing `../renderer` consumers keep importing these from here.
+export { ColorMode, Orientation } from "./pdf-config";
 
 export interface Margin {
   left: number;
@@ -43,8 +36,9 @@ export interface PDFConfig {
 }
 
 export abstract class PDFDocument {
-  @InjectObjectManager()
-  private _objectManager!: PDFObjectManager;
+  // One object manager per document instance - no global singleton. Threaded
+  // explicitly into the renderer.
+  private _objectManager = new PDFObjectManager();
 
   private child!: PDFDocumentElement;
   //#region  Helper
@@ -148,6 +142,6 @@ export abstract class PDFDocument {
   ): Promise<string> {
     const instance = new this();
     instance.child = instance.build();
-    return await PDFRenderer.render(instance.child);
+    return await PDFRenderer.render(instance.child, instance._objectManager);
   }
 }

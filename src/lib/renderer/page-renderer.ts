@@ -1,8 +1,8 @@
-import { pageFormats } from "../constants/page-sizes";
+import { pageFormats, PageSize } from "../constants/page-sizes";
 import { PageElement } from "../elements/page-element";
 import { PDFObjectManager } from "../utils/pdf-object-manager";
 import { RendererRegistry } from "../utils/renderer-registry";
-import { Orientation } from "./pdf-document-class";
+import { Orientation } from "./pdf-config";
 import { IRNode } from "../ir/display-list";
 import { PdfBackend } from "./pdf-backend";
 
@@ -37,7 +37,7 @@ export class PageRenderer {
     // - Get all fonts and add it to the page (reference)
     objectManager.registerFont("Helvetica");
     const fontReferences: string[] = [];
-    objectManager.getAllFontsRaw().forEach((value, key) => {
+    objectManager.getAllFontsRaw().forEach((value, _key) => {
       const fontRef = `/F${value.fontIndex} ${value.resourceIndex} 0 R`;
       fontReferences.push(fontRef);
     });
@@ -55,7 +55,9 @@ export class PageRenderer {
           "\n>>\n"
         : "";
 
-    let [width, height] = pageFormats[config?.pageSize!];
+    // config is fully resolved by the layout pass; fall back to the document default
+    // size rather than asserting, so the optional type stays honest.
+    let [width, height] = pageFormats[config?.pageSize ?? PageSize.A4];
     if (config?.orientation === Orientation.landscape) {
       [width, height] = [height, width];
     }

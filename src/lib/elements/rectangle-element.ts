@@ -1,15 +1,15 @@
 import { Color } from "../common/color";
 import { pageFormats } from "../constants/page-sizes";
-import { Orientation } from "../renderer";
-import { PDFObjectManager } from "../utils/pdf-object-manager";
-import { InjectObjectManager } from "../utils/pdf-object-manager-decorator";
+import { Orientation } from "../renderer/pdf-config";
 import {
   LayoutConstraints,
+  LayoutContext,
   PDFElement,
   SizedElement,
   SizedPDFElement,
   WithChildren,
 } from "./pdf-element";
+import type { PDFPageConfig } from "./page-element";
 
 interface RectangleElementParams extends SizedElement, WithChildren {
   color?: Color;
@@ -30,9 +30,6 @@ export class RectangleElement extends SizedPDFElement {
     height?: number;
   };
 
-  @InjectObjectManager()
-  private _objectManager!: PDFObjectManager;
-
   constructor({
     children = [],
     color = new Color(0, 0, 0),
@@ -50,7 +47,10 @@ export class RectangleElement extends SizedPDFElement {
     this.sizeMemory = { x: 0, y: 0, width, height };
   }
 
-  calculateLayout(parentConstraints?: LayoutConstraints): LayoutConstraints {
+  calculateLayout(
+    parentConstraints: LayoutConstraints | undefined,
+    ctx: LayoutContext
+  ): LayoutConstraints {
     if (parentConstraints) {
       if (parentConstraints.width) {
         this.width = parentConstraints.width;
@@ -69,12 +69,11 @@ export class RectangleElement extends SizedPDFElement {
       height: (this.height || 0) + this.borderWidth, // The rectangle goes bigger with its border width
     };
 
-    this.normalizeCoordinates();
+    this.normalizeCoordinates(ctx.pageConfig);
     return result;
   }
 
-  normalizeCoordinates() {
-    const pageConfig = this._objectManager.getCurrentPageConfig();
+  normalizeCoordinates(pageConfig: PDFPageConfig) {
     const pageHeight =
       pageFormats[pageConfig.pageSize!][
         pageConfig.orientation === Orientation.landscape ? 0 : 1

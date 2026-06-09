@@ -1,14 +1,14 @@
 import { pageFormats } from "../../constants/page-sizes";
-import { Orientation } from "../../renderer";
-import { PDFObjectManager } from "../../utils/pdf-object-manager";
-import { InjectObjectManager } from "../../utils/pdf-object-manager-decorator";
+import { Orientation } from "../../renderer/pdf-config";
 import {
   SizedElement,
   WithChildren,
   SizedPDFElement,
   PDFElement,
   LayoutConstraints,
+  LayoutContext,
 } from "../pdf-element";
+import type { PDFPageConfig } from "../page-element";
 
 interface ContainerElementParams extends SizedElement, WithChildren {
   color?: [number, number, number];
@@ -16,12 +16,8 @@ interface ContainerElementParams extends SizedElement, WithChildren {
   borderWidth?: number;
 }
 
-// @InjectObjectManager()
 export class SizedContainerElement extends SizedPDFElement {
   private children: PDFElement[];
-
-  @InjectObjectManager()
-  private _objectManager!: PDFObjectManager;
 
   constructor({ width, height, children }: ContainerElementParams) {
     super({ x: 0, y: 0, width, height });
@@ -29,7 +25,10 @@ export class SizedContainerElement extends SizedPDFElement {
     this.children = children;
   }
 
-  calculateLayout(parentConstraints?: LayoutConstraints): LayoutConstraints {
+  calculateLayout(
+    parentConstraints: LayoutConstraints | undefined,
+    ctx: LayoutContext
+  ): LayoutConstraints {
     if (parentConstraints) {
       if (parentConstraints.width) this.width = parentConstraints.width;
       if (parentConstraints.height) this.height = parentConstraints.height;
@@ -45,14 +44,13 @@ export class SizedContainerElement extends SizedPDFElement {
     };
 
     if (this.children)
-      this.children.forEach((child) => child.calculateLayout(result));
+      this.children.forEach((child) => child.calculateLayout(result, ctx));
 
-    this.normalizeCoordinates();
+    this.normalizeCoordinates(ctx.pageConfig);
     return result;
   }
 
-  normalizeCoordinates() {
-    const pageConfig = this._objectManager.getCurrentPageConfig();
+  normalizeCoordinates(pageConfig: PDFPageConfig) {
     const pageHeight =
       pageFormats[pageConfig.pageSize!][
         pageConfig.orientation === Orientation.landscape ? 0 : 1

@@ -1,25 +1,21 @@
 import { pageFormats } from "../constants/page-sizes";
-import { Orientation } from "../renderer";
+import { Orientation } from "../renderer/pdf-config";
 import { FlexLayoutHelper } from "../utils/flex-layout";
-import { FontStyle, PDFObjectManager } from "../utils/pdf-object-manager";
-import { InjectObjectManager } from "../utils/pdf-object-manager-decorator";
 import {
   FlexiblePDFElement,
   LayoutConstraints,
+  LayoutContext,
   PDFElement,
   SizedElement,
   SizedPDFElement,
   WithChildren,
 } from "./pdf-element";
+import type { PDFPageConfig } from "./page-element";
 
 interface ContainerElementParams extends SizedElement, WithChildren {}
 
-// @InjectObjectManager()
 export class ContainerElement extends SizedPDFElement {
   private children: PDFElement[];
-
-  @InjectObjectManager()
-  private _objectManager!: PDFObjectManager;
 
   constructor({ x, y, width, height, children }: ContainerElementParams) {
     super({ x, y, width, height });
@@ -27,7 +23,10 @@ export class ContainerElement extends SizedPDFElement {
     this.children = children;
   }
 
-  calculateLayout(parentConstraints?: LayoutConstraints): LayoutConstraints {
+  calculateLayout(
+    parentConstraints: LayoutConstraints | undefined,
+    ctx: LayoutContext
+  ): LayoutConstraints {
     if (parentConstraints) {
       if (parentConstraints.width) this.width = parentConstraints.width;
       if (parentConstraints.height) this.height = parentConstraints.height;
@@ -45,7 +44,7 @@ export class ContainerElement extends SizedPDFElement {
     if (this.children) {
       // Helper to caluclate the height
       const { positions, usedHeight, totalFlex } =
-        FlexLayoutHelper.calculateFlexLayout(this.children, result, this.y);
+        FlexLayoutHelper.calculateFlexLayout(this.children, result, this.y, ctx);
       // Calc the remaining height and set the current positions
       const remainingHeight = Math.max((result.height || 0) - usedHeight, 0);
 
@@ -53,27 +52,32 @@ export class ContainerElement extends SizedPDFElement {
         const { element, y } = position;
         if (element instanceof FlexiblePDFElement) {
           const flexHeight = (element.getFlex() / totalFlex) * remainingHeight;
-          element.calculateLayout({
-            ...result,
-            y: y,
-            height: flexHeight,
-          });
+          element.calculateLayout(
+            {
+              ...result,
+              y: y,
+              height: flexHeight,
+            },
+            ctx
+          );
         } else {
           // Fixed elements are already calculated. Set only the y position
-          element.calculateLayout({
-            ...result,
-            y: y,
-          });
+          element.calculateLayout(
+            {
+              ...result,
+              y: y,
+            },
+            ctx
+          );
         }
       }
     }
 
-    this.normalizeCoordinates();
+    this.normalizeCoordinates(ctx.pageConfig);
     return result;
   }
 
-  normalizeCoordinates() {
-    const pageConfig = this._objectManager.getCurrentPageConfig();
+  normalizeCoordinates(pageConfig: PDFPageConfig) {
     const pageHeight =
       pageFormats[pageConfig.pageSize!][
         pageConfig.orientation === Orientation.landscape ? 0 : 1

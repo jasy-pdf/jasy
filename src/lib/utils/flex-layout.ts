@@ -1,6 +1,7 @@
 import {
   PDFElement,
   LayoutConstraints,
+  LayoutContext,
   FlexiblePDFElement,
 } from "../elements/pdf-element";
 
@@ -8,7 +9,8 @@ export class FlexLayoutHelper {
   static calculateFlexLayout(
     children: PDFElement[],
     parentConstraints: LayoutConstraints,
-    startY: number
+    startY: number,
+    ctx: LayoutContext
   ): {
     positions: { element: PDFElement; y: number }[];
     usedHeight: number;
@@ -27,10 +29,13 @@ export class FlexLayoutHelper {
         totalFlex += child.getFlex();
       } else {
         // Calc the fixed elements
-        const childLayout = child.calculateLayout({
-          ...parentConstraints,
-          y: lastYPosition,
-        });
+        const childLayout = child.calculateLayout(
+          {
+            ...parentConstraints,
+            y: lastYPosition,
+          },
+          ctx
+        );
         usedHeight += childLayout.height || 0;
         positions.push({ element: child, y: lastYPosition });
         lastYPosition += childLayout.height || 0;
