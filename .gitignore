@@ -1,3 +1,9 @@
 /dist
 /node_modules
 /coverage
+
+# Claude's private scratch area — tools, scripts, generated PDFs. Not part of the project.
+/claude-data
+
+# Shared working plan between Flo and Claude. Not part of the published package.
+/todo.md
