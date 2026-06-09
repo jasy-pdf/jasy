@@ -4,6 +4,11 @@ import { TextElement, TextSegment } from "../elements/text-element";
 import { FontStyle, PDFObjectManager } from "../utils/pdf-object-manager";
 import type { FontMetrics } from "../utils/font-metrics";
 import { IRNode, TextRun } from "../ir/display-list";
+import {
+  wrapStringIntoLines,
+  breakSegmentsIntoLines,
+  SegmentLine,
+} from "../text/line-breaker";
 
 export class TextRenderer {
   // Measuring only needs metrics, not the full object manager. (The render pass below
@@ -16,131 +21,27 @@ export class TextRenderer {
     objectManager: FontMetrics,
     maxWidth: number
   ): number {
-    const calculateWrappedLineHeightForSegments = (
-      textSegments: TextSegment[],
-      maxWidth: number
-    ): number => {
-      let currentLineWidth = 0;
-      let lineHeight = 0;
-      let maxFontSizeinLine = 0;
-
-      textSegments.forEach((segment) => {
-        const _fontFamily = segment.fontFamily || fontFamily;
-        const _fontSize = segment.fontSize || fontSize;
-        const _fontStyle = segment.fontStyle || fontStyle;
-        const spaceWidth = objectManager.getCharWidth(
-          " ",
-          _fontSize,
-          undefined,
-          _fontFamily,
-          _fontStyle
-        );
-        if (maxFontSizeinLine < _fontSize) maxFontSizeinLine = _fontSize;
-
-        // Split the segment content into words
-        const words = segment.content.split(" ");
-
-        words.forEach((word, _index) => {
-          // Calculate the current string width by afm and its kernings
-          const wordWidth = objectManager.getStringWidth(
-            word,
-            _fontFamily,
-            _fontSize,
-            _fontStyle
-          );
-
-          // Check if the current length is too big for the current line
-          if (currentLineWidth + wordWidth > maxWidth) {
-            lineHeight += maxFontSizeinLine;
-            currentLineWidth = wordWidth; // Save all and create a new line
-            maxFontSizeinLine = segment.fontSize || fontSize;
-          } else {
-            // No? Add the word to the current line
-            currentLineWidth += wordWidth + spaceWidth;
-          }
-        });
-      });
-
-      // Is still text available, add the line height
-      if (currentLineWidth > 0) {
-        lineHeight += maxFontSizeinLine;
-      }
-
-      return lineHeight;
-    };
-
-    // This function adds line breaks if needed and returns the number of lines
-    const calculateWrappedLineHeight = (
-      text: string,
-      fontFamily: string,
-      fontSize: number,
-      maxWidth: number
-    ): number => {
-      let currentLine = "";
-      let currentWidth = 0;
-      let lineHeight = 0;
-
-      // Split the text into words, inclusive empty spaces
-      const words = text.split(" ");
-
-      words.forEach((word, index) => {
-        // Calc the width of the actual word
-        const wordWidth = objectManager.getStringWidth(
-          word,
-          fontFamily,
-          fontSize,
-          fontStyle
-        );
-        const spaceWidth = objectManager.getCharWidth(
-          " ",
-          fontSize,
-          undefined,
-          fontFamily,
-          fontStyle
-        );
-
-        // Check if the word is too big for the current line
-        if (currentWidth + wordWidth > maxWidth) {
-          lineHeight += fontSize; // Add a line break
-          currentLine = word;
-          currentWidth = wordWidth;
-        } else {
-          // Add the word to the current line
-          currentLine += index === 0 ? word : " " + word;
-          currentWidth += wordWidth + spaceWidth; // Update the current line width
-        }
-      });
-
-      // Add last line if not empty
-      if (currentLine) {
-        lineHeight += fontSize;
-      }
-
-      return lineHeight;
-    };
-
-    let totalLinesHeight = 0;
-
-    // If content is a simple string
+    // Plain string: one line height per wrapped line.
     if (typeof content === "string") {
-      totalLinesHeight += calculateWrappedLineHeight(
+      const lines = wrapStringIntoLines(
         content,
         fontFamily,
         fontSize,
-        maxWidth
+        fontStyle,
+        maxWidth,
+        objectManager
       );
+      return lines.length * fontSize;
     }
 
-    // If content is an array of `TextSegment`
-    if (Array.isArray(content)) {
-      totalLinesHeight = calculateWrappedLineHeightForSegments(
-        content as TextSegment[],
-        maxWidth
-      );
-    }
-
-    // Return the total height based on the number of lines and font size
-    return totalLinesHeight;
+    // Segments: each line contributes its own (tallest-on-line) leading.
+    const lines = breakSegmentsIntoLines(
+      content,
+      { fontFamily, fontSize, fontStyle },
+      maxWidth,
+      objectManager
+    );
+    return lines.reduce((total, line) => total + line.maxFontSize, 0);
   }
 
   static async render(
@@ -193,52 +94,6 @@ export class TextRenderer {
   ): TextRun[] {
     const runs: TextRun[] = [];
 
-    // Word-wrap a plain string by width (unchanged from the original).
-    const wrapText = (
-      text: string,
-      fontFamily: string,
-      fontSize: number,
-      fontStyle: FontStyle,
-      maxWidth: number
-    ): string[] => {
-      let currentLine = "";
-      let currentWidth = 0;
-      const lines: string[] = [];
-
-      const words = text.split(" ");
-
-      words.forEach((word, index) => {
-        const wordWidth = objectManager.getStringWidth(
-          word,
-          fontFamily,
-          fontSize,
-          fontStyle
-        );
-        const spaceWidth = objectManager.getCharWidth(
-          " ",
-          fontSize,
-          undefined,
-          fontFamily,
-          fontStyle
-        );
-
-        if (currentWidth + wordWidth > maxWidth) {
-          lines.push(currentLine.trim());
-          currentLine = word;
-          currentWidth = wordWidth;
-        } else {
-          currentLine += index === 0 ? word : " " + word;
-          currentWidth += wordWidth + spaceWidth;
-        }
-      });
-
-      if (currentLine) {
-        lines.push(currentLine.trim());
-      }
-
-      return lines;
-    };
-
     // Horizontal offset of a line of the given width under the current alignment.
     const alignmentOffset = (lineWidth: number): number => {
       if (textAlignment === HorizontalAlignment.center)
@@ -266,7 +121,14 @@ export class TextRenderer {
 
     // --- Plain string: one run per wrapped line. ---
     if (typeof content === "string") {
-      const lines = wrapText(content, fontFamily, fontSize, fontStyle, maxWidth);
+      const lines = wrapStringIntoLines(
+        content,
+        fontFamily,
+        fontSize,
+        fontStyle,
+        maxWidth,
+        objectManager
+      );
       lines.forEach((line, index) => {
         const lineWidth = objectManager.getStringWidth(
           line,
@@ -288,15 +150,14 @@ export class TextRenderer {
       return runs;
     }
 
-    // --- Segments: keep the original line-accumulation, emit one run per segment. ---
-    // Emit the collected line as runs; segment 0 starts at the aligned line origin and
-    // each following segment is offset by the previous segment's (kerning-free) advance.
-    const pushLine = (
-      lineSegments: { lineWidth: number; segments: TextSegment[] },
-      lineY: number
-    ): void => {
-      let x = initialX + alignmentOffset(lineSegments.lineWidth);
-      lineSegments.segments.forEach((segment) => {
+    // --- Segments: break into lines (shared breaker), then emit one run per segment.
+    // Segment 0 starts at the aligned line origin; each following segment is offset by
+    // the previous segment's kerning-free advance. Each line drops by its OWN leading
+    // (tallest font on that line), so mixed-font lines space correctly and the drawn
+    // height matches the measured height.
+    const pushLine = (line: SegmentLine, lineY: number): void => {
+      let x = initialX + alignmentOffset(line.width);
+      line.segments.forEach((segment) => {
         const family = segment.fontFamily || fontFamily;
         const size = segment.fontSize || fontSize;
         const style = segment.fontStyle || fontStyle;
@@ -314,80 +175,15 @@ export class TextRenderer {
       });
     };
 
-    let currentLineWidth = 0;
-    let maxFontSize = fontSize;
-    let currentLineSegments: { lineWidth: number; segments: TextSegment[] } = {
-      lineWidth: 0,
-      segments: [],
-    };
-    let combinedSegment = "";
-
-    content.forEach((segment) => {
-      const _fontFamily = segment.fontFamily || fontFamily;
-      const _fontSize = segment.fontSize || fontSize;
-      const _fontStyle = segment.fontStyle || fontStyle;
-      const words = segment.content.split(" ");
-
-      const spaceWidth = objectManager.getCharWidth(
-        " ",
-        _fontSize,
-        undefined,
-        _fontFamily,
-        _fontStyle
-      );
-
-      currentLineSegments.segments.push({ ...segment, fontFamily: _fontFamily });
-      combinedSegment = "";
-
-      if (maxFontSize < _fontSize) maxFontSize = _fontSize;
-
-      words.forEach((word, wordIndex) => {
-        const wordWidth = objectManager.getStringWidth(
-          word,
-          _fontFamily,
-          _fontSize,
-          _fontStyle
-        );
-
-        if (currentLineWidth + wordWidth > maxWidth) {
-          currentLineSegments.lineWidth = currentLineWidth;
-          pushLine(currentLineSegments, yPosition);
-
-          // Advance to the next line. Leading is the line's max font size, matching
-          // the original `yPosition -= maxFontSize`.
-          yPosition -= maxFontSize;
-          currentLineWidth = 0;
-          currentLineSegments = { lineWidth: 0, segments: [] };
-          combinedSegment = "";
-
-          combinedSegment += word;
-          currentLineWidth += wordWidth + spaceWidth;
-          currentLineSegments.segments.push({
-            ...segment,
-            content: combinedSegment,
-          });
-        } else {
-          combinedSegment += wordIndex === 0 ? word : " " + word;
-          currentLineWidth += wordWidth + spaceWidth;
-          if (currentLineSegments.segments.length === 0) {
-            currentLineSegments.segments.push({
-              ...segment,
-              fontFamily: _fontFamily,
-              content: combinedSegment,
-            });
-          }
-          currentLineSegments.segments[
-            currentLineSegments.segments.length - 1
-          ].content = combinedSegment;
-          currentLineSegments.lineWidth = currentLineWidth;
-        }
-      });
-    });
-
-    // Emit the last collected line.
-    if (currentLineSegments.segments.length > 0) {
-      currentLineSegments.lineWidth = currentLineWidth;
-      pushLine(currentLineSegments, yPosition);
+    let lineY = yPosition;
+    for (const line of breakSegmentsIntoLines(
+      content,
+      { fontFamily, fontSize, fontStyle },
+      maxWidth,
+      objectManager
+    )) {
+      pushLine(line, lineY);
+      lineY -= line.maxFontSize;
     }
 
     return runs;
