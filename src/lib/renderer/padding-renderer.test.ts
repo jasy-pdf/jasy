@@ -4,9 +4,10 @@ import { PaddingElement } from "../elements/layout/padding-element";
 import { PDFObjectManager } from "../utils/pdf-object-manager";
 import { RendererRegistry } from "../utils/renderer-registry";
 
-// Mock RendererRegistry.getRenderer method
+// Mock RendererRegistry.getRenderer method. Renderers now return an IRNode[];
+// "rendered child content" stands in for a node passed straight through.
 vi.spyOn(RendererRegistry, "getRenderer").mockImplementation(() => {
-  return vi.fn().mockResolvedValue("rendered child content");
+  return vi.fn().mockResolvedValue(["rendered child content"]);
 });
 
 describe("PaddingRenderer", () => {
@@ -74,6 +75,6 @@ describe("PaddingRenderer", () => {
     );
 
     expect(mockPaddingElement.getProps).toHaveBeenCalled();
-    expect(result).toBe(""); // No content rendered
+    expect(result).toEqual([]); // No renderer -> empty display list
   });
 });

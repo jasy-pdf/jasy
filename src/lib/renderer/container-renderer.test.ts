@@ -36,9 +36,10 @@ describe("ContainerRenderer", () => {
     // Mock PDFObjectManager (not used directly in the test but needed as a parameter)
     const mockObjectManager = {} as PDFObjectManager;
 
-    // Mock the renderers for the child elements
-    const mockRenderer1 = vi.fn().mockResolvedValue("Rendered content 1\n");
-    const mockRenderer2 = vi.fn().mockResolvedValue("Rendered content 2\n");
+    // Mock the renderers for the child elements. Renderers now return an IRNode[];
+    // sentinels stand in for nodes - the container just concatenates the lists.
+    const mockRenderer1 = vi.fn().mockResolvedValue(["node-1"]);
+    const mockRenderer2 = vi.fn().mockResolvedValue(["node-2"]);
 
     // Spy on RendererRegistry to return mock renderers for each child
     vi.spyOn(RendererRegistry, "getRenderer")
@@ -55,8 +56,8 @@ describe("ContainerRenderer", () => {
     expect(mockRenderer1).toHaveBeenCalledWith(mockChild1, mockObjectManager);
     expect(mockRenderer2).toHaveBeenCalledWith(mockChild2, mockObjectManager);
 
-    // Ensure that the final output contains the rendered content
-    expect(result).toBe("Rendered content 1\nRendered content 2\n");
+    // The container concatenates its children's display lists in order.
+    expect(result).toEqual(["node-1", "node-2"]);
   });
 
   it("should return an empty string if there are no children", async () => {
@@ -82,8 +83,8 @@ describe("ContainerRenderer", () => {
       mockObjectManager
     );
 
-    // Check that the result is an empty string
-    expect(result).toBe("");
+    // No children -> empty display list.
+    expect(result).toEqual([]);
   });
 
   it("should return an empty string if children are undefined", async () => {
@@ -109,7 +110,7 @@ describe("ContainerRenderer", () => {
       mockObjectManager
     );
 
-    // Check that the result is an empty string
-    expect(result).toBe("");
+    // No children -> empty display list.
+    expect(result).toEqual([]);
   });
 });

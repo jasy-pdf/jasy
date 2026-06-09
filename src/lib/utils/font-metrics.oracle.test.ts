@@ -1,18 +1,18 @@
 import { describe, it, expect } from "vitest";
 import { PDFObjectManager, FontStyle } from "./pdf-object-manager";
 
-// Independently-verified font-metric oracle — the refactor safety net.
+// Independently-verified font-metric oracle - the refactor safety net.
 //
 // Unlike the other suites, these expected numbers are NOT read back from the code
 // or from mocks. They are the published Adobe metrics for the standard-14 fonts;
 // the .afm files in ../assets are the authoritative source. If the engine returns a
-// different value, the engine is wrong — not the test.
+// different value, the engine is wrong - not the test.
 //
 // All values are PDF points (1/72"), never pixels. As metrics move out of
 // PDFObjectManager in later phases, only `stringWidth` below should need updating.
 
-// The single point coupled to the current metrics API. Change this adapter — not the
-// expectations — when the call surface moves in a later phase.
+// The single point coupled to the current metrics API. Change this adapter - not the
+// expectations - when the call surface moves in a later phase.
 function stringWidth(
   text: string,
   font: string,
@@ -24,7 +24,7 @@ function stringWidth(
   return m.getStringWidth(text, font, size, style);
 }
 
-describe("font metrics — Adobe AFM oracle (points)", () => {
+describe("font metrics - Adobe AFM oracle (points)", () => {
   // Single-glyph advances at 1000pt equal the raw AFM units. Anchored on famous
   // constants (Helvetica space = 278, Times space = 250) so the check does not
   // depend on the parser being correct to define its own expectation.

@@ -1,4 +1,5 @@
 import { TextRenderer } from "./text-renderer";
+import { PdfBackend } from "./pdf-backend";
 import { FontStyle, PDFObjectManager } from "../utils/pdf-object-manager";
 import { describe, it, vi, expect } from "vitest";
 import { TextElement } from "../elements";
@@ -86,8 +87,8 @@ describe("TextRenderer - calculateTextHeight", () => {
       getCharWidth: vi.fn().mockReturnValue(5),
     } as unknown as PDFObjectManager;
 
-    const result = await TextRenderer.render(
-      mockTextElement,
+    const result = PdfBackend.serialize(
+      await TextRenderer.render(mockTextElement, mockObjectManager),
       mockObjectManager
     );
 
@@ -121,8 +122,8 @@ describe("TextRenderer - calculateTextHeight", () => {
       getCharWidth: vi.fn().mockReturnValue(5),
     } as unknown as PDFObjectManager;
 
-    const result = await TextRenderer.render(
-      mockTextElement,
+    const result = PdfBackend.serialize(
+      await TextRenderer.render(mockTextElement, mockObjectManager),
       mockObjectManager
     );
 
@@ -153,8 +154,8 @@ describe("TextRenderer - calculateTextHeight", () => {
       getCharWidth: vi.fn().mockReturnValue(0), // For empty spaces: 0
     } as unknown as PDFObjectManager;
 
-    const result = await TextRenderer.render(
-      mockTextElement,
+    const result = PdfBackend.serialize(
+      await TextRenderer.render(mockTextElement, mockObjectManager),
       mockObjectManager
     );
 
@@ -185,8 +186,8 @@ describe("TextRenderer - calculateTextHeight", () => {
       getCharWidth: vi.fn().mockReturnValue(0),
     } as unknown as PDFObjectManager;
 
-    const result = await TextRenderer.render(
-      mockTextElement,
+    const result = PdfBackend.serialize(
+      await TextRenderer.render(mockTextElement, mockObjectManager),
       mockObjectManager
     );
 
@@ -217,13 +218,14 @@ describe("TextRenderer - calculateTextHeight", () => {
       getCharWidth: vi.fn().mockReturnValue(0),
     } as unknown as PDFObjectManager;
 
-    const result = await TextRenderer.render(
-      mockTextElement,
+    const result = PdfBackend.serialize(
+      await TextRenderer.render(mockTextElement, mockObjectManager),
       mockObjectManager
     );
 
-    // Because the test is empty we should not have a text string in the rendered line
-    expect(result).toBe(`BT\n0.000 0.000 0.000 rg 12 TL  ET\n`);
+    // Empty content produces no runs, hence no operators at all (the old renderer
+    // emitted an empty BT/ET shell; the IR seam drops it - visually identical).
+    expect(result).toBe("");
   });
 
   it("should render multiple text segments correctly", async () => {
@@ -267,8 +269,8 @@ describe("TextRenderer - calculateTextHeight", () => {
       getCharWidth: vi.fn().mockReturnValue(10),
     } as unknown as PDFObjectManager;
 
-    const result = await TextRenderer.render(
-      mockTextElement,
+    const result = PdfBackend.serialize(
+      await TextRenderer.render(mockTextElement, mockObjectManager),
       mockObjectManager
     );
 
@@ -317,8 +319,8 @@ describe("TextRenderer - calculateTextHeight", () => {
       getCharWidth: vi.fn().mockReturnValue(0), // For empty spaces: 0
     } as unknown as PDFObjectManager;
 
-    const result = await TextRenderer.render(
-      mockTextElement,
+    const result = PdfBackend.serialize(
+      await TextRenderer.render(mockTextElement, mockObjectManager),
       mockObjectManager
     );
 

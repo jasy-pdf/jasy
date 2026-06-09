@@ -30,10 +30,8 @@ describe("ExpandedRenderer", () => {
     // Mock PDFObjectManager
     const mockObjectManager = {} as PDFObjectManager;
 
-    // Mock the renderer for the child element
-    const mockChildRenderer = vi
-      .fn()
-      .mockResolvedValue("Rendered child content\n");
+    // Mock the renderer for the child element. Renderers now return an IRNode[].
+    const mockChildRenderer = vi.fn().mockResolvedValue(["child-node"]);
 
     // Spy on RendererRegistry to return the mock renderer for the child
     vi.spyOn(RendererRegistry, "getRenderer").mockReturnValue(
@@ -52,8 +50,8 @@ describe("ExpandedRenderer", () => {
       mockObjectManager
     );
 
-    // Ensure that the final output contains the rendered content
-    expect(result).toBe("Rendered child content\n");
+    // Expanded passes the child's display list straight through.
+    expect(result).toEqual(["child-node"]);
   });
 
   it("should return an empty string if there is no renderer for the child element", async () => {
@@ -89,7 +87,7 @@ describe("ExpandedRenderer", () => {
       mockObjectManager
     );
 
-    // Ensure that the result is an empty string
-    expect(result).toBe("");
+    // No renderer for the child -> empty display list.
+    expect(result).toEqual([]);
   });
 });

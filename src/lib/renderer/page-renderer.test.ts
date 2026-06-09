@@ -5,9 +5,10 @@ import { PDFObjectManager } from "../utils/pdf-object-manager";
 import { RendererRegistry } from "../utils/renderer-registry";
 import { PageSize } from "../constants/page-sizes";
 
-// Mock RendererRegistry.getRenderer method
+// Mock RendererRegistry.getRenderer method. Renderers now return an IRNode[]; these
+// tests only check page structure (object count, references), so an empty list is fine.
 vi.spyOn(RendererRegistry, "getRenderer").mockImplementation(() => {
-  return vi.fn().mockResolvedValue("rendered content");
+  return vi.fn().mockResolvedValue([]);
 });
 
 describe("PageRenderer", () => {

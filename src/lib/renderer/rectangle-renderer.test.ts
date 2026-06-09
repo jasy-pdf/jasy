@@ -4,6 +4,7 @@ import { PDFObjectManager } from "../utils/pdf-object-manager";
 import { RendererRegistry } from "../utils/renderer-registry";
 import { RectangleElement } from "../elements/rectangle-element";
 import { Color } from "../common/color";
+import { PdfBackend } from "./pdf-backend";
 
 describe("RectangleRenderer", () => {
   let mockObjectManager: PDFObjectManager;
@@ -29,8 +30,8 @@ describe("RectangleRenderer", () => {
       }),
     } as unknown as RectangleElement;
 
-    const result = await RectangleRenderer.render(
-      mockRectangleElement,
+    const result = PdfBackend.serialize(
+      await RectangleRenderer.render(mockRectangleElement, mockObjectManager),
       mockObjectManager
     );
 
@@ -51,8 +52,8 @@ describe("RectangleRenderer", () => {
       }),
     } as unknown as RectangleElement;
 
-    const result = await RectangleRenderer.render(
-      mockRectangleElement,
+    const result = PdfBackend.serialize(
+      await RectangleRenderer.render(mockRectangleElement, mockObjectManager),
       mockObjectManager
     );
 
@@ -73,8 +74,8 @@ describe("RectangleRenderer", () => {
       }),
     } as unknown as RectangleElement;
 
-    const result = await RectangleRenderer.render(
-      mockRectangleElement,
+    const result = PdfBackend.serialize(
+      await RectangleRenderer.render(mockRectangleElement, mockObjectManager),
       mockObjectManager
     );
 
@@ -93,9 +94,10 @@ describe("RectangleRenderer", () => {
       }),
     };
 
-    // Mock child renderer
+    // Mock child renderer. Renderers return an IRNode[]; a sentinel stands in for
+    // the child's node, which the rectangle appends after its own box node.
     vi.spyOn(RendererRegistry, "getRenderer").mockReturnValue(async () => {
-      return "child-rendered-content";
+      return ["child-node"];
     });
 
     const mockRectangleElement = {
@@ -116,9 +118,15 @@ describe("RectangleRenderer", () => {
       mockObjectManager
     );
 
-    expect(result).toBe(
-      "1 w\n0.000 0.000 1.000 RG\n0.000 1.000 0.000 rg\n10 20 100 50 re B\nchild-rendered-content"
-    );
+    // The box node comes first, then the child's nodes are appended.
+    expect(result[0]).toMatchObject({
+      type: "rect",
+      x: 10,
+      y: 20,
+      width: 100,
+      height: 50,
+    });
+    expect(result[result.length - 1]).toBe("child-node");
     expect(RendererRegistry.getRenderer).toHaveBeenCalledWith(mockChildElement);
   });
 });
