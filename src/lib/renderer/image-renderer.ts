@@ -36,8 +36,8 @@ export class ImageRenderer {
         const fitCoverResult = applyCoverFit(
           dimensions.width,
           dimensions.height,
-          width || 0,
-          height || 0
+          width ?? 0,
+          height ?? 0
         );
         x += fitCoverResult.offsetX;
         y += fitCoverResult.offsetY;
@@ -49,8 +49,8 @@ export class ImageRenderer {
         const fitContainResult = applyContainFit(
           dimensions.width,
           dimensions.height,
-          width || 0,
-          height || 0
+          width ?? 0,
+          height ?? 0
         );
         x += fitContainResult.offsetX;
         y += fitContainResult.offsetY;
@@ -61,8 +61,8 @@ export class ImageRenderer {
         const fitNoneResult = applyFitNone(
           dimensions.width,
           dimensions.height,
-          width || 0,
-          height || 0
+          width ?? 0,
+          height ?? 0
         );
         x += fitNoneResult.offsetX;
         y += fitNoneResult.offsetY;
@@ -70,7 +70,7 @@ export class ImageRenderer {
         height = fitNoneResult.height;
         break;
       case BoxFit.fill:
-        const fitFillResult = applyFillFit(width || 0, height || 0);
+        const fitFillResult = applyFillFit(width ?? 0, height ?? 0);
         width = fitFillResult.width;
         height = fitFillResult.height;
     }

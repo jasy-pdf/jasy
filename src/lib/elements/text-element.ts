@@ -1,9 +1,9 @@
 import { Color } from "../common/color";
 import { TextRenderer } from "../renderer";
 import { FontStyle } from "../utils/pdf-object-manager";
+import { BoxConstraints, Offset, Size } from "../layout/box-constraints";
 import {
   HorizontalAlignment,
-  LayoutConstraints,
   LayoutContext,
   SizedPDFElement,
 } from "./pdf-element";
@@ -17,7 +17,6 @@ export interface TextSegment {
 
 interface TextElementParams {
   id?: string;
-  output?: any;
   fontSize: number;
   fontFamily?: string;
   fontStyle?: FontStyle;
@@ -53,31 +52,28 @@ export class TextElement extends SizedPDFElement {
   }
 
   calculateLayout(
-    parentConstraints: LayoutConstraints | undefined,
+    constraints: BoxConstraints,
+    offset: Offset,
     ctx: LayoutContext
-  ): LayoutConstraints {
-    if (parentConstraints) {
-      this.x = parentConstraints.x;
-      this.y = parentConstraints.y;
-      if (parentConstraints.width) {
-        this.width = parentConstraints.width - this.x + parentConstraints.x;
-      }
-      const textHeight = TextRenderer.calculateTextHeight(
-        this.content,
-        this.fontSize,
-        this.fontFamily,
-        this.fontStyle,
-        ctx.metrics,
-        this.width || 0
-      );
+  ): Size {
+    this.x = offset.x;
+    this.y = offset.y;
+    if (constraints.hasBoundedWidth) this.width = constraints.maxWidth;
 
-      this.height = textHeight;
-    }
+    const wrapWidth = this.width ?? 0;
+    this.height = TextRenderer.calculateTextHeight(
+      this.content,
+      this.fontSize,
+      this.fontFamily,
+      this.fontStyle,
+      ctx.metrics,
+      wrapWidth
+    );
 
     // Top-left coordinates (y = top of the text box). The baseline offset and the
     // Y-flip are applied downstream (the line-builder positions baselines, the seam
     // flips to PDF), so the element stays coordinate-system-blind.
-    return { x: this.x, y: this.y, width: this.width, height: this.height };
+    return { width: wrapWidth, height: this.height };
   }
 
   override getProps() {

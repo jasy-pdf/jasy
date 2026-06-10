@@ -107,8 +107,8 @@ export async function convertImageToGrayscaleBuffer(
   const mime = image.mime;
   if (!mime) throw new Error("Cannot read MIME type");
 
-  // We need to check the MIME type
-  let mimeType: any;
+  // We need to check the MIME type (the exact union `getBuffer` accepts).
+  let mimeType: Parameters<typeof image.getBuffer>[0];
   switch (mime) {
     case JimpMime.png:
     case JimpMime.jpeg:

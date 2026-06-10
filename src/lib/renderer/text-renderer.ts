@@ -73,7 +73,7 @@ export class TextRenderer {
       fontFamily,
       fontStyle,
       objectManager,
-      width || Number.NaN,
+      width ?? Number.NaN,
       textAlignment,
       color,
       x,

@@ -3,9 +3,9 @@ import {
   WithChildren,
   SizedPDFElement,
   PDFElement,
-  LayoutConstraints,
   LayoutContext,
 } from "../pdf-element";
+import { BoxConstraints, Offset, Size } from "../../layout/box-constraints";
 
 interface ContainerElementParams extends SizedElement, WithChildren {
   color?: [number, number, number];
@@ -23,28 +23,29 @@ export class SizedContainerElement extends SizedPDFElement {
   }
 
   calculateLayout(
-    parentConstraints: LayoutConstraints | undefined,
+    constraints: BoxConstraints,
+    offset: Offset,
     ctx: LayoutContext
-  ): LayoutConstraints {
-    if (parentConstraints) {
-      if (parentConstraints.width) this.width = parentConstraints.width;
-      if (parentConstraints.height) this.height = parentConstraints.height;
-      this.x += parentConstraints.x;
-      this.y += parentConstraints.y;
-    }
+  ): Size {
+    if (constraints.hasBoundedWidth) this.width = constraints.maxWidth;
+    if (constraints.hasBoundedHeight) this.height = constraints.maxHeight;
+    this.x += offset.x;
+    this.y += offset.y;
 
-    const result = {
-      x: this.x,
-      y: this.y,
-      width: this.width,
-      height: this.height,
-    };
+    const width = this.width ?? 0;
+    const height = this.height ?? 0;
 
     if (this.children)
-      this.children.forEach((child) => child.calculateLayout(result, ctx));
+      this.children.forEach((child) =>
+        child.calculateLayout(
+          BoxConstraints.loose(width, height),
+          { x: this.x, y: this.y },
+          ctx
+        )
+      );
 
     // Top-left coordinates; the Y-flip now happens once at the IR -> backend seam.
-    return result;
+    return { width, height };
   }
 
   override getProps(): ContainerElementParams {

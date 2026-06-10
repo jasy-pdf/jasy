@@ -1,12 +1,8 @@
 import { pageFormats, PageSize } from "../constants/page-sizes";
 import { Orientation } from "../renderer/pdf-config";
 import type { ColorMode, DefaultFont, Margin } from "../renderer";
-import {
-  LayoutConstraints,
-  LayoutContext,
-  PDFElement,
-  WithChildren,
-} from "./pdf-element";
+import { BoxConstraints, Offset, Size } from "../layout/box-constraints";
+import { LayoutContext, PDFElement, WithChildren } from "./pdf-element";
 import { TextElement } from "./text-element";
 
 export interface PDFPageConfig {
@@ -32,9 +28,10 @@ export class PageElement extends PDFElement {
   }
 
   calculateLayout(
-    _parentConstraints: LayoutConstraints | undefined,
+    _constraints: BoxConstraints,
+    _offset: Offset,
     ctx: LayoutContext
-  ): LayoutConstraints {
+  ): Size {
     // Merge the document defaults (carried in the context) with this page's overrides,
     // then hand descendants a context bound to THIS page's geometry. This is what
     // fixes the old last-page-wins global page-config bug.
@@ -44,25 +41,23 @@ export class PageElement extends PDFElement {
       pageConfig: this.config,
     };
 
-    const result = {
-      x: 0 + this.config.margin!.left,
-      y: 0 + this.config.margin!.top,
-      width:
-        pageFormats[this.config.pageSize!][0] -
-        this.config.margin!.left -
-        this.config.margin!.right,
-      height:
-        pageFormats[this.config.pageSize!][1] -
-        this.config.margin!.top -
-        this.config.margin!.bottom,
-    };
+    const margin = this.config.margin!;
+    let width =
+      pageFormats[this.config.pageSize!][0] - margin.left - margin.right;
+    let height =
+      pageFormats[this.config.pageSize!][1] - margin.top - margin.bottom;
     if (this.config.orientation === Orientation.landscape) {
-      const _width = result.width;
-      result.width = result.height;
-      result.height = _width;
+      [width, height] = [height, width];
     }
-    this.children.forEach((child) => child.calculateLayout(result, pageCtx));
-    return result;
+
+    // Children are placed at the top-left of the content box and may fill it.
+    const origin: Offset = { x: margin.left, y: margin.top };
+    const childConstraints = BoxConstraints.loose(width, height);
+    this.children.forEach((child) =>
+      child.calculateLayout(childConstraints, origin, pageCtx)
+    );
+
+    return { width, height };
   }
 
   override getProps(): PDFPageParams {

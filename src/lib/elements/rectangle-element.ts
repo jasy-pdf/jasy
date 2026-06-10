@@ -1,6 +1,6 @@
 import { Color } from "../common/color";
+import { BoxConstraints, Offset, Size } from "../layout/box-constraints";
 import {
-  LayoutConstraints,
   LayoutContext,
   PDFElement,
   SizedElement,
@@ -45,29 +45,21 @@ export class RectangleElement extends SizedPDFElement {
   }
 
   calculateLayout(
-    parentConstraints: LayoutConstraints | undefined,
+    constraints: BoxConstraints,
+    offset: Offset,
     _ctx: LayoutContext
-  ): LayoutConstraints {
-    if (parentConstraints) {
-      if (parentConstraints.width) {
-        this.width = parentConstraints.width;
-      }
-      if (parentConstraints.height) {
-        this.height = parentConstraints.height;
-      }
-      this.x = this.sizeMemory.x + parentConstraints.x;
-      this.y = this.sizeMemory.y + parentConstraints.y;
-    }
-
-    const result = {
-      x: this.x,
-      y: this.y,
-      width: (this.width || 0) + this.borderWidth,
-      height: (this.height || 0) + this.borderWidth, // The rectangle goes bigger with its border width
-    };
+  ): Size {
+    if (constraints.hasBoundedWidth) this.width = constraints.maxWidth;
+    if (constraints.hasBoundedHeight) this.height = constraints.maxHeight;
+    this.x = this.sizeMemory.x + offset.x;
+    this.y = this.sizeMemory.y + offset.y;
 
     // Top-left coordinates; the Y-flip happens once at the IR -> backend seam.
-    return result;
+    // The rectangle grows by its border width.
+    return {
+      width: (this.width ?? 0) + this.borderWidth,
+      height: (this.height ?? 0) + this.borderWidth,
+    };
   }
 
   override getProps() {

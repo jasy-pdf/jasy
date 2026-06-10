@@ -1,5 +1,6 @@
 import type { FontMetrics } from "../utils/font-metrics";
 import type { PDFPageConfig } from "./page-element";
+import type { BoxConstraints, Offset, Size } from "../layout/box-constraints";
 
 /**
  * Everything the layout pass needs, threaded explicitly (no global singleton):
@@ -13,12 +14,21 @@ export interface LayoutContext {
 }
 
 export abstract class PDFElement {
-  abstract getProps(): { [key: string]: any };
+  // Each subclass overrides this with its own concrete props type; `unknown` forces
+  // callers holding only a base `PDFElement` to narrow before reading props.
+  abstract getProps(): unknown;
 
+  /**
+   * Lays the element out: `constraints` bound its size (flows DOWN), `offset` is the
+   * absolute top-left position the parent assigns it, and the returned `Size` is the
+   * space it actually took (flows UP). Layout works in a top-left origin; the Y-flip
+   * happens once at the IR -> backend seam.
+   */
   abstract calculateLayout(
-    parentConstraints: LayoutConstraints | undefined,
+    constraints: BoxConstraints,
+    offset: Offset,
     ctx: LayoutContext
-  ): LayoutConstraints;
+  ): Size;
 }
 
 export abstract class SizedPDFElement extends PDFElement {
@@ -69,13 +79,6 @@ export enum VerticalAlignment {
   bottom = "BOTTOM",
 }
 
-export interface LayoutConstraints {
-  x: number;
-  y: number;
-  width?: number;
-  height?: number;
-}
-
 export interface WithChildren {
   children: PDFElement[];
 }
@@ -96,8 +99,10 @@ export interface SizedElement {
   height?: number;
 }
 
-export function isSizedElement(obj: any): obj is SizedElement {
-  return "x" in obj && "y" in obj;
+export function isSizedElement(obj: unknown): obj is SizedElement {
+  return (
+    typeof obj === "object" && obj !== null && "x" in obj && "y" in obj
+  );
 }
 
 export function hasChildrenProp<T extends object>(

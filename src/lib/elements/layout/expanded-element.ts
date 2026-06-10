@@ -1,12 +1,12 @@
 import { Validator } from "../../validators/element-validator";
 import {
   PDFElement,
-  LayoutConstraints,
   LayoutContext,
   FlexiblePDFElement,
   WithChild,
   FlexibleElement,
 } from "../pdf-element";
+import { BoxConstraints, Offset, Size } from "../../layout/box-constraints";
 
 interface ExpandedElementParams extends FlexibleElement, WithChild {}
 
@@ -24,29 +24,25 @@ export class ExpandedElement extends FlexiblePDFElement {
   }
 
   calculateLayout(
-    parentConstraints: LayoutConstraints | undefined,
+    constraints: BoxConstraints,
+    offset: Offset,
     ctx: LayoutContext
-  ): LayoutConstraints {
-    if (parentConstraints) {
-      if (parentConstraints.width) this.width = parentConstraints.width;
-      if (parentConstraints.height) this.height = parentConstraints.height;
-      this.x += parentConstraints.x;
-      this.y += parentConstraints.y;
-    }
+  ): Size {
+    if (constraints.hasBoundedWidth) this.width = constraints.maxWidth;
+    if (constraints.hasBoundedHeight) this.height = constraints.maxHeight;
+    this.x += offset.x;
+    this.y += offset.y;
 
     Validator.validateFlexElement(this);
 
-    const result = {
-      x: this.x,
-      y: this.y,
-      width: this.width,
-      height: this.height,
-    };
-
-    this.child.calculateLayout(result, ctx);
+    this.child.calculateLayout(
+      BoxConstraints.loose(this.width, this.height),
+      { x: this.x, y: this.y },
+      ctx
+    );
 
     // Top-left coordinates; the Y-flip now happens once at the IR -> backend seam.
-    return result;
+    return { width: this.width, height: this.height };
   }
 
   override getProps() {

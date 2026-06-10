@@ -18,6 +18,7 @@ import { ExpandedRenderer } from "./expanded-renderer";
 import { PaddingRenderer } from "./padding-renderer";
 import { ImageRenderer } from "./image-renderer";
 import { LineRenderer } from "./line-renderer";
+import { BoxConstraints } from "../layout/box-constraints";
 import { LayoutContext } from "../elements/pdf-element";
 
 export class PDFRenderer {
@@ -45,7 +46,7 @@ export class PDFRenderer {
       metrics: objectManager,
       pageConfig: objectManager.getPDFConfig(),
     };
-    document.calculateLayout(undefined, ctx);
+    document.calculateLayout(new BoxConstraints(), { x: 0, y: 0 }, ctx);
 
     // Render pages and contents
     await PDFDocumentRenderer.render(document, objectManager);

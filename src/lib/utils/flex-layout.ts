@@ -1,14 +1,22 @@
 import {
   PDFElement,
-  LayoutConstraints,
   LayoutContext,
   FlexiblePDFElement,
 } from "../elements/pdf-element";
+import { BoxConstraints } from "../layout/box-constraints";
 
 export class FlexLayoutHelper {
+  /**
+   * Vertical flex distribution. Fixed children are laid out first (stacked from
+   * `startY`, each at `originX`) and their heights summed; `ExpandedElement`s are held
+   * back and only get y positions here (their actual height is split from the leftover
+   * by the caller). `inner` carries the container's content box: `maxWidth`/`maxHeight`
+   * are the space available to the children.
+   */
   static calculateFlexLayout(
     children: PDFElement[],
-    parentConstraints: LayoutConstraints,
+    inner: BoxConstraints,
+    originX: number,
     startY: number,
     ctx: LayoutContext
   ): {
@@ -16,38 +24,35 @@ export class FlexLayoutHelper {
     usedHeight: number;
     totalFlex: number;
   } {
-    let usedHeight = 0; // Height for `PDFElements`
-    let totalFlex = 0; // Flex value
+    let usedHeight = 0; // Height taken by the fixed children
+    let totalFlex = 0;
     let expandedElements: { element: FlexiblePDFElement; index: number }[] = [];
     let positions: { element: PDFElement; y: number }[] = [];
     let lastYPosition = startY;
 
-    // First run: Calc `PDFElement`s and hold `FlexibleElement`s
+    const innerWidth = inner.maxWidth;
+    const innerHeight = inner.maxHeight;
+
+    // First run: lay out the fixed children, hold the flexible ones.
     for (let [index, child] of children.entries()) {
       if (child instanceof FlexiblePDFElement) {
         expandedElements.push({ element: child, index });
         totalFlex += child.getFlex();
       } else {
-        // Calc the fixed elements
-        const childLayout = child.calculateLayout(
-          {
-            ...parentConstraints,
-            y: lastYPosition,
-          },
+        const childSize = child.calculateLayout(
+          BoxConstraints.loose(innerWidth, innerHeight),
+          { x: originX, y: lastYPosition },
           ctx
         );
-        usedHeight += childLayout.height || 0;
+        usedHeight += childSize.height;
         positions.push({ element: child, y: lastYPosition });
-        lastYPosition += childLayout.height || 0;
+        lastYPosition += childSize.height;
       }
     }
 
-    const remainingHeight = Math.max(
-      (parentConstraints.height || 0) - usedHeight,
-      0
-    );
+    const remainingHeight = Math.max(innerHeight - usedHeight, 0);
 
-    // Second run: Calc the flexible elements height
+    // Second run: only y positions for the flexible children (height split below).
     for (let expanded of expandedElements) {
       const flexHeight = parseFloat(
         ((expanded.element.getFlex() / totalFlex) * remainingHeight).toFixed(6)
@@ -57,9 +62,9 @@ export class FlexLayoutHelper {
     }
 
     return {
-      positions, // Returns all positions
-      usedHeight, // The height, used by the fixed elements
-      totalFlex, // All the summarized flex
+      positions,
+      usedHeight,
+      totalFlex,
     };
   }
 }

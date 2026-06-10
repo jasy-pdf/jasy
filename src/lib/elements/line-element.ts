@@ -1,10 +1,6 @@
 import { Color } from "../common/color";
-import {
-  LayoutConstraints,
-  LayoutContext,
-  SizedElement,
-  SizedPDFElement,
-} from "./pdf-element";
+import { BoxConstraints, Offset, Size } from "../layout/box-constraints";
+import { LayoutContext, SizedElement, SizedPDFElement } from "./pdf-element";
 
 interface LineElementParams extends SizedElement {
   color?: Color;
@@ -48,37 +44,26 @@ export class LineElement extends SizedPDFElement {
   }
 
   calculateLayout(
-    parentConstraints: LayoutConstraints | undefined,
+    constraints: BoxConstraints,
+    offset: Offset,
     _ctx: LayoutContext
-  ): LayoutConstraints {
-    if (parentConstraints) {
-      // Set relative to parent
-      this.x = this.sizeMemory.x + parentConstraints.x;
-      this.y = this.sizeMemory.y + parentConstraints.y;
-      // Now calc the end position relative to parent:
-      if (!parentConstraints.width) {
-        throw new Error(
-          "The LineElement must be placed inside a parent container that defines its width"
-        );
-      }
+  ): Size {
+    // Set relative to parent
+    this.x = this.sizeMemory.x + offset.x;
+    this.y = this.sizeMemory.y + offset.y;
 
-      this.xEnd =
-        parentConstraints.x + parentConstraints.width - this.sizeMemory.width!;
-      this.yEnd = parentConstraints.y + this.sizeMemory.height!;
+    // The line spans the parent's width, so it needs a bounded width to anchor its end.
+    if (!constraints.hasBoundedWidth) {
+      throw new Error(
+        "The LineElement must be placed inside a parent container that defines its width"
+      );
     }
 
-    // Line element is special. Here we have xEnd/yEnd and width/height property!
-    const result = {
-      x: this.x,
-      y: this.y,
-      xEnd: this.xEnd,
-      yEnd: this.yEnd,
-      width: this.width,
-      height: this.height,
-    };
+    this.xEnd = offset.x + constraints.maxWidth - this.sizeMemory.width!;
+    this.yEnd = offset.y + this.sizeMemory.height!;
 
     // Top-left coordinates; the Y-flip happens once at the IR -> backend seam.
-    return result;
+    return { width: this.width ?? 0, height: this.height ?? 0 };
   }
 
   override getProps() {

@@ -1,9 +1,6 @@
 import { getImageDimensions } from "../utils/image-helper";
-import {
-  LayoutConstraints,
-  LayoutContext,
-  SizedPDFElement,
-} from "./pdf-element";
+import { BoxConstraints, Offset, Size } from "../layout/box-constraints";
+import { LayoutContext, SizedPDFElement } from "./pdf-element";
 
 export enum BoxFit {
   none = "NONE",
@@ -98,33 +95,27 @@ export class ImageElement extends SizedPDFElement {
   private image: CustomImage;
   private fit: BoxFit;
 
-  constructor({
-    image,
-    width = Number.NaN,
-    height = Number.NaN,
-    fit = BoxFit.none,
-  }: ImageElementParams) {
-    super({ x: 0, y: 0, width: width });
+  constructor({ image, width, height, fit = BoxFit.none }: ImageElementParams) {
+    super({ x: 0, y: 0, width });
 
     this.image = image;
-    this.width = width;
     this.height = height;
     this.fit = fit;
   }
 
   calculateLayout(
-    parentConstraints: LayoutConstraints | undefined,
+    constraints: BoxConstraints,
+    offset: Offset,
     _ctx: LayoutContext
-  ): LayoutConstraints {
-    if (parentConstraints) {
-      this.x = parentConstraints.x || this.x;
-      this.y = parentConstraints.y || this.y;
-      this.width = parentConstraints.width || this.width;
-      this.height = parentConstraints.height || this.height || 0;
-    }
+  ): Size {
+    this.x = offset.x;
+    this.y = offset.y;
+    // A bounded axis overrides the intrinsic/explicit size; otherwise keep our own.
+    if (constraints.hasBoundedWidth) this.width = constraints.maxWidth;
+    if (constraints.hasBoundedHeight) this.height = constraints.maxHeight;
 
     // Top-left coordinates; the fit logic (renderer) and the Y-flip (seam) run later.
-    return { x: this.x, y: this.y, width: this.width, height: this.height };
+    return { width: this.width ?? 0, height: this.height ?? 0 };
   }
 
   override getProps() {
