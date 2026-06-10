@@ -160,8 +160,9 @@ describe("TextRenderer - calculateTextHeight", () => {
     );
 
     expect(result).toContain("/F1 12 Tf");
-    // New x position should be: 25 (text width), 200 width (box width) (10 + (200 - 25) / 2) = 97.5
-    expect(result).toContain("97.500 20.000 Td");
+    // x: 10 + (200 - 25) / 2 = 97.5. y: top 20 + baseline 12*0.683 = 28.196
+    // (top-left baseline; the seam flips to PDF coordinates later).
+    expect(result).toContain("97.500 28.196 Td");
     expect(result).toContain("(Hello World) Tj");
   });
 
@@ -192,8 +193,8 @@ describe("TextRenderer - calculateTextHeight", () => {
     );
 
     expect(result).toContain("/F1 12 Tf");
-    // New x position should be: 25 (text width), 200 width (box width) (10 + 200 - 25) = 185
-    expect(result).toContain("185.000 20.000 Td");
+    // x: 10 + 200 - 25 = 185. y: top 20 + baseline 12*0.683 = 28.196.
+    expect(result).toContain("185.000 28.196 Td");
     expect(result).toContain("(Hello World) Tj");
   });
 
@@ -328,7 +329,7 @@ describe("TextRenderer - calculateTextHeight", () => {
     expect(result).toContain("/F1 12 Tf");
     expect(result).toContain("/F2 14 Tf");
 
-    // New x position should be: 50 (text width), 200 width (box width) (10 + (200 - 50) / 2) = 85
-    expect(result).toContain("85.000 20.000 Td");
+    // x: 10 + (200 - 50) / 2 = 85. y: top 20 + baseline (tallest font 14)*0.683 = 29.562.
+    expect(result).toContain("85.000 29.562 Td");
   });
 });
