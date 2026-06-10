@@ -1,14 +1,9 @@
-import { pageFormats } from "../constants/page-sizes";
-import { Orientation } from "../renderer/pdf-config";
-import {
-  getImageDimensions,
-} from "../utils/image-helper";
+import { getImageDimensions } from "../utils/image-helper";
 import {
   LayoutConstraints,
   LayoutContext,
   SizedPDFElement,
 } from "./pdf-element";
-import type { PDFPageConfig } from "./page-element";
 
 export enum BoxFit {
   none = "NONE",
@@ -119,7 +114,7 @@ export class ImageElement extends SizedPDFElement {
 
   calculateLayout(
     parentConstraints: LayoutConstraints | undefined,
-    ctx: LayoutContext
+    _ctx: LayoutContext
   ): LayoutConstraints {
     if (parentConstraints) {
       this.x = parentConstraints.x || this.x;
@@ -128,16 +123,8 @@ export class ImageElement extends SizedPDFElement {
       this.height = parentConstraints.height || this.height || 0;
     }
 
-    this.normalizeCoordinates(ctx.pageConfig);
+    // Top-left coordinates; the fit logic (renderer) and the Y-flip (seam) run later.
     return { x: this.x, y: this.y, width: this.width, height: this.height };
-  }
-
-  normalizeCoordinates(pageConfig: PDFPageConfig) {
-    const pageHeight =
-      pageFormats[pageConfig.pageSize!][
-        pageConfig.orientation === Orientation.landscape ? 0 : 1
-      ];
-    this.y = pageHeight - this.y - (this.height || 0); // Adjust Y to fit PDF coordinate system
   }
 
   override getProps() {

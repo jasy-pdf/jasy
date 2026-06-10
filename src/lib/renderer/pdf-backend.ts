@@ -31,8 +31,17 @@ export class PdfBackend {
         case "text":
           // node.y is the baseline measured from the page top; flip it directly.
           return { ...node, y: pageHeight - node.y };
-        case "image":
-          return node; // still flipped by its element (migrated in a later slice)
+        case "image": {
+          // Flip the placement box (and the clip frame, if any) around its bottom edge.
+          const flipped = { ...node, y: pageHeight - node.y - node.height };
+          if (node.clip) {
+            flipped.clip = {
+              ...node.clip,
+              y: pageHeight - node.clip.y - node.clip.height,
+            };
+          }
+          return flipped;
+        }
         default: {
           const unknown: never = node;
           return unknown;
