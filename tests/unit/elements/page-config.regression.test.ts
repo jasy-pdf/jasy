@@ -10,6 +10,7 @@ import { Color } from "../../../src/lib/common/color";
 import { FontStyle } from "../../../src/lib/utils/pdf-object-manager";
 import { PageSize, pageFormats } from "../../../src/lib/constants/page-sizes";
 import { Orientation } from "../../../src/lib/renderer/pdf-config";
+import { BoxConstraints } from "../../../src/lib/layout/box-constraints";
 
 // Regression for the per-page-config bug: before Phase 2 the page config was a global
 // singleton (last constructed page wins), so every page flipped its Y against the LAST
@@ -39,7 +40,7 @@ describe("mixed page sizes - per-page config", () => {
       ],
     });
 
-    doc.calculateLayout(undefined, ctx);
+    doc.calculateLayout(new BoxConstraints(), { x: 0, y: 0 }, ctx);
 
     // (1) Layout is now page-independent: both texts share the same top-left Y (the top
     // margin). The old bug baked a per-page flip into the element here.
