@@ -73,10 +73,32 @@ describe("FlexLayoutHelper", () => {
     const expectedHeightFlexible1 = remainingHeight / 3; // flex 1 of total 3
 
     expect(result.positions[2].y).toBe(150);
-    expect(result.positions[3].y).toBe(
-      parseFloat((150 + expectedHeightFlexible1).toFixed(6))
-    );
+    expect(result.positions[3].y).toBeCloseTo(150 + expectedHeightFlexible1, 5);
     expect(result.totalFlex).toBe(3); // 1 + 2 = 3 :-)
+  });
+
+  it("places children in source order: a fixed child after a flex child lands below it", () => {
+    const header = new MockPDFElement({ height: 100 });
+    const flexBody = new MockFlexiblePDFElement(1);
+    const footer = new MockPDFElement({ height: 50 });
+
+    const result = FlexLayoutHelper.calculateFlexLayout(
+      [header, flexBody, footer],
+      inner, // maxHeight 500
+      originX,
+      startY,
+      ctx
+    );
+
+    // remaining = 500 - (100 + 50) = 350 -> the flex body fills 350.
+    expect(result.positions.map((p) => p.element)).toEqual([
+      header,
+      flexBody,
+      footer,
+    ]);
+    expect(result.positions[0].y).toBe(0); // header at the top
+    expect(result.positions[1].y).toBe(100); // body right after the header
+    expect(result.positions[2].y).toBe(450); // footer below the body (100 + 350), not at 100
   });
 
   it("should return correct total height used by fixed elements", () => {
@@ -125,8 +147,6 @@ describe("FlexLayoutHelper", () => {
     expect(result.totalFlex).toBe(3); // 1 + 2
     const remainingHeight = inner.maxHeight;
     expect(result.positions[0].y).toBe(0);
-    expect(result.positions[1].y).toBe(
-      parseFloat((remainingHeight / 3).toFixed(6))
-    ); // Second element after the first
+    expect(result.positions[1].y).toBeCloseTo(remainingHeight / 3, 5); // after the first
   });
 });

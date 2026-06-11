@@ -3,9 +3,15 @@ import { PDFDocumentRenderer } from "../../../src/lib/renderer/pdf-document-rend
 import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager";
 import { PageRenderer } from "../../../src/lib/renderer/page-renderer";
 import { PDFDocumentElement } from "../../../src/lib/elements/pdf-document-element";
+import { LayoutContext } from "../../../src/lib/elements/pdf-element";
 
 // Mock PageRenderer.render to return mock page numbers
 vi.spyOn(PageRenderer, "render").mockImplementation(async () => 1);
+
+const ctx = {} as LayoutContext; // not used on the unchanged (non-fragmenting) path
+
+// A page that takes the unchanged path: not the single-fragmentable-child shape.
+const plainPage = () => ({ getProps: () => ({ children: [], config: {} }) });
 
 describe("PDFDocumentRenderer", () => {
   beforeEach(() => {
@@ -16,7 +22,7 @@ describe("PDFDocumentRenderer", () => {
     // Mock PDFDocumentElement
     const mockDocumentElement = {
       getProps: vi.fn().mockReturnValue({
-        children: [{}, {}], // Two pages
+        children: [plainPage(), plainPage()], // Two pages
       }),
     } as unknown as PDFDocumentElement;
 
@@ -29,7 +35,8 @@ describe("PDFDocumentRenderer", () => {
 
     const pagesObjectNumber = await PDFDocumentRenderer.render(
       mockDocumentElement,
-      mockObjectManager
+      mockObjectManager,
+      ctx
     );
 
     // Expect that the first object is added (the Pages object)
@@ -68,7 +75,8 @@ describe("PDFDocumentRenderer", () => {
 
     const pagesObjectNumber = await PDFDocumentRenderer.render(
       mockDocumentElement,
-      mockObjectManager
+      mockObjectManager,
+      ctx
     );
 
     // Verify that the children array is indeed empty
