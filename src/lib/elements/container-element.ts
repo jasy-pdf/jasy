@@ -101,9 +101,10 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
             ctx
           );
         } else {
-          // Fixed elements are already calculated. Set only the y position
+          // Fixed elements take their natural height (unbounded), like the measure pass;
+          // here we just re-place them at their resolved y.
           element.calculateLayout(
-            BoxConstraints.loose(width, height),
+            BoxConstraints.loose(width, Infinity),
             { x: this.x, y },
             ctx
           );

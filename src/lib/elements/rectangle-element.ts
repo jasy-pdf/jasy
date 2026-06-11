@@ -117,15 +117,19 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
     offset: Offset,
     ctx: LayoutContext
   ): Size {
-    // An explicit size wins (clamped to the available space); only fall back to filling
-    // the offered box when no size was given. Without this a fixed-height box balloons
-    // to the parent's height.
+    // Width: an explicit size wins (clamped), else fill the offered box. (Without this a
+    // fixed box would balloon to the parent's size.)
     this.width =
       this.sizeMemory.width !== undefined
         ? constraints.constrainWidth(this.sizeMemory.width)
         : constraints.hasBoundedWidth
         ? constraints.maxWidth
         : this.width;
+    // Height: explicit wins; otherwise FILL a bounded region (e.g. inside an Expanded) but
+    // SHRINK-WRAP the content in an unbounded one (a note box in a stack). Shrink-wrap is
+    // resolved after the children are measured, just below.
+    const shrinkWrapHeight =
+      this.sizeMemory.height === undefined && !constraints.hasBoundedHeight;
     this.height =
       this.sizeMemory.height !== undefined
         ? constraints.constrainHeight(this.sizeMemory.height)
@@ -138,6 +142,7 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
     // Lay out children stacked inside the border (inset by the border width). Width is
     // finalized here; height is left unbounded so each child sizes to its own content.
     const innerWidth = Math.max(0, (this.width ?? 0) - 2 * this.borderWidth);
+    let contentHeight = 0;
     let yCursor = this.y + this.borderWidth;
     for (const child of this.children) {
       const childSize = child.calculateLayout(
@@ -146,7 +151,11 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
         ctx
       );
       yCursor += childSize.height;
+      contentHeight += childSize.height;
     }
+
+    // No explicit height and no bounded region: the border hugs its content.
+    if (shrinkWrapHeight) this.height = contentHeight + 2 * this.borderWidth;
 
     // Border-box model: width/height ARE the outer box (the rect we draw); the content
     // is inset by the border on every side. Report the honest box size - no phantom

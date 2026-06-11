@@ -1,5 +1,3 @@
-import { PDFElement } from "../elements/pdf-element";
-
 export class RendererRegistry {
   private static renderers = new Map<Function, Function>();
 
@@ -8,7 +6,8 @@ export class RendererRegistry {
       RendererRegistry.renderers.set(elementClass, renderer);
     }
   }
-  static getRenderer(element: PDFElement): Function | undefined {
+  // Keyed on the element's constructor, so it only needs an object - not `any`.
+  static getRenderer(element: object): Function | undefined {
     return RendererRegistry.renderers.get(element.constructor);
   }
   static isRendererAsync(renderer: Function): boolean {

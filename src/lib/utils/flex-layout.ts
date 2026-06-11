@@ -37,8 +37,11 @@ export class FlexLayoutHelper {
       if (child instanceof FlexiblePDFElement) {
         totalFlex += child.getFlex();
       } else {
+        // Fixed children take their NATURAL height (unbounded), so a box/rectangle
+        // shrink-wraps instead of filling the column. Only flex children consume the
+        // leftover space.
         const childSize = child.calculateLayout(
-          BoxConstraints.loose(innerWidth, innerHeight),
+          BoxConstraints.loose(innerWidth, Infinity),
           { x: originX, y: startY },
           ctx
         );
