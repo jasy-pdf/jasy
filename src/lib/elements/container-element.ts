@@ -37,16 +37,14 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
    * in that case we don't fragment and hand the whole container back as `fitted`.
    */
   fragment(maxHeight: number, width: number, ctx: LayoutContext): FragmentResult {
-    if (this.children.some((child) => child instanceof FlexiblePDFElement)) {
-      return { fitted: this, remainder: null };
-    }
-
     const { fitted, remainder } = packChildren(
       this.children,
       maxHeight,
       width,
       ctx
     );
+    // Fits as one region: hand the whole container back so the page renders unchanged
+    // (its normal layout distributes flex / fills the page).
     if (remainder.length === 0) return { fitted: this, remainder: null };
 
     return {
