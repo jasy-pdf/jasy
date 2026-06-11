@@ -93,7 +93,10 @@ export function breakSegmentsIntoLines(
     const spaceWidth = metrics.getCharWidth(" ", size, undefined, family, style);
     const words = segment.content.split(" ");
 
-    lineSegments.push({ ...segment, fontFamily: family });
+    // Start this segment's piece empty; its content is filled word-by-word below. (Not
+    // the original content - otherwise a segment whose FIRST word overflows would carry
+    // its whole text into the line that just closed.)
+    lineSegments.push({ ...segment, fontFamily: family, content: "" });
     combined = "";
     if (maxFontSize < size) maxFontSize = size;
 
@@ -125,4 +128,23 @@ export function breakSegmentsIntoLines(
   }
 
   return lines;
+}
+
+/**
+ * Inverse of `breakSegmentsIntoLines`: flatten broken lines back into a `TextSegment[]`
+ * that re-wraps to exactly those lines. The wrap consumed the space at each line break,
+ * so re-insert one between lines (unless the piece already ends with one) - otherwise the
+ * last word of a line and the first of the next would fuse ("a b" + "c d" -> "a bc d").
+ * Used by text fragmentation to rebuild the fitted/remainder halves of a split paragraph.
+ */
+export function segmentLinesToSegments(lines: SegmentLine[]): TextSegment[] {
+  const result: TextSegment[] = [];
+  lines.forEach((line, lineIndex) => {
+    line.segments.forEach((segment) => result.push({ ...segment }));
+    if (lineIndex < lines.length - 1) {
+      const last = result[result.length - 1];
+      if (last && !last.content.endsWith(" ")) last.content += " ";
+    }
+  });
+  return result;
 }

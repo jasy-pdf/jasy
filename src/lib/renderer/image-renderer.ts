@@ -4,6 +4,7 @@ import {
   applyCoverFit,
   applyFillFit,
   applyFitNone,
+  decodePngToRgbFlate,
 } from "../utils/image-helper";
 import { PDFObjectManager } from "../utils/pdf-object-manager";
 import { IRNode, Image } from "../ir/display-list";
@@ -23,6 +24,13 @@ export class ImageRenderer {
     if (!fileData) {
       throw new Error("File data cannot be `null`");
     }
+
+    // JPEG embeds raw (PDF decodes DCTDecode natively). PNG is not a valid Flate stream,
+    // so decode it to raw DeviceRGB samples that the FlateDecode XObject path expects.
+    const embedData =
+      imageType === "FlateDecode"
+        ? (await decodePngToRgbFlate(Buffer.from(fileData, "binary"))).data
+        : fileData;
 
     // Now we check the `fit` property and changing the dimensions of the image
     // Optionally we must add an overflow container
@@ -85,7 +93,7 @@ export class ImageRenderer {
       height: height!,
       intrinsicWidth: dimensions.width,
       intrinsicHeight: dimensions.height,
-      data: fileData,
+      data: embedData,
       imageType,
       ...(mustCreateOverflowContainer
         ? {

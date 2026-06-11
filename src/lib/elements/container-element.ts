@@ -1,6 +1,11 @@
 import { FlexLayoutHelper } from "../utils/flex-layout";
 import { BoxConstraints, Offset, Size } from "../layout/box-constraints";
 import {
+  Fragmentable,
+  FragmentResult,
+  packChildren,
+} from "../layout/fragmentation";
+import {
   FlexiblePDFElement,
   LayoutContext,
   PDFElement,
@@ -11,13 +16,53 @@ import {
 
 interface ContainerElementParams extends SizedElement, WithChildren {}
 
-export class ContainerElement extends SizedPDFElement {
+export class ContainerElement extends SizedPDFElement implements Fragmentable {
   private children: PDFElement[];
 
   constructor({ x, y, width, height, children }: ContainerElementParams) {
     super({ x, y, width, height });
 
     this.children = children;
+  }
+
+  /**
+   * Splits the vertical stack across pages. Children are measured against the content
+   * width and packed until one would exceed `maxHeight`. That straddling child is itself
+   * fragmented if it can be (Slice 1: a text paragraph splits at line boxes); otherwise
+   * it moves whole. Everything after the break spills into the remainder. Progress is
+   * guaranteed: if nothing fit on the page, the straddling child is forced on (it
+   * overflows) so the next region always makes headway.
+   *
+   * Flex children make the container absorb the leftover space, so it never overflows -
+   * in that case we don't fragment and hand the whole container back as `fitted`.
+   */
+  fragment(maxHeight: number, width: number, ctx: LayoutContext): FragmentResult {
+    if (this.children.some((child) => child instanceof FlexiblePDFElement)) {
+      return { fitted: this, remainder: null };
+    }
+
+    const { fitted, remainder } = packChildren(
+      this.children,
+      maxHeight,
+      width,
+      ctx
+    );
+    if (remainder.length === 0) return { fitted: this, remainder: null };
+
+    return {
+      fitted: this.cloneWithChildren(fitted),
+      remainder: this.cloneWithChildren(remainder),
+    };
+  }
+
+  private cloneWithChildren(children: PDFElement[]): ContainerElement {
+    return new ContainerElement({
+      x: this.x,
+      y: this.y,
+      width: this.width,
+      height: this.height,
+      children,
+    });
   }
 
   calculateLayout(

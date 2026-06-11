@@ -48,8 +48,8 @@ export class PDFRenderer {
     };
     document.calculateLayout(new BoxConstraints(), { x: 0, y: 0 }, ctx);
 
-    // Render pages and contents
-    await PDFDocumentRenderer.render(document, objectManager);
+    // Render pages and contents (the driver paginates overflowing pages).
+    await PDFDocumentRenderer.render(document, objectManager, ctx);
 
     // Add catalog objects
     const catalogObject = `<< /Type /Catalog /Pages ${objectManager.getParentObjectNumber()} 0 R >>`;

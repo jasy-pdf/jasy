@@ -1,4 +1,5 @@
 import { Jimp, JimpMime } from "jimp";
+import { deflateSync } from "zlib";
 
 // Declare the new method in the DataView interface
 declare global {
@@ -97,6 +98,30 @@ export async function getImageDimensions(
  * @param imagePath Path to the input image file.
  * @returns Promise that resolves with the binary data of the grayscale image.
  */
+/**
+ * Decodes a PNG into raw DeviceRGB samples, Flate-compressed, ready to embed as a PDF
+ * image XObject. A PNG file is NOT a valid `/FlateDecode` stream (it's a signature plus
+ * chunks of filtered, zlib-compressed scanlines), so it must be decoded first. PDF has
+ * no alpha channel for DeviceRGB, so transparent pixels are composited over white.
+ */
+export async function decodePngToRgbFlate(
+  pngBuffer: Buffer
+): Promise<{ data: string; width: number; height: number }> {
+  const image = await Jimp.fromBuffer(pngBuffer);
+  const { width, height, data: rgba } = image.bitmap;
+
+  const rgb = Buffer.allocUnsafe(width * height * 3);
+  for (let i = 0, j = 0; i < rgba.length; i += 4, j += 3) {
+    const alpha = rgba[i + 3] / 255;
+    rgb[j] = Math.round(rgba[i] * alpha + 255 * (1 - alpha));
+    rgb[j + 1] = Math.round(rgba[i + 1] * alpha + 255 * (1 - alpha));
+    rgb[j + 2] = Math.round(rgba[i + 2] * alpha + 255 * (1 - alpha));
+  }
+
+  // Compress so the existing `/Filter /FlateDecode` XObject path embeds it correctly.
+  return { data: deflateSync(rgb).toString("binary"), width, height };
+}
+
 export async function convertImageToGrayscaleBuffer(
   imagePath: string
 ): Promise<Buffer> {

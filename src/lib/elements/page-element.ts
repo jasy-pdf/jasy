@@ -16,6 +16,25 @@ export interface PDFPageConfig {
 interface PDFPageParams extends WithChildren {
   config?: PDFPageConfig;
 }
+
+/**
+ * The content box of a page (inside the margins, orientation applied) for a fully
+ * resolved config. Single source of truth, shared by `PageElement` layout and the page
+ * driver so they can never drift.
+ */
+export function resolvePageContentBox(config: PDFPageConfig): {
+  origin: Offset;
+  width: number;
+  height: number;
+} {
+  const margin = config.margin!;
+  let width = pageFormats[config.pageSize!][0] - margin.left - margin.right;
+  let height = pageFormats[config.pageSize!][1] - margin.top - margin.bottom;
+  if (config.orientation === Orientation.landscape) {
+    [width, height] = [height, width];
+  }
+  return { origin: { x: margin.left, y: margin.top }, width, height };
+}
 export class PageElement extends PDFElement {
   // This page's own (partial) config; merged with the document defaults during layout.
   private config: PDFPageConfig;
@@ -41,17 +60,8 @@ export class PageElement extends PDFElement {
       pageConfig: this.config,
     };
 
-    const margin = this.config.margin!;
-    let width =
-      pageFormats[this.config.pageSize!][0] - margin.left - margin.right;
-    let height =
-      pageFormats[this.config.pageSize!][1] - margin.top - margin.bottom;
-    if (this.config.orientation === Orientation.landscape) {
-      [width, height] = [height, width];
-    }
-
     // Children are placed at the top-left of the content box and may fill it.
-    const origin: Offset = { x: margin.left, y: margin.top };
+    const { origin, width, height } = resolvePageContentBox(this.config);
     const childConstraints = BoxConstraints.loose(width, height);
     this.children.forEach((child) =>
       child.calculateLayout(childConstraints, origin, pageCtx)

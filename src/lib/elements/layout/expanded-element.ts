@@ -30,8 +30,9 @@ export class ExpandedElement extends FlexiblePDFElement {
   ): Size {
     if (constraints.hasBoundedWidth) this.width = constraints.maxWidth;
     if (constraints.hasBoundedHeight) this.height = constraints.maxHeight;
-    this.x += offset.x;
-    this.y += offset.y;
+    // Absolute placement from the parent; assignment (not +=) so re-layout is idempotent.
+    this.x = offset.x;
+    this.y = offset.y;
 
     Validator.validateFlexElement(this);
 

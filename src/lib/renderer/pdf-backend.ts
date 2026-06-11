@@ -56,6 +56,18 @@ export class PdfBackend {
   }
 
   /**
+   * Escapes a string for a PDF literal string `( ... )`. The backslash must be doubled
+   * first, then the parentheses that delimit the string. Without this, a ")" in the
+   * text closes the string early and the remaining characters leak as raw operators.
+   */
+  static escapePdfString(text: string): string {
+    return text
+      .replace(/\\/g, "\\\\")
+      .replace(/\(/g, "\\(")
+      .replace(/\)/g, "\\)");
+  }
+
+  /**
    * Serialize a single display-list node to its content-stream operators.
    * `om` is used only by primitives that allocate PDF resources (images, fonts).
    */
@@ -87,15 +99,15 @@ export class PdfBackend {
       case "text": {
         // One self-contained text block per run. The producer has already resolved
         // absolute position, font and color; the backend only allocates the font
-        // resource and emits the operators. Text is not escaped here - that matches
-        // the previous behavior and is a separate fix (see todo).
+        // resource and emits the operators. The text is escaped for PDF literal-string
+        // syntax so parentheses/backslashes can't break out of the string.
         const font = om.registerFont(node.fontFamily, node.fontStyle);
         return (
           `BT\n` +
           `${node.color.toPDFColorString()} rg ` +
           `/F${font.fontIndex} ${node.fontSize} Tf ` +
           `${node.x.toFixed(3)} ${node.y.toFixed(3)} Td ` +
-          `(${node.text}) Tj\n` +
+          `(${PdfBackend.escapePdfString(node.text)}) Tj\n` +
           `ET\n`
         );
       }
