@@ -7,3 +7,4 @@ export * from "./rectangle-renderer";
 export * from "./text-renderer";
 export * from "./expanded-renderer";
 export * from "./line-renderer";
+export * from "./row-renderer";

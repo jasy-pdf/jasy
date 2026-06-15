@@ -1,6 +1,7 @@
 import { Color } from "../common/color";
 import { TextRenderer } from "../renderer";
 import { FontStyle } from "../utils/pdf-object-manager";
+import type { FontMetrics } from "../utils/font-metrics";
 import { BoxConstraints, Offset, Size } from "../layout/box-constraints";
 import { Fragmentable, FragmentResult } from "../layout/fragmentation";
 import {
@@ -158,7 +159,12 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
   ): Size {
     this.x = offset.x;
     this.y = offset.y;
-    if (constraints.hasBoundedWidth) this.width = constraints.maxWidth;
+    // Bounded width (e.g. inside a Column) wraps to that width; an unbounded width
+    // (e.g. inside a Row) means the text takes its natural single-line width and does
+    // not wrap. Columns always bound the width, so this leaves their layout untouched.
+    this.width = constraints.hasBoundedWidth
+      ? constraints.maxWidth
+      : this.naturalWidth(ctx.metrics);
 
     const wrapWidth = this.width ?? 0;
     this.height = TextRenderer.calculateTextHeight(
@@ -174,6 +180,29 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     // Y-flip are applied downstream (the line-builder positions baselines, the seam
     // flips to PDF), so the element stays coordinate-system-blind.
     return { width: wrapWidth, height: this.height };
+  }
+
+  /** The unwrapped single-line width of the content (used when width is unbounded). */
+  private naturalWidth(metrics: FontMetrics): number {
+    if (typeof this.content === "string") {
+      return metrics.getStringWidth(
+        this.content,
+        this.fontFamily,
+        this.fontSize,
+        this.fontStyle
+      );
+    }
+    return this.content.reduce(
+      (sum, seg) =>
+        sum +
+        metrics.getStringWidth(
+          seg.content,
+          seg.fontFamily ?? this.fontFamily,
+          seg.fontSize ?? this.fontSize,
+          seg.fontStyle ?? this.fontStyle
+        ),
+      0
+    );
   }
 
   override getProps() {

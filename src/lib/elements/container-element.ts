@@ -1,4 +1,4 @@
-import { FlexLayoutHelper } from "../utils/flex-layout";
+import { FlexLayoutHelper, VERTICAL_AXIS } from "../utils/flex-layout";
 import { BoxConstraints, Offset, Size } from "../layout/box-constraints";
 import {
   Fragmentable,
@@ -6,7 +6,6 @@ import {
   packChildren,
 } from "../layout/fragmentation";
 import {
-  FlexiblePDFElement,
   LayoutContext,
   PDFElement,
   SizedElement,
@@ -78,38 +77,19 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
     const height = this.height ?? 0;
 
     if (this.children) {
-      const inner = BoxConstraints.loose(width, height);
-      // Helper to caluclate the height
-      const { positions, usedHeight, totalFlex } =
-        FlexLayoutHelper.calculateFlexLayout(
-          this.children,
-          inner,
-          this.x,
-          this.y,
-          ctx
-        );
-      // Calc the remaining height and set the current positions
-      const remainingHeight = Math.max(height - usedHeight, 0);
-
-      for (let position of positions) {
-        const { element, y } = position;
-        if (element instanceof FlexiblePDFElement) {
-          const flexHeight = (element.getFlex() / totalFlex) * remainingHeight;
-          element.calculateLayout(
-            BoxConstraints.loose(width, flexHeight),
-            { x: this.x, y },
-            ctx
-          );
-        } else {
-          // Fixed elements take their natural height (unbounded), like the measure pass;
-          // here we just re-place them at their resolved y.
-          element.calculateLayout(
-            BoxConstraints.loose(width, Infinity),
-            { x: this.x, y },
-            ctx
-          );
-        }
-      }
+      // Vertical flex stack (main = height, cross = width), no gap. The shared helper
+      // measures fixed children, distributes the leftover to flex children, and places
+      // everything in source order.
+      FlexLayoutHelper.layout(
+        this.children,
+        VERTICAL_AXIS,
+        height,
+        width,
+        this.y,
+        this.x,
+        0,
+        ctx
+      );
     }
 
     // Top-left coordinates; the container itself draws nothing, and the Y-flip now

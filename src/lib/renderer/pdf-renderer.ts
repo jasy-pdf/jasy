@@ -12,8 +12,10 @@ import {
 import { TextRenderer } from "./text-renderer";
 import { ContainerElement } from "../elements/container-element";
 import { RectangleElement } from "../elements/rectangle-element";
+import { RowElement } from "../elements/row-element";
 import { ContainerRenderer } from "./container-renderer";
 import { RectangleRenderer } from "./rectangle-renderer";
+import { RowRenderer } from "./row-renderer";
 import { ExpandedRenderer } from "./expanded-renderer";
 import { PaddingRenderer } from "./padding-renderer";
 import { ImageRenderer } from "./image-renderer";
@@ -29,6 +31,7 @@ export class PDFRenderer {
     // Register all Renderer
     RendererRegistry.register(TextElement, TextRenderer.render);
     RendererRegistry.register(ContainerElement, ContainerRenderer.render);
+    RendererRegistry.register(RowElement, RowRenderer.render);
     RendererRegistry.register(RectangleElement, RectangleRenderer.render);
     RendererRegistry.register(ExpandedElement, ExpandedRenderer.render);
     RendererRegistry.register(PaddingElement, PaddingRenderer.render);

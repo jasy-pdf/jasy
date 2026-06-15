@@ -83,7 +83,7 @@ export class ImageRenderer {
         height = fitFillResult.height;
     }
 
-    // A radius rounds the image BOX (the element frame), so it clips to that frame too —
+    // A radius rounds the image BOX (the element frame), so it clips to that frame too -
     // independent of the cover/contain overflow clip.
     const wantsClip = mustCreateOverflowContainer || (radius ?? 0) > 0;
 
