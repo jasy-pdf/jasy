@@ -1,5 +1,10 @@
 import { BoxConstraints, Offset, Size } from "../layout/box-constraints";
-import { FlexLayoutHelper, HORIZONTAL_AXIS } from "../utils/flex-layout";
+import {
+  FlexLayoutHelper,
+  HORIZONTAL_AXIS,
+  MainAlign,
+  CrossAlign,
+} from "../utils/flex-layout";
 import {
   LayoutContext,
   PDFElement,
@@ -10,6 +15,10 @@ import {
 interface RowElementParams extends WithChildren {
   /** Space inserted between children, in points. */
   gap?: number;
+  /** Horizontal distribution of the children (main axis). */
+  main?: MainAlign;
+  /** Vertical alignment of each child (cross axis); defaults to `stretch`. */
+  cross?: CrossAlign;
 }
 
 /**
@@ -27,11 +36,15 @@ interface RowElementParams extends WithChildren {
 export class RowElement extends SizedPDFElement {
   private children: PDFElement[];
   private gap: number;
+  private main: MainAlign;
+  private cross: CrossAlign;
 
-  constructor({ children, gap }: RowElementParams) {
+  constructor({ children, gap, main, cross }: RowElementParams) {
     super({ x: 0, y: 0 });
     this.children = children;
     this.gap = gap ?? 0;
+    this.main = main ?? "start";
+    this.cross = cross ?? "stretch";
   }
 
   calculateLayout(
@@ -58,7 +71,7 @@ export class RowElement extends SizedPDFElement {
         crossAvail,
         this.x,
         this.y,
-        this.gap,
+        { gap: this.gap, main: this.main, cross: this.cross },
         ctx
       );
     }
@@ -81,6 +94,8 @@ export class RowElement extends SizedPDFElement {
       height: this.height,
       children: this.children,
       gap: this.gap,
+      main: this.main,
+      cross: this.cross,
     };
   }
 }

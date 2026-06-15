@@ -1,4 +1,9 @@
-import { FlexLayoutHelper, VERTICAL_AXIS } from "../utils/flex-layout";
+import {
+  FlexLayoutHelper,
+  VERTICAL_AXIS,
+  MainAlign,
+  CrossAlign,
+} from "../utils/flex-layout";
 import { BoxConstraints, Offset, Size } from "../layout/box-constraints";
 import {
   Fragmentable,
@@ -13,15 +18,28 @@ import {
   WithChildren,
 } from "./pdf-element";
 
-interface ContainerElementParams extends SizedElement, WithChildren {}
+interface ContainerElementParams extends SizedElement, WithChildren {
+  /** Space between children. */
+  gap?: number;
+  /** Vertical distribution of the children (main axis). */
+  main?: MainAlign;
+  /** Horizontal alignment of each child (cross axis); defaults to `stretch`. */
+  cross?: CrossAlign;
+}
 
 export class ContainerElement extends SizedPDFElement implements Fragmentable {
   private children: PDFElement[];
+  private gap: number;
+  private main: MainAlign;
+  private cross: CrossAlign;
 
-  constructor({ x, y, width, height, children }: ContainerElementParams) {
+  constructor({ x, y, width, height, children, gap, main, cross }: ContainerElementParams) {
     super({ x, y, width, height });
 
     this.children = children;
+    this.gap = gap ?? 0;
+    this.main = main ?? "start";
+    this.cross = cross ?? "stretch";
   }
 
   /**
@@ -59,6 +77,9 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
       width: this.width,
       height: this.height,
       children,
+      gap: this.gap,
+      main: this.main,
+      cross: this.cross,
     });
   }
 
@@ -87,7 +108,7 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
         width,
         this.y,
         this.x,
-        0,
+        { gap: this.gap, main: this.main, cross: this.cross },
         ctx
       );
     }
@@ -104,6 +125,9 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
       width: this.width!,
       height: this.height,
       children: this.children,
+      gap: this.gap,
+      main: this.main,
+      cross: this.cross,
     };
   }
 }

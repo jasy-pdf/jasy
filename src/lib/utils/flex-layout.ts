@@ -5,6 +5,14 @@ import {
 } from "../elements/pdf-element";
 import { BoxConstraints, Offset, Size } from "../layout/box-constraints";
 
+/** Distribution of the children ALONG the stacking (main) axis when there is leftover
+ *  space and no flex child to absorb it. */
+export type MainAlign = "start" | "center" | "end" | "between" | "around";
+
+/** Position/size of each child ACROSS the cross axis. `stretch` fills the cross extent;
+ *  the others place the child at its natural cross size. */
+export type CrossAlign = "start" | "center" | "end" | "stretch";
+
 /**
  * Maps the abstract MAIN/CROSS axes onto concrete width/height + x/y, so one flex
  * algorithm drives both a vertical Column (main = height) and a horizontal Row
@@ -13,41 +21,64 @@ import { BoxConstraints, Offset, Size } from "../layout/box-constraints";
 export interface FlexAxis {
   mainOf(size: Size): number;
   crossOf(size: Size): number;
-  /** Constraints for a content-sized child: main unbounded, cross capped at `crossAvail`. */
-  measureConstraints(crossAvail: number): BoxConstraints;
-  /** Constraints for a flex child given its resolved main extent. */
+  /** Constraints for a fixed child: main unbounded; cross capped only when stretching. */
+  measureConstraints(crossAvail: number, stretch: boolean): BoxConstraints;
+  /** Constraints for a flex child (fills the cross axis like a stretched child). */
   flexConstraints(mainExtent: number, crossAvail: number): BoxConstraints;
-  /** Absolute offset for a child at main position `mainPos`, cross origin `crossOrigin`. */
-  offsetAt(mainPos: number, crossOrigin: number): Offset;
+  /** Absolute offset for a child at main position `mainPos`, cross position `crossPos`. */
+  offsetAt(mainPos: number, crossPos: number): Offset;
 }
 
-/** Vertical stacking (Column): main = height (y), cross = width (x). */
 export const VERTICAL_AXIS: FlexAxis = {
   mainOf: (s) => s.height,
   crossOf: (s) => s.width,
-  measureConstraints: (crossAvail) => BoxConstraints.loose(crossAvail, Infinity),
+  measureConstraints: (crossAvail, stretch) =>
+    stretch
+      ? BoxConstraints.loose(crossAvail, Infinity)
+      : BoxConstraints.loose(Infinity, Infinity),
   flexConstraints: (mainExtent, crossAvail) =>
     BoxConstraints.loose(crossAvail, mainExtent),
-  offsetAt: (mainPos, crossOrigin) => ({ x: crossOrigin, y: mainPos }),
+  offsetAt: (mainPos, crossPos) => ({ x: crossPos, y: mainPos }),
 };
 
-/** Horizontal stacking (Row): main = width (x), cross = height (y). */
 export const HORIZONTAL_AXIS: FlexAxis = {
   mainOf: (s) => s.width,
   crossOf: (s) => s.height,
-  measureConstraints: (crossAvail) => BoxConstraints.loose(Infinity, crossAvail),
+  measureConstraints: (crossAvail, stretch) =>
+    stretch
+      ? BoxConstraints.loose(Infinity, crossAvail)
+      : BoxConstraints.loose(Infinity, Infinity),
   flexConstraints: (mainExtent, crossAvail) =>
     BoxConstraints.loose(mainExtent, crossAvail),
-  offsetAt: (mainPos, crossOrigin) => ({ x: mainPos, y: crossOrigin }),
+  offsetAt: (mainPos, crossPos) => ({ x: mainPos, y: crossPos }),
 };
+
+/** Cross-axis offset of a child of size `childCross` within `crossExtent`. */
+function crossOffset(
+  align: CrossAlign,
+  crossExtent: number,
+  childCross: number
+): number {
+  if (align === "center") return Math.max(0, (crossExtent - childCross) / 2);
+  if (align === "end") return Math.max(0, crossExtent - childCross);
+  return 0; // start, stretch (stretch fills, so no offset)
+}
+
+export interface FlexOptions {
+  gap?: number;
+  main?: MainAlign;
+  cross?: CrossAlign;
+}
 
 export class FlexLayoutHelper {
   /**
    * Lays out a flex line along `axis`, IN SOURCE ORDER, and places every child.
    * Fixed children take their natural main extent; flex (`ExpandedElement`) children
    * split the leftover main space by their `flex`. `gap` is inserted between children.
-   * Returns the total main extent consumed and the largest cross extent (the line's
-   * cross size). Vertical with `gap = 0` reproduces the previous Column layout exactly.
+   * `main` distributes any leftover when there is no flex child; `cross` positions/sizes
+   * each child across the line. Returns the total main extent consumed and the cross
+   * extent occupied. Vertical with `gap 0`, `main start`, `cross stretch` reproduces the
+   * previous Column layout exactly.
    */
   static layout(
     children: PDFElement[],
@@ -56,34 +87,60 @@ export class FlexLayoutHelper {
     crossAvail: number,
     mainStart: number,
     crossOrigin: number,
-    gap: number,
+    options: FlexOptions,
     ctx: LayoutContext
   ): { mainUsed: number; crossUsed: number } {
-    const totalGap = Math.max(0, children.length - 1) * gap;
+    const gap = options.gap ?? 0;
+    const main = options.main ?? "start";
+    const cross = options.cross ?? "stretch";
+    const stretch = cross === "stretch";
+    const count = children.length;
 
-    // Pass 1: measure the fixed children's main extent and total the flex. (Flex
-    // children get no extent yet - it depends on what the fixed ones leave over.)
+    // Pass 1: measure the fixed children (main extent + cross size) and total the flex.
     let fixedMain = 0;
     let totalFlex = 0;
+    let crossUsed = 0;
+    const fixedSize = new Map<PDFElement, Size>();
     for (const child of children) {
       if (child instanceof FlexiblePDFElement) {
         totalFlex += child.getFlex();
       } else {
         const size = child.calculateLayout(
-          axis.measureConstraints(crossAvail),
+          axis.measureConstraints(crossAvail, stretch),
           axis.offsetAt(mainStart, crossOrigin),
           ctx
         );
         fixedMain += axis.mainOf(size);
+        crossUsed = Math.max(crossUsed, axis.crossOf(size));
+        fixedSize.set(child, size);
       }
     }
 
-    const remaining = Math.max(mainAvail - fixedMain - totalGap, 0);
+    const totalGap = Math.max(0, count - 1) * gap;
+    const leftover = mainAvail - fixedMain - totalGap;
+    const remaining = Math.max(leftover, 0); // for flex children
 
-    // Pass 2: place each child in order at the running main position. A flex child
-    // takes its share of the leftover; a fixed child takes its measured extent.
-    let mainPos = mainStart;
-    let crossUsed = 0;
+    // Main-axis distribution only kicks in with no flex child and bounded, positive space.
+    let leadingSpace = 0;
+    let betweenSpace = gap;
+    if (totalFlex === 0 && mainAvail !== Infinity && leftover > 0) {
+      if (main === "center") leadingSpace = leftover / 2;
+      else if (main === "end") leadingSpace = leftover;
+      else if (main === "between" && count > 1)
+        betweenSpace = gap + leftover / (count - 1);
+      else if (main === "around") {
+        const unit = leftover / count;
+        leadingSpace = unit / 2;
+        betweenSpace = gap + unit;
+      }
+    }
+
+    // The cross extent children align within: the bounded line size, else the tallest child.
+    const crossExtent = crossAvail !== Infinity ? crossAvail : crossUsed;
+
+    // Pass 2: place each child at the running main position, offset across by `cross`.
+    let mainPos = mainStart + leadingSpace;
+    let placedCross = 0;
     children.forEach((child, index) => {
       let mainExtent: number;
       if (child instanceof FlexiblePDFElement) {
@@ -93,20 +150,21 @@ export class FlexLayoutHelper {
           axis.offsetAt(mainPos, crossOrigin),
           ctx
         );
-        crossUsed = Math.max(crossUsed, axis.crossOf(size));
+        placedCross = Math.max(placedCross, axis.crossOf(size));
       } else {
+        const childCross = axis.crossOf(fixedSize.get(child)!);
         const size = child.calculateLayout(
-          axis.measureConstraints(crossAvail),
-          axis.offsetAt(mainPos, crossOrigin),
+          axis.measureConstraints(crossAvail, stretch),
+          axis.offsetAt(mainPos, crossOrigin + crossOffset(cross, crossExtent, childCross)),
           ctx
         );
         mainExtent = axis.mainOf(size);
-        crossUsed = Math.max(crossUsed, axis.crossOf(size));
+        placedCross = Math.max(placedCross, childCross);
       }
       mainPos += mainExtent;
-      if (index < children.length - 1) mainPos += gap;
+      if (index < count - 1) mainPos += betweenSpace;
     });
 
-    return { mainUsed: mainPos - mainStart, crossUsed };
+    return { mainUsed: mainPos - mainStart, crossUsed: placedCross };
   }
 }
