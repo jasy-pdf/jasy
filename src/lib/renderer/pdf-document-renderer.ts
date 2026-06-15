@@ -1,8 +1,8 @@
 import { PDFDocumentElement } from "../elements/pdf-document-element";
 import {
+  layoutPageBands,
   PageElement,
   PDFPageConfig,
-  resolvePageContentBox,
 } from "../elements/page-element";
 import { LayoutContext, PDFElement } from "../elements/pdf-element";
 import { BoxConstraints } from "../layout/box-constraints";
@@ -62,13 +62,21 @@ export class PDFDocumentRenderer {
     objectManager: PDFObjectManager,
     ctx: LayoutContext
   ): Promise<number[]> {
-    const { children, config } = page.getProps();
+    const { children, config, header, footer } = page.getProps();
 
     if (children.length !== 1 || !isFragmentable(children[0])) {
       return [await PageRenderer.render(page, objectManager)];
     }
 
-    const { width, height } = resolvePageContentBox(config!);
+    // Header/footer repeat on every physical page, so the body only ever flows into the
+    // band between them. Resolve that band once (config is already merged by pass 1).
+    const pageCtx: LayoutContext = { metrics: ctx.metrics, pageConfig: config! };
+    const { bodyWidth: width, bodyHeight: height } = layoutPageBands(
+      config!,
+      header,
+      footer,
+      pageCtx
+    );
     const numbers: number[] = [];
     let region: PDFElement | null = children[0];
     let isFirstRegion = true;
@@ -80,6 +88,8 @@ export class PDFDocumentRenderer {
           await PDFDocumentRenderer.renderPhysicalPage(
             config,
             region,
+            header,
+            footer,
             objectManager,
             ctx
           )
@@ -103,6 +113,8 @@ export class PDFDocumentRenderer {
           await PDFDocumentRenderer.renderPhysicalPage(
             config,
             fitted,
+            header,
+            footer,
             objectManager,
             ctx
           )
@@ -115,14 +127,25 @@ export class PDFDocumentRenderer {
     return numbers;
   }
 
-  /** Lays out one fragment on a fresh page of the same geometry and renders it. */
+  /**
+   * Lays out one fragment on a fresh page of the same geometry and renders it. The
+   * header/footer are attached to every physical page so they repeat; `PageElement`
+   * re-places them and the body in the band between.
+   */
   private static async renderPhysicalPage(
     config: PDFPageConfig | undefined,
     content: PDFElement,
+    header: PDFElement | undefined,
+    footer: PDFElement | undefined,
     objectManager: PDFObjectManager,
     ctx: LayoutContext
   ): Promise<number> {
-    const physicalPage = new PageElement({ config, children: [content] });
+    const physicalPage = new PageElement({
+      config,
+      header,
+      footer,
+      children: [content],
+    });
     physicalPage.calculateLayout(new BoxConstraints(), { x: 0, y: 0 }, ctx);
     return PageRenderer.render(physicalPage, objectManager);
   }

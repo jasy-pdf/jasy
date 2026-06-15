@@ -11,7 +11,15 @@ export class PageRenderer {
     page: PageElement,
     objectManager: PDFObjectManager
   ): Promise<number> {
-    const { children, config } = page.getProps();
+    const { children, config, header, footer } = page.getProps();
+
+    // Header (top band) and footer (bottom band) sit around the body and repeat on every
+    // physical page; they are placed by `PageElement.calculateLayout` / the page driver.
+    const renderables = [
+      ...(header ? [header] : []),
+      ...children,
+      ...(footer ? [footer] : []),
+    ];
 
     // Page geometry (also the MediaBox below). Needed up front because flipping the
     // display list to PDF coordinates uses the page height. config is fully resolved
@@ -25,7 +33,7 @@ export class PageRenderer {
     // coordinates at this one seam, then serialize once. Serializing registers the
     // fonts/images used below, so it must run before the resource section.
     const nodes: IRNode[] = [];
-    for (const element of children) {
+    for (const element of renderables) {
       const renderer = RendererRegistry.getRenderer(element);
       if (renderer) {
         nodes.push(...(await renderer(element, objectManager)));

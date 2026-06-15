@@ -79,6 +79,11 @@ export class PaddingElement extends SizedPDFElement implements Fragmentable {
 
     const childSize = this.child.calculateLayout(childConstraints, childOffset, ctx);
     this.height = childSize.height + marginTop + marginBottom;
+    // Unbounded width (e.g. a fixed child in a Row): shrink-wrap to the child + insets,
+    // mirroring how Container/Row shrink-wrap. Bounded width was set above (unchanged).
+    if (!constraints.hasBoundedWidth) {
+      this.width = childSize.width + marginLeft + marginRight;
+    }
 
     Validator.validateSizedElement(this);
 

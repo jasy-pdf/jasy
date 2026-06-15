@@ -15,6 +15,10 @@ export interface PDFPageConfig {
 
 interface PDFPageParams extends WithChildren {
   config?: PDFPageConfig;
+  /** Laid out at the TOP of the content box, repeated on every physical page. */
+  header?: PDFElement;
+  /** Laid out at the BOTTOM of the content box, repeated on every physical page. */
+  footer?: PDFElement;
 }
 
 /**
@@ -35,15 +39,77 @@ export function resolvePageContentBox(config: PDFPageConfig): {
   }
   return { origin: { x: margin.left, y: margin.top }, width, height };
 }
+
+/** The body region of a page once the (optional) header/footer bands are subtracted. */
+export interface PageBands {
+  bodyOrigin: Offset;
+  bodyWidth: number;
+  bodyHeight: number;
+  headerHeight: number;
+  footerHeight: number;
+}
+
+/**
+ * Lays out the header (top) and footer (bottom) of a page and returns the body band left
+ * in between. Header/footer take their natural height against the content width; the body
+ * gets `contentHeight - headerHeight - footerHeight`. Shared by `PageElement.calculateLayout`
+ * (placement) and the page driver (so its fragmentation `maxHeight` matches exactly). With
+ * no header/footer the bands are zero and the body equals the full content box - identical
+ * to a page without them.
+ */
+export function layoutPageBands(
+  config: PDFPageConfig,
+  header: PDFElement | undefined,
+  footer: PDFElement | undefined,
+  ctx: LayoutContext
+): PageBands {
+  const { origin, width, height } = resolvePageContentBox(config);
+
+  let headerHeight = 0;
+  if (header) {
+    headerHeight = header.calculateLayout(
+      BoxConstraints.loose(width, Infinity),
+      origin,
+      ctx
+    ).height;
+  }
+
+  let footerHeight = 0;
+  if (footer) {
+    // Measure first to learn its height, then place it flush against the bottom edge.
+    footerHeight = footer.calculateLayout(
+      BoxConstraints.loose(width, Infinity),
+      origin,
+      ctx
+    ).height;
+    footer.calculateLayout(
+      BoxConstraints.loose(width, Infinity),
+      { x: origin.x, y: origin.y + height - footerHeight },
+      ctx
+    );
+  }
+
+  return {
+    bodyOrigin: { x: origin.x, y: origin.y + headerHeight },
+    bodyWidth: width,
+    bodyHeight: Math.max(0, height - headerHeight - footerHeight),
+    headerHeight,
+    footerHeight,
+  };
+}
 export class PageElement extends PDFElement {
   // This page's own (partial) config; merged with the document defaults during layout.
   private config: PDFPageConfig;
   private children: PDFElement[];
+  private header?: PDFElement;
+  private footer?: PDFElement;
 
-  constructor({ children, config }: PDFPageParams) {
+  constructor({ children, config, header, footer }: PDFPageParams) {
     super();
     this.children = children;
     this.config = config ?? {};
+    this.header = header;
+    this.footer = footer;
   }
 
   calculateLayout(
@@ -60,18 +126,28 @@ export class PageElement extends PDFElement {
       pageConfig: this.config,
     };
 
-    // Children are placed at the top-left of the content box and may fill it.
-    const { origin, width, height } = resolvePageContentBox(this.config);
-    const childConstraints = BoxConstraints.loose(width, height);
+    // Place the header/footer bands; the body gets the region left in between (the whole
+    // content box when there is neither - byte-identical to a plain page).
+    const bands = layoutPageBands(this.config, this.header, this.footer, pageCtx);
+    const childConstraints = BoxConstraints.loose(
+      bands.bodyWidth,
+      bands.bodyHeight
+    );
     this.children.forEach((child) =>
-      child.calculateLayout(childConstraints, origin, pageCtx)
+      child.calculateLayout(childConstraints, bands.bodyOrigin, pageCtx)
     );
 
+    const { width, height } = resolvePageContentBox(this.config);
     return { width, height };
   }
 
   override getProps(): PDFPageParams {
-    return { children: this.children, config: this.config };
+    return {
+      children: this.children,
+      config: this.config,
+      header: this.header,
+      footer: this.footer,
+    };
   }
 
   addTextElement(element: TextElement) {

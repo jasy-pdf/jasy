@@ -58,7 +58,8 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
       this.children,
       maxHeight,
       width,
-      ctx
+      ctx,
+      this.gap
     );
     // Fits as one region: hand the whole container back so the page renders unchanged
     // (its normal layout distributes flex / fills the page).
@@ -88,23 +89,26 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
     offset: Offset,
     ctx: LayoutContext
   ): Size {
-    // The container fills the space it is offered.
+    // The container fills the width/height it is offered; when the height is unbounded it
+    // shrink-wraps to its children instead (mirrors how Row shrink-wraps its width). This
+    // is what lets a bare Container serve as a header/footer band.
     if (constraints.hasBoundedWidth) this.width = constraints.maxWidth;
     if (constraints.hasBoundedHeight) this.height = constraints.maxHeight;
     this.x = offset.x;
     this.y = offset.y;
 
     const width = this.width ?? 0;
-    const height = this.height ?? 0;
+    const mainAvail = constraints.hasBoundedHeight ? this.height! : Infinity;
 
+    let result = { mainUsed: 0, crossUsed: 0 };
     if (this.children) {
-      // Vertical flex stack (main = height, cross = width), no gap. The shared helper
-      // measures fixed children, distributes the leftover to flex children, and places
-      // everything in source order.
-      FlexLayoutHelper.layout(
+      // Vertical flex stack (main = height, cross = width). The shared helper measures
+      // fixed children, distributes the leftover to flex children, and places everything
+      // in source order.
+      result = FlexLayoutHelper.layout(
         this.children,
         VERTICAL_AXIS,
-        height,
+        mainAvail,
         width,
         this.y,
         this.x,
@@ -113,8 +117,11 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
       );
     }
 
-    // Top-left coordinates; the container itself draws nothing, and the Y-flip now
+    // Bounded: fill the offered height (flex distributed above). Unbounded: shrink to the
+    // stacked children. Top-left coordinates; the container draws nothing, and the Y-flip
     // happens once at the IR -> backend seam.
+    const height = constraints.hasBoundedHeight ? this.height! : result.mainUsed;
+    this.height = height;
     return { width, height };
   }
 

@@ -42,6 +42,10 @@ export function isFragmentable(
  * after the break spills. Progress is guaranteed: if nothing fit, the straddling child is
  * forced on (it overflows) so the next region always advances.
  *
+ * `gap` is the spacing the parent inserts BETWEEN children (a `Column` gap) - it must be
+ * counted here, otherwise the packed fragment renders taller than `maxHeight` (the gaps
+ * are added back at render time) and overflows the region.
+ *
  * Shared by every element that lays out a vertical stack and can split it across regions
  * (Container, and the decorated boxes Padding/Rectangle).
  */
@@ -49,7 +53,8 @@ export function packChildren(
   children: PDFElement[],
   maxHeight: number,
   width: number,
-  ctx: LayoutContext
+  ctx: LayoutContext,
+  gap: number = 0
 ): { fitted: PDFElement[]; remainder: PDFElement[] } {
   const fitted: PDFElement[] = [];
   const remainder: PDFElement[] = [];
@@ -63,17 +68,20 @@ export function packChildren(
       ctx
     ).height;
 
-    if (usedHeight + childHeight <= maxHeight) {
+    // A gap precedes every child except the first one placed in this region.
+    const lead = fitted.length > 0 ? gap : 0;
+
+    if (usedHeight + lead + childHeight <= maxHeight) {
       fitted.push(child);
-      usedHeight += childHeight;
+      usedHeight += lead + childHeight;
       continue;
     }
 
     // `child` straddles the boundary. Try to split it; otherwise place/defer it whole.
-    const remaining = maxHeight - usedHeight;
+    const remaining = maxHeight - usedHeight - lead;
     let placedPart = false;
     if (isFragmentable(child)) {
-      const split = child.fragment(remaining, width, ctx);
+      const split = child.fragment(Math.max(0, remaining), width, ctx);
       if (split.fitted) {
         fitted.push(split.fitted);
         if (split.remainder) remainder.push(split.remainder);
