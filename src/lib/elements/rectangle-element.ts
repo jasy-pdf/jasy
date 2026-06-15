@@ -17,6 +17,8 @@ interface RectangleElementParams extends SizedElement, WithChildren {
   color?: Color;
   backgroundColor?: Color;
   borderWidth?: number;
+  /** Corner radius in points; 0 = sharp corners (default). */
+  radius?: number;
 }
 
 export class RectangleElement extends SizedPDFElement implements Fragmentable {
@@ -24,6 +26,7 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
   private color: Color;
   private backgroundColor?: Color;
   private borderWidth: number;
+  private radius: number;
 
   private sizeMemory!: {
     x: number;
@@ -39,6 +42,7 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
     borderWidth,
     width,
     height,
+    radius,
   }: RectangleElementParams) {
     super({ x: 0, y: 0, width, height });
 
@@ -46,6 +50,7 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
     this.color = color;
     this.backgroundColor = backgroundColor;
     this.borderWidth = borderWidth ? borderWidth : 1;
+    this.radius = radius ?? 0;
     this.sizeMemory = { x: 0, y: 0, width, height };
   }
 
@@ -109,6 +114,7 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
       color: this.color,
       backgroundColor: this.backgroundColor,
       borderWidth: this.borderWidth,
+      radius: this.radius,
     });
   }
 
@@ -177,6 +183,7 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
       color: this.color,
       backgroundColor: this.backgroundColor,
       borderWidth: this.borderWidth,
+      radius: this.radius,
     };
   }
 }

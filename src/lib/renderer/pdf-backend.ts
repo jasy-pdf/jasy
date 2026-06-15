@@ -82,6 +82,41 @@ export class PdfBackend {
   }
 
   /**
+   * Path operators for a rounded rectangle: bottom-left at (x,y), size w×h, corner
+   * radius `radius` (clamped to half the smaller side). Corners are 90° Bézier arcs
+   * (kappa ≈ 0.5523). Returns m/l/c/h ops WITHOUT the paint operator.
+   */
+  private static roundedRectPath(
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    radius: number
+  ): string {
+    const r = Math.min(radius, w / 2, h / 2);
+    const c = r * 0.5523; // control-point offset that approximates a quarter circle
+    const f = (n: number) => n.toFixed(3);
+    const xr = x + r;
+    const xwr = x + w - r;
+    const xw = x + w;
+    const yr = y + r;
+    const yhr = y + h - r;
+    const yh = y + h;
+    return (
+      `${f(xr)} ${f(y)} m\n` +
+      `${f(xwr)} ${f(y)} l\n` +
+      `${f(xwr + c)} ${f(y)} ${f(xw)} ${f(yr - c)} ${f(xw)} ${f(yr)} c\n` +
+      `${f(xw)} ${f(yhr)} l\n` +
+      `${f(xw)} ${f(yhr + c)} ${f(xwr + c)} ${f(yh)} ${f(xwr)} ${f(yh)} c\n` +
+      `${f(xr)} ${f(yh)} l\n` +
+      `${f(xr - c)} ${f(yh)} ${f(x)} ${f(yhr + c)} ${f(x)} ${f(yhr)} c\n` +
+      `${f(x)} ${f(yr)} l\n` +
+      `${f(x)} ${f(yr - c)} ${f(xr - c)} ${f(y)} ${f(xr)} ${f(y)} c\n` +
+      `h`
+    );
+  }
+
+  /**
    * Serialize a single display-list node to its content-stream operators.
    * `om` is used only by primitives that allocate PDF resources (images, fonts).
    */
@@ -109,8 +144,19 @@ export class PdfBackend {
         }
         if (node.fill) ops += `${node.fill.toPDFColorString()} rg\n`;
         const paint = node.fill ? (node.stroke ? "B" : "f") : "S";
-        const body =
-          ops + `${node.x} ${node.y} ${node.width} ${node.height} re ${paint}\n`;
+        // Rounded corners emit a Bézier path; sharp corners keep the plain `re`
+        // (byte-identical when no radius is set).
+        const path =
+          (node.radius ?? 0) > 0
+            ? PdfBackend.roundedRectPath(
+                node.x,
+                node.y,
+                node.width,
+                node.height,
+                node.radius!
+              )
+            : `${node.x} ${node.y} ${node.width} ${node.height} re`;
+        const body = ops + `${path} ${paint}\n`;
         // Transparency needs an isolating q/Q so the state does not leak; opaque rects
         // keep their bare operators (byte-identical).
         const gs = PdfBackend.alphaPrefix(

@@ -39,6 +39,8 @@ export interface Rect {
   fill?: Color;
   stroke?: Color;
   strokeWidth: number;
+  /** Corner radius in points; absent/0 = sharp corners (plain `re`). */
+  radius?: number;
 }
 
 /** A straight line segment between two points. */

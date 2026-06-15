@@ -18,6 +18,7 @@ export class RectangleRenderer {
       color,
       backgroundColor,
       borderWidth,
+      radius,
     } = rectangleElement.getProps();
 
     // The box itself becomes a display-list primitive. A background means a filled
@@ -32,6 +33,7 @@ export class RectangleRenderer {
       stroke: color,
       strokeWidth: borderWidth!,
       ...(backgroundColor ? { fill: backgroundColor } : {}),
+      ...(radius ? { radius } : {}),
     };
     const nodes: IRNode[] = [node];
 
