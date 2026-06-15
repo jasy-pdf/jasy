@@ -3,8 +3,9 @@ import { PaddingElement } from "../../../src/lib/elements/layout/padding-element
 import { RectangleElement } from "../../../src/lib/elements/rectangle-element";
 import { TextElement } from "../../../src/lib/elements/text-element";
 import { LineElement } from "../../../src/lib/elements/line-element";
-import { LayoutContext } from "../../../src/lib/elements/pdf-element";
-import { BoxConstraints } from "../../../src/lib/layout/box-constraints";
+import { LayoutContext, PDFElement } from "../../../src/lib/elements/pdf-element";
+import { BoxConstraints, Offset, Size } from "../../../src/lib/layout/box-constraints";
+import { packChildren } from "../../../src/lib/layout/fragmentation";
 import type { FontMetrics } from "../../../src/lib/utils/font-metrics";
 
 // Each glyph 10 wide, spaces 0: "aa bb cc dd ee ff" wraps to 3 lines of 10pt at width 50.
@@ -56,6 +57,36 @@ describe("PaddingElement.fragment (clone insets)", () => {
     // A line isn't fragmentable -> nothing splits, the padding moves whole.
     expect(fitted).toBeNull();
     expect(remainder).toBe(padding);
+  });
+});
+
+// A fixed-height, non-fragmentable block - the simplest thing packChildren can pack.
+class FixedBox extends PDFElement {
+  constructor(private h: number) {
+    super();
+  }
+  getProps(): unknown {
+    return {};
+  }
+  calculateLayout(_c: BoxConstraints, _o: Offset): Size {
+    return { width: 0, height: this.h };
+  }
+}
+
+describe("packChildren - the Column gap counts against the region", () => {
+  const boxes = () => Array.from({ length: 10 }, () => new FixedBox(100));
+
+  it("packs as many as fit edge-to-edge when there is no gap", () => {
+    const { fitted, remainder } = packChildren(boxes(), 350, 0, ctx);
+    expect(fitted).toHaveLength(3); // 3 * 100 = 300 <= 350
+    expect(remainder).toHaveLength(7);
+  });
+
+  it("counts the inter-child gap, so fewer fit (no overflow into the next band)", () => {
+    const { fitted, remainder } = packChildren(boxes(), 350, 0, ctx, 50);
+    // 100 + (50+100) + (50+100) = 400 > 350, so only 2 fit (100 + 150 = 250).
+    expect(fitted).toHaveLength(2);
+    expect(remainder).toHaveLength(8);
   });
 });
 

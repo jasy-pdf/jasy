@@ -47,7 +47,7 @@ class MockFlex extends FlexiblePDFElement {
 
 const ctx = {} as LayoutContext;
 
-describe("FlexLayoutHelper.layout — vertical (Column)", () => {
+describe("FlexLayoutHelper.layout - vertical (Column)", () => {
   it("stacks fixed then splits leftover among flex, in source order", () => {
     const f1 = new MockBox({ width: 0, height: 100 });
     const f2 = new MockBox({ width: 0, height: 50 });
@@ -84,7 +84,7 @@ describe("FlexLayoutHelper.layout — vertical (Column)", () => {
   });
 });
 
-describe("FlexLayoutHelper.layout — main-axis distribution (no flex)", () => {
+describe("FlexLayoutHelper.layout - main-axis distribution (no flex)", () => {
   const boxes = () => [
     new MockBox({ width: 0, height: 100 }),
     new MockBox({ width: 0, height: 50 }),
@@ -113,7 +113,7 @@ describe("FlexLayoutHelper.layout — main-axis distribution (no flex)", () => {
   });
 });
 
-describe("FlexLayoutHelper.layout — cross-axis alignment", () => {
+describe("FlexLayoutHelper.layout - cross-axis alignment", () => {
   it("center: a narrow child is centered across the cross extent", () => {
     const child = new MockBox({ width: 40, height: 20 });
     FlexLayoutHelper.layout(
@@ -136,7 +136,7 @@ describe("FlexLayoutHelper.layout — cross-axis alignment", () => {
   });
 });
 
-describe("FlexLayoutHelper.layout — horizontal (Row), same algorithm", () => {
+describe("FlexLayoutHelper.layout - horizontal (Row), same algorithm", () => {
   it("lays children left-to-right with a gap; cross = tallest child", () => {
     const a = new MockBox({ width: 30, height: 12 });
     const b = new MockBox({ width: 40, height: 20 });
