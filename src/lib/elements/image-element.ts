@@ -89,18 +89,28 @@ interface ImageElementParams {
   width?: number;
   height?: number;
   fit?: BoxFit;
+  /** Corner radius in points; rounds the image box (0 = sharp, default). */
+  radius?: number;
 }
 
 export class ImageElement extends SizedPDFElement {
   private image: CustomImage;
   private fit: BoxFit;
+  private radius: number;
 
-  constructor({ image, width, height, fit = BoxFit.none }: ImageElementParams) {
+  constructor({
+    image,
+    width,
+    height,
+    fit = BoxFit.none,
+    radius,
+  }: ImageElementParams) {
     super({ x: 0, y: 0, width });
 
     this.image = image;
     this.height = height;
     this.fit = fit;
+    this.radius = radius ?? 0;
   }
 
   calculateLayout(
@@ -126,6 +136,7 @@ export class ImageElement extends SizedPDFElement {
       height: this.height,
       image: this.image,
       fit: this.fit,
+      radius: this.radius,
     };
   }
 }

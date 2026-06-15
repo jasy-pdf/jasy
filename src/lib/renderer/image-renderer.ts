@@ -15,7 +15,7 @@ export class ImageRenderer {
     _objectManager: PDFObjectManager
   ): Promise<IRNode[]> {
     // Load the image and convert it in a binary string
-    let { x, y, width, height, image, fit } = imageElement.getProps();
+    let { x, y, width, height, image, fit, radius } = imageElement.getProps();
     await image.init(); // Load and initialize the image
     const imageType = await image.getImageType(); // For the moment we can handle `png` and `jpg/jpeg` files
     const fileData = await image.getFileData();
@@ -83,8 +83,12 @@ export class ImageRenderer {
         height = fitFillResult.height;
     }
 
+    // A radius rounds the image BOX (the element frame), so it clips to that frame too —
+    // independent of the cover/contain overflow clip.
+    const wantsClip = mustCreateOverflowContainer || (radius ?? 0) > 0;
+
     // The fitted geometry becomes a display-list primitive; the backend registers
-    // the XObject and emits the placement (and clip, for cover/contain).
+    // the XObject and emits the placement (+ clip, rounded when a radius is set).
     const node: Image = {
       type: "image",
       x,
@@ -95,7 +99,8 @@ export class ImageRenderer {
       intrinsicHeight: dimensions.height,
       data: embedData,
       imageType,
-      ...(mustCreateOverflowContainer
+      ...(radius ? { radius } : {}),
+      ...(wantsClip
         ? {
             clip: {
               x: containerDimensions.x,

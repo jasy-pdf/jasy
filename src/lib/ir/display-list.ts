@@ -67,6 +67,8 @@ export interface Image {
   imageType: string; // PDF filter name, e.g. "DCTDecode" (JPEG) or "FlateDecode" (PNG)
   /** cover/contain fits clip the placement to the element's original frame. */
   clip?: { x: number; y: number; width: number; height: number };
+  /** Corner radius in points for the image box; absent/0 = sharp corners. */
+  radius?: number;
 }
 
 /** The closed set of primitives the PDF backend knows how to draw. */

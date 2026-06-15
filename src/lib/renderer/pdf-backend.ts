@@ -196,9 +196,14 @@ export class PdfBackend {
           `q\n${node.width} 0 0 ${node.height} ${node.x} ${node.y} cm\n` +
           `/IM${ref} Do\nQ\n`;
         if (!node.clip) return draw;
-        // cover/contain clip the placement to the original frame (re … W n).
+        // Clip to the frame (re … W n); rounded when a radius is set. The rectangular
+        // path is byte-identical to before.
         const c = node.clip;
-        return `q\n${c.x} ${c.y} ${c.width} ${c.height} re \nW n \n` + draw + `Q\n`;
+        const clipPath =
+          (node.radius ?? 0) > 0
+            ? PdfBackend.roundedRectPath(c.x, c.y, c.width, c.height, node.radius!)
+            : `${c.x} ${c.y} ${c.width} ${c.height} re `;
+        return `q\n${clipPath}\nW n \n` + draw + `Q\n`;
       }
       default: {
         // Exhaustiveness guard: if a new IRNode variant is added, this fails to compile.
