@@ -1,152 +1,160 @@
 import { describe, it, expect } from "vitest";
-import { FlexLayoutHelper } from "../../../src/lib/utils/flex-layout";
+import {
+  FlexLayoutHelper,
+  VERTICAL_AXIS,
+  HORIZONTAL_AXIS,
+} from "../../../src/lib/utils/flex-layout";
 import {
   PDFElement,
   LayoutContext,
   FlexiblePDFElement,
   VerticalAlignment,
 } from "../../../src/lib/elements/pdf-element";
-import { BoxConstraints, Size } from "../../../src/lib/layout/box-constraints";
+import { BoxConstraints, Offset, Size } from "../../../src/lib/layout/box-constraints";
 
-// Mock elements for PDFElement and FlexiblePDFElement. The helper only lays out the
-// fixed children (and reads their returned height); flexible children are positioned
-// but never laid out here, so their calculateLayout return is irrelevant.
-class MockPDFElement extends PDFElement {
-  constructor(private layout: { height: number }) {
+// The helper PLACES children (calls calculateLayout with their offset), so the mocks
+// record where they were placed and report a fixed size.
+class MockBox extends PDFElement {
+  placedAt?: Offset;
+  constructor(private size: Size) {
     super();
   }
-
-  getProps(): { [key: string]: any } {
-    throw new Error("Method not implemented.");
+  getProps(): unknown {
+    return {};
   }
-
-  calculateLayout(): Size {
-    return { width: 0, height: this.layout.height };
+  calculateLayout(_c: BoxConstraints, offset: Offset): Size {
+    this.placedAt = offset;
+    return this.size;
   }
 }
 
-class MockFlexiblePDFElement extends FlexiblePDFElement {
+class MockFlex extends FlexiblePDFElement {
+  placedAt?: Offset;
   constructor(flex: number) {
     super({ flex, verticalChildAlignment: VerticalAlignment.top });
   }
-
-  getProps(): { [key: string]: any } {
-    throw new Error("Method not implemented.");
+  getProps(): unknown {
+    return {};
   }
-
-  getFlex() {
-    return this.flex;
-  }
-
-  calculateLayout(constraints: BoxConstraints): Size {
-    return { width: 0, height: constraints.maxHeight };
+  calculateLayout(c: BoxConstraints, offset: Offset): Size {
+    this.placedAt = offset;
+    return {
+      width: c.maxWidth === Infinity ? 0 : c.maxWidth,
+      height: c.maxHeight === Infinity ? 0 : c.maxHeight,
+    };
   }
 }
 
-const ctx = {} as LayoutContext; // mocks ignore it
-const originX = 0;
-const startY = 0;
-const inner = BoxConstraints.loose(0, 500); // content box: maxHeight 500
+const ctx = {} as LayoutContext;
 
-describe("FlexLayoutHelper", () => {
-  it("should calculate layout with fixed and flexible elements", () => {
-    const fixedElement1 = new MockPDFElement({ height: 100 });
-    const fixedElement2 = new MockPDFElement({ height: 50 });
-    const flexibleElement1 = new MockFlexiblePDFElement(1);
-    const flexibleElement2 = new MockFlexiblePDFElement(2);
+describe("FlexLayoutHelper.layout — vertical (Column)", () => {
+  it("stacks fixed then splits leftover among flex, in source order", () => {
+    const f1 = new MockBox({ width: 0, height: 100 });
+    const f2 = new MockBox({ width: 0, height: 50 });
+    const x1 = new MockFlex(1);
+    const x2 = new MockFlex(2);
 
-    const result = FlexLayoutHelper.calculateFlexLayout(
-      [fixedElement1, fixedElement2, flexibleElement1, flexibleElement2],
-      inner,
-      originX,
-      startY,
-      ctx
-    );
+    const r = FlexLayoutHelper.layout([f1, f2, x1, x2], VERTICAL_AXIS, 500, 0, 0, 0, {}, ctx);
 
-    expect(result.positions.length).toBe(4);
-    expect(result.positions[0].y).toBe(0); // Fixed element 1 at y = 0
-    expect(result.positions[1].y).toBe(100); // Fixed element 2 at y = 100
-    expect(result.positions[2].y).toBe(150); // First flexible element starts at y = 150
-    expect(result.positions[3].y).toBeGreaterThan(150); // Second flexible element below the first
-
-    const remainingHeight = inner.maxHeight - 150; // after the fixed elements
-    const expectedHeightFlexible1 = remainingHeight / 3; // flex 1 of total 3
-
-    expect(result.positions[2].y).toBe(150);
-    expect(result.positions[3].y).toBeCloseTo(150 + expectedHeightFlexible1, 5);
-    expect(result.totalFlex).toBe(3); // 1 + 2 = 3 :-)
+    expect(f1.placedAt!.y).toBe(0);
+    expect(f2.placedAt!.y).toBe(100);
+    expect(x1.placedAt!.y).toBe(150);
+    expect(x2.placedAt!.y).toBeCloseTo(150 + 350 / 3, 5);
+    expect(r.mainUsed).toBeCloseTo(500, 5);
   });
 
-  it("places children in source order: a fixed child after a flex child lands below it", () => {
-    const header = new MockPDFElement({ height: 100 });
-    const flexBody = new MockFlexiblePDFElement(1);
-    const footer = new MockPDFElement({ height: 50 });
+  it("puts a fixed child after a flex child below it (footer at the bottom)", () => {
+    const header = new MockBox({ width: 0, height: 100 });
+    const body = new MockFlex(1);
+    const footer = new MockBox({ width: 0, height: 50 });
 
-    const result = FlexLayoutHelper.calculateFlexLayout(
-      [header, flexBody, footer],
-      inner, // maxHeight 500
-      originX,
-      startY,
-      ctx
-    );
+    FlexLayoutHelper.layout([header, body, footer], VERTICAL_AXIS, 500, 0, 0, 0, {}, ctx);
 
-    // remaining = 500 - (100 + 50) = 350 -> the flex body fills 350.
-    expect(result.positions.map((p) => p.element)).toEqual([
-      header,
-      flexBody,
-      footer,
-    ]);
-    expect(result.positions[0].y).toBe(0); // header at the top
-    expect(result.positions[1].y).toBe(100); // body right after the header
-    expect(result.positions[2].y).toBe(450); // footer below the body (100 + 350), not at 100
+    expect(footer.placedAt!.y).toBe(450); // 100 + (500 - 150)
   });
 
-  it("should return correct total height used by fixed elements", () => {
-    const fixedElement1 = new MockPDFElement({ height: 100 });
-    const fixedElement2 = new MockPDFElement({ height: 50 });
+  it("inserts the gap and reports the main extent used", () => {
+    const a = new MockBox({ width: 0, height: 100 });
+    const b = new MockBox({ width: 0, height: 50 });
 
-    const result = FlexLayoutHelper.calculateFlexLayout(
-      [fixedElement1, fixedElement2],
-      inner,
-      originX,
-      startY,
-      ctx
-    );
+    const r = FlexLayoutHelper.layout([a, b], VERTICAL_AXIS, 500, 0, 0, 0, { gap: 10 }, ctx);
 
-    expect(result.usedHeight).toBe(150); // 100 + 50
+    expect(b.placedAt!.y).toBe(110);
+    expect(r.mainUsed).toBe(160);
+  });
+});
+
+describe("FlexLayoutHelper.layout — main-axis distribution (no flex)", () => {
+  const boxes = () => [
+    new MockBox({ width: 0, height: 100 }),
+    new MockBox({ width: 0, height: 50 }),
+  ];
+
+  it("center: the group is centered, leftover split before/after", () => {
+    const [a, b] = boxes();
+    FlexLayoutHelper.layout([a, b], VERTICAL_AXIS, 500, 0, 0, 0, { main: "center" }, ctx);
+    // leftover 350 -> leading 175.
+    expect(a.placedAt!.y).toBe(175);
+    expect(b.placedAt!.y).toBe(275);
   });
 
-  it("should correctly handle cases with no flexible elements", () => {
-    const fixedElement1 = new MockPDFElement({ height: 100 });
-    const fixedElement2 = new MockPDFElement({ height: 50 });
-
-    const result = FlexLayoutHelper.calculateFlexLayout(
-      [fixedElement1, fixedElement2],
-      inner,
-      originX,
-      startY,
-      ctx
-    );
-
-    expect(result.totalFlex).toBe(0); // No flexible elements
-    expect(result.usedHeight).toBe(150); // Fixed height is 100 + 50
+  it("end: the group is pushed to the end", () => {
+    const [a, b] = boxes();
+    FlexLayoutHelper.layout([a, b], VERTICAL_AXIS, 500, 0, 0, 0, { main: "end" }, ctx);
+    expect(a.placedAt!.y).toBe(350); // leftover before
+    expect(b.placedAt!.y).toBe(450);
   });
 
-  it("should correctly handle cases with only flexible elements", () => {
-    const flexibleElement1 = new MockFlexiblePDFElement(1);
-    const flexibleElement2 = new MockFlexiblePDFElement(2);
+  it("between: leftover goes between the children", () => {
+    const [a, b] = boxes();
+    FlexLayoutHelper.layout([a, b], VERTICAL_AXIS, 500, 0, 0, 0, { main: "between" }, ctx);
+    expect(a.placedAt!.y).toBe(0);
+    expect(b.placedAt!.y).toBe(450); // 100 + leftover 350 between the two
+  });
+});
 
-    const result = FlexLayoutHelper.calculateFlexLayout(
-      [flexibleElement1, flexibleElement2],
-      inner,
-      originX,
-      startY,
+describe("FlexLayoutHelper.layout — cross-axis alignment", () => {
+  it("center: a narrow child is centered across the cross extent", () => {
+    const child = new MockBox({ width: 40, height: 20 });
+    FlexLayoutHelper.layout(
+      [child],
+      VERTICAL_AXIS,
+      /*main*/ 500,
+      /*crossAvail*/ 100,
+      0,
+      0,
+      { cross: "center" },
       ctx
     );
+    expect(child.placedAt!.x).toBe(30); // (100 - 40) / 2
+  });
 
-    expect(result.totalFlex).toBe(3); // 1 + 2
-    const remainingHeight = inner.maxHeight;
-    expect(result.positions[0].y).toBe(0);
-    expect(result.positions[1].y).toBeCloseTo(remainingHeight / 3, 5); // after the first
+  it("end: a narrow child is pushed to the cross end", () => {
+    const child = new MockBox({ width: 40, height: 20 });
+    FlexLayoutHelper.layout([child], VERTICAL_AXIS, 500, 100, 0, 0, { cross: "end" }, ctx);
+    expect(child.placedAt!.x).toBe(60); // 100 - 40
+  });
+});
+
+describe("FlexLayoutHelper.layout — horizontal (Row), same algorithm", () => {
+  it("lays children left-to-right with a gap; cross = tallest child", () => {
+    const a = new MockBox({ width: 30, height: 12 });
+    const b = new MockBox({ width: 40, height: 20 });
+
+    const r = FlexLayoutHelper.layout([a, b], HORIZONTAL_AXIS, 500, 100, 0, 0, { gap: 8 }, ctx);
+
+    expect(a.placedAt!.x).toBe(0);
+    expect(b.placedAt!.x).toBe(38);
+    expect(r.crossUsed).toBe(20);
+  });
+
+  it("vertically centers a short child in the row (cross: center)", () => {
+    const tall = new MockBox({ width: 30, height: 40 });
+    const short = new MockBox({ width: 30, height: 10 });
+
+    FlexLayoutHelper.layout([tall, short], HORIZONTAL_AXIS, 500, Infinity, 0, 0, { cross: "center" }, ctx);
+
+    expect(tall.placedAt!.y).toBe(0); // tallest -> defines the cross extent (40)
+    expect(short.placedAt!.y).toBe(15); // (40 - 10) / 2
   });
 });
