@@ -34,6 +34,31 @@ class ImageManager {
   }
 }
 
+/** Graphics-state objects for transparency, deduped by their (fill, stroke) alpha pair. */
+class ExtGStateManager {
+  // alpha-pair key -> { resource name, indirect-object number }
+  private states = new Map<string, { name: string; objectNumber: number }>();
+
+  get(key: string) {
+    return this.states.get(key);
+  }
+
+  add(key: string, name: string, objectNumber: number) {
+    this.states.set(key, { name, objectNumber });
+  }
+
+  size(): number {
+    return this.states.size;
+  }
+
+  /** name -> object number, for the page `/Resources /ExtGState` dict. */
+  getAll(): Map<string, number> {
+    const out = new Map<string, number>();
+    this.states.forEach((value) => out.set(value.name, value.objectNumber));
+    return out;
+  }
+}
+
 class FontManager {
   private fonts: Map<string, FontIndexes> = new Map();
 
@@ -117,6 +142,7 @@ export class PDFObjectManager implements FontMetrics {
   private parentObjectNumber: number = 0;
   private fonts: FontManager = new FontManager(); // Stores the fonts
   private images: ImageManager = new ImageManager(); // Stores the images (object numbers and names)
+  private extGStates: ExtGStateManager = new ExtGStateManager(); // Transparency states
   private pdfConfig!: PDFConfig;
   public pageFormat = pageFormats[PageSize.A4];
 
@@ -221,6 +247,29 @@ endstream`;
 
     this.images.addImage(imageObjectNumber);
     return imageObjectNumber;
+  }
+
+  // Registers (or reuses) a transparency graphics state and returns its resource name
+  // (e.g. "GS1"). `fillAlpha` -> /ca, `strokeAlpha` -> /CA. Deduped by the alpha pair.
+  registerExtGState(fillAlpha: number, strokeAlpha: number): string {
+    const ca = fillAlpha.toFixed(3);
+    const CA = strokeAlpha.toFixed(3);
+    const key = `${ca}:${CA}`;
+
+    const existing = this.extGStates.get(key);
+    if (existing) return existing.name;
+
+    const name = `GS${this.extGStates.size() + 1}`;
+    const objectNumber = this.addObject(
+      `<< /Type /ExtGState /ca ${ca} /CA ${CA} >>`
+    );
+    this.extGStates.add(key, name, objectNumber);
+    return name;
+  }
+
+  // Returns all registered transparency states (name -> object number) for the page
+  getAllExtGStatesRaw(): Map<string, number> {
+    return this.extGStates.getAll();
   }
 
   // Registers a font

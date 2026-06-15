@@ -2,11 +2,25 @@ export class Color {
   private r: number;
   private g: number;
   private b: number;
+  // 0 = fully transparent, 1 = fully opaque. Real transparency is realized at the
+  // backend via an ExtGState (/ca fill, /CA stroke); the RGB string stays alpha-free.
+  private alpha: number;
 
-  constructor(r: number, g: number, b: number) {
+  constructor(r: number, g: number, b: number, alpha: number = 1) {
     this.r = this.clampColorValue(r, "r");
     this.g = this.clampColorValue(g, "g");
     this.b = this.clampColorValue(b, "b");
+    this.alpha = Math.max(0, Math.min(1, alpha));
+  }
+
+  /** Opacity in 0..1 (1 = opaque). */
+  getAlpha(): number {
+    return this.alpha;
+  }
+
+  /** True when the color is not fully opaque and needs an ExtGState to render. */
+  isTransparent(): boolean {
+    return this.alpha < 1;
   }
 
   /**

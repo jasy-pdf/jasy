@@ -68,6 +68,20 @@ export class PdfBackend {
   }
 
   /**
+   * Returns the `/GSx gs` operator that selects a transparency state, or `""` when both
+   * alphas are fully opaque. Opaque draws emit nothing here, so output stays
+   * byte-identical until transparency is actually used.
+   */
+  private static alphaPrefix(
+    om: PDFObjectManager,
+    fillAlpha: number,
+    strokeAlpha: number
+  ): string {
+    if (fillAlpha >= 1 && strokeAlpha >= 1) return "";
+    return `/${om.registerExtGState(fillAlpha, strokeAlpha)} gs\n`;
+  }
+
+  /**
    * Serialize a single display-list node to its content-stream operators.
    * `om` is used only by primitives that allocate PDF resources (images, fonts).
    */
@@ -77,6 +91,7 @@ export class PdfBackend {
         // q/Q isolates the graphics state; "[] 0 d" resets the dash pattern to solid.
         return (
           `q\n` +
+          PdfBackend.alphaPrefix(om, 1, node.stroke.getAlpha()) +
           `${node.strokeWidth} w\n` +
           `${node.stroke.toPDFColorString()} RG\n` +
           `[] 0 d\n` +
@@ -94,7 +109,16 @@ export class PdfBackend {
         }
         if (node.fill) ops += `${node.fill.toPDFColorString()} rg\n`;
         const paint = node.fill ? (node.stroke ? "B" : "f") : "S";
-        return ops + `${node.x} ${node.y} ${node.width} ${node.height} re ${paint}\n`;
+        const body =
+          ops + `${node.x} ${node.y} ${node.width} ${node.height} re ${paint}\n`;
+        // Transparency needs an isolating q/Q so the state does not leak; opaque rects
+        // keep their bare operators (byte-identical).
+        const gs = PdfBackend.alphaPrefix(
+          om,
+          node.fill?.getAlpha() ?? 1,
+          node.stroke?.getAlpha() ?? 1
+        );
+        return gs ? `q\n${gs}${body}Q\n` : body;
       }
       case "text": {
         // One self-contained text block per run. The producer has already resolved
@@ -102,14 +126,16 @@ export class PdfBackend {
         // resource and emits the operators. The text is escaped for PDF literal-string
         // syntax so parentheses/backslashes can't break out of the string.
         const font = om.registerFont(node.fontFamily, node.fontStyle);
-        return (
+        const block =
           `BT\n` +
           `${node.color.toPDFColorString()} rg ` +
           `/F${font.fontIndex} ${node.fontSize} Tf ` +
           `${node.x.toFixed(3)} ${node.y.toFixed(3)} Td ` +
           `(${PdfBackend.escapePdfString(node.text)}) Tj\n` +
-          `ET\n`
-        );
+          `ET\n`;
+        // Transparent text gets an isolating q/Q + gs; opaque text is byte-identical.
+        const gs = PdfBackend.alphaPrefix(om, node.color.getAlpha(), 1);
+        return gs ? `q\n${gs}${block}Q\n` : block;
       }
       case "image": {
         // The backend owns PDF resource creation: register the XObject (using the
