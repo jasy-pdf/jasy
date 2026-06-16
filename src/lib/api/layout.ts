@@ -1,6 +1,7 @@
 import { ContainerElement } from "../elements/container-element";
 import { RowElement } from "../elements/row-element";
 import { RectangleElement } from "../elements/rectangle-element";
+import { ExpandedElement } from "../elements/layout/expanded-element";
 import { PaddingElement } from "../elements/layout/padding-element";
 import { PDFElement } from "../elements/pdf-element";
 import { MainAlign, CrossAlign } from "../utils/flex-layout";
@@ -106,4 +107,33 @@ export function Box(
     height: opts.height,
     radius: opts.radius,
   });
+}
+
+/**
+ * A flexible empty gap that pushes its siblings apart - `Row([a, Spacer(), b])` sends `a`
+ * and `b` to the edges. `flex` weights it against other flex children (default 1).
+ */
+export function Spacer(flex: number = 1): ExpandedElement {
+  return new ExpandedElement({ flex, child: Column([]) });
+}
+
+export interface ExpandedOptions {
+  /** Share of the leftover space vs other flex children (default 1). */
+  flex?: number;
+}
+
+/**
+ * Makes a child fill the leftover space along the stack's main axis (height in a Column,
+ * width in a Row). `Expanded(child)` or `Expanded({ flex }, child)`.
+ */
+export function Expanded(child: PDFElement): ExpandedElement;
+export function Expanded(opts: ExpandedOptions, child: PDFElement): ExpandedElement;
+export function Expanded(
+  a: ExpandedOptions | PDFElement,
+  b?: PDFElement
+): ExpandedElement {
+  const isOptsForm = b !== undefined;
+  const opts = (isOptsForm ? a : {}) as ExpandedOptions;
+  const child = (isOptsForm ? b : a) as PDFElement;
+  return new ExpandedElement({ flex: opts.flex ?? 1, child });
 }
