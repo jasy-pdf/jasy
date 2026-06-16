@@ -24,7 +24,7 @@ class MockBox extends PDFElement {
   getProps(): unknown {
     return {};
   }
-  calculateLayout(c: BoxConstraints, offset: Offset): Size {
+  calculateLayout(c: BoxConstraints, offset: Offset, _ctx?: LayoutContext): Size {
     this.placedAt = offset;
     this.offeredMaxHeight = c.maxHeight;
     return this.size;
