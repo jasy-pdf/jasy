@@ -6,3 +6,4 @@ export * from "./insets";
 export * from "./text";
 export * from "./layout";
 export * from "./content";
+export * from "./structure";
