@@ -49,7 +49,8 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
     this.children = children;
     this.color = color;
     this.backgroundColor = backgroundColor;
-    this.borderWidth = borderWidth ? borderWidth : 1;
+    // `?? 1` (not `|| 1`) so an explicit `0` means "no border" instead of snapping to 1.
+    this.borderWidth = borderWidth ?? 1;
     this.radius = radius ?? 0;
     this.sizeMemory = { x: 0, y: 0, width, height };
   }

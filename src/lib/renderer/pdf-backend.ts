@@ -136,14 +136,17 @@ export class PdfBackend {
           `Q\n`
         );
       case "rect": {
-        // Stroke state first, then optional fill color, then paint: B = fill+stroke,
-        // f = fill only, S = stroke only.
+        // Stroke only with a stroke colour AND a positive width - a 0-width border means
+        // "no border" (e.g. a filled box with no outline). Nothing to paint at all (no
+        // fill, no border) draws nothing. Paint: B = fill+stroke, f = fill, S = stroke.
+        const doStroke = !!node.stroke && (node.strokeWidth ?? 0) > 0;
+        if (!node.fill && !doStroke) return "";
         let ops = "";
-        if (node.stroke) {
-          ops += `${node.strokeWidth} w\n${node.stroke.toPDFColorString()} RG\n`;
+        if (doStroke) {
+          ops += `${node.strokeWidth} w\n${node.stroke!.toPDFColorString()} RG\n`;
         }
         if (node.fill) ops += `${node.fill.toPDFColorString()} rg\n`;
-        const paint = node.fill ? (node.stroke ? "B" : "f") : "S";
+        const paint = node.fill ? (doStroke ? "B" : "f") : "S";
         // Rounded corners emit a Bézier path; sharp corners keep the plain `re`
         // (byte-identical when no radius is set).
         const path =
@@ -162,7 +165,7 @@ export class PdfBackend {
         const gs = PdfBackend.alphaPrefix(
           om,
           node.fill?.getAlpha() ?? 1,
-          node.stroke?.getAlpha() ?? 1
+          doStroke ? node.stroke!.getAlpha() : 1
         );
         return gs ? `q\n${gs}${body}Q\n` : body;
       }
