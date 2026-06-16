@@ -1,5 +1,9 @@
 import { Color } from "../common/color";
-import { TextRenderer } from "../renderer";
+// Import the renderer DIRECTLY, not via the "../renderer" barrel: the barrel pulls in
+// pdf-renderer (and every element) while this element module is still loading, which under
+// ESM (Vite/vitest, and the future framework bindings) duplicates the element classes and
+// breaks the constructor-keyed RendererRegistry. A direct import keeps the graph acyclic.
+import { TextRenderer } from "../renderer/text-renderer";
 import { FontStyle } from "../utils/pdf-object-manager";
 import type { FontMetrics } from "../utils/font-metrics";
 import { BoxConstraints, Offset, Size } from "../layout/box-constraints";
