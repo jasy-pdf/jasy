@@ -3,3 +3,4 @@
 // core classes stay untouched and remain exported for power users.
 export * from "./color";
 export * from "./insets";
+export * from "./text";
