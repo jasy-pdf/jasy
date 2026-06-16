@@ -7,4 +7,5 @@ export * from "./text";
 export * from "./layout";
 export * from "./content";
 export * from "./structure";
+export * from "./table";
 export * from "./descriptor";
