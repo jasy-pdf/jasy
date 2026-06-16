@@ -21,8 +21,16 @@ export type CrossAlign = "start" | "center" | "end" | "stretch";
 export interface FlexAxis {
   mainOf(size: Size): number;
   crossOf(size: Size): number;
-  /** Constraints for a fixed child: main unbounded; cross capped only when stretching. */
-  measureConstraints(crossAvail: number, stretch: boolean): BoxConstraints;
+  /**
+   * Constraints for a fixed child: the main extent is unbounded (it takes its natural
+   * size); the cross extent is ALWAYS capped to what the line offers. The cap is a hard
+   * ceiling regardless of `cross` alignment - it is what guarantees nothing ever overflows
+   * (a paragraph wraps at the column width instead of running one line off the page). A
+   * child smaller than the cap keeps its size and is positioned by `crossOffset`; a child
+   * that wants to fill (Container, Text) fills the cap. So `stretch` vs `start/center/end`
+   * differ only in where a smaller child sits, never in the ceiling.
+   */
+  measureConstraints(crossAvail: number): BoxConstraints;
   /** Constraints for a flex child (fills the cross axis like a stretched child). */
   flexConstraints(mainExtent: number, crossAvail: number): BoxConstraints;
   /** Absolute offset for a child at main position `mainPos`, cross position `crossPos`. */
@@ -32,10 +40,7 @@ export interface FlexAxis {
 export const VERTICAL_AXIS: FlexAxis = {
   mainOf: (s) => s.height,
   crossOf: (s) => s.width,
-  measureConstraints: (crossAvail, stretch) =>
-    stretch
-      ? BoxConstraints.loose(crossAvail, Infinity)
-      : BoxConstraints.loose(Infinity, Infinity),
+  measureConstraints: (crossAvail) => BoxConstraints.loose(crossAvail, Infinity),
   flexConstraints: (mainExtent, crossAvail) =>
     BoxConstraints.loose(crossAvail, mainExtent),
   offsetAt: (mainPos, crossPos) => ({ x: crossPos, y: mainPos }),
@@ -44,10 +49,7 @@ export const VERTICAL_AXIS: FlexAxis = {
 export const HORIZONTAL_AXIS: FlexAxis = {
   mainOf: (s) => s.width,
   crossOf: (s) => s.height,
-  measureConstraints: (crossAvail, stretch) =>
-    stretch
-      ? BoxConstraints.loose(Infinity, crossAvail)
-      : BoxConstraints.loose(Infinity, Infinity),
+  measureConstraints: (crossAvail) => BoxConstraints.loose(Infinity, crossAvail),
   flexConstraints: (mainExtent, crossAvail) =>
     BoxConstraints.loose(mainExtent, crossAvail),
   offsetAt: (mainPos, crossPos) => ({ x: mainPos, y: crossPos }),
@@ -93,7 +95,6 @@ export class FlexLayoutHelper {
     const gap = options.gap ?? 0;
     const main = options.main ?? "start";
     const cross = options.cross ?? "stretch";
-    const stretch = cross === "stretch";
     const count = children.length;
 
     // Pass 1: measure the fixed children (main extent + cross size) and total the flex.
@@ -106,7 +107,7 @@ export class FlexLayoutHelper {
         totalFlex += child.getFlex();
       } else {
         const size = child.calculateLayout(
-          axis.measureConstraints(crossAvail, stretch),
+          axis.measureConstraints(crossAvail),
           axis.offsetAt(mainStart, crossOrigin),
           ctx
         );
@@ -154,7 +155,7 @@ export class FlexLayoutHelper {
       } else {
         const childCross = axis.crossOf(fixedSize.get(child)!);
         const size = child.calculateLayout(
-          axis.measureConstraints(crossAvail, stretch),
+          axis.measureConstraints(crossAvail),
           axis.offsetAt(mainPos, crossOrigin + crossOffset(cross, crossExtent, childCross)),
           ctx
         );
