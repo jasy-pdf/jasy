@@ -4,7 +4,7 @@ import { PageElement } from "../elements/page-element";
 import { TextSegment } from "../elements/text-element";
 import { Text, Paragraph, span } from "./text";
 import { Column, Row, Box, Spacer, Expanded } from "./layout";
-import { Divider } from "./content";
+import { Divider, Image } from "./content";
 import { Page, Document } from "./structure";
 
 /**
@@ -58,6 +58,7 @@ const REGISTRY: Record<string, ElementFactory> = {
   expanded: (props, children) => Expanded(props, elementChildren(children)[0]),
   spacer: (props) => Spacer(props?.flex),
   divider: (props) => Divider(props),
+  image: (props) => Image(props.src, props),
   text: (props, children) => Text(textContent(children), props),
   paragraph: (props, children) => Paragraph(textContent(children), props),
 };

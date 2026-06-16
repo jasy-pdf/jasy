@@ -89,15 +89,16 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
     offset: Offset,
     ctx: LayoutContext
   ): Size {
-    // The container fills the width/height it is offered; when the height is unbounded it
-    // shrink-wraps to its children instead (mirrors how Row shrink-wraps its width). This
-    // is what lets a bare Container serve as a header/footer band.
+    // The container fills the width/height it is offered; when an axis is unbounded it
+    // shrink-wraps to its children instead (mirrors how Row shrink-wraps). Width unbounded
+    // happens for a Column nested in a Row (the Row offers its fixed children unbounded
+    // width); passing 0 there would collapse every child to width 0.
     if (constraints.hasBoundedWidth) this.width = constraints.maxWidth;
     if (constraints.hasBoundedHeight) this.height = constraints.maxHeight;
     this.x = offset.x;
     this.y = offset.y;
 
-    const width = this.width ?? 0;
+    const crossAvail = constraints.hasBoundedWidth ? this.width! : Infinity;
     const mainAvail = constraints.hasBoundedHeight ? this.height! : Infinity;
 
     let result = { mainUsed: 0, crossUsed: 0 };
@@ -109,7 +110,7 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
         this.children,
         VERTICAL_AXIS,
         mainAvail,
-        width,
+        crossAvail,
         this.y,
         this.x,
         { gap: this.gap, main: this.main, cross: this.cross },
@@ -117,10 +118,12 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
       );
     }
 
-    // Bounded: fill the offered height (flex distributed above). Unbounded: shrink to the
-    // stacked children. Top-left coordinates; the container draws nothing, and the Y-flip
-    // happens once at the IR -> backend seam.
+    // Bounded: fill the offered extent. Unbounded: shrink to the children (height = the
+    // stack, width = the widest child). Top-left coordinates; the container draws nothing,
+    // and the Y-flip happens once at the IR -> backend seam.
+    const width = constraints.hasBoundedWidth ? this.width! : result.crossUsed;
     const height = constraints.hasBoundedHeight ? this.height! : result.mainUsed;
+    this.width = width;
     this.height = height;
     return { width, height };
   }

@@ -1,5 +1,11 @@
 import { LineElement } from "../elements/line-element";
 import { PaddingElement } from "../elements/layout/padding-element";
+import {
+  ImageElement,
+  CustomImage,
+  CustomLocalImage,
+  BoxFit,
+} from "../elements/image-element";
 import { PDFElement } from "../elements/pdf-element";
 import { ColorInput, toColor } from "./color";
 import { Insets, toEdges } from "./insets";
@@ -34,5 +40,41 @@ export function Divider(opts: DividerOptions = {}): PDFElement {
   return new PaddingElement({
     margin: toEdges(opts.margin ?? DEFAULT_DIVIDER_MARGIN),
     child: line,
+  });
+}
+
+/** An image source: a local file path, or a `CustomImage` (e.g. a browser-supplied image). */
+export type ImageSource = string | CustomImage;
+
+/** How the image fills its box (locked §4). Mirrors CSS `object-fit`. */
+export type ImageFit = "none" | "contain" | "cover" | "fill";
+
+const FIT: Record<ImageFit, BoxFit> = {
+  none: BoxFit.none,
+  contain: BoxFit.contain,
+  cover: BoxFit.cover,
+  fill: BoxFit.fill,
+};
+
+export interface ImageOptions {
+  width?: number;
+  height?: number;
+  /** Fit within the box (default `none`). */
+  fit?: ImageFit;
+  /** Corner radius in points (rounds the image box). */
+  radius?: number;
+}
+
+/**
+ * An image. `src` is a local file path (wrapped in a `CustomLocalImage`) or a ready
+ * `CustomImage` for non-filesystem sources. Maps to an `ImageElement`.
+ */
+export function Image(src: ImageSource, opts: ImageOptions = {}): ImageElement {
+  return new ImageElement({
+    image: typeof src === "string" ? new CustomLocalImage(src) : src,
+    width: opts.width,
+    height: opts.height,
+    fit: opts.fit ? FIT[opts.fit] : undefined,
+    radius: opts.radius,
   });
 }
