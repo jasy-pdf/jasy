@@ -5,7 +5,7 @@ import { PageSize } from "../constants/page-sizes";
 import { Orientation } from "../renderer/pdf-config";
 import { PDFDocument, PDFConfig } from "../renderer/pdf-document-class";
 import { getArrayBuffer } from "../utils/utf8-to-windows1252-encoder";
-import { Column } from "./layout";
+import { Column, StackOptions } from "./layout";
 import { Insets, toEdges } from "./insets";
 
 /** A page size: a `PageSize` enum, or a friendly name like `"A4"` / `"letter"` (any case). */
@@ -22,7 +22,7 @@ function toPageSize(input: PageSizeInput): PageSize {
 /** Default page margin (all sides, points) when a `Page` doesn't set one. */
 const DEFAULT_MARGIN = 56;
 
-export interface PageOptions {
+export interface PageOptions extends StackOptions {
   /** Page size (default A4). */
   size?: PageSizeInput;
   orientation?: "portrait" | "landscape";
@@ -32,6 +32,7 @@ export interface PageOptions {
   header?: PDFElement;
   /** Laid out at the bottom, repeated on every physical page. */
   footer?: PDFElement;
+  // `gap` / `main` / `cross` (from StackOptions) tune the body Column the children sit in.
 }
 
 /**
@@ -63,7 +64,9 @@ export function Page(
     config,
     header: opts.header,
     footer: opts.footer,
-    children: [Column(children)],
+    children: [
+      Column({ gap: opts.gap, main: opts.main, cross: opts.cross }, children),
+    ],
   });
 }
 

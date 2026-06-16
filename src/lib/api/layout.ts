@@ -109,6 +109,11 @@ export function Box(
   });
 }
 
+/** Insets a single child by `padding` (a number / `{x,y}` / `{top,…}` / 4-tuple). */
+export function Padding(padding: Insets, child: PDFElement): PaddingElement {
+  return new PaddingElement({ margin: toEdges(padding), child });
+}
+
 /**
  * A flexible empty gap that pushes its siblings apart - `Row([a, Spacer(), b])` sends `a`
  * and `b` to the edges. `flex` weights it against other flex children (default 1).

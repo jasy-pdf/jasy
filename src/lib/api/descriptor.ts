@@ -3,7 +3,7 @@ import { PDFDocumentElement } from "../elements/pdf-document-element";
 import { PageElement } from "../elements/page-element";
 import { TextSegment } from "../elements/text-element";
 import { Text, Paragraph, span } from "./text";
-import { Column, Row, Box, Spacer, Expanded } from "./layout";
+import { Column, Row, Box, Padding, Spacer, Expanded } from "./layout";
 import { Divider, Image } from "./content";
 import { Page, Document } from "./structure";
 
@@ -55,6 +55,7 @@ const REGISTRY: Record<string, ElementFactory> = {
   column: (props, children) => Column(props, elementChildren(children)),
   row: (props, children) => Row(props, elementChildren(children)),
   box: (props, children) => Box(props, elementChildren(children)),
+  padding: (props, children) => Padding(props.insets ?? 0, elementChildren(children)[0]),
   expanded: (props, children) => Expanded(props, elementChildren(children)[0]),
   spacer: (props) => Spacer(props?.flex),
   divider: (props) => Divider(props),
