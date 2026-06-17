@@ -58,4 +58,22 @@ describe("Box factory", () => {
     expect(props(b).children).toHaveLength(2);
     expect(props(b).children[0]).not.toBeInstanceOf(PaddingElement);
   });
+
+  it("a uniform border sets no per-side borders (byte-identical path)", () => {
+    expect(props(Box({ border: "gray" }, [Text("a")])).sideBorders).toBeUndefined();
+  });
+
+  it("a single side (borderBottom) draws only that side", () => {
+    const s = props(Box({ borderBottom: "gray" }, [Text("a")])).sideBorders;
+    expect(s.bottom.toArray()).toEqual([128, 128, 128]);
+    expect(s.top).toBeUndefined();
+    expect(s.left).toBeUndefined();
+    expect(s.right).toBeUndefined();
+  });
+
+  it("a uniform `border` plus a per-side override colours all sides, with the override on its side", () => {
+    const s = props(Box({ border: "gray", borderBottom: "red" }, [Text("a")])).sideBorders;
+    expect(s.top.toArray()).toEqual([128, 128, 128]); // from `border`
+    expect(s.bottom.toArray()).toEqual([255, 0, 0]); // override
+  });
 });

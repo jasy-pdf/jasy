@@ -3,6 +3,7 @@ import { RepeatingHeaderElement } from "../elements/layout/repeating-header-elem
 import { Column, Row, Box, Expanded, Padding } from "./layout";
 import { Text } from "./text";
 import { Insets } from "./insets";
+import { ColorInput } from "./color";
 
 /**
  * A column width: a `number` of points (fixed), or a fraction string like `"1fr"` / `"2fr"`
@@ -27,6 +28,9 @@ export interface TableOptions {
   colGap?: number;
   /** Padding inside every cell (default none). */
   cellPadding?: Insets;
+  /** Grid line colour around every cell. Draws the complete grid once - don't add your own
+   *  frame Box, or the outer edges double up. */
+  cellBorder?: ColorInput;
 }
 
 function asElement(c: Cell): PDFElement {
@@ -41,39 +45,66 @@ function fractionOf(col: ColumnWidth): number | null {
 }
 
 /**
- * A table: a `Column` of `Row`s built from the cell grid, with column widths resolved from
- * `columns` (fixed point widths sit in a fixed-width `Box`; `"Nfr"` fractions become
- * `Expanded`, so they align across rows and share the leftover width). Because it is just a
- * Column of atomic Rows, it paginates at ROW boundaries for free - a row that doesn't fit
- * moves whole to the next page. (A repeating header row across pages is a later feature.)
+ * A `Column` of `Row`s. Fixed-point columns sit in a fixed-width `Box`, `"Nfr"` fractions
+ * become `Expanded`, so columns align across rows. Being a Column of atomic Rows, it
+ * paginates at row boundaries for free (a row that doesn't fit moves whole).
  */
 export function Table(opts: TableOptions, rows: Cell[][]): PDFElement {
   const { columns, cellPadding } = opts;
   const colGap = opts.colGap ?? opts.gap ?? 0;
   const rowGap = opts.rowGap ?? opts.gap ?? 0;
 
-  const wrap = (cell: Cell, col: ColumnWidth): PDFElement => {
+  const cb = opts.cellBorder;
+
+  // The complete grid, once: every cell bottom+right, first row also top, first col also left.
+  const borderFor = (firstRow: boolean, firstCol: boolean) =>
+    cb === undefined
+      ? {}
+      : {
+          borderBottom: cb,
+          borderRight: cb,
+          ...(firstRow ? { borderTop: cb } : {}),
+          ...(firstCol ? { borderLeft: cb } : {}),
+        };
+
+  const wrap = (
+    cell: Cell,
+    col: ColumnWidth,
+    firstRow: boolean,
+    firstCol: boolean
+  ): PDFElement => {
     const inner =
       cellPadding !== undefined ? Padding(cellPadding, asElement(cell)) : asElement(cell);
-    if (typeof col === "number") return Box({ width: col }, [inner]);
+    // The border lives on the wrapper, which stretches to the row height (crisp lines).
+    const border = borderFor(firstRow, firstCol);
+    if (typeof col === "number") return Box({ width: col, ...border }, [inner]);
     const fr = fractionOf(col);
-    if (fr !== null) return Expanded({ flex: fr }, inner);
+    if (fr !== null)
+      return Expanded(
+        { flex: fr },
+        cb !== undefined ? Box({ ...border }, [inner]) : inner
+      );
     throw new Error(
       `Unsupported column width "${col}" - use a number of points or "<n>fr" ("auto" is not supported yet)`
     );
   };
 
-  const buildRow = (cells: Cell[]) =>
+  // cross:stretch → equal-height cells, so a wrapping cell keeps the row's bottom rule straight.
+  const buildRow = (cells: Cell[], firstRow: boolean) =>
     Row(
-      { gap: colGap },
-      cells.map((cell, i) => wrap(cell, columns[i] ?? "1fr"))
+      { gap: colGap, cross: "stretch" },
+      cells.map((cell, i) => wrap(cell, columns[i] ?? "1fr", firstRow, i === 0))
     );
 
-  const body = Column({ gap: rowGap }, rows.map(buildRow));
+  // The first row (which gets the top border) is the header if present, else body row 0.
+  const body = Column(
+    { gap: rowGap },
+    rows.map((cells, idx) => buildRow(cells, !opts.header && idx === 0))
+  );
 
   // A repeating header gets its own element so it reappears on every page; otherwise the
   // table is just the body Column (still paginates at row boundaries).
   return opts.header
-    ? new RepeatingHeaderElement(buildRow(opts.header), body, rowGap)
+    ? new RepeatingHeaderElement(buildRow(opts.header, true), body, rowGap)
     : body;
 }

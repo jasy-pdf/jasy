@@ -136,8 +136,29 @@ export class FlexLayoutHelper {
       }
     }
 
+    // Measure flex children too (at their main share) so a tall/wrapping flex cell counts
+    // toward the line's cross extent - they're placed in pass 2, but crossExtent needs them now.
+    if (totalFlex > 0) {
+      for (const child of children) {
+        if (child instanceof FlexiblePDFElement) {
+          const mainExtent = (child.getFlex() / totalFlex) * remaining;
+          const size = child.calculateLayout(
+            axis.flexConstraints(mainExtent, crossAvail),
+            axis.offsetAt(mainStart, crossOrigin),
+            ctx
+          );
+          crossUsed = Math.max(crossUsed, axis.crossOf(size));
+        }
+      }
+    }
+
     // The cross extent children align within: the bounded line size, else the tallest child.
     const crossExtent = crossAvail !== Infinity ? crossAvail : crossUsed;
+
+    // `stretch` caps a child's cross to `crossExtent` (not `crossAvail`) so siblings end up
+    // equal across the axis. Bounded lines have crossExtent == crossAvail (byte-identical);
+    // only an unbounded line (a shrink-wrap Row) now equalises instead of staying natural.
+    const stretch = cross === "stretch";
 
     // Pass 2: place each child at the running main position, offset across by `cross`.
     let mainPos = mainStart + leadingSpace;
@@ -147,7 +168,7 @@ export class FlexLayoutHelper {
       if (child instanceof FlexiblePDFElement) {
         mainExtent = (child.getFlex() / totalFlex) * remaining;
         const size = child.calculateLayout(
-          axis.flexConstraints(mainExtent, crossAvail),
+          axis.flexConstraints(mainExtent, stretch ? crossExtent : crossAvail),
           axis.offsetAt(mainPos, crossOrigin),
           ctx
         );
@@ -155,12 +176,12 @@ export class FlexLayoutHelper {
       } else {
         const childCross = axis.crossOf(fixedSize.get(child)!);
         const size = child.calculateLayout(
-          axis.measureConstraints(crossAvail),
+          axis.measureConstraints(stretch ? crossExtent : crossAvail),
           axis.offsetAt(mainPos, crossOrigin + crossOffset(cross, crossExtent, childCross)),
           ctx
         );
         mainExtent = axis.mainOf(size);
-        placedCross = Math.max(placedCross, childCross);
+        placedCross = Math.max(placedCross, axis.crossOf(size));
       }
       mainPos += mainExtent;
       if (index < count - 1) mainPos += betweenSpace;
