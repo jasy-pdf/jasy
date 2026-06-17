@@ -8,9 +8,6 @@ importers:
 
   .:
     dependencies:
-      jasy-pdf:
-        specifier: 'file:'
-        version: 'file:'
       jimp:
         specifier: ^1.6.0
         version: 1.6.1
@@ -39,6 +36,12 @@ importers:
       vitest:
         specifier: ^2.1.1
         version: 2.1.9(@types/node@25.9.2)
+
+  packages/zugferd:
+    dependencies:
+      jasy-pdf:
+        specifier: workspace:*
+        version: link:../..
 
 packages:
 
@@ -1239,9 +1242,6 @@ packages:
 
   jackspeak@3.4.3:
     resolution: {integrity: sha512-OGlZQpz2yfahA/Rd1Y8Cd9SIEsqvXkLVoSw/cgwhnhFMDbsQFeZYoJJ7bIZBS9BcamUW96asq/npPWugM+RQBw==}
-
-  'jasy-pdf@file:':
-    resolution: {directory: '', type: directory}
 
   jest-changed-files@29.7.0:
     resolution: {integrity: sha512-fEArFiwf1BpQ+4bXSprcDc3/x4HSzL4al2tozwVpDFpsxALjLYdyiIK4e5Vz66GQJIbXJ82+35PtysofptNX2w==}
@@ -3336,13 +3336,6 @@ snapshots:
       '@isaacs/cliui': 8.0.2
     optionalDependencies:
       '@pkgjs/parseargs': 0.11.0
-
-  'jasy-pdf@file:':
-    dependencies:
-      jimp: 1.6.1
-      reflect-metadata: 0.2.2
-    transitivePeerDependencies:
-      - supports-color
 
   jest-changed-files@29.7.0:
     dependencies:
