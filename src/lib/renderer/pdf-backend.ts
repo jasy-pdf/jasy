@@ -174,13 +174,22 @@ export class PdfBackend {
         // absolute position, font and color; the backend only allocates the font
         // resource and emits the operators. The text is escaped for PDF literal-string
         // syntax so parentheses/backslashes can't break out of the string.
-        const font = om.registerFont(node.fontFamily, node.fontStyle);
+        // Embedded (custom) fonts: pick the family variant for this style (falling back to the
+        // family's Normal), select its Identity-H Type0 resource and emit hex glyph ids - both
+        // from the SAME variant. Standard fonts keep the WinAnsi literal string, byte-identical.
+        const isCustom = om.isCustomFont(node.fontFamily, node.fontStyle);
+        const font = isCustom
+          ? om.getCustomFontResource(node.fontFamily, node.fontStyle)!
+          : om.registerFont(node.fontFamily, node.fontStyle);
+        const textOp = isCustom
+          ? `<${om.encodeCustomText(node.fontFamily, node.text, node.fontStyle)}>`
+          : `(${PdfBackend.escapePdfString(node.text)})`;
         const block =
           `BT\n` +
           `${node.color.toPDFColorString()} rg ` +
           `/F${font.fontIndex} ${node.fontSize} Tf ` +
           `${node.x.toFixed(3)} ${node.y.toFixed(3)} Td ` +
-          `(${PdfBackend.escapePdfString(node.text)}) Tj\n` +
+          `${textOp} Tj\n` +
           `ET\n`;
         // Transparent text gets an isolating q/Q + gs; opaque text is byte-identical.
         const gs = PdfBackend.alphaPrefix(om, node.color.getAlpha(), 1);

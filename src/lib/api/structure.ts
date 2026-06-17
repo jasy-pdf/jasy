@@ -4,6 +4,7 @@ import { PDFElement } from "../elements/pdf-element";
 import { PageSize } from "../constants/page-sizes";
 import { Orientation } from "../renderer/pdf-config";
 import { PDFDocument, PDFConfig } from "../renderer/pdf-document-class";
+import { FontStyle } from "../utils/pdf-object-manager";
 import { getArrayBuffer } from "../utils/utf8-to-windows1252-encoder";
 import { Column, StackOptions } from "./layout";
 import { Insets, toEdges } from "./insets";
@@ -98,18 +99,56 @@ export function Document(
   return doc;
 }
 
+export type FontBytes = Buffer | Uint8Array;
+
+/** A font family: one `.ttf` per style. Only `normal` is required; `bold`/`italic`/`boldItalic`
+ *  are picked up automatically by `Text({ bold, italic })`, falling back to `normal` if absent. */
+export interface FontFamily {
+  normal: FontBytes;
+  bold?: FontBytes;
+  italic?: FontBytes;
+  boldItalic?: FontBytes;
+}
+
+export interface RenderOptions {
+  /** Embedded TrueType fonts, keyed by the name used in `Text({ font })`. The value is either the
+   *  raw `.ttf` bytes (registered as `normal`) or a `FontFamily` with per-style files. */
+  fonts?: Record<string, FontBytes | FontFamily>;
+}
+
+function isFontBytes(v: FontBytes | FontFamily): v is FontBytes {
+  return Buffer.isBuffer(v) || v instanceof Uint8Array;
+}
+
 /** Renders a `Document(...)` tree to the raw PDF string. */
-export async function renderPdf(doc: PDFDocumentElement): Promise<string> {
+export async function renderPdf(
+  doc: PDFDocumentElement,
+  options?: RenderOptions
+): Promise<string> {
   const meta = docMeta.get(doc);
   const config: PDFConfig | undefined = meta
     ? { metaData: { title: meta.title, author: meta.author, keywords: [] } }
     : undefined;
+  const fonts = options?.fonts ?? {};
 
   // A throwaway PDFDocument whose build() yields this tree, reusing the engine's standard
-  // font registration + config handling (the constructor does both).
+  // font registration + config handling (the constructor does both). Custom fonts are
+  // registered here, before layout/render, so both the metrics and the backend see them.
   const Anon = class extends PDFDocument {
     constructor() {
       super(config);
+      const om = this.objectManager;
+      for (const [name, value] of Object.entries(fonts)) {
+        if (isFontBytes(value)) {
+          om.registerCustomFont(name, Buffer.from(value));
+        } else {
+          om.registerCustomFont(name, Buffer.from(value.normal), FontStyle.Normal);
+          if (value.bold) om.registerCustomFont(name, Buffer.from(value.bold), FontStyle.Bold);
+          if (value.italic) om.registerCustomFont(name, Buffer.from(value.italic), FontStyle.Italic);
+          if (value.boldItalic)
+            om.registerCustomFont(name, Buffer.from(value.boldItalic), FontStyle.BoldItalic);
+        }
+      }
     }
     build(): PDFDocumentElement {
       return doc;
@@ -119,6 +158,9 @@ export async function renderPdf(doc: PDFDocumentElement): Promise<string> {
 }
 
 /** Renders a `Document(...)` tree to PDF bytes (e.g. for a download / save dialog). */
-export async function renderToBytes(doc: PDFDocumentElement): Promise<Uint8Array> {
-  return new Uint8Array(getArrayBuffer(await renderPdf(doc)));
+export async function renderToBytes(
+  doc: PDFDocumentElement,
+  options?: RenderOptions
+): Promise<Uint8Array> {
+  return new Uint8Array(getArrayBuffer(await renderPdf(doc, options)));
 }

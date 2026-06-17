@@ -2,6 +2,7 @@ import { pageFormats, PageSize } from "../constants/page-sizes";
 import * as fs from "fs";
 import * as path from "path";
 import { AFMParser } from "./afm-parser";
+import { TTFParser } from "./ttf-parser";
 // Enums come from the leaf config module (never in a cycle); the config type is
 // erased at runtime so it can come from the cyclic module safely.
 import { ColorMode, Orientation } from "../renderer/pdf-config";
@@ -21,6 +22,15 @@ export enum FontStyle {
   Italic = "italic",
   BoldItalic = "boldItalic",
 }
+
+// Suffix appended to an embedded font's PDF /BaseFont so each style variant of a family keeps
+// a distinct name (the variants are otherwise selected by the font resource, not the name).
+const STYLE_SUFFIX: Record<FontStyle, string> = {
+  [FontStyle.Normal]: "",
+  [FontStyle.Bold]: "-Bold",
+  [FontStyle.Italic]: "-Italic",
+  [FontStyle.BoldItalic]: "-BoldItalic",
+};
 
 class ImageManager {
   private images: Map<string, number> = new Map();
@@ -152,6 +162,10 @@ export class PDFObjectManager implements FontMetrics {
     fullFontName?: string;
     parser: AFMParser;
   }[] = [];
+
+  // Embedded TrueType fonts, keyed by the name the user registers them under. When a font
+  // name is in here the metric/emission paths take the TTF branch instead of the AFM one.
+  private customFonts = new Map<string, TTFParser>();
 
   constructor();
   constructor(pageSize?: PageSize) {
@@ -312,6 +326,134 @@ endstream`;
     };
   }
 
+  // Registers one variant (default Normal) of an embedded TrueType family `name`: stores it for
+  // metrics and emits its PDF font objects. All variants share the family `name`; bold/italic are
+  // separate .ttf files registered under the same name with a different style.
+  registerCustomFont(name: string, data: Buffer, style: FontStyle = FontStyle.Normal): void {
+    const key = this.customKey(name, style);
+    if (this.customFonts.has(key)) return;
+    const ttf = new TTFParser(data);
+    this.customFonts.set(key, ttf);
+
+    // Created in dependency order so each reference points at an already-numbered object.
+    const pdfName = name + STYLE_SUFFIX[style];
+    const fontFile = this.addObject(this.buildFontFile2(ttf));
+    const descriptor = this.addObject(this.buildFontDescriptor(pdfName, ttf, fontFile));
+    const cidFont = this.addObject(this.buildCIDFont(pdfName, ttf, descriptor));
+    const toUnicode = this.addObject(this.buildToUnicode(ttf));
+    const type0 = this.addObject(this.buildType0(pdfName, cidFont, toUnicode));
+
+    // The Type0 dict is the resource the page references (/F{index} -> type0 object).
+    this.fonts.addFont(name, this.fonts.getLastFontIndex() + 1, type0, style);
+  }
+
+  private customKey(name: string, style: FontStyle): string {
+    return `${name}-${style}`;
+  }
+
+  // The variant to actually use for (name, style): the requested style if registered, else the
+  // family's Normal as a clean fallback (e.g. bold chosen but no bold file), else undefined when
+  // `name` is not a custom family at all.
+  private resolveCustomStyle(
+    name?: string,
+    style: FontStyle = FontStyle.Normal
+  ): FontStyle | undefined {
+    if (!name) return undefined;
+    if (this.customFonts.has(this.customKey(name, style))) return style;
+    if (this.customFonts.has(this.customKey(name, FontStyle.Normal))) return FontStyle.Normal;
+    return undefined;
+  }
+
+  private getCustomFont(
+    name?: string,
+    style: FontStyle = FontStyle.Normal
+  ): TTFParser | undefined {
+    const resolved = this.resolveCustomStyle(name, style);
+    return resolved ? this.customFonts.get(this.customKey(name!, resolved)) : undefined;
+  }
+
+  isCustomFont(name?: string, style: FontStyle = FontStyle.Normal): boolean {
+    return !!this.resolveCustomStyle(name, style);
+  }
+
+  // The page font resource for the resolved variant - same resolution as getCustomFont, so the
+  // selected Type0 object and the emitted glyph ids always come from the SAME font file.
+  getCustomFontResource(
+    name: string,
+    style: FontStyle = FontStyle.Normal
+  ): FontIndexes | undefined {
+    const resolved = this.resolveCustomStyle(name, style);
+    return resolved ? this.fonts.getFont(name, resolved) : undefined;
+  }
+
+  // Encodes text as a hex Identity-H string for an embedded font's Tj operator: each codepoint
+  // becomes its 2-byte glyph id (CID == GID under /CIDToGIDMap /Identity).
+  encodeCustomText(name: string, text: string, style: FontStyle = FontStyle.Normal): string {
+    const ttf = this.getCustomFont(name, style);
+    if (!ttf) return "";
+    let hex = "";
+    for (const ch of text) {
+      hex += ttf.getGlyphIndex(ch.codePointAt(0)!).toString(16).padStart(4, "0").toUpperCase();
+    }
+    return hex;
+  }
+
+  // The whole (non-subset) font program. Binary bytes survive as a latin1 string - the final
+  // Windows-1252 encoder passes 0x00-0xFF through unchanged (see getArrayBuffer).
+  private buildFontFile2(ttf: TTFParser): string {
+    const bytes = ttf.getData();
+    return `<< /Length ${bytes.length} /Length1 ${bytes.length} >>\nstream\n${bytes.toString(
+      "latin1"
+    )}\nendstream`;
+  }
+
+  private buildFontDescriptor(name: string, ttf: TTFParser, fontFile: number): string {
+    const [x0, y0, x1, y1] = ttf.bbox;
+    return (
+      `<< /Type /FontDescriptor /FontName /${name} /Flags 4 ` +
+      `/FontBBox [${x0} ${y0} ${x1} ${y1}] /ItalicAngle 0 ` +
+      `/Ascent ${ttf.ascent} /Descent ${ttf.descent} /CapHeight ${ttf.ascent} /StemV 80 ` +
+      `/FontFile2 ${fontFile} 0 R >>`
+    );
+  }
+
+  // CIDToGIDMap /Identity means CID == GID, so the /W widths are indexed straight by glyph id.
+  private buildCIDFont(name: string, ttf: TTFParser, descriptor: number): string {
+    const widths = ttf.glyphWidths().join(" ");
+    return (
+      `<< /Type /Font /Subtype /CIDFontType2 /BaseFont /${name} ` +
+      `/CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> ` +
+      `/FontDescriptor ${descriptor} 0 R /CIDToGIDMap /Identity ` +
+      `/DW 1000 /W [0 [${widths}]] >>`
+    );
+  }
+
+  // Maps glyph id -> Unicode so the text stays copy-/searchable (rendering doesn't need it).
+  private buildToUnicode(ttf: TTFParser): string {
+    const hex4 = (n: number) => n.toString(16).padStart(4, "0").toUpperCase();
+    const entries = [...ttf.reverseCmap().entries()];
+    const blocks: string[] = [];
+    for (let i = 0; i < entries.length; i += 100) {
+      const block = entries.slice(i, i + 100);
+      const lines = block.map(([gid, code]) => `<${hex4(gid)}> <${hex4(code)}>`);
+      blocks.push(`${block.length} beginbfchar\n${lines.join("\n")}\nendbfchar`);
+    }
+    const body =
+      `/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n` +
+      `/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def\n` +
+      `/CMapName /Adobe-Identity-UCS def\n/CMapType 2 def\n` +
+      `1 begincodespacerange\n<0000> <FFFF>\nendcodespacerange\n${blocks.join("\n")}\n` +
+      `endcmap\nCMapName currentdict /CMap defineresource pop\nend\nend`;
+    return `<< /Length ${body.length} >>\nstream\n${body}\nendstream`;
+  }
+
+  private buildType0(name: string, cidFont: number, toUnicode: number): string {
+    return (
+      `<< /Type /Font /Subtype /Type0 /BaseFont /${name} /Encoding /Identity-H ` +
+      `/DescendantFonts [${cidFont} 0 R] /ToUnicode ${toUnicode} 0 R >>`
+    );
+  }
+
   // Returns the current width of a text, included kernings
   public getStringWidth(
     text: string,
@@ -393,6 +535,9 @@ endstream`;
     fontName?: string,
     fontStyle?: FontStyle
   ): number {
+    const ttf = this.getCustomFont(fullFontName ?? fontName, fontStyle);
+    if (ttf) return ttf.getCharWidth(char, fontSize);
+
     const currentParser = this.getAVMParserByFont(
       fullFontName,
       fontName,
@@ -420,6 +565,9 @@ endstream`;
     fontName?: string,
     fontStyle?: FontStyle
   ): number {
+    // TrueType kerning (the kern/GPOS tables) is not wired up yet - no kerning for custom fonts.
+    if (this.getCustomFont(fullFontName ?? fontName, fontStyle)) return 0;
+
     const currentParser = this.getAVMParserByFont(
       fullFontName,
       fontName,

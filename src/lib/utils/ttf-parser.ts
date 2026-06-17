@@ -17,6 +17,10 @@ interface CmapGroup {
 
 export class TTFParser {
   unitsPerEm = 1000;
+  // FontDescriptor metrics, in PDF glyph space (1000 units / em).
+  ascent = 0;
+  descent = 0;
+  bbox: [number, number, number, number] = [0, 0, 0, 0];
   private numGlyphs = 0;
   private numHMetrics = 0;
   private advanceWidths: number[] = []; // per glyph id, in font units
@@ -26,11 +30,52 @@ export class TTFParser {
 
   constructor(private data: Buffer) {
     this.readTableDirectory();
-    this.unitsPerEm = this.data.readUInt16BE(this.table("head").offset + 18);
+    const head = this.table("head").offset;
+    this.unitsPerEm = this.data.readUInt16BE(head + 18);
     this.numGlyphs = this.data.readUInt16BE(this.table("maxp").offset + 4);
     this.numHMetrics = this.data.readUInt16BE(this.table("hhea").offset + 34);
+    this.bbox = [
+      this.toGlyphSpace(this.data.readInt16BE(head + 36)), // xMin
+      this.toGlyphSpace(this.data.readInt16BE(head + 38)), // yMin
+      this.toGlyphSpace(this.data.readInt16BE(head + 40)), // xMax
+      this.toGlyphSpace(this.data.readInt16BE(head + 42)), // yMax
+    ];
+    const hhea = this.table("hhea").offset;
+    this.ascent = this.toGlyphSpace(this.data.readInt16BE(hhea + 4));
+    this.descent = this.toGlyphSpace(this.data.readInt16BE(hhea + 6));
     this.readHmtx();
     this.readCmap();
+  }
+
+  // The raw font bytes, for the /FontFile2 stream.
+  getData(): Buffer {
+    return this.data;
+  }
+
+  glyphCount(): number {
+    return this.numGlyphs;
+  }
+
+  // Advance width of every glyph in PDF glyph space (the /W array of the CIDFont).
+  glyphWidths(): number[] {
+    const out: number[] = [];
+    for (let g = 0; g < this.numGlyphs; g++) {
+      out.push(this.toGlyphSpace(this.getAdvanceWidth(g)));
+    }
+    return out;
+  }
+
+  // glyph id → Unicode codepoint, for the /ToUnicode CMap (BMP / format-4 coverage).
+  reverseCmap(): Map<number, number> {
+    const out = new Map<number, number>();
+    this.cmap.forEach((gid, code) => {
+      if (!out.has(gid)) out.set(gid, code);
+    });
+    return out;
+  }
+
+  private toGlyphSpace(v: number): number {
+    return Math.round((v * 1000) / this.unitsPerEm);
   }
 
   // Codepoint → glyph id (0 = .notdef when the font has no glyph for it).
@@ -51,13 +96,17 @@ export class TTFParser {
     return this.advanceWidths[i] ?? 0;
   }
 
-  // String width at fontSize, scaled from font units (em = unitsPerEm) to points.
-  getStringWidth(text: string, fontSize: number): number {
-    let units = 0;
-    for (const ch of text) {
-      units += this.getAdvanceWidth(this.getGlyphIndex(ch.codePointAt(0)!));
-    }
+  // Char width at fontSize, scaled from font units (em = unitsPerEm) to points.
+  getCharWidth(char: string, fontSize: number): number {
+    const units = this.getAdvanceWidth(this.getGlyphIndex(char.codePointAt(0)!));
     return (units / this.unitsPerEm) * fontSize;
+  }
+
+  // String width at fontSize.
+  getStringWidth(text: string, fontSize: number): number {
+    let width = 0;
+    for (const ch of text) width += this.getCharWidth(ch, fontSize);
+    return width;
   }
 
   private table(tag: string): TableRecord {
