@@ -1,4 +1,7 @@
 {
   "extends": "./tsconfig.json",
+  // The base config sets rootDir to ./src/lib for the lib build; the test build also compiles
+  // tests/**, so widen the root back to the repo (keeps dist/tests/... for `manual-test`).
+  "compilerOptions": { "rootDir": "." },
   "include": ["src/**/*", "tests/**/*"]
 }

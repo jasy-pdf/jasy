@@ -1,7 +1,7 @@
 {
-  "name": "@jasy-pdf/zugferd",
+  "name": "@jasy/zugferd",
   "version": "0.0.1",
-  "description": "ZUGFeRD / Factur-X / XRechnung (EN-16931) for jasy-pdf — invoice data model, CII XML, PDF/A-3.",
+  "description": "ZUGFeRD / Factur-X / XRechnung (EN-16931) for @jasy/pdf — invoice data model, CII XML, PDF/A-3.",
   "license": "MIT",
   "author": "Florian Heuberger",
   "main": "dist/index.js",
@@ -11,6 +11,9 @@
     "validate": "tsc && node scripts/validate.cjs"
   },
   "dependencies": {
-    "jasy-pdf": "workspace:*"
+    "@jasy/pdf": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.3"
   }
 }

@@ -1,4 +1,4 @@
-// The Invoice data model — the public API of @jasy-pdf/zugferd and the single source that drives
+// The Invoice data model — the public API of @jasy/zugferd and the single source that drives
 // both the CII XML and the rendered PDF. It mirrors the EN-16931 semantic model: every field is
 // annotated with its Business Term (BT-xx) / Business Group (BG-xx) so the mapping to the standard
 // is traceable and reviewable. Target: ZUGFeRD 2.x / Factur-X, profile EN16931 (COMFORT).
