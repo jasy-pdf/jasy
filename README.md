@@ -58,11 +58,28 @@ const bytes: Uint8Array = await renderToBytes(doc); // write to a file or stream
 The engine classes (`PageElement`, `ContainerElement`, …) stay exported for power users — the
 factories are sugar over them, never a wall.
 
+## ZUGFeRD / Factur-X e-invoicing
+
+The sibling package **[`@jasy/zugferd`](packages/zugferd)** turns an invoice into a conformant
+**ZUGFeRD / Factur-X PDF/A-3** — the human-readable invoice PDF with the EN-16931 CII XML embedded —
+in pure TypeScript, no Java.
+
+```ts
+import { renderZugferd } from "@jasy/zugferd";
+
+const { bytes, xml } = await renderZugferd(invoice); // PDF/A-3 + the embedded factur-x.xml
+```
+
+Early days (one profile, **EN 16931**), but the output is **validator-proven**: it passes **veraPDF**
+(PDF/A-3B) and the **EN-16931** schema + Schematron via Mustangproject. This is the gap the Node
+ecosystem has had — Java has Mustang, PHP has horstoeko, Python has factur-x; pure TS/JS was thin.
+
 ## Roadmap
 
 - **Font subsetting** — embed only the glyphs used, for much smaller files (today the full `.ttf` is
   embedded); plus OTF/CFF and WOFF2 font formats.
-- **ZUGFeRD / XRechnung** — EN-16931 invoice XML + PDF/A-3 output, in pure TS.
+- **More ZUGFeRD** — the XRechnung profile, a privacy-preserving local validation CLI, and font
+  subsetting to keep invoice PDFs small.
 - **Framework bindings** — author documents as Vue / React components on top of the same vocabulary.
 - **Browser support** — bundle the AFM metrics so the engine runs without Node's filesystem.
 
@@ -74,7 +91,6 @@ Package manager is **pnpm**.
 pnpm install
 pnpm exec vitest run     # unit tests
 pnpm run build           # tsc → dist/
-pnpm run manual-test     # render the capability showcase → claude-data/out/showcase.pdf
 ```
 
 ## License

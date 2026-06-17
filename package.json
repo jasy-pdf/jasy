@@ -1,15 +1,25 @@
 {
   "name": "@jasy/pdf",
   "version": "0.0.1",
-  "description": "",
-  "keywords": [],
+  "description": "Declarative, component-based PDF generation in pure TypeScript — Flutter-style components, real AFM font metrics, a hand-rolled PDF writer. No headless browser, no Java.",
+  "keywords": [
+    "pdf",
+    "pdf-generation",
+    "typescript",
+    "declarative",
+    "layout",
+    "pagination",
+    "invoice",
+    "zugferd",
+    "factur-x",
+    "pdf-a"
+  ],
   "license": "MIT",
   "author": "Florian Heuberger",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "copy-assets": "ncp ./src/lib/assets ./dist/src/lib/assets",
-    "manual-test": "tsc -p tsconfig.test.json && npm run copy-assets &&  node dist/tests/manual/index.js",
     "test": "vitest",
     "test:coverage": "vitest --coverage",
     "build": "tsc",
@@ -19,8 +29,7 @@
     "fmt:check": "oxfmt --check"
   },
   "dependencies": {
-    "jimp": "^1.6.0",
-    "reflect-metadata": "^0.2.2"
+    "jimp": "^1.6.0"
   },
   "devDependencies": {
     "@jimp/types": "^1.6.0",
