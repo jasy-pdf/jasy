@@ -22,6 +22,8 @@ import { ImageRenderer } from "./image-renderer";
 import { LineRenderer } from "./line-renderer";
 import { RepeatingHeaderElement } from "../elements/layout/repeating-header-element";
 import { RepeatingHeaderRenderer } from "./repeating-header-renderer";
+import { DeferredElement } from "../elements/layout/deferred-element";
+import { DeferredRenderer } from "./deferred-renderer";
 import { BoxConstraints } from "../layout/box-constraints";
 import { LayoutContext } from "../elements/pdf-element";
 
@@ -43,6 +45,7 @@ export class PDFRenderer {
       RepeatingHeaderElement,
       RepeatingHeaderRenderer.render
     );
+    RendererRegistry.register(DeferredElement, DeferredRenderer.render);
 
     let pdfContent = "";
 

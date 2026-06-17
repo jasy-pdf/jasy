@@ -6,6 +6,7 @@ import { RowElement } from "../../../src/lib/elements/row-element";
 import { RectangleElement } from "../../../src/lib/elements/rectangle-element";
 import { ExpandedElement } from "../../../src/lib/elements/layout/expanded-element";
 import { RepeatingHeaderElement } from "../../../src/lib/elements/layout/repeating-header-element";
+import { DeferredElement } from "../../../src/lib/elements/layout/deferred-element";
 import { PDFElement } from "../../../src/lib/elements/pdf-element";
 
 const rowsOf = (t: PDFElement) =>
@@ -47,7 +48,28 @@ describe("Table factory", () => {
   });
 
   it("rejects an unsupported column width", () => {
-    expect(() => Table({ columns: ["auto"] }, [["x"]])).toThrow();
+    expect(() => Table({ columns: ["5px"] }, [["x"]])).toThrow();
+  });
+
+  it("an `auto` column defers to a DeferredElement (resolved at layout time)", () => {
+    expect(Table({ columns: ["auto", "1fr"] }, [["a", "b"]])).toBeInstanceOf(DeferredElement);
+  });
+
+  it("an `auto` table renders to a valid PDF with its content intact", async () => {
+    const { renderPdf } = await import("../../../src/lib/api/structure");
+    const { Document, Page } = await import("../../../src/lib/api/structure");
+    const pdf = await renderPdf(
+      Document([
+        Page([
+          Table({ columns: ["1fr", "auto"] }, [
+            ["Beschreibung", "11.06.2026"],
+            ["Zeile", "01.01.2026"],
+          ]),
+        ]),
+      ])
+    );
+    expect(pdf.startsWith("%PDF")).toBe(true);
+    expect(pdf).toContain("(11.06.2026)"); // one run, not split across an empty line
   });
 
   it("missing column spec for an extra cell defaults to 1fr", () => {
