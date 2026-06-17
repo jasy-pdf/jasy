@@ -60,8 +60,16 @@ export class PDFRenderer {
     // Render pages and contents (the driver paginates overflowing pages).
     await PDFDocumentRenderer.render(document, objectManager, ctx);
 
-    // Add catalog objects
-    const catalogObject = `<< /Type /Catalog /Pages ${objectManager.getParentObjectNumber()} 0 R >>`;
+    // Add catalog objects. Embedded files (e.g. ZUGFeRD's factur-x.xml) add a /Names/EmbeddedFiles
+    // name tree + an /AF array; with no attachments the catalog is byte-identical to before.
+    const attachments = objectManager.getAttachments();
+    let attachmentEntries = "";
+    if (attachments.length > 0) {
+      const names = attachments.map((a) => `(${a.name}) ${a.filespec} 0 R`).join(" ");
+      const af = attachments.map((a) => `${a.filespec} 0 R`).join(" ");
+      attachmentEntries = ` /AF [${af}] /Names << /EmbeddedFiles << /Names [${names}] >> >>`;
+    }
+    const catalogObject = `<< /Type /Catalog /Pages ${objectManager.getParentObjectNumber()} 0 R${attachmentEntries} >>`;
     objectManager.addObject(catalogObject);
 
     // Add rendered objects

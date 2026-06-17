@@ -160,6 +160,10 @@ export class PDFObjectManager implements FontMetrics {
   // name is in here the metric/emission paths take the TTF branch instead of the AFM one.
   private customFonts = new Map<string, TTFParser>();
 
+  // Embedded file attachments (their /Filespec object numbers + display names). Referenced from
+  // the catalog's /Names/EmbeddedFiles + /AF. Drives ZUGFeRD's embedded factur-x.xml.
+  private attachments: { name: string; filespec: number }[] = [];
+
   constructor();
   constructor(pageSize?: PageSize) {
     if (pageSize) this.pageFormat = pageFormats[pageSize];
@@ -249,6 +253,36 @@ endstream`;
 
     this.images.addImage(imageObjectNumber);
     return imageObjectNumber;
+  }
+
+  // Embeds a file as an associated file (PDF/A-3 / PDF 2.0): an /EmbeddedFile stream + a /Filespec.
+  // The catalog wiring (/Names/EmbeddedFiles + /AF) is added by PDFRenderer when attachments exist.
+  // `relationship` is the /AFRelationship (e.g. "Data" for the ZUGFeRD factur-x.xml). Binary bytes
+  // ride as a latin1 string, like images/fonts (the final encoder passes 0x00-0xFF through).
+  attachFile(
+    name: string,
+    data: Buffer,
+    opts: { relationship?: string; mimeType?: string; description?: string } = {},
+  ): void {
+    const subtype = (opts.mimeType ?? "application/octet-stream").replace(/\//g, "#2F");
+    const embedded = this.addObject(
+      `<< /Type /EmbeddedFile /Subtype /${subtype} /Length ${data.length} ` +
+        `/Params << /Size ${data.length} >> >>\nstream\n${data.toString("latin1")}\nendstream`,
+    );
+    const escaped = (s: string) =>
+      s.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
+    const desc = opts.description ? ` /Desc (${escaped(opts.description)})` : "";
+    const filespec = this.addObject(
+      `<< /Type /Filespec /F (${escaped(name)}) /UF (${escaped(name)}) ` +
+        `/AFRelationship /${opts.relationship ?? "Unspecified"}${desc} ` +
+        `/EF << /F ${embedded} 0 R /UF ${embedded} 0 R >> >>`,
+    );
+    this.attachments.push({ name, filespec });
+  }
+
+  // Filespec object numbers + names, for the catalog's /Names/EmbeddedFiles and /AF.
+  getAttachments(): { name: string; filespec: number }[] {
+    return this.attachments;
   }
 
   // Registers (or reuses) a transparency graphics state and returns its resource name

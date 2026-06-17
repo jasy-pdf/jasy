@@ -99,10 +99,24 @@ export interface FontFamily {
   boldItalic?: FontBytes;
 }
 
+/** A file to embed in the PDF as an associated file (PDF/A-3 / PDF 2.0). */
+export interface Attachment {
+  /** Display file name, e.g. `"factur-x.xml"`. */
+  name: string;
+  data: FontBytes;
+  /** `/AFRelationship`, e.g. `"Data"` (ZUGFeRD), `"Source"`, `"Alternative"`. Default `"Unspecified"`. */
+  relationship?: string;
+  /** MIME type, e.g. `"text/xml"`. Default `"application/octet-stream"`. */
+  mimeType?: string;
+  description?: string;
+}
+
 export interface RenderOptions {
   /** Embedded TrueType fonts, keyed by the name used in `Text({ font })`. The value is either the
    *  raw `.ttf` bytes (registered as `normal`) or a `FontFamily` with per-style files. */
   fonts?: Record<string, FontBytes | FontFamily>;
+  /** Files to embed as associated files (e.g. the ZUGFeRD `factur-x.xml`). */
+  attachments?: Attachment[];
 }
 
 function isFontBytes(v: FontBytes | FontFamily): v is FontBytes {
@@ -116,6 +130,7 @@ export async function renderPdf(doc: PDFDocumentElement, options?: RenderOptions
     ? { metaData: { title: meta.title, author: meta.author, keywords: [] } }
     : undefined;
   const fonts = options?.fonts ?? {};
+  const attachments = options?.attachments ?? [];
 
   // A throwaway PDFDocument whose build() yields this tree, reusing the engine's standard
   // font registration + config handling (the constructor does both). Custom fonts are
@@ -135,6 +150,13 @@ export async function renderPdf(doc: PDFDocumentElement, options?: RenderOptions
           if (value.boldItalic)
             om.registerCustomFont(name, Buffer.from(value.boldItalic), FontStyle.BoldItalic);
         }
+      }
+      for (const a of attachments) {
+        om.attachFile(a.name, Buffer.from(a.data), {
+          relationship: a.relationship,
+          mimeType: a.mimeType,
+          description: a.description,
+        });
       }
     }
     build(): PDFDocumentElement {
