@@ -7,6 +7,10 @@ export { computeInvoice, round2 } from "./compute";
 export type { ComputedInvoice, VatBreakdownEntry } from "./compute";
 export { toCII } from "./cii";
 export { bundledFonts } from "./fonts";
+export { facturxXmp } from "./xmp";
+export type { XmpOptions } from "./xmp";
+export { renderZugferd } from "./render";
+export type { RenderZugferdOptions, ZugferdResult } from "./render";
 
 /** ZUGFeRD / Factur-X conformance profiles, in rising order of data completeness. */
 export type ZugferdProfile = "minimum" | "basic" | "en16931" | "extended" | "xrechnung";

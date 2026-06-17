@@ -125,6 +125,9 @@ export interface RenderOptions {
   pdfVersion?: string;
   /** Write a trailer `/ID` (required by PDF/A); the id is a deterministic content hash. */
   documentId?: boolean;
+  /** Register the standard-14 fonts (default true). Set false for PDF/A so only embedded fonts
+   *  appear — then every font name used must be supplied via `fonts`. */
+  standardFonts?: boolean;
 }
 
 function isFontBytes(v: FontBytes | FontFamily): v is FontBytes {
@@ -134,9 +137,10 @@ function isFontBytes(v: FontBytes | FontFamily): v is FontBytes {
 /** Renders a `Document(...)` tree to the raw PDF string. */
 export async function renderPdf(doc: PDFDocumentElement, options?: RenderOptions): Promise<string> {
   const meta = docMeta.get(doc);
-  const config: PDFConfig | undefined = meta
-    ? { metaData: { title: meta.title, author: meta.author, keywords: [] } }
-    : undefined;
+  const config: PDFConfig = {
+    ...(meta ? { metaData: { title: meta.title, author: meta.author, keywords: [] } } : {}),
+    ...(options?.standardFonts === false ? { registerStandardFonts: false } : {}),
+  };
   const fonts = options?.fonts ?? {};
   const attachments = options?.attachments ?? [];
 

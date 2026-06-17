@@ -79,9 +79,13 @@ class FontManager {
     resourceIndex: number,
     fontStyle: FontStyle = FontStyle.Normal,
     fullName: string = fontName,
+    force = false,
   ): void {
     const fontKey = this._createFontKey(fontName, fontStyle);
-    if (!this.fonts.has(fontKey)) {
+    // `force` lets an embedded custom font override a same-named standard-14 entry (e.g. embedding
+    // "Helvetica" as Liberation for PDF/A) - otherwise the standard /Type1 resource would win and
+    // the CID text would be drawn against the wrong font.
+    if (force || !this.fonts.has(fontKey)) {
       this.fonts.set(fontKey, {
         fontIndex,
         resourceIndex,
@@ -223,7 +227,7 @@ export class PDFObjectManager implements FontMetrics {
 
   // Calculates the total length of the document in bytes (for XRef)
   private getCurrentByteLength(): number {
-    let length = "%PDF-1.4\n".length; // Start with the header
+    let length = this.getHeader().length; // Start with the header
 
     for (let i = 0; i < this.objects.length; i++) {
       const obj = this.objects[i];
@@ -335,6 +339,15 @@ endstream`;
     return this.pdfVersion;
   }
 
+  // The full PDF header: the version line + a binary-marker comment whose 4 bytes are all > 127
+  // (PDF/A clause 6.1.2). Every char is <= 0xFF, so the string length equals the emitted byte
+  // length - which the xref offset calculation relies on.
+  getHeader(): string {
+    // The marker is `%` + â ã Ï Ó (Latin-1 0xE2 0xE3 0xCF 0xD3, all > 127); each char is <= 0xFF so
+    // the final encoder emits it as that exact byte.
+    return `%PDF-${this.pdfVersion}\n%âãÏÓ\n`;
+  }
+
   // Enables a trailer /ID (required by PDF/A). The id is a content hash, so it is deterministic.
   enableDocumentId(): void {
     this.documentId = true;
@@ -414,8 +427,9 @@ endstream`;
     const toUnicode = this.addObject(this.buildToUnicode(ttf));
     const type0 = this.addObject(this.buildType0(pdfName, cidFont, toUnicode));
 
-    // The Type0 dict is the resource the page references (/F{index} -> type0 object).
-    this.fonts.addFont(name, this.fonts.getLastFontIndex() + 1, type0, style);
+    // The Type0 dict is the resource the page references (/F{index} -> type0 object). `force` so an
+    // embedded font overrides a same-named standard-14 entry instead of being silently dropped.
+    this.fonts.addFont(name, this.fonts.getLastFontIndex() + 1, type0, style, name, true);
   }
 
   private customKey(name: string, style: FontStyle): string {
@@ -632,7 +646,7 @@ endstream`;
     let result = "";
     this.objectPositions = [];
     this.objects.forEach((content, index) => {
-      const position = result.length + "%PDF-1.4\n".length; // Calculate positions after the header
+      const position = result.length + this.getHeader().length; // Calculate positions after the header
       this.objectPositions.push(position);
       result += `${index + 1} 0 obj\n${content}\nendobj\n`;
     });

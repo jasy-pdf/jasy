@@ -46,9 +46,9 @@ export class PDFRenderer {
 
     let pdfContent = "";
 
-    // Header. The version is always "1.X" (default 1.4; PDF/A-3 uses 1.7) so the 9-byte header
-    // length - which the xref offsets are computed against - is unchanged.
-    pdfContent += `%PDF-${objectManager.getPdfVersion()}\n`;
+    // Header: version line + the PDF/A binary marker (the object manager owns it so its length
+    // matches the xref offset calculation).
+    pdfContent += objectManager.getHeader();
 
     // Layout pass: thread the context explicitly. The seed page config is the document
     // default; each PageElement overrides it for its own subtree.

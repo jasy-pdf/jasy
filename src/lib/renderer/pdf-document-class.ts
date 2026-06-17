@@ -33,6 +33,9 @@ export interface PDFConfig {
   colorMode?: ColorMode;
   defaultFont?: DefaultFont;
   metaData?: MetaData;
+  /** Register the 14 standard fonts (default true). Set false for PDF/A, where every font must be
+   *  embedded — the non-embeddable standard-14 must not appear in the document at all. */
+  registerStandardFonts?: boolean;
 }
 
 export abstract class PDFDocument {
@@ -124,8 +127,11 @@ export abstract class PDFDocument {
   //#endregion
 
   constructor(config?: PDFConfig) {
-    // Add all standard font families
-    this.registerStandardFonts(this._objectManager);
+    // Add all standard font families - unless the document is PDF/A, which forbids non-embedded
+    // fonts (the caller then supplies embedded fonts for every name it uses).
+    if (config?.registerStandardFonts !== false) {
+      this.registerStandardFonts(this._objectManager);
+    }
     if (config) this._objectManager.changePDFConfig(config);
   }
 
