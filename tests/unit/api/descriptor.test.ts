@@ -1,10 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  build,
-  buildDocument,
-  registerElement,
-  Descriptor,
-} from "../../../src/lib/api/descriptor";
+import { build, buildDocument, registerElement, Descriptor } from "../../../src/lib/api/descriptor";
 import { renderPdf } from "../../../src/lib/api/structure";
 import { ContainerElement } from "../../../src/lib/elements/container-element";
 import { RowElement } from "../../../src/lib/elements/row-element";
@@ -52,7 +47,7 @@ describe("registerElement - custom component types", () => {
   it("lets a custom tag resolve through the same seam", () => {
     // A user/binding component: a 'badge' = a small filled Box.
     registerElement("badge", (props, children) =>
-      build({ type: "box", props: { bg: props.color ?? "gray", padding: 6, radius: 4 }, children })
+      build({ type: "box", props: { bg: props.color ?? "gray", padding: 6, radius: 4 }, children }),
     );
     const el = build({ type: "badge", props: { color: "steelblue" }, children: ["NEW"] });
     expect(el).toBeInstanceOf(RectangleElement);
@@ -71,12 +66,20 @@ describe("buildDocument + render - a descriptor tree renders a PDF", () => {
             type: "column",
             props: { gap: 12 },
             children: [
-              { type: "text", props: { size: 24, bold: true }, children: ["From a descriptor tree"] },
+              {
+                type: "text",
+                props: { size: 24, bold: true },
+                children: ["From a descriptor tree"],
+              },
               { type: "divider" },
-              { type: "row", props: { main: "between" }, children: [
-                { type: "text", children: ["left"] },
-                { type: "text", children: ["right"] },
-              ] },
+              {
+                type: "row",
+                props: { main: "between" },
+                children: [
+                  { type: "text", children: ["left"] },
+                  { type: "text", children: ["right"] },
+                ],
+              },
             ],
           },
         ],

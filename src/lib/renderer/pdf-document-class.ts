@@ -118,7 +118,7 @@ export abstract class PDFDocument {
     ];
 
     standardFonts.forEach((font) =>
-      objectManager.registerFont(font.fontName, font.fontStyle, font.fullName)
+      objectManager.registerFont(font.fontName, font.fontStyle, font.fullName),
     );
   }
   //#endregion
@@ -137,9 +137,7 @@ export abstract class PDFDocument {
 
   protected beforeRenderer() {}
 
-  public static async render<T extends PDFDocument>(
-    this: new () => T
-  ): Promise<string> {
+  public static async render<T extends PDFDocument>(this: new () => T): Promise<string> {
     const instance = new this();
     instance.child = instance.build();
     return await PDFRenderer.render(instance.child, instance._objectManager);

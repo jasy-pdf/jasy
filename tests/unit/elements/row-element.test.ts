@@ -19,7 +19,7 @@ describe("RowElement", () => {
     const size = row.calculateLayout(
       BoxConstraints.loose(200, Infinity),
       { x: 10, y: 5 },
-      {} as LayoutContext
+      {} as LayoutContext,
     );
 
     expect(a.getProps().x).toBe(10);
@@ -41,11 +41,7 @@ describe("RowElement", () => {
     const right = new TextElement({ fontSize: 10, content: "Right" }); // width 30
     const row = new RowElement({ children: [left, spacer, right] });
 
-    row.calculateLayout(
-      BoxConstraints.loose(200, Infinity),
-      { x: 0, y: 0 },
-      ctx
-    );
+    row.calculateLayout(BoxConstraints.loose(200, Infinity), { x: 0, y: 0 }, ctx);
 
     expect(left.getProps().x).toBe(0);
     // remaining = 200 - 24 - 30 = 146 -> spacer fills it -> right at 24 + 146 = 170.

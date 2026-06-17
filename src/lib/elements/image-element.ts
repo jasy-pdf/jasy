@@ -46,13 +46,9 @@ export class CustomLocalImage extends CustomImage {
       case ".png":
         return "FlateDecode"; // For PNG
       case ".bmp":
-        throw new Error(
-          "BMP is not directly supported. Please convert to PNG or JPEG."
-        );
+        throw new Error("BMP is not directly supported. Please convert to PNG or JPEG.");
       case ".webp":
-        throw new Error(
-          "WebP is not directly supported. Please convert to PNG or JPEG."
-        );
+        throw new Error("WebP is not directly supported. Please convert to PNG or JPEG.");
       default:
         throw new Error(`Unsupported image format: ${ext}`);
     }
@@ -98,13 +94,7 @@ export class ImageElement extends SizedPDFElement {
   private fit: BoxFit;
   private radius: number;
 
-  constructor({
-    image,
-    width,
-    height,
-    fit = BoxFit.none,
-    radius,
-  }: ImageElementParams) {
+  constructor({ image, width, height, fit = BoxFit.none, radius }: ImageElementParams) {
     super({ x: 0, y: 0, width });
 
     this.image = image;
@@ -113,11 +103,7 @@ export class ImageElement extends SizedPDFElement {
     this.radius = radius ?? 0;
   }
 
-  calculateLayout(
-    constraints: BoxConstraints,
-    offset: Offset,
-    _ctx: LayoutContext
-  ): Size {
+  calculateLayout(constraints: BoxConstraints, offset: Offset, _ctx: LayoutContext): Size {
     this.x = offset.x;
     this.y = offset.y;
     // A bounded axis overrides the intrinsic/explicit size; otherwise keep our own.

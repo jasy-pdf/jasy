@@ -18,7 +18,7 @@ const stack = (n: number) =>
     y: 0,
     children: Array.from(
       { length: n },
-      (_, i) => new TextElement({ fontSize: 24, content: `Block ${i}` })
+      (_, i) => new TextElement({ fontSize: 24, content: `Block ${i}` }),
     ),
   });
 
@@ -75,9 +75,9 @@ describe("Slice 0 pagination - atomic blocks reflow to new pages", () => {
 // Slice 1: a single paragraph taller than the page splits at line boxes.
 class LongParagraphDoc extends PDFDocument {
   build(): PDFDocumentElement {
-    const words = Array.from({ length: 1500 }, (_, i) =>
-      `w${String(i).padStart(4, "0")}`
-    ).join(" ");
+    const words = Array.from({ length: 1500 }, (_, i) => `w${String(i).padStart(4, "0")}`).join(
+      " ",
+    );
     return new PDFDocumentElement({
       children: [
         new PageElement({
@@ -118,9 +118,9 @@ describe("Slice 1 pagination - a paragraph splits at line boxes", () => {
 // child made the container bail out of pagination entirely and clip).
 class FlexOverflowDoc extends PDFDocument {
   build(): PDFDocumentElement {
-    const words = Array.from({ length: 1500 }, (_, i) =>
-      `f${String(i).padStart(4, "0")}`
-    ).join(" ");
+    const words = Array.from({ length: 1500 }, (_, i) => `f${String(i).padStart(4, "0")}`).join(
+      " ",
+    );
     return new PDFDocumentElement({
       children: [
         new PageElement({

@@ -20,10 +20,7 @@ export interface Descriptor {
 export type DescriptorChild = Descriptor | string;
 
 /** A registry entry: turn a node's props + raw children into an engine element. */
-export type ElementFactory = (
-  props: any,
-  children: DescriptorChild[]
-) => PDFElement;
+export type ElementFactory = (props: any, children: DescriptorChild[]) => PDFElement;
 
 // Element children (Column/Row/Box/Page/…) → built recursively. Text/Paragraph children are
 // strings or `span` descriptors and become content instead.
@@ -49,8 +46,7 @@ function textContent(children: DescriptorChild[]): string | TextSegment[] {
 }
 
 const REGISTRY: Record<string, ElementFactory> = {
-  document: (props, children) =>
-    Document(props, elementChildren(children) as PageElement[]),
+  document: (props, children) => Document(props, elementChildren(children) as PageElement[]),
   page: (props, children) => Page(props, elementChildren(children)),
   column: (props, children) => Column(props, elementChildren(children)),
   row: (props, children) => Row(props, elementChildren(children)),
@@ -83,7 +79,6 @@ export function build(node: DescriptorChild): PDFElement {
 
 /** Builds a descriptor tree whose root is a `document` into the renderable root element. */
 export function buildDocument(root: Descriptor): PDFDocumentElement {
-  if (root.type !== "document")
-    throw new Error(`Expected a "document" root, got "${root.type}"`);
+  if (root.type !== "document") throw new Error(`Expected a "document" root, got "${root.type}"`);
   return build(root) as PDFDocumentElement;
 }

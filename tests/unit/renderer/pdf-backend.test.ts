@@ -16,9 +16,7 @@ describe("PdfBackend.escapePdfString", () => {
   });
 
   it("leaves ordinary text untouched", () => {
-    expect(PdfBackend.escapePdfString("Muenchen, Groesse")).toBe(
-      "Muenchen, Groesse"
-    );
+    expect(PdfBackend.escapePdfString("Muenchen, Groesse")).toBe("Muenchen, Groesse");
   });
 });
 

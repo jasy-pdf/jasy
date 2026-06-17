@@ -18,9 +18,7 @@ describe("Text factory", () => {
   it("combines bold + italic into one FontStyle", () => {
     expect(props(Text("a", { bold: true })).fontStyle).toBe(FontStyle.Bold);
     expect(props(Text("a", { italic: true })).fontStyle).toBe(FontStyle.Italic);
-    expect(props(Text("a", { bold: true, italic: true })).fontStyle).toBe(
-      FontStyle.BoldItalic
-    );
+    expect(props(Text("a", { bold: true, italic: true })).fontStyle).toBe(FontStyle.BoldItalic);
   });
 
   it("normalizes color via toColor and maps align", () => {

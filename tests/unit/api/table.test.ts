@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import { Table } from "../../../src/lib/api/table";
-import { Text } from "../../../src/lib/api/text";
 import { ContainerElement } from "../../../src/lib/elements/container-element";
 import { RowElement } from "../../../src/lib/elements/row-element";
 import { RectangleElement } from "../../../src/lib/elements/rectangle-element";
@@ -9,8 +8,7 @@ import { RepeatingHeaderElement } from "../../../src/lib/elements/layout/repeati
 import { DeferredElement } from "../../../src/lib/elements/layout/deferred-element";
 import { PDFElement } from "../../../src/lib/elements/pdf-element";
 
-const rowsOf = (t: PDFElement) =>
-  ((t.getProps() as { children: RowElement[] }).children);
+const rowsOf = (t: PDFElement) => (t.getProps() as { children: RowElement[] }).children;
 const cellsOf = (r: RowElement) => (r.getProps() as { children: unknown[] }).children;
 
 describe("Table factory", () => {
@@ -42,7 +40,10 @@ describe("Table factory", () => {
   });
 
   it("applies gap / rowGap / colGap", () => {
-    const t = Table({ columns: ["1fr", "1fr"], gap: 8, colGap: 4 }, [["a", "b"], ["c", "d"]]);
+    const t = Table({ columns: ["1fr", "1fr"], gap: 8, colGap: 4 }, [
+      ["a", "b"],
+      ["c", "d"],
+    ]);
     expect((t.getProps() as { gap: number }).gap).toBe(8); // rowGap falls back to gap
     expect((rowsOf(t)[0].getProps() as { gap: number }).gap).toBe(4); // colGap overrides
   });
@@ -66,7 +67,7 @@ describe("Table factory", () => {
             ["Zeile", "01.01.2026"],
           ]),
         ]),
-      ])
+      ]),
     );
     expect(pdf.startsWith("%PDF")).toBe(true);
     expect(pdf).toContain("(11.06.2026)"); // one run, not split across an empty line
@@ -79,14 +80,17 @@ describe("Table factory", () => {
 
   it("a `header` option returns a repeating-header element; without it, a plain Column", () => {
     expect(Table({ columns: ["1fr"] }, [["a"]])).toBeInstanceOf(ContainerElement);
-    expect(
-      Table({ columns: ["1fr"], header: ["H"] }, [["a"]])
-    ).toBeInstanceOf(RepeatingHeaderElement);
+    expect(Table({ columns: ["1fr"], header: ["H"] }, [["a"]])).toBeInstanceOf(
+      RepeatingHeaderElement,
+    );
   });
 
   it("`cellBorder` draws the complete grid once: inner cells bottom+right, edges add top/left", () => {
     const rows = rowsOf(
-      Table({ columns: ["1fr", 80], cellBorder: "gray" }, [["a", "b"], ["c", "d"]])
+      Table({ columns: ["1fr", 80], cellBorder: "gray" }, [
+        ["a", "b"],
+        ["c", "d"],
+      ]),
     );
     // Top-edge cell (first row, fixed col 1): gets top + bottom + right, but not left.
     const edge = cellsOf(rows[0])[1] as RectangleElement;

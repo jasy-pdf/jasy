@@ -4,11 +4,7 @@ import { TextElement, TextSegment } from "../elements/text-element";
 import { FontStyle, PDFObjectManager } from "../utils/pdf-object-manager";
 import type { FontMetrics } from "../utils/font-metrics";
 import { IRNode, TextRun } from "../ir/display-list";
-import {
-  wrapStringIntoLines,
-  breakSegmentsIntoLines,
-  SegmentLine,
-} from "../text/line-breaker";
+import { wrapStringIntoLines, breakSegmentsIntoLines, SegmentLine } from "../text/line-breaker";
 
 // Distance from the top of a line down to its baseline, as a fraction of the font
 // size. ~0.683 is the standard-14 ascent ratio used to seat the first baseline.
@@ -23,7 +19,7 @@ export class TextRenderer {
     fontFamily: string,
     fontStyle: FontStyle,
     objectManager: FontMetrics,
-    maxWidth: number
+    maxWidth: number,
   ): number {
     // Plain string: one line height per wrapped line.
     if (typeof content === "string") {
@@ -33,7 +29,7 @@ export class TextRenderer {
         fontSize,
         fontStyle,
         maxWidth,
-        objectManager
+        objectManager,
       );
       return lines.length * fontSize;
     }
@@ -43,26 +39,17 @@ export class TextRenderer {
       content,
       { fontFamily, fontSize, fontStyle },
       maxWidth,
-      objectManager
+      objectManager,
     );
     return lines.reduce((total, line) => total + line.maxFontSize, 0);
   }
 
   static async render(
     textElement: TextElement,
-    objectManager: PDFObjectManager
+    objectManager: PDFObjectManager,
   ): Promise<IRNode[]> {
-    const {
-      x,
-      y,
-      width,
-      fontSize,
-      color,
-      content,
-      fontFamily,
-      fontStyle,
-      textAlignment,
-    } = textElement.getProps();
+    const { x, y, width, fontSize, color, content, fontFamily, fontStyle, textAlignment } =
+      textElement.getProps();
 
     // Component -> display list. Wrapping and positioning stay here; the backend
     // turns each run into BT/Tf/Td/Tj/ET. The wrapping algorithm is unchanged from
@@ -77,7 +64,7 @@ export class TextRenderer {
       textAlignment,
       color,
       x,
-      y
+      y,
     );
   }
 
@@ -94,16 +81,14 @@ export class TextRenderer {
     textAlignment: HorizontalAlignment,
     color: Color,
     initialX: number,
-    yPosition: number
+    yPosition: number,
   ): TextRun[] {
     const runs: TextRun[] = [];
 
     // Horizontal offset of a line of the given width under the current alignment.
     const alignmentOffset = (lineWidth: number): number => {
-      if (textAlignment === HorizontalAlignment.center)
-        return (maxWidth - lineWidth) / 2;
-      if (textAlignment === HorizontalAlignment.right)
-        return maxWidth - lineWidth;
+      if (textAlignment === HorizontalAlignment.center) return (maxWidth - lineWidth) / 2;
+      if (textAlignment === HorizontalAlignment.right) return maxWidth - lineWidth;
       return 0;
     };
 
@@ -114,7 +99,7 @@ export class TextRenderer {
       text: string,
       family: string,
       size: number,
-      style: FontStyle
+      style: FontStyle,
     ): number => {
       let width = 0;
       for (const ch of text) {
@@ -131,18 +116,13 @@ export class TextRenderer {
         fontSize,
         fontStyle,
         maxWidth,
-        objectManager
+        objectManager,
       );
       // yPosition is the top of the text box (top-left); seat line 0's baseline below
       // it, then step DOWN per line. The seam flips the whole thing to PDF space.
       const baseline = yPosition + fontSize * BASELINE_RATIO;
       lines.forEach((line, index) => {
-        const lineWidth = objectManager.getStringWidth(
-          line,
-          fontFamily,
-          fontSize,
-          fontStyle
-        );
+        const lineWidth = objectManager.getStringWidth(line, fontFamily, fontSize, fontStyle);
         runs.push({
           type: "text",
           x: initialX + alignmentOffset(lineWidth),
@@ -196,7 +176,7 @@ export class TextRenderer {
       content,
       { fontFamily, fontSize, fontStyle },
       maxWidth,
-      objectManager
+      objectManager,
     )) {
       pushLine(line, lineY);
       lineY += line.maxFontSize;

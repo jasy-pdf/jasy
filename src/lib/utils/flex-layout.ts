@@ -1,8 +1,4 @@
-import {
-  PDFElement,
-  LayoutContext,
-  FlexiblePDFElement,
-} from "../elements/pdf-element";
+import { PDFElement, LayoutContext, FlexiblePDFElement } from "../elements/pdf-element";
 import { BoxConstraints, Offset, Size } from "../layout/box-constraints";
 
 /** Distribution of the children ALONG the stacking (main) axis when there is leftover
@@ -41,8 +37,7 @@ export const VERTICAL_AXIS: FlexAxis = {
   mainOf: (s) => s.height,
   crossOf: (s) => s.width,
   measureConstraints: (crossAvail) => BoxConstraints.loose(crossAvail, Infinity),
-  flexConstraints: (mainExtent, crossAvail) =>
-    BoxConstraints.loose(crossAvail, mainExtent),
+  flexConstraints: (mainExtent, crossAvail) => BoxConstraints.loose(crossAvail, mainExtent),
   offsetAt: (mainPos, crossPos) => ({ x: crossPos, y: mainPos }),
 };
 
@@ -50,17 +45,12 @@ export const HORIZONTAL_AXIS: FlexAxis = {
   mainOf: (s) => s.width,
   crossOf: (s) => s.height,
   measureConstraints: (crossAvail) => BoxConstraints.loose(Infinity, crossAvail),
-  flexConstraints: (mainExtent, crossAvail) =>
-    BoxConstraints.loose(mainExtent, crossAvail),
+  flexConstraints: (mainExtent, crossAvail) => BoxConstraints.loose(mainExtent, crossAvail),
   offsetAt: (mainPos, crossPos) => ({ x: mainPos, y: crossPos }),
 };
 
 /** Cross-axis offset of a child of size `childCross` within `crossExtent`. */
-function crossOffset(
-  align: CrossAlign,
-  crossExtent: number,
-  childCross: number
-): number {
+function crossOffset(align: CrossAlign, crossExtent: number, childCross: number): number {
   if (align === "center") return Math.max(0, (crossExtent - childCross) / 2);
   if (align === "end") return Math.max(0, crossExtent - childCross);
   return 0; // start, stretch (stretch fills, so no offset)
@@ -90,7 +80,7 @@ export class FlexLayoutHelper {
     mainStart: number,
     crossOrigin: number,
     options: FlexOptions,
-    ctx: LayoutContext
+    ctx: LayoutContext,
   ): { mainUsed: number; crossUsed: number } {
     const gap = options.gap ?? 0;
     const main = options.main ?? "start";
@@ -109,7 +99,7 @@ export class FlexLayoutHelper {
         const size = child.calculateLayout(
           axis.measureConstraints(crossAvail),
           axis.offsetAt(mainStart, crossOrigin),
-          ctx
+          ctx,
         );
         fixedMain += axis.mainOf(size);
         crossUsed = Math.max(crossUsed, axis.crossOf(size));
@@ -127,8 +117,7 @@ export class FlexLayoutHelper {
     if (totalFlex === 0 && mainAvail !== Infinity && leftover > 0) {
       if (main === "center") leadingSpace = leftover / 2;
       else if (main === "end") leadingSpace = leftover;
-      else if (main === "between" && count > 1)
-        betweenSpace = gap + leftover / (count - 1);
+      else if (main === "between" && count > 1) betweenSpace = gap + leftover / (count - 1);
       else if (main === "around") {
         const unit = leftover / count;
         leadingSpace = unit / 2;
@@ -145,7 +134,7 @@ export class FlexLayoutHelper {
           const size = child.calculateLayout(
             axis.flexConstraints(mainExtent, crossAvail),
             axis.offsetAt(mainStart, crossOrigin),
-            ctx
+            ctx,
           );
           crossUsed = Math.max(crossUsed, axis.crossOf(size));
         }
@@ -170,7 +159,7 @@ export class FlexLayoutHelper {
         const size = child.calculateLayout(
           axis.flexConstraints(mainExtent, stretch ? crossExtent : crossAvail),
           axis.offsetAt(mainPos, crossOrigin),
-          ctx
+          ctx,
         );
         placedCross = Math.max(placedCross, axis.crossOf(size));
       } else {
@@ -178,7 +167,7 @@ export class FlexLayoutHelper {
         const size = child.calculateLayout(
           axis.measureConstraints(stretch ? crossExtent : crossAvail),
           axis.offsetAt(mainPos, crossOrigin + crossOffset(cross, crossExtent, childCross)),
-          ctx
+          ctx,
         );
         mainExtent = axis.mainOf(size);
         placedCross = Math.max(placedCross, axis.crossOf(size));

@@ -47,21 +47,14 @@ describe("PDFObjectManager - Fonts", () => {
     vitest.spyOn(manager, "getCharWidth").mockReturnValue(600);
 
     // Mock the getKerning method to simulate kerning between 'A' and 'V'
-    vitest
-      .spyOn(manager as any, "getKerning")
-      .mockImplementation((char, nextChar) => {
-        if (char === "A" && nextChar === "V") {
-          return 0.1; // Simulated kerning value for 'A' and 'V'
-        }
-        return 0;
-      });
+    vitest.spyOn(manager as any, "getKerning").mockImplementation((char, nextChar) => {
+      if (char === "A" && nextChar === "V") {
+        return 0.1; // Simulated kerning value for 'A' and 'V'
+      }
+      return 0;
+    });
 
-    const width = manager.getStringWidth(
-      "AV",
-      "Helvetica",
-      12,
-      FontStyle.Normal
-    );
+    const width = manager.getStringWidth("AV", "Helvetica", 12, FontStyle.Normal);
     // char width: 600 for each + kerning: 0.1 * 12 (font size)
     expect(width).toBe(600 + 600 + 0.1 * 12); // 1200 + 1.2 = 1201.2
   });
@@ -70,12 +63,7 @@ describe("PDFObjectManager - Fonts", () => {
 describe("PDFObjectManager - Images", () => {
   it("should register an image and return the correct object number", () => {
     const manager = new PDFObjectManager();
-    const imageObjectNumber = manager.registerImage(
-      100,
-      200,
-      "DCTDecode",
-      "imageData"
-    );
+    const imageObjectNumber = manager.registerImage(100, 200, "DCTDecode", "imageData");
 
     expect(imageObjectNumber).toBe(1);
   });
@@ -119,12 +107,7 @@ describe("PDFObjectManager - Images", () => {
     const imageType = "DCTDecode";
     const imageData = "some-image-data";
 
-    const imageObjectNumber = manager.registerImage(
-      imageWidth,
-      imageHeight,
-      imageType,
-      imageData
-    );
+    const imageObjectNumber = manager.registerImage(imageWidth, imageHeight, imageType, imageData);
 
     expect(imageObjectNumber).toBe(1);
     const allImages = manager.getAllImagesRaw();
@@ -164,23 +147,10 @@ describe("PDFObjectManager - Kerning Calculation", () => {
     const manager = new PDFObjectManager();
     manager.registerFont("Helvetica", FontStyle.Normal);
 
-    const kerningSpy = vitest
-      .spyOn(manager as any, "getKerning")
-      .mockReturnValue(0.1);
+    const kerningSpy = vitest.spyOn(manager as any, "getKerning").mockReturnValue(0.1);
 
-    const width = manager.getStringWidth(
-      "AV",
-      "Helvetica",
-      12,
-      FontStyle.Normal
-    );
-    expect(kerningSpy).toHaveBeenCalledWith(
-      "A",
-      "V",
-      undefined,
-      "Helvetica",
-      "normal"
-    );
+    const width = manager.getStringWidth("AV", "Helvetica", 12, FontStyle.Normal);
+    expect(kerningSpy).toHaveBeenCalledWith("A", "V", undefined, "Helvetica", "normal");
     expect(width).toBeGreaterThan(12); // Kerning adds to width
   });
 });
@@ -211,15 +181,11 @@ describe("PDFObjectManager - XRef Table and Trailer with multiple objects", () =
 
     // Check that each object has a reference in the XRef table
     expect(xrefTable).toMatch(/0000000000 65535 f/); // Free object
+    expect(xrefTable).toMatch(new RegExp(`${String(firstObjectOffset).padStart(10, "0")} 00000 n`)); // First object
     expect(xrefTable).toMatch(
-      new RegExp(`${String(firstObjectOffset).padStart(10, "0")} 00000 n`)
-    ); // First object
-    expect(xrefTable).toMatch(
-      new RegExp(`${String(secondObjectOffset).padStart(10, "0")} 00000 n`)
+      new RegExp(`${String(secondObjectOffset).padStart(10, "0")} 00000 n`),
     ); // Second object
-    expect(xrefTable).toMatch(
-      new RegExp(`${String(thirdObjectOffset).padStart(10, "0")} 00000 n`)
-    ); // Third object
+    expect(xrefTable).toMatch(new RegExp(`${String(thirdObjectOffset).padStart(10, "0")} 00000 n`)); // Third object
 
     const trailer = manager.getTrailerAndXRef(50);
 

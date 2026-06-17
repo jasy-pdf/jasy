@@ -6,7 +6,7 @@ import { IRNode } from "../ir/display-list";
 export class PaddingRenderer {
   static async render(
     paddingElement: PaddingElement,
-    objectManager: PDFObjectManager
+    objectManager: PDFObjectManager,
   ): Promise<IRNode[]> {
     const { child } = paddingElement.getProps();
 

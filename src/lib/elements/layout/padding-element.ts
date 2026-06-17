@@ -1,16 +1,7 @@
 import { Validator } from "../../validators/element-validator";
-import {
-  PDFElement,
-  LayoutContext,
-  WithChild,
-  SizedPDFElement,
-} from "../pdf-element";
+import { PDFElement, LayoutContext, WithChild, SizedPDFElement } from "../pdf-element";
 import { BoxConstraints, Offset, Size } from "../../layout/box-constraints";
-import {
-  Fragmentable,
-  FragmentResult,
-  isFragmentable,
-} from "../../layout/fragmentation";
+import { Fragmentable, FragmentResult, isFragmentable } from "../../layout/fragmentation";
 
 // Padding sizes itself from its child + margin, so it takes no x/y of its own.
 interface PaddingElementParams extends WithChild {
@@ -54,11 +45,7 @@ export class PaddingElement extends SizedPDFElement implements Fragmentable {
     return new PaddingElement({ margin: this.margin, child });
   }
 
-  calculateLayout(
-    constraints: BoxConstraints,
-    offset: Offset,
-    ctx: LayoutContext
-  ): Size {
+  calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
     // Padding takes the width it is offered; its height shrink-wraps the child.
     if (constraints.hasBoundedWidth) this.width = constraints.maxWidth;
     this.x = offset.x;

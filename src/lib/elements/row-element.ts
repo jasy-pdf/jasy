@@ -1,16 +1,6 @@
 import { BoxConstraints, Offset, Size } from "../layout/box-constraints";
-import {
-  FlexLayoutHelper,
-  HORIZONTAL_AXIS,
-  MainAlign,
-  CrossAlign,
-} from "../utils/flex-layout";
-import {
-  LayoutContext,
-  PDFElement,
-  SizedPDFElement,
-  WithChildren,
-} from "./pdf-element";
+import { FlexLayoutHelper, HORIZONTAL_AXIS, MainAlign, CrossAlign } from "../utils/flex-layout";
+import { LayoutContext, PDFElement, SizedPDFElement, WithChildren } from "./pdf-element";
 
 interface RowElementParams extends WithChildren {
   /** Space inserted between children, in points. */
@@ -47,20 +37,14 @@ export class RowElement extends SizedPDFElement {
     this.cross = cross ?? "stretch";
   }
 
-  calculateLayout(
-    constraints: BoxConstraints,
-    offset: Offset,
-    ctx: LayoutContext
-  ): Size {
+  calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
     this.x = offset.x;
     this.y = offset.y;
 
     // Width fills the offered space (flex children split the leftover); height is the
     // tallest child unless the parent bounds it.
     const mainAvail = constraints.hasBoundedWidth ? constraints.maxWidth : Infinity;
-    const crossAvail = constraints.hasBoundedHeight
-      ? constraints.maxHeight
-      : Infinity;
+    const crossAvail = constraints.hasBoundedHeight ? constraints.maxHeight : Infinity;
 
     let result = { mainUsed: 0, crossUsed: 0 };
     if (this.children.length > 0) {
@@ -72,16 +56,12 @@ export class RowElement extends SizedPDFElement {
         this.x,
         this.y,
         { gap: this.gap, main: this.main, cross: this.cross },
-        ctx
+        ctx,
       );
     }
 
-    this.width = constraints.hasBoundedWidth
-      ? constraints.maxWidth
-      : result.mainUsed;
-    this.height = constraints.hasBoundedHeight
-      ? constraints.maxHeight
-      : result.crossUsed;
+    this.width = constraints.hasBoundedWidth ? constraints.maxWidth : result.mainUsed;
+    this.height = constraints.hasBoundedHeight ? constraints.maxHeight : result.crossUsed;
 
     return { width: this.width, height: this.height };
   }

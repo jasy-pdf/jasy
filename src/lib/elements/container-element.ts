@@ -1,15 +1,6 @@
-import {
-  FlexLayoutHelper,
-  VERTICAL_AXIS,
-  MainAlign,
-  CrossAlign,
-} from "../utils/flex-layout";
+import { FlexLayoutHelper, VERTICAL_AXIS, MainAlign, CrossAlign } from "../utils/flex-layout";
 import { BoxConstraints, Offset, Size } from "../layout/box-constraints";
-import {
-  Fragmentable,
-  FragmentResult,
-  packChildren,
-} from "../layout/fragmentation";
+import { Fragmentable, FragmentResult, packChildren } from "../layout/fragmentation";
 import {
   LayoutContext,
   PDFElement,
@@ -54,13 +45,7 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
    * in that case we don't fragment and hand the whole container back as `fitted`.
    */
   fragment(maxHeight: number, width: number, ctx: LayoutContext): FragmentResult {
-    const { fitted, remainder } = packChildren(
-      this.children,
-      maxHeight,
-      width,
-      ctx,
-      this.gap
-    );
+    const { fitted, remainder } = packChildren(this.children, maxHeight, width, ctx, this.gap);
     // Fits as one region: hand the whole container back so the page renders unchanged
     // (its normal layout distributes flex / fills the page).
     if (remainder.length === 0) return { fitted: this, remainder: null };
@@ -84,11 +69,7 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
     });
   }
 
-  calculateLayout(
-    constraints: BoxConstraints,
-    offset: Offset,
-    ctx: LayoutContext
-  ): Size {
+  calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
     // The container fills the width/height it is offered; when an axis is unbounded it
     // shrink-wraps to its children instead (mirrors how Row shrink-wraps). Width unbounded
     // happens for a Column nested in a Row (the Row offers its fixed children unbounded
@@ -114,7 +95,7 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
         this.y,
         this.x,
         { gap: this.gap, main: this.main, cross: this.cross },
-        ctx
+        ctx,
       );
     }
 

@@ -1,9 +1,5 @@
 import { BoxConstraints, Offset, Size } from "../../layout/box-constraints";
-import {
-  Fragmentable,
-  FragmentResult,
-  isFragmentable,
-} from "../../layout/fragmentation";
+import { Fragmentable, FragmentResult, isFragmentable } from "../../layout/fragmentation";
 import { LayoutContext, PDFElement } from "../pdf-element";
 
 /**
@@ -23,11 +19,7 @@ export class DeferredElement extends PDFElement implements Fragmentable {
     return this.composed;
   }
 
-  calculateLayout(
-    constraints: BoxConstraints,
-    offset: Offset,
-    ctx: LayoutContext
-  ): Size {
+  calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
     return this.build(ctx).calculateLayout(constraints, offset, ctx);
   }
 

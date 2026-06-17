@@ -52,11 +52,7 @@ function naturalWidth(cell: Cell, cellPadding: Insets | undefined, ctx: LayoutCo
 }
 
 /** Replaces every `"auto"` column with the widest cell width measured down that column. */
-function resolveAutoColumns(
-  opts: TableOptions,
-  rows: Cell[][],
-  ctx: LayoutContext
-): ColumnWidth[] {
+function resolveAutoColumns(opts: TableOptions, rows: Cell[][], ctx: LayoutContext): ColumnWidth[] {
   // The composed cell sits in a 1pt-border Box (border-box) that eats 1pt each side, which the
   // measured content doesn't include; add it back, and `ceil` so a single-word cell can't land
   // a hair over the width and wrap to an empty first line.
@@ -72,11 +68,7 @@ function resolveAutoColumns(
 }
 
 /** Builds the table tree for already-resolved column widths (no `"auto"`). */
-function composeTable(
-  opts: TableOptions,
-  rows: Cell[][],
-  columns: ColumnWidth[]
-): PDFElement {
+function composeTable(opts: TableOptions, rows: Cell[][], columns: ColumnWidth[]): PDFElement {
   const { cellPadding } = opts;
   const colGap = opts.colGap ?? opts.gap ?? 0;
   const rowGap = opts.rowGap ?? opts.gap ?? 0;
@@ -109,18 +101,16 @@ function composeTable(
   const buildRow = (cells: Cell[], firstRow: boolean) =>
     Row(
       { gap: colGap, cross: "stretch" },
-      cells.map((cell, i) => wrap(cell, columns[i] ?? "1fr", firstRow, i === 0))
+      cells.map((cell, i) => wrap(cell, columns[i] ?? "1fr", firstRow, i === 0)),
     );
 
   // The first row (which gets the top border) is the header if present, else body row 0.
   const body = Column(
     { gap: rowGap },
-    rows.map((cells, idx) => buildRow(cells, !opts.header && idx === 0))
+    rows.map((cells, idx) => buildRow(cells, !opts.header && idx === 0)),
   );
 
-  return opts.header
-    ? new RepeatingHeaderElement(buildRow(opts.header, true), body, rowGap)
-    : body;
+  return opts.header ? new RepeatingHeaderElement(buildRow(opts.header, true), body, rowGap) : body;
 }
 
 /**
@@ -132,7 +122,7 @@ function composeTable(
 export function Table(opts: TableOptions, rows: Cell[][]): PDFElement {
   if (opts.columns.some((c) => c === "auto")) {
     return new DeferredElement((ctx) =>
-      composeTable(opts, rows, resolveAutoColumns(opts, rows, ctx))
+      composeTable(opts, rows, resolveAutoColumns(opts, rows, ctx)),
     );
   }
   return composeTable(opts, rows, opts.columns);

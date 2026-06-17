@@ -1,10 +1,6 @@
 import { Color } from "../common/color";
 import { BoxConstraints, Offset, Size } from "../layout/box-constraints";
-import {
-  Fragmentable,
-  FragmentResult,
-  packChildren,
-} from "../layout/fragmentation";
+import { Fragmentable, FragmentResult, packChildren } from "../layout/fragmentation";
 import {
   LayoutContext,
   PDFElement,
@@ -84,42 +80,25 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
     // holding `c` of content is `c + 2*border` tall. (Derived, not a fudge factor.)
     const innerMaxHeight = maxHeight - 2 * this.borderWidth;
 
-    const { fitted, remainder } = packChildren(
-      this.children,
-      innerMaxHeight,
-      innerWidth,
-      ctx
-    );
+    const { fitted, remainder } = packChildren(this.children, innerMaxHeight, innerWidth, ctx);
     if (remainder.length === 0) return { fitted: this, remainder: null };
 
     const contentHeight = (kids: PDFElement[]): number =>
       kids.reduce(
         (sum, child) =>
           sum +
-          child.calculateLayout(
-            BoxConstraints.loose(innerWidth, Infinity),
-            { x: 0, y: 0 },
-            ctx
-          ).height,
-        0
+          child.calculateLayout(BoxConstraints.loose(innerWidth, Infinity), { x: 0, y: 0 }, ctx)
+            .height,
+        0,
       );
 
     return {
-      fitted: this.cloneWithChildren(
-        fitted,
-        contentHeight(fitted) + 2 * this.borderWidth
-      ),
-      remainder: this.cloneWithChildren(
-        remainder,
-        contentHeight(remainder) + 2 * this.borderWidth
-      ),
+      fitted: this.cloneWithChildren(fitted, contentHeight(fitted) + 2 * this.borderWidth),
+      remainder: this.cloneWithChildren(remainder, contentHeight(remainder) + 2 * this.borderWidth),
     };
   }
 
-  private cloneWithChildren(
-    children: PDFElement[],
-    height: number
-  ): RectangleElement {
+  private cloneWithChildren(children: PDFElement[], height: number): RectangleElement {
     return new RectangleElement({
       x: 0,
       y: 0,
@@ -134,30 +113,25 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
     });
   }
 
-  calculateLayout(
-    constraints: BoxConstraints,
-    offset: Offset,
-    ctx: LayoutContext
-  ): Size {
+  calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
     // Width: an explicit size wins (clamped), else fill the offered box. (Without this a
     // fixed box would balloon to the parent's size.)
     this.width =
       this.sizeMemory.width !== undefined
         ? constraints.constrainWidth(this.sizeMemory.width)
         : constraints.hasBoundedWidth
-        ? constraints.maxWidth
-        : this.width;
+          ? constraints.maxWidth
+          : this.width;
     // Height: explicit wins; otherwise FILL a bounded region (e.g. inside an Expanded) but
     // SHRINK-WRAP the content in an unbounded one (a note box in a stack). Shrink-wrap is
     // resolved after the children are measured, just below.
-    const shrinkWrapHeight =
-      this.sizeMemory.height === undefined && !constraints.hasBoundedHeight;
+    const shrinkWrapHeight = this.sizeMemory.height === undefined && !constraints.hasBoundedHeight;
     this.height =
       this.sizeMemory.height !== undefined
         ? constraints.constrainHeight(this.sizeMemory.height)
         : constraints.hasBoundedHeight
-        ? constraints.maxHeight
-        : this.height;
+          ? constraints.maxHeight
+          : this.height;
     this.x = this.sizeMemory.x + offset.x;
     this.y = this.sizeMemory.y + offset.y;
 
@@ -170,7 +144,7 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
       const childSize = child.calculateLayout(
         BoxConstraints.loose(innerWidth, Infinity),
         { x: this.x + this.borderWidth, y: yCursor },
-        ctx
+        ctx,
       );
       yCursor += childSize.height;
       contentHeight += childSize.height;

@@ -36,12 +36,12 @@ describe("PDFDocumentRenderer", () => {
     const pagesObjectNumber = await PDFDocumentRenderer.render(
       mockDocumentElement,
       mockObjectManager,
-      ctx
+      ctx,
     );
 
     // Expect that the first object is added (the Pages object)
     expect(mockObjectManager.addObject).toHaveBeenCalledWith(
-      "<< /Type /Pages /Kids [] /Count 2 >>"
+      "<< /Type /Pages /Kids [] /Count 2 >>",
     );
     expect(mockObjectManager.setParentObjectNumber).toHaveBeenCalledWith(1);
 
@@ -51,7 +51,7 @@ describe("PDFDocumentRenderer", () => {
     // Expect the pages object to be replaced with the correct page references
     expect(mockObjectManager.replaceObject).toHaveBeenCalledWith(
       1,
-      "<< /Type /Pages /Kids [1 0 R 1 0 R] /Count 2 >>"
+      "<< /Type /Pages /Kids [1 0 R 1 0 R] /Count 2 >>",
     );
 
     // Ensure the returned pages object number is correct
@@ -76,7 +76,7 @@ describe("PDFDocumentRenderer", () => {
     const pagesObjectNumber = await PDFDocumentRenderer.render(
       mockDocumentElement,
       mockObjectManager,
-      ctx
+      ctx,
     );
 
     // Verify that the children array is indeed empty
@@ -84,7 +84,7 @@ describe("PDFDocumentRenderer", () => {
 
     // Expect that the pages object is added with Count 0
     expect(mockObjectManager.addObject).toHaveBeenCalledWith(
-      "<< /Type /Pages /Kids [] /Count 0 >>"
+      "<< /Type /Pages /Kids [] /Count 0 >>",
     );
 
     // Expect no calls to PageRenderer.render since there are no pages

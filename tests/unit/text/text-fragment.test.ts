@@ -13,20 +13,14 @@ const metrics: FontMetrics = {
 };
 const ctx = { metrics } as LayoutContext;
 
-const para = (content: string, fontSize = 10) =>
-  new TextElement({ fontSize, content });
+const para = (content: string, fontSize = 10) => new TextElement({ fontSize, content });
 
-const contentOf = (el: unknown) =>
-  (el as TextElement).getProps().content as string;
+const contentOf = (el: unknown) => (el as TextElement).getProps().content as string;
 
 describe("TextElement.fragment - split at line boxes", () => {
   it("keeps the lines that fit and spills the rest", () => {
     // 3 lines, each 10pt tall. maxHeight 20 -> 2 lines fit.
-    const { fitted, remainder } = para("aa bb cc dd ee ff").fragment(
-      20,
-      50,
-      ctx
-    );
+    const { fitted, remainder } = para("aa bb cc dd ee ff").fragment(20, 50, ctx);
     expect(contentOf(fitted)).toBe("aa bb cc dd");
     expect(contentOf(remainder)).toBe("ee ff");
   });
@@ -37,7 +31,7 @@ describe("TextElement.fragment - split at line boxes", () => {
     const height = (fitted as TextElement).calculateLayout(
       BoxConstraints.loose(50, Infinity),
       { x: 0, y: 0 },
-      ctx
+      ctx,
     ).height;
     expect(height).toBe(20); // 2 lines * 10pt
   });
@@ -58,17 +52,12 @@ describe("TextElement.fragment - split at line boxes", () => {
 
   // Height after re-wrapping at width 50: a robust proxy for "no text duplicated or lost".
   const wrappedHeight = (el: unknown) =>
-    (el as TextElement).calculateLayout(
-      BoxConstraints.loose(50, Infinity),
-      { x: 0, y: 0 },
-      ctx
-    ).height;
+    (el as TextElement).calculateLayout(BoxConstraints.loose(50, Infinity), { x: 0, y: 0 }, ctx)
+      .height;
 
   it("splits styled segments at line boxes too", () => {
     // One segment wrapping to 3 lines of 10pt each; maxHeight 20 keeps 2.
-    const segments: TextSegment[] = [
-      { content: "aa bb cc dd ee ff", fontSize: 10 },
-    ];
+    const segments: TextSegment[] = [{ content: "aa bb cc dd ee ff", fontSize: 10 }];
     const text = new TextElement({ fontSize: 10, content: segments });
     const { fitted, remainder } = text.fragment(20, 50, ctx);
 

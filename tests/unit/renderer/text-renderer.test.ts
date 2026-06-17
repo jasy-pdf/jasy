@@ -19,7 +19,7 @@ describe("TextRenderer - calculateTextHeight", () => {
       "Helvetica",
       FontStyle.Normal,
       mockObjectManager,
-      25
+      25,
     );
 
     expect(textHeight).toBe(12); // No line breaks
@@ -37,7 +37,7 @@ describe("TextRenderer - calculateTextHeight", () => {
       "Helvetica",
       FontStyle.Normal,
       mockObjectManager,
-      70
+      70,
     );
 
     expect(textHeight).toBe(24); // Two lines
@@ -60,7 +60,7 @@ describe("TextRenderer - calculateTextHeight", () => {
       "Helvetica",
       FontStyle.Normal,
       mockObjectManager,
-      100
+      100,
     );
 
     expect(textHeight).toBe(14); // Bigger font size is setting height (one line)
@@ -90,7 +90,7 @@ describe("TextRenderer - calculateTextHeight", () => {
 
     const result = PdfBackend.serialize(
       await TextRenderer.render(mockTextElement, mockObjectManager),
-      mockObjectManager
+      mockObjectManager,
     );
 
     expect(result).toContain("BT");
@@ -126,7 +126,7 @@ describe("TextRenderer - calculateTextHeight", () => {
 
     const result = PdfBackend.serialize(
       await TextRenderer.render(mockTextElement, mockObjectManager),
-      mockObjectManager
+      mockObjectManager,
     );
 
     expect(result).toContain("/F1 12 Tf");
@@ -159,7 +159,7 @@ describe("TextRenderer - calculateTextHeight", () => {
 
     const result = PdfBackend.serialize(
       await TextRenderer.render(mockTextElement, mockObjectManager),
-      mockObjectManager
+      mockObjectManager,
     );
 
     expect(result).toContain("/F1 12 Tf");
@@ -193,7 +193,7 @@ describe("TextRenderer - calculateTextHeight", () => {
 
     const result = PdfBackend.serialize(
       await TextRenderer.render(mockTextElement, mockObjectManager),
-      mockObjectManager
+      mockObjectManager,
     );
 
     expect(result).toContain("/F1 12 Tf");
@@ -226,7 +226,7 @@ describe("TextRenderer - calculateTextHeight", () => {
 
     const result = PdfBackend.serialize(
       await TextRenderer.render(mockTextElement, mockObjectManager),
-      mockObjectManager
+      mockObjectManager,
     );
 
     // Empty content produces no runs, hence no operators at all (the old renderer
@@ -278,7 +278,7 @@ describe("TextRenderer - calculateTextHeight", () => {
 
     const result = PdfBackend.serialize(
       await TextRenderer.render(mockTextElement, mockObjectManager),
-      mockObjectManager
+      mockObjectManager,
     );
 
     expect(result).toContain("/F1 12 Tf"); // Normal font für "Hello"
@@ -329,7 +329,7 @@ describe("TextRenderer - calculateTextHeight", () => {
 
     const result = PdfBackend.serialize(
       await TextRenderer.render(mockTextElement, mockObjectManager),
-      mockObjectManager
+      mockObjectManager,
     );
 
     // Prüfen, ob beide Segmente gerendert werden

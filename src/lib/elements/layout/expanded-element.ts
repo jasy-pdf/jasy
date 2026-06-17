@@ -7,11 +7,7 @@ import {
   FlexibleElement,
 } from "../pdf-element";
 import { BoxConstraints, Offset, Size } from "../../layout/box-constraints";
-import {
-  Fragmentable,
-  FragmentResult,
-  isFragmentable,
-} from "../../layout/fragmentation";
+import { Fragmentable, FragmentResult, isFragmentable } from "../../layout/fragmentation";
 
 interface ExpandedElementParams extends FlexibleElement, WithChild {}
 
@@ -28,11 +24,7 @@ export class ExpandedElement extends FlexiblePDFElement implements Fragmentable 
     this.child = child;
   }
 
-  calculateLayout(
-    constraints: BoxConstraints,
-    offset: Offset,
-    ctx: LayoutContext
-  ): Size {
+  calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
     if (constraints.hasBoundedWidth) this.width = constraints.maxWidth;
     // Absolute placement from the parent; assignment (not +=) so re-layout is idempotent.
     this.x = offset.x;
@@ -46,7 +38,7 @@ export class ExpandedElement extends FlexiblePDFElement implements Fragmentable 
       this.child.calculateLayout(
         BoxConstraints.loose(this.width, this.height),
         { x: this.x, y: this.y },
-        ctx
+        ctx,
       );
     } else {
       // Unbounded (measuring while paginating): there's no leftover space to fill, so
@@ -55,7 +47,7 @@ export class ExpandedElement extends FlexiblePDFElement implements Fragmentable 
       const childSize = this.child.calculateLayout(
         BoxConstraints.loose(this.width, Infinity),
         { x: this.x, y: this.y },
-        ctx
+        ctx,
       );
       this.height = childSize.height;
     }

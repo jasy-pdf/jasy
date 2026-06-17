@@ -5,7 +5,7 @@ import { IRNode, Line } from "../ir/display-list";
 export class LineRenderer {
   static async render(
     lineElement: LineElement,
-    _objectManager: PDFObjectManager
+    _objectManager: PDFObjectManager,
   ): Promise<IRNode[]> {
     const { x, y, xEnd, yEnd, color, strokeWidth } = lineElement.getProps();
 

@@ -61,10 +61,7 @@ export class PdfBackend {
    * text closes the string early and the remaining characters leak as raw operators.
    */
   static escapePdfString(text: string): string {
-    return text
-      .replace(/\\/g, "\\\\")
-      .replace(/\(/g, "\\(")
-      .replace(/\)/g, "\\)");
+    return text.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
   }
 
   /**
@@ -72,11 +69,7 @@ export class PdfBackend {
    * alphas are fully opaque. Opaque draws emit nothing here, so output stays
    * byte-identical until transparency is actually used.
    */
-  private static alphaPrefix(
-    om: PDFObjectManager,
-    fillAlpha: number,
-    strokeAlpha: number
-  ): string {
+  private static alphaPrefix(om: PDFObjectManager, fillAlpha: number, strokeAlpha: number): string {
     if (fillAlpha >= 1 && strokeAlpha >= 1) return "";
     return `/${om.registerExtGState(fillAlpha, strokeAlpha)} gs\n`;
   }
@@ -91,7 +84,7 @@ export class PdfBackend {
     y: number,
     w: number,
     h: number,
-    radius: number
+    radius: number,
   ): string {
     const r = Math.min(radius, w / 2, h / 2);
     const c = r * 0.5523; // control-point offset that approximates a quarter circle
@@ -151,13 +144,7 @@ export class PdfBackend {
         // (byte-identical when no radius is set).
         const path =
           (node.radius ?? 0) > 0
-            ? PdfBackend.roundedRectPath(
-                node.x,
-                node.y,
-                node.width,
-                node.height,
-                node.radius!
-              )
+            ? PdfBackend.roundedRectPath(node.x, node.y, node.width, node.height, node.radius!)
             : `${node.x} ${node.y} ${node.width} ${node.height} re`;
         const body = ops + `${path} ${paint}\n`;
         // Transparency needs an isolating q/Q so the state does not leak; opaque rects
@@ -165,7 +152,7 @@ export class PdfBackend {
         const gs = PdfBackend.alphaPrefix(
           om,
           node.fill?.getAlpha() ?? 1,
-          doStroke ? node.stroke!.getAlpha() : 1
+          doStroke ? node.stroke!.getAlpha() : 1,
         );
         return gs ? `q\n${gs}${body}Q\n` : body;
       }
@@ -202,11 +189,10 @@ export class PdfBackend {
           node.intrinsicWidth,
           node.intrinsicHeight,
           node.imageType,
-          node.data
+          node.data,
         );
         const draw =
-          `q\n${node.width} 0 0 ${node.height} ${node.x} ${node.y} cm\n` +
-          `/IM${ref} Do\nQ\n`;
+          `q\n${node.width} 0 0 ${node.height} ${node.x} ${node.y} cm\n` + `/IM${ref} Do\nQ\n`;
         if (!node.clip) return draw;
         // Clip to the frame (re … W n); rounded when a radius is set. The rectangular
         // path is byte-identical to before.

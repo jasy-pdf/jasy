@@ -6,7 +6,7 @@ import { IRNode } from "../ir/display-list";
 export class RepeatingHeaderRenderer {
   static async render(
     element: RepeatingHeaderElement,
-    objectManager: PDFObjectManager
+    objectManager: PDFObjectManager,
   ): Promise<IRNode[]> {
     const { header, body } = element.getProps();
     const nodes: IRNode[] = [];

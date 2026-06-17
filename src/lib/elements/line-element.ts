@@ -24,14 +24,7 @@ export class LineElement extends SizedPDFElement {
     height?: number;
   };
 
-  constructor({
-    color = new Color(0, 0, 0),
-    strokeWidth,
-    x,
-    y,
-    xEnd,
-    yEnd,
-  }: LineElementParams) {
+  constructor({ color = new Color(0, 0, 0), strokeWidth, x, y, xEnd, yEnd }: LineElementParams) {
     super({ x: x, y: y, width: xEnd, height: y + yEnd });
 
     this.color = color;
@@ -43,11 +36,7 @@ export class LineElement extends SizedPDFElement {
     this.sizeMemory = { x, y, width: xEnd, height: yEnd };
   }
 
-  calculateLayout(
-    constraints: BoxConstraints,
-    offset: Offset,
-    _ctx: LayoutContext
-  ): Size {
+  calculateLayout(constraints: BoxConstraints, offset: Offset, _ctx: LayoutContext): Size {
     // Set relative to parent
     this.x = this.sizeMemory.x + offset.x;
     this.y = this.sizeMemory.y + offset.y;
@@ -55,7 +44,7 @@ export class LineElement extends SizedPDFElement {
     // The line spans the parent's width, so it needs a bounded width to anchor its end.
     if (!constraints.hasBoundedWidth) {
       throw new Error(
-        "The LineElement must be placed inside a parent container that defines its width"
+        "The LineElement must be placed inside a parent container that defines its width",
       );
     }
 

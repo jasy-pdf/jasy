@@ -6,7 +6,7 @@ import { IRNode } from "../ir/display-list";
 export class ContainerRenderer {
   static async render(
     containerElement: ContainerElement,
-    objectManager: PDFObjectManager
+    objectManager: PDFObjectManager,
   ): Promise<IRNode[]> {
     const { children } = containerElement.getProps();
     const nodes: IRNode[] = [];

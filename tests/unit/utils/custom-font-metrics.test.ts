@@ -10,7 +10,7 @@ describe("PDFObjectManager - custom font metric routing (slice 2.1)", () => {
     expect(om.getStringWidth("AB", "MyFont", 12, FontStyle.Normal)).toBeCloseTo(14.4, 5);
     expect(om.getStringWidth("A B", "MyFont", 12, FontStyle.Normal)).toBeCloseTo(
       ((500 + 250 + 700) / 1000) * 12,
-      5
+      5,
     );
   });
 

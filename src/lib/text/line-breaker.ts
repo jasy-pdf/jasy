@@ -31,7 +31,7 @@ export function wrapStringIntoLines(
   fontSize: number,
   fontStyle: FontStyle,
   maxWidth: number,
-  metrics: FontMetrics
+  metrics: FontMetrics,
 ): string[] {
   let currentLine = "";
   let currentWidth = 0;
@@ -39,19 +39,8 @@ export function wrapStringIntoLines(
 
   const words = text.split(" ");
   words.forEach((word, index) => {
-    const wordWidth = metrics.getStringWidth(
-      word,
-      fontFamily,
-      fontSize,
-      fontStyle
-    );
-    const spaceWidth = metrics.getCharWidth(
-      " ",
-      fontSize,
-      undefined,
-      fontFamily,
-      fontStyle
-    );
+    const wordWidth = metrics.getStringWidth(word, fontFamily, fontSize, fontStyle);
+    const spaceWidth = metrics.getCharWidth(" ", fontSize, undefined, fontFamily, fontStyle);
 
     if (currentWidth + wordWidth > maxWidth) {
       lines.push(currentLine.trim());
@@ -78,7 +67,7 @@ export function breakSegmentsIntoLines(
   segments: TextSegment[],
   defaults: SegmentDefaults,
   maxWidth: number,
-  metrics: FontMetrics
+  metrics: FontMetrics,
 ): SegmentLine[] {
   const lines: SegmentLine[] = [];
   let width = 0;

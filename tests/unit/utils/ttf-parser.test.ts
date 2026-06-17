@@ -25,7 +25,7 @@ describe("TTFParser", () => {
     expect(font.getStringWidth("A", 1000)).toBe(500);
     expect(font.getStringWidth("A", 12)).toBeCloseTo(6, 5); // 500/1000 * 12
     expect(font.getStringWidth("AB", 12)).toBeCloseTo(14.4, 5); // (500+700)/1000 * 12
-    expect(font.getStringWidth("A B", 12)).toBeCloseTo((500 + 250 + 700) / 1000 * 12, 5);
+    expect(font.getStringWidth("A B", 12)).toBeCloseTo(((500 + 250 + 700) / 1000) * 12, 5);
   });
 
   it("throws on a missing required table", () => {

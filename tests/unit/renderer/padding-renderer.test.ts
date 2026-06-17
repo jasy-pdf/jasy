@@ -33,10 +33,7 @@ describe("PaddingRenderer", () => {
     // Mock PDFObjectManager
     const mockObjectManager = {} as PDFObjectManager;
 
-    const result = await PaddingRenderer.render(
-      mockPaddingElement,
-      mockObjectManager
-    );
+    const result = await PaddingRenderer.render(mockPaddingElement, mockObjectManager);
 
     expect(mockPaddingElement.getProps).toHaveBeenCalled();
     expect(result).toContain("rendered child content");
@@ -44,9 +41,7 @@ describe("PaddingRenderer", () => {
 
   it("should not render anything if no renderer is found", async () => {
     // Override the mock to return undefined for the renderer
-    vi.spyOn(RendererRegistry, "getRenderer").mockImplementation(
-      () => undefined
-    );
+    vi.spyOn(RendererRegistry, "getRenderer").mockImplementation(() => undefined);
 
     // Mock PaddingElement
     const mockPaddingElement = {
@@ -69,10 +64,7 @@ describe("PaddingRenderer", () => {
     // Mock PDFObjectManager
     const mockObjectManager = {} as PDFObjectManager;
 
-    const result = await PaddingRenderer.render(
-      mockPaddingElement,
-      mockObjectManager
-    );
+    const result = await PaddingRenderer.render(mockPaddingElement, mockObjectManager);
 
     expect(mockPaddingElement.getProps).toHaveBeenCalled();
     expect(result).toEqual([]); // No renderer -> empty display list

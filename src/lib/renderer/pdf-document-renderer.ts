@@ -1,9 +1,5 @@
 import { PDFDocumentElement } from "../elements/pdf-document-element";
-import {
-  layoutPageBands,
-  PageElement,
-  PDFPageConfig,
-} from "../elements/page-element";
+import { layoutPageBands, PageElement, PDFPageConfig } from "../elements/page-element";
 import { LayoutContext, PDFElement } from "../elements/pdf-element";
 import { BoxConstraints } from "../layout/box-constraints";
 import { isFragmentable } from "../layout/fragmentation";
@@ -14,15 +10,13 @@ export class PDFDocumentRenderer {
   static async render(
     document: PDFDocumentElement,
     objectManager: PDFObjectManager,
-    ctx: LayoutContext
+    ctx: LayoutContext,
   ): Promise<number> {
     const pageNumbers: number[] = [];
 
     // Add the pages object first... we need its object number (resources). The count is
     // a placeholder; it is replaced below with the real (post-pagination) page count.
-    const pagesObject = `<< /Type /Pages /Kids [] /Count ${
-      document.getProps().children.length
-    } >>`;
+    const pagesObject = `<< /Type /Pages /Kids [] /Count ${document.getProps().children.length} >>`;
     const pagesObjectNumber = objectManager.addObject(pagesObject);
 
     // Now set the given object number all its childs
@@ -31,11 +25,7 @@ export class PDFDocumentRenderer {
     // The page driver: each logical PageElement may produce SEVERAL physical PDF pages
     // when its content overflows (Slice 0: whole children reflow to the next page).
     for (let page of document.getProps().children) {
-      const numbers = await PDFDocumentRenderer.renderLogicalPage(
-        page,
-        objectManager,
-        ctx
-      );
+      const numbers = await PDFDocumentRenderer.renderLogicalPage(page, objectManager, ctx);
       pageNumbers.push(...numbers);
     }
 
@@ -60,7 +50,7 @@ export class PDFDocumentRenderer {
   private static async renderLogicalPage(
     page: PageElement,
     objectManager: PDFObjectManager,
-    ctx: LayoutContext
+    ctx: LayoutContext,
   ): Promise<number[]> {
     const { children, config, header, footer } = page.getProps();
 
@@ -75,7 +65,7 @@ export class PDFDocumentRenderer {
       config!,
       header,
       footer,
-      pageCtx
+      pageCtx,
     );
     const numbers: number[] = [];
     let region: PDFElement | null = children[0];
@@ -91,8 +81,8 @@ export class PDFDocumentRenderer {
             header,
             footer,
             objectManager,
-            ctx
-          )
+            ctx,
+          ),
         );
         break;
       }
@@ -116,8 +106,8 @@ export class PDFDocumentRenderer {
             header,
             footer,
             objectManager,
-            ctx
-          )
+            ctx,
+          ),
         );
       }
       region = remainder;
@@ -138,7 +128,7 @@ export class PDFDocumentRenderer {
     header: PDFElement | undefined,
     footer: PDFElement | undefined,
     objectManager: PDFObjectManager,
-    ctx: LayoutContext
+    ctx: LayoutContext,
   ): Promise<number> {
     const physicalPage = new PageElement({
       config,

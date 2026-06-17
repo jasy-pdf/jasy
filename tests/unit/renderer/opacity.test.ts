@@ -33,9 +33,7 @@ describe("opacity (ExtGState)", () => {
     expect(out).toContain("/GS1 gs");
 
     expect(om.getAllExtGStatesRaw().get("GS1")).toBeDefined();
-    expect(om.getRenderedObjects()).toContain(
-      "<< /Type /ExtGState /ca 0.500 /CA 1.000 >>"
-    );
+    expect(om.getRenderedObjects()).toContain("<< /Type /ExtGState /ca 0.500 /CA 1.000 >>");
   });
 
   it("dedupes equal alpha pairs to a single graphics state", () => {

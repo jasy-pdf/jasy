@@ -7,19 +7,12 @@ import { IRNode } from "../ir/display-list";
 import { PdfBackend } from "./pdf-backend";
 
 export class PageRenderer {
-  static async render(
-    page: PageElement,
-    objectManager: PDFObjectManager
-  ): Promise<number> {
+  static async render(page: PageElement, objectManager: PDFObjectManager): Promise<number> {
     const { children, config, header, footer } = page.getProps();
 
     // Header (top band) and footer (bottom band) sit around the body and repeat on every
     // physical page; they are placed by `PageElement.calculateLayout` / the page driver.
-    const renderables = [
-      ...(header ? [header] : []),
-      ...children,
-      ...(footer ? [footer] : []),
-    ];
+    const renderables = [...(header ? [header] : []), ...children, ...(footer ? [footer] : [])];
 
     // Page geometry (also the MediaBox below). Needed up front because flipping the
     // display list to PDF coordinates uses the page height. config is fully resolved
@@ -39,14 +32,11 @@ export class PageRenderer {
         nodes.push(...(await renderer(element, objectManager)));
       }
     }
-    const pageContent = PdfBackend.serialize(
-      PdfBackend.flipY(nodes, height),
-      objectManager
-    );
+    const pageContent = PdfBackend.serialize(PdfBackend.flipY(nodes, height), objectManager);
 
     // Add the page content as a new object (content stream)
     const contentObjectNumber = objectManager.addObject(
-      `<</Length ${pageContent.length}>>\nstream\n${pageContent}endstream`
+      `<</Length ${pageContent.length}>>\nstream\n${pageContent}endstream`,
     );
 
     // Get the parent object number dynamically (linked with the page object)
@@ -85,7 +75,7 @@ export class PageRenderer {
         : "";
 
     const pageObject = `<< /Type /Page /Parent ${parentObjectNumber} 0 R /Contents ${contentObjectNumber} 0 R /Resources <<\n/Font <<\n${fontReferences.join(
-      "\n"
+      "\n",
     )}\n>>\n${imageCode}${extGStateCode}>>\n/MediaBox [0 0 ${width} ${height}] >>`;
 
     // Add page as new object and return the page number

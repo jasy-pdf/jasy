@@ -13,17 +13,11 @@ export class PDFDocumentElement extends PDFElement {
     this.children = children;
   }
 
-  calculateLayout(
-    _constraints: BoxConstraints,
-    _offset: Offset,
-    ctx: LayoutContext
-  ): Size {
+  calculateLayout(_constraints: BoxConstraints, _offset: Offset, ctx: LayoutContext): Size {
     // The document is the root: each page derives its own geometry, so it ignores the
     // incoming constraints/offset. It has no size of its own.
     const origin: Offset = { x: 0, y: 0 };
-    this.children.forEach((child) =>
-      child.calculateLayout(new BoxConstraints(), origin, ctx)
-    );
+    this.children.forEach((child) => child.calculateLayout(new BoxConstraints(), origin, ctx));
     return { width: 0, height: 0 };
   }
 

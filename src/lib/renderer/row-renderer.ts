@@ -4,10 +4,7 @@ import { RendererRegistry } from "../utils/renderer-registry";
 import { IRNode } from "../ir/display-list";
 
 export class RowRenderer {
-  static async render(
-    rowElement: RowElement,
-    objectManager: PDFObjectManager
-  ): Promise<IRNode[]> {
+  static async render(rowElement: RowElement, objectManager: PDFObjectManager): Promise<IRNode[]> {
     const { children } = rowElement.getProps();
     const nodes: IRNode[] = [];
 

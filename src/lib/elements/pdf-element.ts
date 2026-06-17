@@ -24,11 +24,7 @@ export abstract class PDFElement {
    * space it actually took (flows UP). Layout works in a top-left origin; the Y-flip
    * happens once at the IR -> backend seam.
    */
-  abstract calculateLayout(
-    constraints: BoxConstraints,
-    offset: Offset,
-    ctx: LayoutContext
-  ): Size;
+  abstract calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size;
 }
 
 export abstract class SizedPDFElement extends PDFElement {
@@ -57,8 +53,7 @@ export abstract class FlexiblePDFElement extends PDFElement {
   constructor(data: FlexibleElement) {
     super();
     this.flex = data.flex;
-    this.verticalChildAlignment =
-      data.verticalChildAlignment || VerticalAlignment.middle;
+    this.verticalChildAlignment = data.verticalChildAlignment || VerticalAlignment.middle;
   }
 
   getFlex(): number {
@@ -100,14 +95,10 @@ export interface SizedElement {
 }
 
 export function isSizedElement(obj: unknown): obj is SizedElement {
-  return (
-    typeof obj === "object" && obj !== null && "x" in obj && "y" in obj
-  );
+  return typeof obj === "object" && obj !== null && "x" in obj && "y" in obj;
 }
 
-export function hasChildrenProp<T extends object>(
-  obj: T
-): obj is T & WithChildren {
+export function hasChildrenProp<T extends object>(obj: T): obj is T & WithChildren {
   return "children" in obj;
 }
 

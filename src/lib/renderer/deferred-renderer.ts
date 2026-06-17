@@ -6,7 +6,7 @@ import { IRNode } from "../ir/display-list";
 export class DeferredRenderer {
   static async render(
     element: DeferredElement,
-    objectManager: PDFObjectManager
+    objectManager: PDFObjectManager,
   ): Promise<IRNode[]> {
     const { composed } = element.getProps();
     if (!composed) return [];

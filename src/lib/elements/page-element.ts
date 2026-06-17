@@ -61,7 +61,7 @@ export function layoutPageBands(
   config: PDFPageConfig,
   header: PDFElement | undefined,
   footer: PDFElement | undefined,
-  ctx: LayoutContext
+  ctx: LayoutContext,
 ): PageBands {
   const { origin, width, height } = resolvePageContentBox(config);
 
@@ -70,7 +70,7 @@ export function layoutPageBands(
     headerHeight = header.calculateLayout(
       BoxConstraints.loose(width, Infinity),
       origin,
-      ctx
+      ctx,
     ).height;
   }
 
@@ -80,12 +80,12 @@ export function layoutPageBands(
     footerHeight = footer.calculateLayout(
       BoxConstraints.loose(width, Infinity),
       origin,
-      ctx
+      ctx,
     ).height;
     footer.calculateLayout(
       BoxConstraints.loose(width, Infinity),
       { x: origin.x, y: origin.y + height - footerHeight },
-      ctx
+      ctx,
     );
   }
 
@@ -112,11 +112,7 @@ export class PageElement extends PDFElement {
     this.footer = footer;
   }
 
-  calculateLayout(
-    _constraints: BoxConstraints,
-    _offset: Offset,
-    ctx: LayoutContext
-  ): Size {
+  calculateLayout(_constraints: BoxConstraints, _offset: Offset, ctx: LayoutContext): Size {
     // Merge the document defaults (carried in the context) with this page's overrides,
     // then hand descendants a context bound to THIS page's geometry. This is what
     // fixes the old last-page-wins global page-config bug.
@@ -129,12 +125,9 @@ export class PageElement extends PDFElement {
     // Place the header/footer bands; the body gets the region left in between (the whole
     // content box when there is neither - byte-identical to a plain page).
     const bands = layoutPageBands(this.config, this.header, this.footer, pageCtx);
-    const childConstraints = BoxConstraints.loose(
-      bands.bodyWidth,
-      bands.bodyHeight
-    );
+    const childConstraints = BoxConstraints.loose(bands.bodyWidth, bands.bodyHeight);
     this.children.forEach((child) =>
-      child.calculateLayout(childConstraints, bands.bodyOrigin, pageCtx)
+      child.calculateLayout(childConstraints, bands.bodyOrigin, pageCtx),
     );
 
     const { width, height } = resolvePageContentBox(this.config);

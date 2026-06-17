@@ -23,16 +23,14 @@ describe("AFMParser", () => {
 
   beforeEach(() => {
     // Mock für fs.readFileSync mit Vitest
-    vi.spyOn(fs, "readFileSync").mockImplementation(
-      (path: any, options?: any): any => {
-        if (path.includes("agl.txt")) {
-          return mockGlyphList;
-        } else if (path.includes("afm")) {
-          return mockAFMData;
-        }
-        return "";
+    vi.spyOn(fs, "readFileSync").mockImplementation((path: any, options?: any): any => {
+      if (path.includes("agl.txt")) {
+        return mockGlyphList;
+      } else if (path.includes("afm")) {
+        return mockAFMData;
       }
-    );
+      return "";
+    });
 
     // Initialisierung des Parsers
     afmParser = new AFMParser(mockAFMData);

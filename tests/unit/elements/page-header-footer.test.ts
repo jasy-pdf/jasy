@@ -82,7 +82,7 @@ describe("layoutPageBands - header/footer reserve their bands", () => {
     body.calculateLayout(
       BoxConstraints.loose(bands.bodyWidth, bands.bodyHeight),
       bands.bodyOrigin,
-      ctx
+      ctx,
     );
 
     expect(bands.bodyHeight).toBe(height - 50);
@@ -97,7 +97,7 @@ const stack = (n: number) =>
     y: 0,
     children: Array.from(
       { length: n },
-      (_, i) => new TextElement({ fontSize: 24, content: `Block ${i}` })
+      (_, i) => new TextElement({ fontSize: 24, content: `Block ${i}` }),
     ),
   });
 

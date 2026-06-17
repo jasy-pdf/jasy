@@ -25,13 +25,10 @@ export interface Fragmentable {
   fragment(maxHeight: number, width: number, ctx: LayoutContext): FragmentResult;
 }
 
-export function isFragmentable(
-  element: PDFElement
-): element is PDFElement & Fragmentable {
+export function isFragmentable(element: PDFElement): element is PDFElement & Fragmentable {
   return (
     "fragment" in element &&
-    typeof (element as PDFElement & { fragment: unknown }).fragment ===
-      "function"
+    typeof (element as PDFElement & { fragment: unknown }).fragment === "function"
   );
 }
 
@@ -54,7 +51,7 @@ export function packChildren(
   maxHeight: number,
   width: number,
   ctx: LayoutContext,
-  gap: number = 0
+  gap: number = 0,
 ): { fitted: PDFElement[]; remainder: PDFElement[] } {
   const fitted: PDFElement[] = [];
   const remainder: PDFElement[] = [];
@@ -65,7 +62,7 @@ export function packChildren(
     const childHeight = child.calculateLayout(
       BoxConstraints.loose(width, Infinity),
       { x: 0, y: 0 },
-      ctx
+      ctx,
     ).height;
 
     // A gap precedes every child except the first one placed in this region.

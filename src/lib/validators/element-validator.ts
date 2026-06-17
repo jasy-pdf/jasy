@@ -5,7 +5,6 @@ import {
   hasChildProp,
   SizedPDFElement,
 } from "../elements/pdf-element";
-import { PDFObjectManager } from "../utils/pdf-object-manager";
 
 export class Validator {
   static validateDocument(document: PDFDocumentElement) {
@@ -13,9 +12,7 @@ export class Validator {
     document.getProps().children.forEach((page) => {
       page.getProps().children.forEach((element) => {
         if (element instanceof PDFDocumentElement) {
-          throw new Error(
-            "PDFDocument cannot be nested inside another element."
-          );
+          throw new Error("PDFDocument cannot be nested inside another element.");
         }
       });
     });
@@ -32,12 +29,12 @@ export class Validator {
       const { x, y, width, height } = element.getSize();
       if (x < 0 || y < 0) {
         throw new Error(
-          `Element ${element.constructor.name} has invalid coordinates (x: ${x}, y: ${y})`
+          `Element ${element.constructor.name} has invalid coordinates (x: ${x}, y: ${y})`,
         );
       }
       if ((width !== undefined && width <= 0) || (height !== undefined && height <= 0)) {
         throw new Error(
-          `Element ${element.constructor.name} has invalid size (width: ${width}, height: ${height})`
+          `Element ${element.constructor.name} has invalid size (width: ${width}, height: ${height})`,
         );
       }
     }
@@ -52,18 +49,13 @@ export class Validator {
     const { x, y, width, height } = element.getSize();
     if (x < 0 || y < 0) {
       throw new Error(
-        `Element ${element.constructor.name} has invalid coordinates (x: ${x}, y: ${y})`
+        `Element ${element.constructor.name} has invalid coordinates (x: ${x}, y: ${y})`,
       );
     }
 
-    if (
-      width === undefined ||
-      height === undefined ||
-      width <= 0 ||
-      height <= 0
-    ) {
+    if (width === undefined || height === undefined || width <= 0 || height <= 0) {
       throw new Error(
-        `Element ${element.constructor.name} has invalid size (width: ${width}, height: ${height})`
+        `Element ${element.constructor.name} has invalid size (width: ${width}, height: ${height})`,
       );
     }
   }
@@ -71,16 +63,14 @@ export class Validator {
   static validateFlexElement(element: FlexiblePDFElement): void {
     // Ensure flexible elements have valid flex values
     if (element.getFlex() <= 0) {
-      throw new Error(
-        `Flexible element ${element.constructor.name} has invalid flex value`
-      );
+      throw new Error(`Flexible element ${element.constructor.name} has invalid flex value`);
     }
 
     // Ensure a flexible element does not contain another flexible element
     if (hasChildProp<FlexiblePDFElement>(element)) {
       if (element.child instanceof FlexiblePDFElement) {
         throw new Error(
-          `Flexible element ${element.constructor.name} cannot hold another flexible element`
+          `Flexible element ${element.constructor.name} cannot hold another flexible element`,
         );
       }
     }

@@ -50,16 +50,11 @@ describe("ImageRenderer", () => {
     // the image XObject (which is what the registerImage assertions below check).
     const result = PdfBackend.serialize(
       await ImageRenderer.render(mockImageElement, mockObjectManager),
-      mockObjectManager
+      mockObjectManager,
     );
 
     expect(mockImageElement.getProps).toHaveBeenCalled();
-    expect(mockObjectManager.registerImage).toHaveBeenCalledWith(
-      200,
-      200,
-      "jpeg",
-      "mockImageData"
-    );
+    expect(mockObjectManager.registerImage).toHaveBeenCalledWith(200, 200, "jpeg", "mockImageData");
 
     expect(result).toContain("q");
     expect(result).toContain("/IM1 Do");
@@ -103,16 +98,11 @@ describe("ImageRenderer", () => {
     // the image XObject (which is what the registerImage assertions below check).
     const result = PdfBackend.serialize(
       await ImageRenderer.render(mockImageElement, mockObjectManager),
-      mockObjectManager
+      mockObjectManager,
     );
 
     expect(mockImageElement.getProps).toHaveBeenCalled();
-    expect(mockObjectManager.registerImage).toHaveBeenCalledWith(
-      200,
-      200,
-      "jpeg",
-      "mockImageData"
-    );
+    expect(mockObjectManager.registerImage).toHaveBeenCalledWith(200, 200, "jpeg", "mockImageData");
 
     expect(result).toContain("q");
     expect(result).toContain("/IM2 Do");
@@ -142,9 +132,9 @@ describe("ImageRenderer", () => {
     // Mock PDFObjectManager
     const mockObjectManager = {} as PDFObjectManager;
 
-    await expect(
-      ImageRenderer.render(mockImageElement, mockObjectManager)
-    ).rejects.toThrow("File data cannot be `null`");
+    await expect(ImageRenderer.render(mockImageElement, mockObjectManager)).rejects.toThrow(
+      "File data cannot be `null`",
+    );
   });
 
   it("should render an image with the correct placement and size for 'fill' fit", async () => {
@@ -185,16 +175,11 @@ describe("ImageRenderer", () => {
     // the image XObject (which is what the registerImage assertions below check).
     const result = PdfBackend.serialize(
       await ImageRenderer.render(mockImageElement, mockObjectManager),
-      mockObjectManager
+      mockObjectManager,
     );
 
     expect(mockImageElement.getProps).toHaveBeenCalled();
-    expect(mockObjectManager.registerImage).toHaveBeenCalledWith(
-      200,
-      200,
-      "jpeg",
-      "mockImageData"
-    );
+    expect(mockObjectManager.registerImage).toHaveBeenCalledWith(200, 200, "jpeg", "mockImageData");
 
     expect(result).toContain("q");
     expect(result).toContain("/IM3 Do");
@@ -238,16 +223,11 @@ describe("ImageRenderer", () => {
     // the image XObject (which is what the registerImage assertions below check).
     const result = PdfBackend.serialize(
       await ImageRenderer.render(mockImageElement, mockObjectManager),
-      mockObjectManager
+      mockObjectManager,
     );
 
     expect(mockImageElement.getProps).toHaveBeenCalled();
-    expect(mockObjectManager.registerImage).toHaveBeenCalledWith(
-      200,
-      200,
-      "jpeg",
-      "mockImageData"
-    );
+    expect(mockObjectManager.registerImage).toHaveBeenCalledWith(200, 200, "jpeg", "mockImageData");
 
     expect(result).toContain("q");
     expect(result).toContain("/IM4 Do");

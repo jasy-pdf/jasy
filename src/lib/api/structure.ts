@@ -43,21 +43,15 @@ export interface PageOptions extends StackOptions {
  */
 export function Page(children: PDFElement[]): PageElement;
 export function Page(opts: PageOptions, children: PDFElement[]): PageElement;
-export function Page(
-  a: PageOptions | PDFElement[],
-  b?: PDFElement[]
-): PageElement {
+export function Page(a: PageOptions | PDFElement[], b?: PDFElement[]): PageElement {
   const isOpts = !Array.isArray(a);
   const opts = (isOpts ? a : {}) as PageOptions;
-  const children = (isOpts ? b ?? [] : a) as PDFElement[];
+  const children = (isOpts ? (b ?? []) : a) as PDFElement[];
 
   const [top, right, bottom, left] = toEdges(opts.margin ?? DEFAULT_MARGIN);
   const config: PDFPageConfig = {
     pageSize: opts.size !== undefined ? toPageSize(opts.size) : PageSize.A4,
-    orientation:
-      opts.orientation === "landscape"
-        ? Orientation.landscape
-        : Orientation.portrait,
+    orientation: opts.orientation === "landscape" ? Orientation.landscape : Orientation.portrait,
     margin: { top, right, bottom, left },
   };
 
@@ -65,9 +59,7 @@ export function Page(
     config,
     header: opts.header,
     footer: opts.footer,
-    children: [
-      Column({ gap: opts.gap, main: opts.main, cross: opts.cross }, children),
-    ],
+    children: [Column({ gap: opts.gap, main: opts.main, cross: opts.cross }, children)],
   });
 }
 
@@ -82,17 +74,14 @@ const docMeta = new WeakMap<PDFDocumentElement, DocumentOptions["meta"]>();
 
 /** The document root. `Document(pages)` or `Document(opts, pages)`. */
 export function Document(pages: PageElement[]): PDFDocumentElement;
-export function Document(
-  opts: DocumentOptions,
-  pages: PageElement[]
-): PDFDocumentElement;
+export function Document(opts: DocumentOptions, pages: PageElement[]): PDFDocumentElement;
 export function Document(
   a: DocumentOptions | PageElement[],
-  b?: PageElement[]
+  b?: PageElement[],
 ): PDFDocumentElement {
   const isOpts = !Array.isArray(a);
   const opts = (isOpts ? a : {}) as DocumentOptions;
-  const pages = (isOpts ? b ?? [] : a) as PageElement[];
+  const pages = (isOpts ? (b ?? []) : a) as PageElement[];
 
   const doc = new PDFDocumentElement({ children: pages });
   if (opts.meta) docMeta.set(doc, opts.meta);
@@ -121,10 +110,7 @@ function isFontBytes(v: FontBytes | FontFamily): v is FontBytes {
 }
 
 /** Renders a `Document(...)` tree to the raw PDF string. */
-export async function renderPdf(
-  doc: PDFDocumentElement,
-  options?: RenderOptions
-): Promise<string> {
+export async function renderPdf(doc: PDFDocumentElement, options?: RenderOptions): Promise<string> {
   const meta = docMeta.get(doc);
   const config: PDFConfig | undefined = meta
     ? { metaData: { title: meta.title, author: meta.author, keywords: [] } }
@@ -144,7 +130,8 @@ export async function renderPdf(
         } else {
           om.registerCustomFont(name, Buffer.from(value.normal), FontStyle.Normal);
           if (value.bold) om.registerCustomFont(name, Buffer.from(value.bold), FontStyle.Bold);
-          if (value.italic) om.registerCustomFont(name, Buffer.from(value.italic), FontStyle.Italic);
+          if (value.italic)
+            om.registerCustomFont(name, Buffer.from(value.italic), FontStyle.Italic);
           if (value.boldItalic)
             om.registerCustomFont(name, Buffer.from(value.boldItalic), FontStyle.BoldItalic);
         }
@@ -160,7 +147,7 @@ export async function renderPdf(
 /** Renders a `Document(...)` tree to PDF bytes (e.g. for a download / save dialog). */
 export async function renderToBytes(
   doc: PDFDocumentElement,
-  options?: RenderOptions
+  options?: RenderOptions,
 ): Promise<Uint8Array> {
   return new Uint8Array(getArrayBuffer(await renderPdf(doc, options)));
 }

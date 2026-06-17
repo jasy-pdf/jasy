@@ -26,8 +26,14 @@ describe("Page factory", () => {
 
   it("maps size (case-insensitive), orientation, margin Insets, header/footer", () => {
     const p = Page(
-      { size: "Letter", orientation: "landscape", margin: { x: 40, y: 20 }, header: Text("h"), footer: Text("f") },
-      [Text("body")]
+      {
+        size: "Letter",
+        orientation: "landscape",
+        margin: { x: 40, y: 20 },
+        header: Text("h"),
+        footer: Text("f"),
+      },
+      [Text("body")],
     );
     const props = p.getProps() as any;
     expect(props.config.pageSize).toBe(PageSize.LETTER);
@@ -53,7 +59,7 @@ describe("Document factory", () => {
 describe("renderPdf / renderToBytes", () => {
   it("renders a factory tree to a valid PDF string", async () => {
     const pdf = await renderPdf(
-      Document([Page([Column({ gap: 12 }, [Text("Hello", { size: 20, bold: true })])])])
+      Document([Page([Column({ gap: 12 }, [Text("Hello", { size: 20, bold: true })])])]),
     );
     expect(pdf.startsWith("%PDF")).toBe(true);
     expect(pdf).toContain("(Hello)");
@@ -73,7 +79,7 @@ describe("renderPdf / renderToBytes", () => {
     // /Info dictionary (a pending engine feature, also needed for PDF/A), so we only assert
     // the meta path doesn't break rendering.
     const pdf = await renderPdf(
-      Document({ meta: { title: "Invoice 42", author: "ACME" } }, [Page([Text("x")])])
+      Document({ meta: { title: "Invoice 42", author: "ACME" } }, [Page([Text("x")])]),
     );
     expect(pdf.startsWith("%PDF")).toBe(true);
   });

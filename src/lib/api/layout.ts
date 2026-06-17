@@ -26,10 +26,7 @@ const DEFAULT_CROSS: CrossAlign = "start";
 /** A vertical stack. `Column(children)` or `Column(opts, children)`. */
 export function Column(children: PDFElement[]): ContainerElement;
 export function Column(opts: StackOptions, children: PDFElement[]): ContainerElement;
-export function Column(
-  a: StackOptions | PDFElement[],
-  b?: PDFElement[]
-): ContainerElement {
+export function Column(a: StackOptions | PDFElement[], b?: PDFElement[]): ContainerElement {
   const { opts, children } = splitArgs<StackOptions>(a, b);
   return new ContainerElement({
     x: 0,
@@ -85,10 +82,7 @@ export interface BoxOptions {
  */
 export function Box(children: PDFElement[]): RectangleElement;
 export function Box(opts: BoxOptions, children: PDFElement[]): RectangleElement;
-export function Box(
-  a: BoxOptions | PDFElement[],
-  b?: PDFElement[]
-): RectangleElement {
+export function Box(a: BoxOptions | PDFElement[], b?: PDFElement[]): RectangleElement {
   const { opts, children } = splitArgs<BoxOptions>(a, b);
 
   const content =
@@ -103,20 +97,14 @@ export function Box(
 
   // A side is set if it (or the uniform `border`) is given. If ANY differs from a plain
   // uniform border, we hand the engine per-side colours (which draws individual lines).
-  const sideKeys = [
-    opts.borderTop,
-    opts.borderRight,
-    opts.borderBottom,
-    opts.borderLeft,
-  ];
+  const sideKeys = [opts.borderTop, opts.borderRight, opts.borderBottom, opts.borderLeft];
   const hasPerSide = sideKeys.some((s) => s !== undefined);
   const side = (s?: ColorInput) => {
     const c = s ?? opts.border;
     return c !== undefined ? toColor(c) : undefined;
   };
 
-  const hasBorder =
-    opts.border !== undefined || opts.borderWidth !== undefined || hasPerSide;
+  const hasBorder = opts.border !== undefined || opts.borderWidth !== undefined || hasPerSide;
 
   return new RectangleElement({
     x: 0,
@@ -124,7 +112,7 @@ export function Box(
     children: content,
     color: opts.border !== undefined ? toColor(opts.border) : undefined,
     backgroundColor: opts.bg !== undefined ? toColor(opts.bg) : undefined,
-    borderWidth: hasBorder ? opts.borderWidth ?? 1 : 0,
+    borderWidth: hasBorder ? (opts.borderWidth ?? 1) : 0,
     width: opts.width,
     height: opts.height,
     radius: opts.radius,
@@ -163,10 +151,7 @@ export interface ExpandedOptions {
  */
 export function Expanded(child: PDFElement): ExpandedElement;
 export function Expanded(opts: ExpandedOptions, child: PDFElement): ExpandedElement;
-export function Expanded(
-  a: ExpandedOptions | PDFElement,
-  b?: PDFElement
-): ExpandedElement {
+export function Expanded(a: ExpandedOptions | PDFElement, b?: PDFElement): ExpandedElement {
   const isOptsForm = b !== undefined;
   const opts = (isOptsForm ? a : {}) as ExpandedOptions;
   const child = (isOptsForm ? b : a) as PDFElement;

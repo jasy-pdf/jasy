@@ -34,21 +34,13 @@ describe("ExpandedRenderer", () => {
     const mockChildRenderer = vi.fn().mockResolvedValue(["child-node"]);
 
     // Spy on RendererRegistry to return the mock renderer for the child
-    vi.spyOn(RendererRegistry, "getRenderer").mockReturnValue(
-      mockChildRenderer
-    );
+    vi.spyOn(RendererRegistry, "getRenderer").mockReturnValue(mockChildRenderer);
 
     // Call the ExpandedRenderer's render method
-    const result = await ExpandedRenderer.render(
-      mockExpandedElement,
-      mockObjectManager
-    );
+    const result = await ExpandedRenderer.render(mockExpandedElement, mockObjectManager);
 
     // Check if the mock renderer for the child was called
-    expect(mockChildRenderer).toHaveBeenCalledWith(
-      mockChild,
-      mockObjectManager
-    );
+    expect(mockChildRenderer).toHaveBeenCalledWith(mockChild, mockObjectManager);
 
     // Expanded passes the child's display list straight through.
     expect(result).toEqual(["child-node"]);
@@ -82,10 +74,7 @@ describe("ExpandedRenderer", () => {
     vi.spyOn(RendererRegistry, "getRenderer").mockReturnValue(undefined);
 
     // Call the ExpandedRenderer's render method
-    const result = await ExpandedRenderer.render(
-      mockExpandedElement,
-      mockObjectManager
-    );
+    const result = await ExpandedRenderer.render(mockExpandedElement, mockObjectManager);
 
     // No renderer for the child -> empty display list.
     expect(result).toEqual([]);

@@ -32,7 +32,7 @@ describe("RectangleRenderer", () => {
 
     const result = PdfBackend.serialize(
       await RectangleRenderer.render(mockRectangleElement, mockObjectManager),
-      mockObjectManager
+      mockObjectManager,
     );
 
     expect(result).toBe("1 w\n0.000 0.000 0.000 RG\n10 20 100 50 re S\n");
@@ -54,7 +54,7 @@ describe("RectangleRenderer", () => {
 
     const result = PdfBackend.serialize(
       await RectangleRenderer.render(mockRectangleElement, mockObjectManager),
-      mockObjectManager
+      mockObjectManager,
     );
 
     expect(result).toBe("2 w\n1.000 0.000 0.000 RG\n10 20 100 50 re S\n");
@@ -76,12 +76,10 @@ describe("RectangleRenderer", () => {
 
     const result = PdfBackend.serialize(
       await RectangleRenderer.render(mockRectangleElement, mockObjectManager),
-      mockObjectManager
+      mockObjectManager,
     );
 
-    expect(result).toBe(
-      "1 w\n0.000 0.000 1.000 RG\n0.000 1.000 0.000 rg\n10 20 100 50 re B\n"
-    );
+    expect(result).toBe("1 w\n0.000 0.000 1.000 RG\n0.000 1.000 0.000 rg\n10 20 100 50 re B\n");
   });
 
   it("should render a rectangle and its children", async () => {
@@ -113,10 +111,7 @@ describe("RectangleRenderer", () => {
       }),
     } as unknown as RectangleElement;
 
-    const result = await RectangleRenderer.render(
-      mockRectangleElement,
-      mockObjectManager
-    );
+    const result = await RectangleRenderer.render(mockRectangleElement, mockObjectManager);
 
     // The box node comes first, then the child's nodes are appended.
     expect(result[0]).toMatchObject({

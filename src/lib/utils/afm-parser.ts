@@ -71,9 +71,7 @@ export class AFMParser {
     }
   }
 
-  private parseCharMetrics(
-    line: string
-  ): { charName: string; wx: number } | null {
+  private parseCharMetrics(line: string): { charName: string; wx: number } | null {
     const parts = line.split(";").map((part) => part.trim());
 
     let charName = "";

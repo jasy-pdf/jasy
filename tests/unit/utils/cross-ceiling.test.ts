@@ -1,8 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  FlexLayoutHelper,
-  VERTICAL_AXIS,
-} from "../../../src/lib/utils/flex-layout";
+import { FlexLayoutHelper, VERTICAL_AXIS } from "../../../src/lib/utils/flex-layout";
 import { LayoutContext, PDFElement } from "../../../src/lib/elements/pdf-element";
 import { BoxConstraints, Offset, Size } from "../../../src/lib/layout/box-constraints";
 
@@ -38,7 +35,7 @@ describe("cross-axis ceiling - nothing overflows regardless of alignment", () =>
         0,
         0,
         { cross },
-        ctx
+        ctx,
       );
       // The ceiling is the available column width, NEVER unbounded - so the child wraps
       // instead of running one line off the page. This is the regression that the old

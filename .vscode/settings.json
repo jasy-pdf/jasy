@@ -1,0 +1,9 @@
+{
+  // Format on save with oxfmt (via the official Oxc extension), lint with oxlint.
+  // Needs the "Oxc" extension installed (see .vscode/extensions.json).
+  "editor.formatOnSave": true,
+  "[typescript]": { "editor.defaultFormatter": "oxc.oxc-vscode" },
+  "[javascript]": { "editor.defaultFormatter": "oxc.oxc-vscode" },
+  "[json]": { "editor.defaultFormatter": "oxc.oxc-vscode" },
+  "[jsonc]": { "editor.defaultFormatter": "oxc.oxc-vscode" }
+}

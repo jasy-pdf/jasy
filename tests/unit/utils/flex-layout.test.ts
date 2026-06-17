@@ -124,7 +124,7 @@ describe("FlexLayoutHelper.layout - cross-axis alignment", () => {
       0,
       0,
       { cross: "center" },
-      ctx
+      ctx,
     );
     expect(child.placedAt!.x).toBe(30); // (100 - 40) / 2
   });
@@ -152,7 +152,16 @@ describe("FlexLayoutHelper.layout - horizontal (Row), same algorithm", () => {
     const tall = new MockBox({ width: 30, height: 40 });
     const short = new MockBox({ width: 30, height: 10 });
 
-    FlexLayoutHelper.layout([tall, short], HORIZONTAL_AXIS, 500, Infinity, 0, 0, { cross: "center" }, ctx);
+    FlexLayoutHelper.layout(
+      [tall, short],
+      HORIZONTAL_AXIS,
+      500,
+      Infinity,
+      0,
+      0,
+      { cross: "center" },
+      ctx,
+    );
 
     expect(tall.placedAt!.y).toBe(0); // tallest -> defines the cross extent (40)
     expect(short.placedAt!.y).toBe(15); // (40 - 10) / 2

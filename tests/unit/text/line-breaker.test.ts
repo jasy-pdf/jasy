@@ -1,8 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  breakSegmentsIntoLines,
-  wrapStringIntoLines,
-} from "../../../src/lib/text/line-breaker";
+import { breakSegmentsIntoLines, wrapStringIntoLines } from "../../../src/lib/text/line-breaker";
 import { FontStyle } from "../../../src/lib/utils/pdf-object-manager";
 import type { FontMetrics } from "../../../src/lib/utils/font-metrics";
 
@@ -28,7 +25,7 @@ describe("line-breaker", () => {
       12,
       FontStyle.Normal,
       50,
-      metrics
+      metrics,
     );
     expect(lines).toEqual(["aa bb", "cc dd"]);
   });
@@ -42,7 +39,7 @@ describe("line-breaker", () => {
       ],
       defaults,
       60,
-      metrics
+      metrics,
     );
 
     // Line 0 carries the 24pt word, so its leading is 24; the wrapped 11pt lines are 11.

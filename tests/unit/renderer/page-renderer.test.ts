@@ -45,25 +45,20 @@ describe("PageRenderer", () => {
               resourceIndex: 1,
             },
           ],
-        ])
+        ]),
       ),
       getAllImagesRaw: vi.fn().mockReturnValue(new Map()),
       getAllExtGStatesRaw: vi.fn().mockReturnValue(new Map()),
     } as unknown as PDFObjectManager;
 
-    const pageNumber = await PageRenderer.render(
-      mockPageElement,
-      mockObjectManager
-    );
+    const pageNumber = await PageRenderer.render(mockPageElement, mockObjectManager);
 
     expect(mockPageElement.getProps).toHaveBeenCalled();
     expect(mockObjectManager.addObject).toHaveBeenCalledTimes(2); // Once for content, once for page
     expect(pageNumber).toBe(1); // Returns the page object number
 
     // Check if the renderer was called for the child element
-    expect(RendererRegistry.getRenderer).toHaveBeenCalledWith(
-      expect.anything()
-    );
+    expect(RendererRegistry.getRenderer).toHaveBeenCalledWith(expect.anything());
   });
 
   it("should render a page with image references", async () => {
@@ -85,10 +80,7 @@ describe("PageRenderer", () => {
       getAllExtGStatesRaw: vi.fn().mockReturnValue(new Map()),
     } as unknown as PDFObjectManager;
 
-    const pageNumber = await PageRenderer.render(
-      mockPageElement,
-      mockObjectManager
-    );
+    const pageNumber = await PageRenderer.render(mockPageElement, mockObjectManager);
 
     expect(mockPageElement.getProps).toHaveBeenCalled();
     expect(mockObjectManager.addObject).toHaveBeenCalledTimes(2); // Once for content, once for page
@@ -131,16 +123,13 @@ describe("PageRenderer", () => {
               resourceIndex: 2,
             },
           ],
-        ])
+        ]),
       ),
       getAllImagesRaw: vi.fn().mockReturnValue(new Map()),
       getAllExtGStatesRaw: vi.fn().mockReturnValue(new Map()),
     } as unknown as PDFObjectManager;
 
-    const pageNumber = await PageRenderer.render(
-      mockPageElement,
-      mockObjectManager
-    );
+    const pageNumber = await PageRenderer.render(mockPageElement, mockObjectManager);
 
     expect(mockPageElement.getProps).toHaveBeenCalled();
     expect(mockObjectManager.addObject).toHaveBeenCalledTimes(2); // Once for content, once for page

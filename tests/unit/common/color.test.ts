@@ -12,7 +12,7 @@ describe("Color Class", () => {
     const color = new Color(-50, 50, 255);
     expect(color.toArray()).toEqual([0, 50, 255]);
     expect(consoleSpy).toHaveBeenCalledWith(
-      "Warning: r value -50 is out of range (0-255). Clamping to valid range."
+      "Warning: r value -50 is out of range (0-255). Clamping to valid range.",
     );
   });
 
@@ -21,7 +21,7 @@ describe("Color Class", () => {
     const color = new Color(100, 300, 255);
     expect(color.toArray()).toEqual([100, 255, 255]);
     expect(consoleSpy).toHaveBeenCalledWith(
-      "Warning: g value 300 is out of range (0-255). Clamping to valid range."
+      "Warning: g value 300 is out of range (0-255). Clamping to valid range.",
     );
   });
 

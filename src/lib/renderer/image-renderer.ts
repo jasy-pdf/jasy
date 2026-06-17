@@ -12,7 +12,7 @@ import { IRNode, Image } from "../ir/display-list";
 export class ImageRenderer {
   static async render(
     imageElement: ImageElement,
-    _objectManager: PDFObjectManager
+    _objectManager: PDFObjectManager,
   ): Promise<IRNode[]> {
     // Load the image and convert it in a binary string
     let { x, y, width, height, image, fit, radius } = imageElement.getProps();
@@ -35,9 +35,7 @@ export class ImageRenderer {
     // Now we check the `fit` property and changing the dimensions of the image
     // Optionally we must add an overflow container
     let mustCreateOverflowContainer: boolean = false;
-    const containerDimensions = JSON.parse(
-      JSON.stringify({ x, y, width, height })
-    ); // Deep clone images dimensions
+    const containerDimensions = JSON.parse(JSON.stringify({ x, y, width, height })); // Deep clone images dimensions
     switch (fit) {
       case BoxFit.cover:
         mustCreateOverflowContainer = true;
@@ -45,7 +43,7 @@ export class ImageRenderer {
           dimensions.width,
           dimensions.height,
           width ?? 0,
-          height ?? 0
+          height ?? 0,
         );
         x += fitCoverResult.offsetX;
         y += fitCoverResult.offsetY;
@@ -58,7 +56,7 @@ export class ImageRenderer {
           dimensions.width,
           dimensions.height,
           width ?? 0,
-          height ?? 0
+          height ?? 0,
         );
         x += fitContainResult.offsetX;
         y += fitContainResult.offsetY;
@@ -70,7 +68,7 @@ export class ImageRenderer {
           dimensions.width,
           dimensions.height,
           width ?? 0,
-          height ?? 0
+          height ?? 0,
         );
         x += fitNoneResult.offsetX;
         y += fitNoneResult.offsetY;

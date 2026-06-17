@@ -17,7 +17,7 @@ function stringWidth(
   text: string,
   font: string,
   size: number,
-  style: FontStyle = FontStyle.Normal
+  style: FontStyle = FontStyle.Normal,
 ): number {
   const m = new PDFObjectManager();
   m.registerFont(font, style); // loads the matching .afm parser

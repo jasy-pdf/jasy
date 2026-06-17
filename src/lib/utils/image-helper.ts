@@ -11,14 +11,12 @@ declare global {
 // Implement the method to handle 24-bit integers
 DataView.prototype.getUint24 = function (
   byteOffset: number,
-  littleEndian: boolean = false
+  littleEndian: boolean = false,
 ): number {
   const b1 = this.getUint8(byteOffset);
   const b2 = this.getUint8(byteOffset + 1);
   const b3 = this.getUint8(byteOffset + 2);
-  return littleEndian
-    ? (b3 << 16) | (b2 << 8) | b1
-    : (b1 << 16) | (b2 << 8) | b3;
+  return littleEndian ? (b3 << 16) | (b2 << 8) | b1 : (b1 << 16) | (b2 << 8) | b3;
 };
 
 interface ImageDimensions {
@@ -26,11 +24,9 @@ interface ImageDimensions {
   height: number;
 }
 
-export async function getImageDimensions(
-  buffer: Buffer
-): Promise<ImageDimensions> {
+export async function getImageDimensions(buffer: Buffer): Promise<ImageDimensions> {
   const dataView = new DataView(
-    buffer.buffer
+    buffer.buffer,
     // buffer.byteOffset,
     // buffer.byteLength
   );
@@ -70,10 +66,7 @@ export async function getImageDimensions(
   }
 
   // Check for WebP (0x52494646 is the WebP signature 'RIFF')
-  if (
-    dataView.getUint32(0) === 0x52494646 &&
-    dataView.getUint32(8) === 0x57454250
-  ) {
+  if (dataView.getUint32(0) === 0x52494646 && dataView.getUint32(8) === 0x57454250) {
     // 'WEBP'
     if (dataView.getUint32(12) === 0x56503820) {
       // 'VP8 '
@@ -105,7 +98,7 @@ export async function getImageDimensions(
  * no alpha channel for DeviceRGB, so transparent pixels are composited over white.
  */
 export async function decodePngToRgbFlate(
-  pngBuffer: Buffer
+  pngBuffer: Buffer,
 ): Promise<{ data: string; width: number; height: number }> {
   const image = await Jimp.fromBuffer(pngBuffer);
   const { width, height, data: rgba } = image.bitmap;
@@ -122,9 +115,7 @@ export async function decodePngToRgbFlate(
   return { data: deflateSync(rgb).toString("binary"), width, height };
 }
 
-export async function convertImageToGrayscaleBuffer(
-  imagePath: string
-): Promise<Buffer> {
+export async function convertImageToGrayscaleBuffer(imagePath: string): Promise<Buffer> {
   // We get the image from the buffer
   const image = await Jimp.read(imagePath);
 
@@ -164,7 +155,7 @@ export function applyContainFit(
   imageWidth: number,
   imageHeight: number,
   containerWidth: number,
-  containerHeight: number
+  containerHeight: number,
 ): FitResult {
   const imageAspectRatio = imageWidth / imageHeight;
   const containerAspectRatio = containerWidth / containerHeight;
@@ -198,7 +189,7 @@ export function applyCoverFit(
   imageWidth: number,
   imageHeight: number,
   containerWidth: number,
-  containerHeight: number
+  containerHeight: number,
 ): FitResult {
   const imageAspectRatio = imageWidth / imageHeight;
   const containerAspectRatio = containerWidth / containerHeight;
@@ -228,10 +219,7 @@ export function applyCoverFit(
   };
 }
 
-export function applyFillFit(
-  containerWidth: number,
-  containerHeight: number
-): FitResult {
+export function applyFillFit(containerWidth: number, containerHeight: number): FitResult {
   return {
     width: containerWidth,
     height: containerHeight,
@@ -244,7 +232,7 @@ export function applyFitNone(
   imageWidth: number,
   imageHeight: number,
   containerWidth: number,
-  containerHeight: number
+  containerHeight: number,
 ) {
   const offsetX = (containerWidth - imageWidth) / 2; // Center horizontally
   const offsetY = (containerHeight - imageHeight) / 2; // Center vertically

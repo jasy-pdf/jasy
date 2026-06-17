@@ -8,18 +8,13 @@ import type { FontStyle } from "./pdf-object-manager";
  * touching layout code.
  */
 export interface FontMetrics {
-  getStringWidth(
-    text: string,
-    fontFamily: string,
-    fontSize: number,
-    fontStyle: FontStyle
-  ): number;
+  getStringWidth(text: string, fontFamily: string, fontSize: number, fontStyle: FontStyle): number;
 
   getCharWidth(
     char: string,
     fontSize: number,
     fullFontName?: string,
     fontName?: string,
-    fontStyle?: FontStyle
+    fontStyle?: FontStyle,
   ): number;
 }

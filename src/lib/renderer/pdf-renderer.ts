@@ -30,7 +30,7 @@ import { LayoutContext } from "../elements/pdf-element";
 export class PDFRenderer {
   static async render(
     document: PDFDocumentElement,
-    objectManager: PDFObjectManager
+    objectManager: PDFObjectManager,
   ): Promise<string> {
     // Register all Renderer
     RendererRegistry.register(TextElement, TextRenderer.render);
@@ -41,10 +41,7 @@ export class PDFRenderer {
     RendererRegistry.register(PaddingElement, PaddingRenderer.render);
     RendererRegistry.register(ImageElement, ImageRenderer.render);
     RendererRegistry.register(LineElement, LineRenderer.render);
-    RendererRegistry.register(
-      RepeatingHeaderElement,
-      RepeatingHeaderRenderer.render
-    );
+    RendererRegistry.register(RepeatingHeaderElement, RepeatingHeaderRenderer.render);
     RendererRegistry.register(DeferredElement, DeferredRenderer.render);
 
     let pdfContent = "";

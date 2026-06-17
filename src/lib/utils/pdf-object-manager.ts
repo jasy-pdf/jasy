@@ -77,7 +77,7 @@ class FontManager {
     fontIndex: number,
     resourceIndex: number,
     fontStyle: FontStyle = FontStyle.Normal,
-    fullName: string = fontName
+    fullName: string = fontName,
   ): void {
     const fontKey = this._createFontKey(fontName, fontStyle);
     if (!this.fonts.has(fontKey)) {
@@ -95,19 +95,12 @@ class FontManager {
     return this.fonts.has(fontKey);
   }
 
-  getFont(
-    fontName: string,
-    fontStyle: FontStyle = FontStyle.Normal
-  ): FontIndexes | undefined {
+  getFont(fontName: string, fontStyle: FontStyle = FontStyle.Normal): FontIndexes | undefined {
     const fontKey = this._createFontKey(fontName, fontStyle);
     return this.fonts.get(fontKey);
   }
 
-  addCustomFont(
-    fontName: string,
-    fontStyle: FontStyle,
-    fullName: string = fontName
-  ): void {
+  addCustomFont(fontName: string, fontStyle: FontStyle, fullName: string = fontName): void {
     const fontIndex = this.getLastFontIndex() + 1;
     const resourceIndex = this.getLastResourceIndex() + 1;
     this.addFont(fontName, fontIndex, resourceIndex, fontStyle, fullName);
@@ -238,12 +231,7 @@ export class PDFObjectManager implements FontMetrics {
   }
 
   // Registers an image
-  registerImage(
-    width: number,
-    height: number,
-    imageType: string,
-    imageData: string
-  ) {
+  registerImage(width: number, height: number, imageType: string, imageData: string) {
     const imageObject = `<< /Type /XObject
     /Subtype /Image
     /Width ${width}
@@ -274,9 +262,7 @@ endstream`;
     if (existing) return existing.name;
 
     const name = `GS${this.extGStates.size() + 1}`;
-    const objectNumber = this.addObject(
-      `<< /Type /ExtGState /ca ${ca} /CA ${CA} >>`
-    );
+    const objectNumber = this.addObject(`<< /Type /ExtGState /ca ${ca} /CA ${CA} >>`);
     this.extGStates.add(key, name, objectNumber);
     return name;
   }
@@ -290,17 +276,13 @@ endstream`;
   registerFont(
     fontName: string,
     fontStyle: FontStyle = FontStyle.Normal,
-    fullName: string = fontName
+    fullName: string = fontName,
   ): FontIndexes {
     if (this.fonts.hasFont(fontName, fontStyle)) {
       return this.fonts.getFont(fontName, fontStyle)!; // Already exists? Return it!
     }
 
-    const afmFilePath = path.resolve(
-      __dirname,
-      "../",
-      `assets/${fullName}.afm`
-    );
+    const afmFilePath = path.resolve(__dirname, "../", `assets/${fullName}.afm`);
     if (fs.existsSync(afmFilePath)) {
       const data = fs.readFileSync(afmFilePath, "utf-8");
       this.afmParsers.push({
@@ -356,7 +338,7 @@ endstream`;
   // `name` is not a custom family at all.
   private resolveCustomStyle(
     name?: string,
-    style: FontStyle = FontStyle.Normal
+    style: FontStyle = FontStyle.Normal,
   ): FontStyle | undefined {
     if (!name) return undefined;
     if (this.customFonts.has(this.customKey(name, style))) return style;
@@ -364,10 +346,7 @@ endstream`;
     return undefined;
   }
 
-  private getCustomFont(
-    name?: string,
-    style: FontStyle = FontStyle.Normal
-  ): TTFParser | undefined {
+  private getCustomFont(name?: string, style: FontStyle = FontStyle.Normal): TTFParser | undefined {
     const resolved = this.resolveCustomStyle(name, style);
     return resolved ? this.customFonts.get(this.customKey(name!, resolved)) : undefined;
   }
@@ -380,7 +359,7 @@ endstream`;
   // selected Type0 object and the emitted glyph ids always come from the SAME font file.
   getCustomFontResource(
     name: string,
-    style: FontStyle = FontStyle.Normal
+    style: FontStyle = FontStyle.Normal,
   ): FontIndexes | undefined {
     const resolved = this.resolveCustomStyle(name, style);
     return resolved ? this.fonts.getFont(name, resolved) : undefined;
@@ -403,7 +382,7 @@ endstream`;
   private buildFontFile2(ttf: TTFParser): string {
     const bytes = ttf.getData();
     return `<< /Length ${bytes.length} /Length1 ${bytes.length} >>\nstream\n${bytes.toString(
-      "latin1"
+      "latin1",
     )}\nendstream`;
   }
 
@@ -459,7 +438,7 @@ endstream`;
     text: string,
     fontFamily: string,
     fontSize: number,
-    fontStyle: FontStyle
+    fontStyle: FontStyle,
   ): number {
     let width = 0;
 
@@ -469,24 +448,12 @@ endstream`;
       const nextChar = text[i + 1] || null;
 
       // Get signs width
-      const charWidth = this.getCharWidth(
-        char,
-        fontSize,
-        undefined,
-        fontFamily,
-        fontStyle
-      );
+      const charWidth = this.getCharWidth(char, fontSize, undefined, fontFamily, fontStyle);
       width += charWidth;
 
       // If a next sign available calculate the kerning
       if (nextChar) {
-        const kerning = this.getKerning(
-          char,
-          nextChar,
-          undefined,
-          fontFamily,
-          fontStyle
-        );
+        const kerning = this.getKerning(char, nextChar, undefined, fontFamily, fontStyle);
         width += kerning * fontSize; // Kerning must be scaled with the font size
       }
     }
@@ -498,30 +465,24 @@ endstream`;
     return char.charCodeAt(0).toString();
   }
 
-  private getAVMParserByFont(
-    fullFontName?: string,
-    fontName?: string,
-    fontStyle?: FontStyle
-  ) {
+  private getAVMParserByFont(fullFontName?: string, fontName?: string, fontStyle?: FontStyle) {
     if (!fullFontName && (!fontName || !fontStyle)) {
       throw new Error(
-        "No font family is given. Please set a full font name or a font with font style"
+        "No font family is given. Please set a full font name or a font with font style",
       );
     }
     let result;
     if (fullFontName) {
       result = this.afmParsers.find((f) => f.fullFontName === fullFontName);
     } else {
-      result = this.afmParsers.find(
-        (f) => f.fontName === fontName && f.fontStyle === fontStyle
-      );
+      result = this.afmParsers.find((f) => f.fontName === fontName && f.fontStyle === fontStyle);
     }
 
     if (!result)
       throw new Error(
         `Cannot find a parser for the given font family ${
           fullFontName || fontName || "No given font"
-        }`
+        }`,
       );
 
     return result;
@@ -533,24 +494,18 @@ endstream`;
     fontSize: number,
     fullFontName?: string,
     fontName?: string,
-    fontStyle?: FontStyle
+    fontStyle?: FontStyle,
   ): number {
     const ttf = this.getCustomFont(fullFontName ?? fontName, fontStyle);
     if (ttf) return ttf.getCharWidth(char, fontSize);
 
-    const currentParser = this.getAVMParserByFont(
-      fullFontName,
-      fontName,
-      fontStyle
-    );
+    const currentParser = this.getAVMParserByFont(fullFontName, fontName, fontStyle);
 
     const advanceWidth = currentParser.parser.getAdvanceWidth(char);
 
     // Normally we got still zero. TODO: Return a alternative width like the "space"
     if (!advanceWidth) {
-      throw new Error(
-        `Kein Metrik-Eintrag für Zeichen: ${char} ${this.getCharCode(char)}`
-      );
+      throw new Error(`Kein Metrik-Eintrag für Zeichen: ${char} ${this.getCharCode(char)}`);
     }
 
     // Width of the character multiplied by the font size (scaled proportionally)
@@ -563,16 +518,12 @@ endstream`;
     nextChar: string,
     fullFontName?: string,
     fontName?: string,
-    fontStyle?: FontStyle
+    fontStyle?: FontStyle,
   ): number {
     // TrueType kerning (the kern/GPOS tables) is not wired up yet - no kerning for custom fonts.
     if (this.getCustomFont(fullFontName ?? fontName, fontStyle)) return 0;
 
-    const currentParser = this.getAVMParserByFont(
-      fullFontName,
-      fontName,
-      fontStyle
-    );
+    const currentParser = this.getAVMParserByFont(fullFontName, fontName, fontStyle);
 
     return currentParser.parser.getKerning(char, nextChar) / 1000;
   }

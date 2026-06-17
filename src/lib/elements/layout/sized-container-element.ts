@@ -22,11 +22,7 @@ export class SizedContainerElement extends SizedPDFElement {
     this.children = children;
   }
 
-  calculateLayout(
-    constraints: BoxConstraints,
-    offset: Offset,
-    ctx: LayoutContext
-  ): Size {
+  calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
     if (constraints.hasBoundedWidth) this.width = constraints.maxWidth;
     if (constraints.hasBoundedHeight) this.height = constraints.maxHeight;
     // Absolute placement from the parent; assignment (not +=) so re-layout is idempotent.
@@ -38,11 +34,7 @@ export class SizedContainerElement extends SizedPDFElement {
 
     if (this.children)
       this.children.forEach((child) =>
-        child.calculateLayout(
-          BoxConstraints.loose(width, height),
-          { x: this.x, y: this.y },
-          ctx
-        )
+        child.calculateLayout(BoxConstraints.loose(width, height), { x: this.x, y: this.y }, ctx),
       );
 
     // Top-left coordinates; the Y-flip now happens once at the IR -> backend seam.

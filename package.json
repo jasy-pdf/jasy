@@ -2,6 +2,9 @@
   "name": "jasy-pdf",
   "version": "0.0.1",
   "description": "",
+  "keywords": [],
+  "license": "MIT",
+  "author": "Florian Heuberger",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
@@ -9,22 +12,25 @@
     "manual-test": "tsc -p tsconfig.test.json && npm run copy-assets &&  node dist/tests/manual/index.js",
     "test": "vitest",
     "test:coverage": "vitest --coverage",
-    "build": "tsc"
+    "build": "tsc",
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
+    "fmt": "oxfmt",
+    "fmt:check": "oxfmt --check"
   },
-  "keywords": [],
-  "author": "Florian Heuberger",
-  "license": "MIT",
+  "dependencies": {
+    "jimp": "^1.6.0",
+    "reflect-metadata": "^0.2.2"
+  },
   "devDependencies": {
     "@jimp/types": "^1.6.0",
     "@vitest/coverage-v8": "^2.1.1",
     "c8": "^10.1.2",
     "jest": "^29.7.0",
     "ncp": "^2.0.0",
+    "oxfmt": "^0.55.0",
+    "oxlint": "^1.70.0",
     "typescript": "^5.5.4",
     "vitest": "^2.1.1"
-  },
-  "dependencies": {
-    "jimp": "^1.6.0",
-    "reflect-metadata": "^0.2.2"
   }
 }

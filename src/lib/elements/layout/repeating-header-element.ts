@@ -1,9 +1,5 @@
 import { BoxConstraints, Offset, Size } from "../../layout/box-constraints";
-import {
-  Fragmentable,
-  FragmentResult,
-  isFragmentable,
-} from "../../layout/fragmentation";
+import { Fragmentable, FragmentResult, isFragmentable } from "../../layout/fragmentation";
 import { LayoutContext, PDFElement } from "../pdf-element";
 
 /**
@@ -21,16 +17,12 @@ export class RepeatingHeaderElement extends PDFElement implements Fragmentable {
   constructor(
     private header: PDFElement,
     private body: PDFElement,
-    private gap: number = 0
+    private gap: number = 0,
   ) {
     super();
   }
 
-  calculateLayout(
-    constraints: BoxConstraints,
-    offset: Offset,
-    ctx: LayoutContext
-  ): Size {
+  calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
     this.x = offset.x;
     this.y = offset.y;
     const width = constraints.hasBoundedWidth ? constraints.maxWidth : 0;
@@ -38,12 +30,12 @@ export class RepeatingHeaderElement extends PDFElement implements Fragmentable {
     const h = this.header.calculateLayout(
       BoxConstraints.loose(width, Infinity),
       { x: this.x, y: this.y },
-      ctx
+      ctx,
     );
     const b = this.body.calculateLayout(
       BoxConstraints.loose(width, Infinity),
       { x: this.x, y: this.y + h.height + this.gap },
-      ctx
+      ctx,
     );
 
     this.width = width;
@@ -56,29 +48,30 @@ export class RepeatingHeaderElement extends PDFElement implements Fragmentable {
     const headerHeight = this.header.calculateLayout(
       BoxConstraints.loose(width, Infinity),
       { x: 0, y: 0 },
-      ctx
+      ctx,
     ).height;
 
     if (!isFragmentable(this.body)) return { fitted: this, remainder: null };
 
-    const split = this.body.fragment(
-      Math.max(0, maxHeight - headerHeight - this.gap),
-      width,
-      ctx
-    );
+    const split = this.body.fragment(Math.max(0, maxHeight - headerHeight - this.gap), width, ctx);
     // Body fits whole → the whole thing fits on this page.
     if (split.remainder === null) return { fitted: this, remainder: null };
 
     // Re-wrap each body piece with the SAME header → it reappears on the next page too.
     return {
-      fitted: split.fitted
-        ? new RepeatingHeaderElement(this.header, split.fitted, this.gap)
-        : null,
+      fitted: split.fitted ? new RepeatingHeaderElement(this.header, split.fitted, this.gap) : null,
       remainder: new RepeatingHeaderElement(this.header, split.remainder, this.gap),
     };
   }
 
   override getProps() {
-    return { x: this.x, y: this.y, width: this.width, height: this.height, header: this.header, body: this.body };
+    return {
+      x: this.x,
+      y: this.y,
+      width: this.width,
+      height: this.height,
+      header: this.header,
+      body: this.body,
+    };
   }
 }

@@ -34,7 +34,7 @@ export class Color {
   private clampColorValue(value: number, channel: string): number {
     if (value < 0 || value > 255) {
       console.warn(
-        `Warning: ${channel} value ${value} is out of range (0-255). Clamping to valid range.`
+        `Warning: ${channel} value ${value} is out of range (0-255). Clamping to valid range.`,
       );
     }
     return Math.max(0, Math.min(255, value));
@@ -57,9 +57,7 @@ export class Color {
   toGrayscale(): string {
     const [r, g, b] = JSON.parse(JSON.stringify(this.toArray())); // JSON because its better to deep clone it here
     const gray = Math.round(0.3 * r + 0.59 * g + 0.11 * b);
-    return `${(gray / 255).toFixed(3)} ${(gray / 255).toFixed(3)} ${(
-      gray / 255
-    ).toFixed(3)}`;
+    return `${(gray / 255).toFixed(3)} ${(gray / 255).toFixed(3)} ${(gray / 255).toFixed(3)}`;
   }
 
   // Returns the color as array `[number, number, number]`
@@ -70,8 +68,6 @@ export class Color {
   // Returns a PDF compatible color string
   toPDFColorString(): string {
     const [r, g, b] = this.toArray();
-    return `${(r / 255).toFixed(3)} ${(g / 255).toFixed(3)} ${(b / 255).toFixed(
-      3
-    )}`;
+    return `${(r / 255).toFixed(3)} ${(g / 255).toFixed(3)} ${(b / 255).toFixed(3)}`;
   }
 }

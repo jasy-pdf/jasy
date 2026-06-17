@@ -13,11 +13,7 @@ import {
   breakSegmentsIntoLines,
   segmentLinesToSegments,
 } from "../text/line-breaker";
-import {
-  HorizontalAlignment,
-  LayoutContext,
-  SizedPDFElement,
-} from "./pdf-element";
+import { HorizontalAlignment, LayoutContext, SizedPDFElement } from "./pdf-element";
 export interface TextSegment {
   content: string;
   fontStyle?: FontStyle;
@@ -80,7 +76,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     content: string,
     maxHeight: number,
     width: number,
-    ctx: LayoutContext
+    ctx: LayoutContext,
   ): FragmentResult {
     const lines = wrapStringIntoLines(
       content,
@@ -88,13 +84,12 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       this.fontSize,
       this.fontStyle,
       width,
-      ctx.metrics
+      ctx.metrics,
     );
 
     const fittedLineCount = Math.floor(maxHeight / this.fontSize);
     if (fittedLineCount <= 0) return { fitted: null, remainder: this };
-    if (fittedLineCount >= lines.length)
-      return { fitted: this, remainder: null };
+    if (fittedLineCount >= lines.length) return { fitted: this, remainder: null };
 
     return {
       fitted: this.cloneWithContent(lines.slice(0, fittedLineCount).join(" ")),
@@ -108,7 +103,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     content: TextSegment[],
     maxHeight: number,
     width: number,
-    ctx: LayoutContext
+    ctx: LayoutContext,
   ): FragmentResult {
     const lines = breakSegmentsIntoLines(
       content,
@@ -118,7 +113,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
         fontStyle: this.fontStyle,
       },
       width,
-      ctx.metrics
+      ctx.metrics,
     );
 
     let used = 0;
@@ -130,16 +125,11 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     }
 
     if (fittedLineCount <= 0) return { fitted: null, remainder: this };
-    if (fittedLineCount >= lines.length)
-      return { fitted: this, remainder: null };
+    if (fittedLineCount >= lines.length) return { fitted: this, remainder: null };
 
     return {
-      fitted: this.cloneWithContent(
-        segmentLinesToSegments(lines.slice(0, fittedLineCount))
-      ),
-      remainder: this.cloneWithContent(
-        segmentLinesToSegments(lines.slice(fittedLineCount))
-      ),
+      fitted: this.cloneWithContent(segmentLinesToSegments(lines.slice(0, fittedLineCount))),
+      remainder: this.cloneWithContent(segmentLinesToSegments(lines.slice(fittedLineCount))),
     };
   }
 
@@ -156,11 +146,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     });
   }
 
-  calculateLayout(
-    constraints: BoxConstraints,
-    offset: Offset,
-    ctx: LayoutContext
-  ): Size {
+  calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
     this.x = offset.x;
     this.y = offset.y;
     // Bounded width (e.g. inside a Column) wraps to that width; an unbounded width
@@ -177,7 +163,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       this.fontFamily,
       this.fontStyle,
       ctx.metrics,
-      wrapWidth
+      wrapWidth,
     );
 
     // Top-left coordinates (y = top of the text box). The baseline offset and the
@@ -189,12 +175,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
   /** The unwrapped single-line width of the content (used when width is unbounded). */
   private naturalWidth(metrics: FontMetrics): number {
     if (typeof this.content === "string") {
-      return metrics.getStringWidth(
-        this.content,
-        this.fontFamily,
-        this.fontSize,
-        this.fontStyle
-      );
+      return metrics.getStringWidth(this.content, this.fontFamily, this.fontSize, this.fontStyle);
     }
     return this.content.reduce(
       (sum, seg) =>
@@ -203,9 +184,9 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
           seg.content,
           seg.fontFamily ?? this.fontFamily,
           seg.fontSize ?? this.fontSize,
-          seg.fontStyle ?? this.fontStyle
+          seg.fontStyle ?? this.fontStyle,
         ),
-      0
+      0,
     );
   }
 

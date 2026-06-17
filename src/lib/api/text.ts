@@ -57,10 +57,7 @@ export function span(text: string, style: TextStyle = {}): TextSegment {
  * options set the defaults (size/font/style/color) that any spans inherit, plus the
  * text-internal `align`.
  */
-export function Text(
-  content: string | TextSegment[],
-  opts: TextOptions = {}
-): TextElement {
+export function Text(content: string | TextSegment[], opts: TextOptions = {}): TextElement {
   return new TextElement({
     content,
     fontSize: opts.size ?? DEFAULT_SIZE,
@@ -72,9 +69,6 @@ export function Text(
 }
 
 /** `Text` with body-paragraph defaults (same options; a separate name reads as intent). */
-export function Paragraph(
-  content: string | TextSegment[],
-  opts: TextOptions = {}
-): TextElement {
+export function Paragraph(content: string | TextSegment[], opts: TextOptions = {}): TextElement {
   return Text(content, opts);
 }

@@ -45,9 +45,9 @@ describe("convertImageToGrayscaleBuffer", () => {
 
     (Jimp.read as unknown as Mock).mockResolvedValue(imageMock);
 
-    await expect(
-      convertImageToGrayscaleBuffer("path/to/gif/image.gif")
-    ).rejects.toThrow("Unsupported MIME type");
+    await expect(convertImageToGrayscaleBuffer("path/to/gif/image.gif")).rejects.toThrow(
+      "Unsupported MIME type",
+    );
   });
 });
 

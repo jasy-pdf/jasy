@@ -2,9 +2,9 @@
   "name": "@jasy-pdf/zugferd",
   "version": "0.0.1",
   "description": "ZUGFeRD / Factur-X / XRechnung (EN-16931) for jasy-pdf — invoice data model, CII XML, PDF/A-3.",
-  "main": "dist/index.js",
   "license": "MIT",
   "author": "Florian Heuberger",
+  "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
     "test": "vitest run"

@@ -7,7 +7,7 @@ import { PDFElement } from "../elements/pdf-element";
  */
 export function splitArgs<O>(
   a: O | PDFElement[],
-  b?: PDFElement[]
+  b?: PDFElement[],
 ): { opts: O; children: PDFElement[] } {
   if (Array.isArray(a)) return { opts: {} as O, children: a };
   return { opts: a, children: b ?? [] };

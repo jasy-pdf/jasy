@@ -47,10 +47,7 @@ describe("ContainerRenderer", () => {
       .mockImplementationOnce(() => mockRenderer2);
 
     // Call the ContainerRenderer's render method
-    const result = await ContainerRenderer.render(
-      mockContainerElement,
-      mockObjectManager
-    );
+    const result = await ContainerRenderer.render(mockContainerElement, mockObjectManager);
 
     // Check if the correct renderers were called for each child
     expect(mockRenderer1).toHaveBeenCalledWith(mockChild1, mockObjectManager);
@@ -78,10 +75,7 @@ describe("ContainerRenderer", () => {
     const mockObjectManager = {} as PDFObjectManager;
 
     // Call the ContainerRenderer's render method
-    const result = await ContainerRenderer.render(
-      mockContainerElement,
-      mockObjectManager
-    );
+    const result = await ContainerRenderer.render(mockContainerElement, mockObjectManager);
 
     // No children -> empty display list.
     expect(result).toEqual([]);
@@ -105,10 +99,7 @@ describe("ContainerRenderer", () => {
     const mockObjectManager = {} as PDFObjectManager;
 
     // Call the ContainerRenderer's render method
-    const result = await ContainerRenderer.render(
-      mockContainerElement,
-      mockObjectManager
-    );
+    const result = await ContainerRenderer.render(mockContainerElement, mockObjectManager);
 
     // No children -> empty display list.
     expect(result).toEqual([]);

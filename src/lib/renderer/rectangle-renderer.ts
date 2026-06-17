@@ -8,7 +8,7 @@ import { Color } from "../common/color";
 export class RectangleRenderer {
   static async render(
     rectangleElement: RectangleElement,
-    objectManager: PDFObjectManager
+    objectManager: PDFObjectManager,
   ): Promise<IRNode[]> {
     const {
       x,
@@ -32,9 +32,7 @@ export class RectangleRenderer {
       if (backgroundColor) {
         nodes.push({ type: "rect", x, y, width, height: h, strokeWidth: 0, fill: backgroundColor });
       }
-      nodes.push(
-        ...RectangleRenderer.sideLines(x, y, width, h, borderWidth!, sideBorders)
-      );
+      nodes.push(...RectangleRenderer.sideLines(x, y, width, h, borderWidth!, sideBorders));
     } else {
       // The box itself becomes a display-list primitive. A background means a filled box;
       // otherwise it is stroked only. (Unchanged path - byte-identical.)
@@ -71,7 +69,7 @@ export class RectangleRenderer {
     width: number,
     height: number,
     strokeWidth: number,
-    sides: SideBorders
+    sides: SideBorders,
   ): Line[] {
     const lines: Line[] = [];
     const add = (x1: number, y1: number, x2: number, y2: number, stroke?: Color) => {

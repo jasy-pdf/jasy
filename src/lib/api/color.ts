@@ -69,8 +69,7 @@ function fromHex(s: string): Color {
   const g = parseInt(full.slice(2, 4), 16);
   const b = parseInt(full.slice(4, 6), 16);
   const a = full.length === 8 ? parseInt(full.slice(6, 8), 16) / 255 : 1;
-  if ([r, g, b].some(Number.isNaN))
-    throw new Error(`Invalid hex color: "${s}"`);
+  if ([r, g, b].some(Number.isNaN)) throw new Error(`Invalid hex color: "${s}"`);
   return new Color(r, g, b, a);
 }
 

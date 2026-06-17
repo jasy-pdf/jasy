@@ -41,30 +41,12 @@ describe("PDFRenderer", () => {
     await PDFRenderer.render(mockDocumentElement, mockObjectManager);
 
     // Check that all the renderers are registered
-    expect(RendererRegistry.register).toHaveBeenCalledWith(
-      TextElement,
-      expect.any(Function)
-    );
-    expect(RendererRegistry.register).toHaveBeenCalledWith(
-      ContainerElement,
-      expect.any(Function)
-    );
-    expect(RendererRegistry.register).toHaveBeenCalledWith(
-      RectangleElement,
-      expect.any(Function)
-    );
-    expect(RendererRegistry.register).toHaveBeenCalledWith(
-      ExpandedElement,
-      expect.any(Function)
-    );
-    expect(RendererRegistry.register).toHaveBeenCalledWith(
-      PaddingElement,
-      expect.any(Function)
-    );
-    expect(RendererRegistry.register).toHaveBeenCalledWith(
-      ImageElement,
-      expect.any(Function)
-    );
+    expect(RendererRegistry.register).toHaveBeenCalledWith(TextElement, expect.any(Function));
+    expect(RendererRegistry.register).toHaveBeenCalledWith(ContainerElement, expect.any(Function));
+    expect(RendererRegistry.register).toHaveBeenCalledWith(RectangleElement, expect.any(Function));
+    expect(RendererRegistry.register).toHaveBeenCalledWith(ExpandedElement, expect.any(Function));
+    expect(RendererRegistry.register).toHaveBeenCalledWith(PaddingElement, expect.any(Function));
+    expect(RendererRegistry.register).toHaveBeenCalledWith(ImageElement, expect.any(Function));
   });
 
   it("should call calculateLayout on the document element", async () => {
@@ -99,9 +81,7 @@ describe("PDFRenderer", () => {
 
     await PDFRenderer.render(mockDocumentElement, mockObjectManager);
 
-    expect(mockObjectManager.addObject).toHaveBeenCalledWith(
-      "<< /Type /Catalog /Pages 1 0 R >>"
-    );
+    expect(mockObjectManager.addObject).toHaveBeenCalledWith("<< /Type /Catalog /Pages 1 0 R >>");
   });
 
   it("should add the correct XRef and trailer", async () => {

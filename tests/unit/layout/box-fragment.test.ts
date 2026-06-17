@@ -15,15 +15,11 @@ const metrics: FontMetrics = {
 };
 const ctx = { metrics } as LayoutContext;
 
-const tallText = () =>
-  new TextElement({ fontSize: 10, content: "aa bb cc dd ee ff" });
+const tallText = () => new TextElement({ fontSize: 10, content: "aa bb cc dd ee ff" });
 
 const laidOutHeight = (el: unknown, width: number) =>
-  (el as PaddingElement).calculateLayout(
-    BoxConstraints.loose(width, Infinity),
-    { x: 0, y: 0 },
-    ctx
-  ).height;
+  (el as PaddingElement).calculateLayout(BoxConstraints.loose(width, Infinity), { x: 0, y: 0 }, ctx)
+    .height;
 
 const innerText = (el: unknown): string => {
   const props = (el as { getProps(): any }).getProps();

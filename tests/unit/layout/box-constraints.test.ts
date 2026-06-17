@@ -14,9 +14,7 @@ describe("BoxConstraints", () => {
 
   it("tight() forces min === max on both axes", () => {
     const c = BoxConstraints.tight(100, 50);
-    expect([c.minWidth, c.maxWidth, c.minHeight, c.maxHeight]).toEqual([
-      100, 100, 50, 50,
-    ]);
+    expect([c.minWidth, c.maxWidth, c.minHeight, c.maxHeight]).toEqual([100, 100, 50, 50]);
     expect(c.isTight).toBe(true);
     expect(c.hasBoundedWidth).toBe(true);
     expect(c.hasBoundedHeight).toBe(true);
@@ -24,9 +22,7 @@ describe("BoxConstraints", () => {
 
   it("loose() caps the max but keeps min at zero", () => {
     const c = BoxConstraints.loose(200, 80);
-    expect([c.minWidth, c.maxWidth, c.minHeight, c.maxHeight]).toEqual([
-      0, 200, 0, 80,
-    ]);
+    expect([c.minWidth, c.maxWidth, c.minHeight, c.maxHeight]).toEqual([0, 200, 0, 80]);
     expect(c.isTight).toBe(false);
   });
 
@@ -52,9 +48,7 @@ describe("BoxConstraints", () => {
   it("deflate() shrinks both bounds and clamps at zero", () => {
     const c = new BoxConstraints(10, 100, 0, 50).deflate(20, 10);
     // minWidth 10-20 floored to 0; maxWidth 100-20=80; maxHeight 50-10=40.
-    expect([c.minWidth, c.maxWidth, c.minHeight, c.maxHeight]).toEqual([
-      0, 80, 0, 40,
-    ]);
+    expect([c.minWidth, c.maxWidth, c.minHeight, c.maxHeight]).toEqual([0, 80, 0, 40]);
   });
 
   it("deflate() leaves an unbounded axis unbounded", () => {

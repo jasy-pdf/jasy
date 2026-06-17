@@ -10,7 +10,7 @@ const png = (width: number, height: number, color: number) =>
 describe("decodePngToRgbFlate", () => {
   it("decodes a PNG to Flate-compressed DeviceRGB samples", async () => {
     const { data, width, height } = await decodePngToRgbFlate(
-      await png(2, 2, 0xff0000ff) // opaque red, RGBA
+      await png(2, 2, 0xff0000ff), // opaque red, RGBA
     );
     expect([width, height]).toEqual([2, 2]);
 
@@ -21,7 +21,7 @@ describe("decodePngToRgbFlate", () => {
 
   it("composites transparent pixels over white (no black halo)", async () => {
     const { data } = await decodePngToRgbFlate(
-      await png(1, 1, 0x00000000) // fully transparent
+      await png(1, 1, 0x00000000), // fully transparent
     );
     const raw = inflateSync(Buffer.from(data, "binary"));
     expect([raw[0], raw[1], raw[2]]).toEqual([255, 255, 255]);

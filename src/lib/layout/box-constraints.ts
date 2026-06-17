@@ -17,7 +17,7 @@ export class BoxConstraints {
     public readonly minWidth: number = 0,
     public readonly maxWidth: number = Infinity,
     public readonly minHeight: number = 0,
-    public readonly maxHeight: number = Infinity
+    public readonly maxHeight: number = Infinity,
   ) {}
 
   /** Forces an exact size: the element has no choice but `width` x `height`. */
@@ -26,19 +26,8 @@ export class BoxConstraints {
   }
 
   /** Tight only on the axes given; the others stay unbounded (0..Infinity). */
-  static tightFor({
-    width,
-    height,
-  }: {
-    width?: number;
-    height?: number;
-  }): BoxConstraints {
-    return new BoxConstraints(
-      width ?? 0,
-      width ?? Infinity,
-      height ?? 0,
-      height ?? Infinity
-    );
+  static tightFor({ width, height }: { width?: number; height?: number }): BoxConstraints {
+    return new BoxConstraints(width ?? 0, width ?? Infinity, height ?? 0, height ?? Infinity);
   }
 
   /** Caps each axis at `max` but allows anything down to zero (shrink-wrap). */
@@ -85,7 +74,7 @@ export class BoxConstraints {
       Math.max(0, this.minWidth - horizontal),
       Math.max(0, this.maxWidth - horizontal),
       Math.max(0, this.minHeight - vertical),
-      Math.max(0, this.maxHeight - vertical)
+      Math.max(0, this.maxHeight - vertical),
     );
   }
 
@@ -95,7 +84,7 @@ export class BoxConstraints {
       Math.max(parent.minWidth, Math.min(this.minWidth, parent.maxWidth)),
       Math.max(parent.minWidth, Math.min(this.maxWidth, parent.maxWidth)),
       Math.max(parent.minHeight, Math.min(this.minHeight, parent.maxHeight)),
-      Math.max(parent.minHeight, Math.min(this.maxHeight, parent.maxHeight))
+      Math.max(parent.minHeight, Math.min(this.maxHeight, parent.maxHeight)),
     );
   }
 }

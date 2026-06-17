@@ -1,11 +1,6 @@
 import { LineElement } from "../elements/line-element";
 import { PaddingElement } from "../elements/layout/padding-element";
-import {
-  ImageElement,
-  CustomImage,
-  CustomLocalImage,
-  BoxFit,
-} from "../elements/image-element";
+import { ImageElement, CustomImage, CustomLocalImage, BoxFit } from "../elements/image-element";
 import { PDFElement } from "../elements/pdf-element";
 import { ColorInput, toColor } from "./color";
 import { Insets, toEdges } from "./insets";
