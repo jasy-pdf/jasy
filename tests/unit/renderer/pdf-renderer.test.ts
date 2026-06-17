@@ -24,6 +24,10 @@ describe("PDFRenderer", () => {
       getTrailerAndXRef: vi.fn().mockReturnValue("trailer\nstartxref\n33"),
       getParentObjectNumber: vi.fn().mockReturnValue(1),
       getPDFConfig: vi.fn().mockReturnValue({}),
+      getAttachments: vi.fn().mockReturnValue([]),
+      getXmpMetadata: vi.fn().mockReturnValue(undefined),
+      getOutputIntent: vi.fn().mockReturnValue(undefined),
+      getPdfVersion: vi.fn().mockReturnValue("1.4"),
     } as unknown as PDFObjectManager;
 
     vi.spyOn(PDFDocumentRenderer, "render").mockResolvedValue(1);
