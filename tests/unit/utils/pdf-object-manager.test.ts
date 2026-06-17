@@ -84,7 +84,8 @@ describe("PDFObjectManager - XRef and Trailer", () => {
     manager.addObject("First object");
 
     const xrefTable = manager.getXRefTable();
-    expect(xrefTable).toContain("0000000009 00000 n "); // Die Position des ersten Objekts ist 9
+    // First object sits right after the header (version line + PDF/A binary marker = 15 bytes).
+    expect(xrefTable).toContain("0000000015 00000 n ");
   });
 
   it("should generate the correct trailer", () => {
@@ -164,8 +165,8 @@ describe("PDFObjectManager - XRef Table and Trailer with multiple objects", () =
     manager.addObject("Second Object");
     manager.addObject("Third Object");
 
-    // Calculate the byte positions
-    const header = "%PDF-1.4\n";
+    // Calculate the byte positions (offsets start right after the real header)
+    const header = manager.getHeader();
     const firstObject = "1 0 obj\nFirst Object\nendobj\n";
     const secondObject = "2 0 obj\nSecond Object\nendobj\n";
 

@@ -28,6 +28,7 @@ describe("PDFRenderer", () => {
       getXmpMetadata: vi.fn().mockReturnValue(undefined),
       getOutputIntent: vi.fn().mockReturnValue(undefined),
       getPdfVersion: vi.fn().mockReturnValue("1.4"),
+      getHeader: vi.fn().mockReturnValue("%PDF-1.4\n"),
     } as unknown as PDFObjectManager;
 
     vi.spyOn(PDFDocumentRenderer, "render").mockResolvedValue(1);
