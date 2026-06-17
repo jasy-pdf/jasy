@@ -83,6 +83,7 @@ describe("TextRenderer - calculateTextHeight", () => {
 
     const mockObjectManager = {
       registerFont: vi.fn().mockReturnValue({ fontIndex: 1 }),
+      isCustomFont: vi.fn().mockReturnValue(false),
       getStringWidth: vi.fn().mockReturnValue(10),
       getCharWidth: vi.fn().mockReturnValue(5),
     } as unknown as PDFObjectManager;
@@ -118,6 +119,7 @@ describe("TextRenderer - calculateTextHeight", () => {
 
     const mockObjectManager = {
       registerFont: vi.fn().mockReturnValue({ fontIndex: 1 }),
+      isCustomFont: vi.fn().mockReturnValue(false),
       getStringWidth: vi.fn().mockReturnValue(10),
       getCharWidth: vi.fn().mockReturnValue(5),
     } as unknown as PDFObjectManager;
@@ -150,6 +152,7 @@ describe("TextRenderer - calculateTextHeight", () => {
 
     const mockObjectManager = {
       registerFont: vi.fn().mockReturnValue({ fontIndex: 1 }),
+      isCustomFont: vi.fn().mockReturnValue(false),
       getStringWidth: vi.fn().mockReturnValue(25), // Here we get the widht of the "complete" string, because the renderer renders each "line", not only the words/segments: 25
       getCharWidth: vi.fn().mockReturnValue(0), // For empty spaces: 0
     } as unknown as PDFObjectManager;
@@ -183,6 +186,7 @@ describe("TextRenderer - calculateTextHeight", () => {
 
     const mockObjectManager = {
       registerFont: vi.fn().mockReturnValue({ fontIndex: 1 }),
+      isCustomFont: vi.fn().mockReturnValue(false),
       getStringWidth: vi.fn().mockReturnValue(25), // Here we get the widht of the "complete" string, because the renderer renders each "line", not only the words/segments: 25
       getCharWidth: vi.fn().mockReturnValue(0),
     } as unknown as PDFObjectManager;
@@ -215,6 +219,7 @@ describe("TextRenderer - calculateTextHeight", () => {
 
     const mockObjectManager = {
       registerFont: vi.fn().mockReturnValue({ fontIndex: 1 }),
+      isCustomFont: vi.fn().mockReturnValue(false),
       getStringWidth: vi.fn().mockReturnValue(0),
       getCharWidth: vi.fn().mockReturnValue(0),
     } as unknown as PDFObjectManager;
@@ -264,6 +269,7 @@ describe("TextRenderer - calculateTextHeight", () => {
         }
         return { fontIndex: 1 }; // Normal font
       }),
+      isCustomFont: vi.fn().mockReturnValue(false),
       getStringWidth: vi.fn((content, fontFamily, fontSize) => {
         return content.length * fontSize; // Einfacher Algorithmus zur Rückgabe der Breite
       }),
@@ -316,6 +322,7 @@ describe("TextRenderer - calculateTextHeight", () => {
         }
         return { fontIndex: 1 }; // Normal font
       }),
+      isCustomFont: vi.fn().mockReturnValue(false),
       getStringWidth: vi.fn().mockReturnValue(25), // Here we get the widht of each segment: 50
       getCharWidth: vi.fn().mockReturnValue(0), // For empty spaces: 0
     } as unknown as PDFObjectManager;
