@@ -46,8 +46,9 @@ export class PDFRenderer {
 
     let pdfContent = "";
 
-    // Header
-    pdfContent += "%PDF-1.4\n";
+    // Header. The version is always "1.X" (default 1.4; PDF/A-3 uses 1.7) so the 9-byte header
+    // length - which the xref offsets are computed against - is unchanged.
+    pdfContent += `%PDF-${objectManager.getPdfVersion()}\n`;
 
     // Layout pass: thread the context explicitly. The seed page config is the document
     // default; each PageElement overrides it for its own subtree.
@@ -60,16 +61,31 @@ export class PDFRenderer {
     // Render pages and contents (the driver paginates overflowing pages).
     await PDFDocumentRenderer.render(document, objectManager, ctx);
 
-    // Add catalog objects. Embedded files (e.g. ZUGFeRD's factur-x.xml) add a /Names/EmbeddedFiles
-    // name tree + an /AF array; with no attachments the catalog is byte-identical to before.
+    // Add the catalog. XMP metadata (/Metadata) and embedded files (/AF + /Names/EmbeddedFiles)
+    // are added only when present; with neither, the catalog is byte-identical to before.
+    const catalogParts = [`/Type /Catalog /Pages ${objectManager.getParentObjectNumber()} 0 R`];
+
+    const xmp = objectManager.getXmpMetadata();
+    if (xmp) {
+      const metadataObject = objectManager.addObject(
+        `<< /Type /Metadata /Subtype /XML /Length ${xmp.length} >>\nstream\n${xmp}\nendstream`,
+      );
+      catalogParts.push(`/Metadata ${metadataObject} 0 R`);
+    }
+
+    const outputIntent = objectManager.getOutputIntent();
+    if (outputIntent) {
+      catalogParts.push(`/OutputIntents [${outputIntent} 0 R]`);
+    }
+
     const attachments = objectManager.getAttachments();
-    let attachmentEntries = "";
     if (attachments.length > 0) {
       const names = attachments.map((a) => `(${a.name}) ${a.filespec} 0 R`).join(" ");
       const af = attachments.map((a) => `${a.filespec} 0 R`).join(" ");
-      attachmentEntries = ` /AF [${af}] /Names << /EmbeddedFiles << /Names [${names}] >> >>`;
+      catalogParts.push(`/AF [${af}]`, `/Names << /EmbeddedFiles << /Names [${names}] >> >>`);
     }
-    const catalogObject = `<< /Type /Catalog /Pages ${objectManager.getParentObjectNumber()} 0 R${attachmentEntries} >>`;
+
+    const catalogObject = `<< ${catalogParts.join(" ")} >>`;
     objectManager.addObject(catalogObject);
 
     // Add rendered objects

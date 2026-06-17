@@ -1,6 +1,7 @@
 import { pageFormats, PageSize } from "../constants/page-sizes";
 import * as fs from "fs";
 import * as path from "path";
+import { createHash } from "crypto";
 import { AFMParser } from "./afm-parser";
 import { TTFParser } from "./ttf-parser";
 // Enums come from the leaf config module (never in a cycle); the config type is
@@ -164,6 +165,19 @@ export class PDFObjectManager implements FontMetrics {
   // the catalog's /Names/EmbeddedFiles + /AF. Drives ZUGFeRD's embedded factur-x.xml.
   private attachments: { name: string; filespec: number }[] = [];
 
+  // Document XMP packet (catalog /Metadata), e.g. the PDF/A-3 + Factur-X identification. The
+  // content is supplied by the caller; keep it ASCII (entity-escape non-ASCII) for the 1-byte path.
+  private xmpMetadata?: string;
+
+  // The /OutputIntent dict object number (catalog /OutputIntents), set by setOutputIntent. PDF/A
+  // requires one; it names the output colour space via an embedded ICC profile.
+  private outputIntent?: number;
+
+  // PDF header version (PDF/A-3 needs 1.7) and whether to write a trailer /ID (PDF/A needs one).
+  // Both default to the pre-PDF/A behaviour, so a normal document stays byte-identical.
+  private pdfVersion = "1.4";
+  private documentId = false;
+
   constructor();
   constructor(pageSize?: PageSize) {
     if (pageSize) this.pageFormat = pageFormats[pageSize];
@@ -283,6 +297,47 @@ endstream`;
   // Filespec object numbers + names, for the catalog's /Names/EmbeddedFiles and /AF.
   getAttachments(): { name: string; filespec: number }[] {
     return this.attachments;
+  }
+
+  // Sets the document XMP packet (catalog /Metadata). ASCII expected (see the field comment).
+  setXmpMetadata(xml: string): void {
+    this.xmpMetadata = xml;
+  }
+
+  getXmpMetadata(): string | undefined {
+    return this.xmpMetadata;
+  }
+
+  // Embeds an ICC profile and a PDF/A /OutputIntent that points at it (catalog /OutputIntents).
+  // `icc` are the raw profile bytes (an RGB profile, /N 3 - e.g. sRGB).
+  setOutputIntent(icc: Buffer, opts: { identifier?: string; info?: string } = {}): void {
+    const profile = this.addObject(
+      `<< /N 3 /Length ${icc.length} >>\nstream\n${icc.toString("latin1")}\nendstream`,
+    );
+    this.outputIntent = this.addObject(
+      `<< /Type /OutputIntent /S /GTS_PDFA1 ` +
+        `/OutputConditionIdentifier (${opts.identifier ?? "sRGB"}) ` +
+        `/Info (${opts.info ?? "sRGB IEC61966-2.1"}) /DestOutputProfile ${profile} 0 R >>`,
+    );
+  }
+
+  getOutputIntent(): number | undefined {
+    return this.outputIntent;
+  }
+
+  // PDF header version, e.g. "1.7" for PDF/A-3. Always "1.X" so the 9-byte header length (and the
+  // xref offsets that depend on it) never change.
+  setPdfVersion(version: string): void {
+    this.pdfVersion = version;
+  }
+
+  getPdfVersion(): string {
+    return this.pdfVersion;
+  }
+
+  // Enables a trailer /ID (required by PDF/A). The id is a content hash, so it is deterministic.
+  enableDocumentId(): void {
+    this.documentId = true;
   }
 
   // Registers (or reuses) a transparency graphics state and returns its resource name
@@ -600,9 +655,14 @@ endstream`;
   // Calculates the position of the XRef table and returns the trailer
   getTrailerAndXRef(startxref: number): string {
     const objectCount = this.getObjectCount();
-    return `trailer\n<< /Size ${objectCount + 1} /Root ${
-      this.objects.findIndex((f) => f.toLowerCase().includes("catalog")) + 1
-    } 0 R >>\nstartxref\n${startxref}\n%%EOF`;
+    const root = this.objects.findIndex((f) => f.toLowerCase().includes("catalog")) + 1;
+    // A fresh document uses the same hash for both /ID strings; they only diverge on an update.
+    const id = this.documentId ? ` /ID [${this.contentId()} ${this.contentId()}]` : "";
+    return `trailer\n<< /Size ${objectCount + 1} /Root ${root} 0 R${id} >>\nstartxref\n${startxref}\n%%EOF`;
+  }
+
+  private contentId(): string {
+    return `<${createHash("md5").update(this.objects.join("")).digest("hex").toUpperCase()}>`;
   }
 
   // Returns the number of objects

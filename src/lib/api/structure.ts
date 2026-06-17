@@ -117,6 +117,14 @@ export interface RenderOptions {
   fonts?: Record<string, FontBytes | FontFamily>;
   /** Files to embed as associated files (e.g. the ZUGFeRD `factur-x.xml`). */
   attachments?: Attachment[];
+  /** Document XMP metadata packet (catalog `/Metadata`), e.g. PDF/A-3 + Factur-X. Keep it ASCII. */
+  xmp?: string;
+  /** ICC profile bytes for a PDF/A `/OutputIntent` (an RGB profile, e.g. sRGB). */
+  outputIntent?: FontBytes;
+  /** PDF header version, e.g. `"1.7"` for PDF/A-3 (default `"1.4"`). */
+  pdfVersion?: string;
+  /** Write a trailer `/ID` (required by PDF/A); the id is a deterministic content hash. */
+  documentId?: boolean;
 }
 
 function isFontBytes(v: FontBytes | FontFamily): v is FontBytes {
@@ -158,6 +166,10 @@ export async function renderPdf(doc: PDFDocumentElement, options?: RenderOptions
           description: a.description,
         });
       }
+      if (options?.xmp) om.setXmpMetadata(options.xmp);
+      if (options?.outputIntent) om.setOutputIntent(Buffer.from(options.outputIntent));
+      if (options?.pdfVersion) om.setPdfVersion(options.pdfVersion);
+      if (options?.documentId) om.enableDocumentId();
     }
     build(): PDFDocumentElement {
       return doc;
