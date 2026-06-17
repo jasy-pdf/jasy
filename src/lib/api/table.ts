@@ -1,5 +1,5 @@
-import { ContainerElement } from "../elements/container-element";
 import { PDFElement } from "../elements/pdf-element";
+import { RepeatingHeaderElement } from "../elements/layout/repeating-header-element";
 import { Column, Row, Box, Expanded, Padding } from "./layout";
 import { Text } from "./text";
 import { Insets } from "./insets";
@@ -17,6 +17,8 @@ export type Cell = PDFElement | string;
 export interface TableOptions {
   /** One entry per column: a fixed point width or an `"Nfr"` fraction. */
   columns: ColumnWidth[];
+  /** A header row that REPEATS at the top of every page the table flows onto. */
+  header?: Cell[];
   /** Gap between both columns and rows (default 0). */
   gap?: number;
   /** Gap between rows (overrides `gap`). */
@@ -45,7 +47,7 @@ function fractionOf(col: ColumnWidth): number | null {
  * Column of atomic Rows, it paginates at ROW boundaries for free - a row that doesn't fit
  * moves whole to the next page. (A repeating header row across pages is a later feature.)
  */
-export function Table(opts: TableOptions, rows: Cell[][]): ContainerElement {
+export function Table(opts: TableOptions, rows: Cell[][]): PDFElement {
   const { columns, cellPadding } = opts;
   const colGap = opts.colGap ?? opts.gap ?? 0;
   const rowGap = opts.rowGap ?? opts.gap ?? 0;
@@ -61,12 +63,17 @@ export function Table(opts: TableOptions, rows: Cell[][]): ContainerElement {
     );
   };
 
-  const tableRows = rows.map((cells) =>
+  const buildRow = (cells: Cell[]) =>
     Row(
       { gap: colGap },
       cells.map((cell, i) => wrap(cell, columns[i] ?? "1fr"))
-    )
-  );
+    );
 
-  return Column({ gap: rowGap }, tableRows);
+  const body = Column({ gap: rowGap }, rows.map(buildRow));
+
+  // A repeating header gets its own element so it reappears on every page; otherwise the
+  // table is just the body Column (still paginates at row boundaries).
+  return opts.header
+    ? new RepeatingHeaderElement(buildRow(opts.header), body, rowGap)
+    : body;
 }

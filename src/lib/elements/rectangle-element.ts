@@ -13,12 +13,23 @@ import {
   WithChildren,
 } from "./pdf-element";
 
+/** Per-side border colours. When set, each present side is stroked individually (sharp
+ *  corners), instead of the uniform `color` border - this is what enables grid lines. */
+export interface SideBorders {
+  top?: Color;
+  right?: Color;
+  bottom?: Color;
+  left?: Color;
+}
+
 interface RectangleElementParams extends SizedElement, WithChildren {
   color?: Color;
   backgroundColor?: Color;
   borderWidth?: number;
   /** Corner radius in points; 0 = sharp corners (default). */
   radius?: number;
+  /** Individual side borders; overrides the uniform `color` border when present. */
+  sideBorders?: SideBorders;
 }
 
 export class RectangleElement extends SizedPDFElement implements Fragmentable {
@@ -27,6 +38,7 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
   private backgroundColor?: Color;
   private borderWidth: number;
   private radius: number;
+  private sideBorders?: SideBorders;
 
   private sizeMemory!: {
     x: number;
@@ -43,6 +55,7 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
     width,
     height,
     radius,
+    sideBorders,
   }: RectangleElementParams) {
     super({ x: 0, y: 0, width, height });
 
@@ -52,6 +65,7 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
     // `?? 1` (not `|| 1`) so an explicit `0` means "no border" instead of snapping to 1.
     this.borderWidth = borderWidth ?? 1;
     this.radius = radius ?? 0;
+    this.sideBorders = sideBorders;
     this.sizeMemory = { x: 0, y: 0, width, height };
   }
 
@@ -116,6 +130,7 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
       backgroundColor: this.backgroundColor,
       borderWidth: this.borderWidth,
       radius: this.radius,
+      sideBorders: this.sideBorders,
     });
   }
 
@@ -185,6 +200,7 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
       backgroundColor: this.backgroundColor,
       borderWidth: this.borderWidth,
       radius: this.radius,
+      sideBorders: this.sideBorders,
     };
   }
 }

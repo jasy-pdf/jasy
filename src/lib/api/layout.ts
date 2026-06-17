@@ -58,6 +58,13 @@ export function Row(a: StackOptions | PDFElement[], b?: PDFElement[]): RowElemen
 export interface BoxOptions {
   /** Border (stroke) colour. A box has a border only when `border` or `borderWidth` is set. */
   border?: ColorInput;
+  /** Per-side border colours - override/add to `border`. Any of these makes the box draw
+   *  individual side lines (sharp corners) instead of a uniform frame - this is how you get
+   *  grid lines (e.g. a cell with only `borderBottom` + `borderRight`). */
+  borderTop?: ColorInput;
+  borderRight?: ColorInput;
+  borderBottom?: ColorInput;
+  borderLeft?: ColorInput;
   /** Border thickness in points (default 1 when a border is present). */
   borderWidth?: number;
   /** Background fill colour. */
@@ -94,7 +101,22 @@ export function Box(
         ]
       : children;
 
-  const hasBorder = opts.border !== undefined || opts.borderWidth !== undefined;
+  // A side is set if it (or the uniform `border`) is given. If ANY differs from a plain
+  // uniform border, we hand the engine per-side colours (which draws individual lines).
+  const sideKeys = [
+    opts.borderTop,
+    opts.borderRight,
+    opts.borderBottom,
+    opts.borderLeft,
+  ];
+  const hasPerSide = sideKeys.some((s) => s !== undefined);
+  const side = (s?: ColorInput) => {
+    const c = s ?? opts.border;
+    return c !== undefined ? toColor(c) : undefined;
+  };
+
+  const hasBorder =
+    opts.border !== undefined || opts.borderWidth !== undefined || hasPerSide;
 
   return new RectangleElement({
     x: 0,
@@ -106,6 +128,14 @@ export function Box(
     width: opts.width,
     height: opts.height,
     radius: opts.radius,
+    sideBorders: hasPerSide
+      ? {
+          top: side(opts.borderTop),
+          right: side(opts.borderRight),
+          bottom: side(opts.borderBottom),
+          left: side(opts.borderLeft),
+        }
+      : undefined,
   });
 }
 

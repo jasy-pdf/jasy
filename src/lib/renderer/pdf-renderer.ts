@@ -20,6 +20,8 @@ import { ExpandedRenderer } from "./expanded-renderer";
 import { PaddingRenderer } from "./padding-renderer";
 import { ImageRenderer } from "./image-renderer";
 import { LineRenderer } from "./line-renderer";
+import { RepeatingHeaderElement } from "../elements/layout/repeating-header-element";
+import { RepeatingHeaderRenderer } from "./repeating-header-renderer";
 import { BoxConstraints } from "../layout/box-constraints";
 import { LayoutContext } from "../elements/pdf-element";
 
@@ -37,6 +39,10 @@ export class PDFRenderer {
     RendererRegistry.register(PaddingElement, PaddingRenderer.render);
     RendererRegistry.register(ImageElement, ImageRenderer.render);
     RendererRegistry.register(LineElement, LineRenderer.render);
+    RendererRegistry.register(
+      RepeatingHeaderElement,
+      RepeatingHeaderRenderer.render
+    );
 
     let pdfContent = "";
 
