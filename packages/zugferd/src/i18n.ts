@@ -105,7 +105,7 @@ const en: InvoiceLabels = {
 const fr: InvoiceLabels = {
   invoice: "Facture",
   position: "N°",
-  description: "Désignation",
+  description: "Description",
   quantity: "Qté",
   unitPrice: "Prix unitaire",
   vat: "TVA",
@@ -113,9 +113,9 @@ const fr: InvoiceLabels = {
   subtotal: "Sous-total",
   allowance: "remise",
   charge: "majoration",
-  netTotal: "Montant net",
+  netTotal: "Total HT",
   plusVat: "TVA",
-  grandTotal: "Total",
+  grandTotal: "Total TTC",
   alreadyPaid: "déjà payé",
   amountDue: "Net à payer",
   payment: "Paiement",
@@ -130,7 +130,7 @@ const fr: InvoiceLabels = {
   orderNumber: "N° de commande",
   vatId: "N° TVA",
   taxNumber: "N° fiscal",
-  registration: "Reg.",
+  registration: "Immatriculation",
   phone: "Tél.",
 };
 
