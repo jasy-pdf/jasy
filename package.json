@@ -18,11 +18,15 @@
   "author": "Florian Heuberger",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
   "scripts": {
-    "copy-assets": "ncp ./src/lib/assets ./dist/src/lib/assets",
+    "copy-assets": "ncp ./src/lib/assets ./dist/assets",
     "test": "vitest",
     "test:coverage": "vitest --coverage",
-    "build": "tsc",
+    "build": "tsc && pnpm run copy-assets",
+    "prepublishOnly": "pnpm run build",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
     "fmt": "oxfmt",
@@ -35,8 +39,6 @@
     "@jimp/types": "^1.6.0",
     "@types/node": "^25.9.3",
     "@vitest/coverage-v8": "^2.1.1",
-    "c8": "^10.1.2",
-    "jest": "^29.7.0",
     "ncp": "^2.0.0",
     "oxfmt": "^0.55.0",
     "oxlint": "^1.70.0",

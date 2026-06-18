@@ -2,11 +2,15 @@
   "name": "@jasy/zugferd",
   "version": "0.0.1",
   "description": "ZUGFeRD / Factur-X / XRechnung (EN-16931) for @jasy/pdf — invoice data model, CII XML, PDF/A-3.",
+  "keywords": ["zugferd", "factur-x", "xrechnung", "en16931", "e-invoice", "einvoice", "pdf-a", "invoice"],
   "license": "MIT",
   "author": "Florian Heuberger",
   "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist", "assets"],
   "scripts": {
     "build": "tsc",
+    "prepublishOnly": "pnpm run build",
     "test": "vitest run",
     "validate": "tsc && node scripts/validate.cjs"
   },

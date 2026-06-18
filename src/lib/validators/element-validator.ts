@@ -32,7 +32,8 @@ export class Validator {
           `Element ${element.constructor.name} has invalid coordinates (x: ${x}, y: ${y})`,
         );
       }
-      if ((width !== undefined && width <= 0) || (height !== undefined && height <= 0)) {
+      // 0 is legitimate (a hairline divider, an empty spacer); only a NEGATIVE size is invalid.
+      if ((width !== undefined && width < 0) || (height !== undefined && height < 0)) {
         throw new Error(
           `Element ${element.constructor.name} has invalid size (width: ${width}, height: ${height})`,
         );
@@ -53,7 +54,8 @@ export class Validator {
       );
     }
 
-    if (width === undefined || height === undefined || width <= 0 || height <= 0) {
+    // A size must be set, but 0 is legitimate (a hairline divider); only NEGATIVE is invalid.
+    if (width === undefined || height === undefined || width < 0 || height < 0) {
       throw new Error(
         `Element ${element.constructor.name} has invalid size (width: ${width}, height: ${height})`,
       );
