@@ -18,6 +18,8 @@ export interface RenderZugferdOptions {
   locale?: Locale;
   /** Override individual labels (merged onto the locale preset), e.g. `{ vat: "Sales Tax" }`. */
   labels?: Partial<InvoiceLabels>;
+  /** FlateDecode-compress the PDF streams (default true). */
+  compress?: boolean;
 }
 
 export interface ZugferdResult {
@@ -36,7 +38,7 @@ export interface ZugferdResult {
  */
 export async function renderZugferd(
   invoice: Invoice,
-  options: RenderZugferdOptions = {}
+  options: RenderZugferdOptions = {},
 ): Promise<ZugferdResult> {
   const computed = computeInvoice(invoice);
   const xml = toCII(invoice, computed);
@@ -50,6 +52,7 @@ export async function renderZugferd(
     // standardFonts:false drops the non-embeddable standard-14 so only embedded fonts remain.
     fonts: bundledFonts(),
     standardFonts: false,
+    compress: options.compress,
     attachments: [
       {
         name: "factur-x.xml",

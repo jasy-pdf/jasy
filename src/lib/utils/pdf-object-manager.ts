@@ -2,6 +2,7 @@ import { pageFormats, PageSize } from "../constants/page-sizes";
 import * as fs from "fs";
 import * as path from "path";
 import { createHash } from "crypto";
+import { deflateSync } from "zlib";
 import { AFMParser } from "./afm-parser";
 import { TTFParser } from "./ttf-parser";
 import { subsetTTF } from "./ttf-subsetter";
@@ -196,6 +197,7 @@ export class PDFObjectManager implements FontMetrics {
   // Both default to the pre-PDF/A behaviour, so a normal document stays byte-identical.
   private pdfVersion = "1.4";
   private documentId = false;
+  private compress = false;
 
   constructor();
   constructor(pageSize?: PageSize) {
@@ -216,6 +218,33 @@ export class PDFObjectManager implements FontMetrics {
   // Replaces an object at the index `objectNumber`
   replaceObject(objectNumber: number, content: string): void {
     this.objects[objectNumber - 1] = content;
+  }
+
+  // FlateDecode compression for stream payloads (default off; renderPdf turns it on). Off keeps the
+  // PDF greppable for debugging and the internal tests; the XMP metadata stream is never routed here.
+  setCompress(on: boolean): void {
+    this.compress = on;
+  }
+
+  // Builds a stream object body: `<< extraDict /Length n >> stream … endstream`, FlateDecode-compressed
+  // when enabled AND it actually helps (tiny streams aren't inflated). Binary bytes ride as a latin1
+  // string - the final encoder passes 0x00-0xFF through unchanged.
+  private stream(extraDict: string, data: Buffer): string {
+    const head = extraDict ? extraDict + " " : "";
+    if (this.compress) {
+      const z = deflateSync(data);
+      if (z.length < data.length) {
+        return `<< ${head}/Filter /FlateDecode /Length ${z.length} >>\nstream\n${z.toString(
+          "latin1",
+        )}\nendstream`;
+      }
+    }
+    return `<< ${head}/Length ${data.length} >>\nstream\n${data.toString("latin1")}\nendstream`;
+  }
+
+  // Adds a page content stream (compressed when enabled). The caller passes the raw operator string.
+  addContentStream(content: string): number {
+    return this.addObject(this.stream("", Buffer.from(content, "latin1")));
   }
 
   changePDFConfig(config: PDFConfig) {
@@ -299,8 +328,10 @@ endstream`;
   ): void {
     const subtype = (opts.mimeType ?? "application/octet-stream").replace(/\//g, "#2F");
     const embedded = this.addObject(
-      `<< /Type /EmbeddedFile /Subtype /${subtype} /Length ${data.length} ` +
-        `/Params << /Size ${data.length} >> >>\nstream\n${data.toString("latin1")}\nendstream`,
+      this.stream(
+        `/Type /EmbeddedFile /Subtype /${subtype} /Params << /Size ${data.length} >>`,
+        data,
+      ),
     );
     const escaped = (s: string) =>
       s.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
@@ -330,9 +361,7 @@ endstream`;
   // Embeds an ICC profile and a PDF/A /OutputIntent that points at it (catalog /OutputIntents).
   // `icc` are the raw profile bytes (an RGB profile, /N 3 - e.g. sRGB).
   setOutputIntent(icc: Buffer, opts: { identifier?: string; info?: string } = {}): void {
-    const profile = this.addObject(
-      `<< /N 3 /Length ${icc.length} >>\nstream\n${icc.toString("latin1")}\nendstream`,
-    );
+    const profile = this.addObject(this.stream("/N 3", icc));
     this.outputIntent = this.addObject(
       `<< /Type /OutputIntent /S /GTS_PDFA1 ` +
         `/OutputConditionIdentifier (${opts.identifier ?? "sRGB"}) ` +
@@ -549,9 +578,8 @@ endstream`;
   // string - the final Windows-1252 encoder passes 0x00-0xFF through unchanged (see getArrayBuffer).
   private buildFontFile2(ttf: TTFParser, used: Set<number>): string {
     const bytes = subsetTTF(ttf.getData(), used);
-    return `<< /Length ${bytes.length} /Length1 ${bytes.length} >>\nstream\n${bytes.toString(
-      "latin1",
-    )}\nendstream`;
+    // /Length1 is the UNCOMPRESSED font-program length (required even when FlateDecode'd).
+    return this.stream(`/Length1 ${bytes.length}`, bytes);
   }
 
   private buildFontDescriptor(name: string, ttf: TTFParser, fontFile: number): string {
@@ -606,7 +634,7 @@ endstream`;
       `/CMapName /Adobe-Identity-UCS def\n/CMapType 2 def\n` +
       `1 begincodespacerange\n<0000> <FFFF>\nendcodespacerange\n${blocks.join("\n")}\n` +
       `endcmap\nCMapName currentdict /CMap defineresource pop\nend\nend`;
-    return `<< /Length ${body.length} >>\nstream\n${body}\nendstream`;
+    return this.stream("", Buffer.from(body, "latin1"));
   }
 
   private buildType0(name: string, cidFont: number, toUnicode: number): string {

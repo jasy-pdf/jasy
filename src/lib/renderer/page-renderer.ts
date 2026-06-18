@@ -34,12 +34,9 @@ export class PageRenderer {
     }
     const pageContent = PdfBackend.serialize(PdfBackend.flipY(nodes, height), objectManager);
 
-    // Add the page content as a new object (content stream). The EOL before `endstream` is
-    // explicit, so /Length counts exactly the content bytes (PDF/A clause 6.1.7.1) - without it
-    // the content's own trailing newline becomes the EOL and /Length is over by one.
-    const contentObjectNumber = objectManager.addObject(
-      `<</Length ${pageContent.length}>>\nstream\n${pageContent}\nendstream`,
-    );
+    // Add the page content as a new object (FlateDecode-compressed when enabled). The /Length is
+    // computed inside, with an explicit EOL before `endstream` (PDF/A clause 6.1.7.1).
+    const contentObjectNumber = objectManager.addContentStream(pageContent);
 
     // Get the parent object number dynamically (linked with the page object)
     const parentObjectNumber = objectManager.getParentObjectNumber(); // Get parent object number
