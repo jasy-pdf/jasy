@@ -1,3 +1,4 @@
+export { PDFElement } from "./pdf-element"; // the base element type — public for composing custom layouts
 export * from "./text-element";
 export * from "./pdf-document-element";
 export * from "./page-element";

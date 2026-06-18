@@ -11,6 +11,9 @@ export { facturxXmp } from "./xmp";
 export type { XmpOptions } from "./xmp";
 export { renderZugferd } from "./render";
 export type { RenderZugferdOptions, ZugferdResult } from "./render";
+export { defaultInvoiceTemplate } from "./template";
+export { resolveLabels, makeFormatters } from "./i18n";
+export type { Locale, InvoiceLabels, Formatters } from "./i18n";
 
 /** ZUGFeRD / Factur-X conformance profiles, in rising order of data completeness. */
 export type ZugferdProfile = "minimum" | "basic" | "en16931" | "extended" | "xrechnung";

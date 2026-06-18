@@ -1,26 +1,23 @@
 import * as fs from "fs";
 import * as path from "path";
-import {
-  Column,
-  Document,
-  Page,
-  type PDFDocumentElement,
-  renderToBytes,
-  Row,
-  Table,
-  Text,
-} from "@jasy/pdf";
-import { Invoice, PostalAddress } from "./invoice";
-import { ComputedInvoice, computeInvoice } from "./compute";
+import { type PDFDocumentElement, renderToBytes } from "@jasy/pdf";
+import { Invoice } from "./invoice";
+import { computeInvoice } from "./compute";
 import { toCII } from "./cii";
 import { bundledFonts } from "./fonts";
 import { facturxXmp } from "./xmp";
+import { defaultInvoiceTemplate } from "./template";
+import { InvoiceLabels, Locale, makeFormatters, resolveLabels } from "./i18n";
 
 const ICC_PATH = path.resolve(__dirname, "..", "assets", "icc", "sRGB.icc");
 
 export interface RenderZugferdOptions {
   /** A custom invoice layout (a `Document`). Omit to use the built-in default template. */
   pdf?: PDFDocumentElement;
+  /** Language of the default template's labels + number/date formatting (default `"de"`). */
+  locale?: Locale;
+  /** Override individual labels (merged onto the locale preset), e.g. `{ vat: "Sales Tax" }`. */
+  labels?: Partial<InvoiceLabels>;
 }
 
 export interface ZugferdResult {
@@ -44,7 +41,11 @@ export async function renderZugferd(
   const computed = computeInvoice(invoice);
   const xml = toCII(invoice, computed);
 
-  const bytes = await renderToBytes(options.pdf ?? defaultTemplate(invoice, computed), {
+  const labels = resolveLabels(options.locale, options.labels);
+  const fmt = makeFormatters(options.locale, invoice.currency);
+  const doc = options.pdf ?? defaultInvoiceTemplate(invoice, computed, labels, fmt);
+
+  const bytes = await renderToBytes(doc, {
     // The standard-14 names render as embedded Liberation substitutes (PDF/A needs all fonts in);
     // standardFonts:false drops the non-embeddable standard-14 so only embedded fonts remain.
     fonts: bundledFonts(),
@@ -64,51 +65,4 @@ export async function renderZugferd(
   });
 
   return { bytes, xml };
-}
-
-/** A plain built-in invoice layout (the polished template is a later slice). */
-function defaultTemplate(invoice: Invoice, c: ComputedInvoice): PDFDocumentElement {
-  const money = (n: number) => `${n.toFixed(2)} ${invoice.currency}`;
-  const addressLines = (a: PostalAddress) =>
-    [a.line1, `${a.postCode ?? ""} ${a.city ?? ""}`.trim(), a.country].filter(Boolean) as string[];
-
-  const party = (label: string, name: string, a: PostalAddress) =>
-    Column({ gap: 2 }, [
-      Text(label, { bold: true, size: 10, color: "#555" }),
-      Text(name),
-      ...addressLines(a).map((t) => Text(t, { size: 10 })),
-    ]);
-
-  const lineRows = invoice.lines.map((l, i) => [
-    l.name,
-    String(l.quantity),
-    money(l.netUnitPrice),
-    money(c.lineNets[i]),
-  ]);
-
-  return Document([
-    Page({ size: "A4", margin: 56, gap: 14 }, [
-      Text(`Rechnung ${invoice.number}`, { size: 22, bold: true, color: "#145aaa" }),
-      Text(`Datum: ${invoice.issueDate}${invoice.dueDate ? `   ·   Fällig: ${invoice.dueDate}` : ""}`, {
-        size: 10,
-        color: "#555",
-      }),
-      Row({ gap: 24 }, [
-        party("Von", invoice.seller.name, invoice.seller.address),
-        party("An", invoice.buyer.name, invoice.buyer.address),
-      ]),
-      Table(
-        {
-          columns: ["3fr", "auto", "auto", "auto"],
-          header: ["Beschreibung", "Menge", "Einzelpreis", "Netto"],
-          cellBorder: "#cccccc",
-          cellPadding: { x: 6, y: 4 },
-        },
-        lineRows
-      ),
-      Text(`Nettobetrag: ${money(c.taxBasisTotal)}`, { align: "right", size: 11 }),
-      Text(`Umsatzsteuer: ${money(c.taxTotal)}`, { align: "right", size: 11 }),
-      Text(`Gesamtbetrag: ${money(c.grandTotal)}`, { align: "right", bold: true, size: 14 }),
-    ]),
-  ]);
 }
