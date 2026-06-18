@@ -431,12 +431,20 @@ endstream`;
   registerCustomFont(name: string, data: Buffer, style: FontStyle = FontStyle.Normal): void {
     const key = this.customKey(name, style);
     if (this.customFonts.has(key)) return;
-    const ttf = new TTFParser(data);
-    this.customFonts.set(key, ttf);
+    this.customFonts.set(key, new TTFParser(data));
+    // Emission (the PDF font objects + page resource) is DEFERRED to first use via ensureEmitted(),
+    // so a registered-but-never-rendered face - e.g. a bundled family the document doesn't touch -
+    // costs nothing in the output. The metrics above are still available for layout immediately.
+  }
 
-    // Reserve the font objects now (dependency order so each reference points at an already-numbered
-    // object); their content - a SUBSET of the font - is filled in by finalizeCustomFonts() once the
-    // render pass has revealed which glyphs are actually used.
+  // Reserves the font objects and registers the page resource the FIRST time a face is actually
+  // used. Idempotent; `style` is the already-resolved variant.
+  private ensureEmitted(name: string, style: FontStyle): void {
+    const key = this.customKey(name, style);
+    if (this.customFontEmit.has(key)) return;
+
+    // Reserve the font objects (dependency order so each reference points at an already-numbered
+    // object); their content - a SUBSET of the font - is filled in by finalizeCustomFonts().
     const fontFile = this.addObject("<< >>");
     const descriptor = this.addObject("<< >>");
     const cidFont = this.addObject("<< >>");
@@ -514,7 +522,9 @@ endstream`;
     style: FontStyle = FontStyle.Normal,
   ): FontIndexes | undefined {
     const resolved = this.resolveCustomStyle(name, style);
-    return resolved ? this.fonts.getFont(name, resolved) : undefined;
+    if (!resolved) return undefined;
+    this.ensureEmitted(name, resolved);
+    return this.fonts.getFont(name, resolved);
   }
 
   // Encodes text as a hex Identity-H string for an embedded font's Tj operator: each codepoint
@@ -522,13 +532,14 @@ endstream`;
   encodeCustomText(name: string, text: string, style: FontStyle = FontStyle.Normal): string {
     const resolved = this.resolveCustomStyle(name, style);
     if (!resolved) return "";
+    this.ensureEmitted(name, resolved);
     const key = this.customKey(name, resolved);
     const ttf = this.customFonts.get(key)!;
-    const used = this.customFontEmit.get(key)?.used;
+    const used = this.customFontEmit.get(key)!.used;
     let hex = "";
     for (const ch of text) {
       const gid = ttf.getGlyphIndex(ch.codePointAt(0)!);
-      used?.add(gid); // record the glyph so the subset keeps it
+      used.add(gid); // record the glyph so the subset keeps it
       hex += gid.toString(16).padStart(4, "0").toUpperCase();
     }
     return hex;

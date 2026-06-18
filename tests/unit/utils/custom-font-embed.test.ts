@@ -3,12 +3,13 @@ import { FontStyle, PDFObjectManager } from "../../../src/lib/utils/pdf-object-m
 import { buildTestTtf } from "./ttf-fixture";
 
 describe("PDFObjectManager - custom font embedding (slice 2.2a)", () => {
-  it("emits the Type0 font object graph and registers the font", () => {
+  it("emits the Type0 font object graph on first use", () => {
     const om = new PDFObjectManager();
     const before = om.getObjectCount();
     om.registerCustomFont("MyFont", buildTestTtf());
+    expect(om.getObjectCount()).toBe(before); // lazy: registering only stores metrics, emits nothing
 
-    // FontFile2, FontDescriptor, CIDFontType2, ToUnicode, Type0 (reserved at registration)
+    om.encodeCustomText("MyFont", "Hi"); // first use → reserves FontFile2/Descriptor/CIDFont/ToUnicode/Type0
     expect(om.getObjectCount()).toBe(before + 5);
     expect(om.getAllFontsRaw().size).toBe(1);
 
@@ -21,12 +22,22 @@ describe("PDFObjectManager - custom font embedding (slice 2.2a)", () => {
     expect(pdf).toContain("/ToUnicode");
   });
 
-  it("is idempotent - re-registering the same name adds nothing", () => {
+  it("emits a face once, however often it's used", () => {
     const om = new PDFObjectManager();
     om.registerCustomFont("MyFont", buildTestTtf());
+    om.encodeCustomText("MyFont", "first");
     const count = om.getObjectCount();
-    om.registerCustomFont("MyFont", buildTestTtf());
+    om.encodeCustomText("MyFont", "second"); // same face, already emitted → no new objects
     expect(om.getObjectCount()).toBe(count);
+  });
+
+  it("a registered but unused face emits nothing", () => {
+    const om = new PDFObjectManager();
+    const before = om.getObjectCount();
+    om.registerCustomFont("MyFont", buildTestTtf());
+    om.finalizeCustomFonts();
+    expect(om.getObjectCount()).toBe(before); // never used → no objects, no page resource
+    expect(om.getAllFontsRaw().size).toBe(0);
   });
 
   // Regression: embedding under a standard-14 name (e.g. "Helvetica" → Liberation for PDF/A) must
