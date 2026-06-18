@@ -88,6 +88,10 @@ export class PDFRenderer {
     const catalogObject = `<< ${catalogParts.join(" ")} >>`;
     objectManager.addObject(catalogObject);
 
+    // Now that the render pass has revealed which glyphs each embedded font uses, fill the reserved
+    // font objects with the subset font program (must happen before the objects are serialized).
+    objectManager.finalizeCustomFonts();
+
     // Add rendered objects
     pdfContent += objectManager.getRenderedObjects();
 

@@ -4,6 +4,7 @@ import * as path from "path";
 import { createHash } from "crypto";
 import { AFMParser } from "./afm-parser";
 import { TTFParser } from "./ttf-parser";
+import { subsetTTF } from "./ttf-subsetter";
 // Enums come from the leaf config module (never in a cycle); the config type is
 // erased at runtime so it can come from the cyclic module safely.
 import { ColorMode, Orientation } from "../renderer/pdf-config";
@@ -164,6 +165,20 @@ export class PDFObjectManager implements FontMetrics {
   // Embedded TrueType fonts, keyed by the name the user registers them under. When a font
   // name is in here the metric/emission paths take the TTF branch instead of the AFM one.
   private customFonts = new Map<string, TTFParser>();
+  // Per-registered face: the reserved font-object numbers + the glyph ids actually used. The font
+  // program is subsetted and the objects filled in by finalizeCustomFonts(), after the render pass.
+  private customFontEmit = new Map<
+    string,
+    {
+      pdfName: string;
+      fontFile: number;
+      descriptor: number;
+      cidFont: number;
+      toUnicode: number;
+      type0: number;
+      used: Set<number>;
+    }
+  >();
 
   // Embedded file attachments (their /Filespec object numbers + display names). Referenced from
   // the catalog's /Names/EmbeddedFiles + /AF. Drives ZUGFeRD's embedded factur-x.xml.
@@ -419,17 +434,51 @@ endstream`;
     const ttf = new TTFParser(data);
     this.customFonts.set(key, ttf);
 
-    // Created in dependency order so each reference points at an already-numbered object.
-    const pdfName = name + STYLE_SUFFIX[style];
-    const fontFile = this.addObject(this.buildFontFile2(ttf));
-    const descriptor = this.addObject(this.buildFontDescriptor(pdfName, ttf, fontFile));
-    const cidFont = this.addObject(this.buildCIDFont(pdfName, ttf, descriptor));
-    const toUnicode = this.addObject(this.buildToUnicode(ttf));
-    const type0 = this.addObject(this.buildType0(pdfName, cidFont, toUnicode));
+    // Reserve the font objects now (dependency order so each reference points at an already-numbered
+    // object); their content - a SUBSET of the font - is filled in by finalizeCustomFonts() once the
+    // render pass has revealed which glyphs are actually used.
+    const fontFile = this.addObject("<< >>");
+    const descriptor = this.addObject("<< >>");
+    const cidFont = this.addObject("<< >>");
+    const toUnicode = this.addObject("<< >>");
+    const type0 = this.addObject("<< >>");
 
     // The Type0 dict is the resource the page references (/F{index} -> type0 object). `force` so an
     // embedded font overrides a same-named standard-14 entry instead of being silently dropped.
     this.fonts.addFont(name, this.fonts.getLastFontIndex() + 1, type0, style, name, true);
+    this.customFontEmit.set(key, {
+      pdfName: name + STYLE_SUFFIX[style],
+      fontFile,
+      descriptor,
+      cidFont,
+      toUnicode,
+      type0,
+      used: new Set([0]), // .notdef always present
+    });
+  }
+
+  // Fills the reserved font objects with a SUBSET of each font (only the glyphs the document used),
+  // tagged "ABCDEF+" as PDF/A requires for subsets. Call once, after the render pass, before output.
+  finalizeCustomFonts(): void {
+    for (const [key, e] of this.customFontEmit) {
+      const ttf = this.customFonts.get(key)!;
+      const base = `${this.subsetTag(e.pdfName, e.used)}+${e.pdfName}`;
+      this.replaceObject(e.fontFile, this.buildFontFile2(ttf, e.used));
+      this.replaceObject(e.descriptor, this.buildFontDescriptor(base, ttf, e.fontFile));
+      this.replaceObject(e.cidFont, this.buildCIDFont(base, ttf, e.descriptor, e.used));
+      this.replaceObject(e.toUnicode, this.buildToUnicode(ttf, e.used));
+      this.replaceObject(e.type0, this.buildType0(base, e.cidFont, e.toUnicode));
+    }
+  }
+
+  // A deterministic 6-uppercase-letter subset tag (PDF/A wants the "TAG+FontName" form).
+  private subsetTag(pdfName: string, used: Set<number>): string {
+    const h = createHash("md5")
+      .update(pdfName + [...used].sort((a, b) => a - b).join(","))
+      .digest();
+    let tag = "";
+    for (let i = 0; i < 6; i++) tag += String.fromCharCode(65 + (h[i] % 26));
+    return tag;
   }
 
   private customKey(name: string, style: FontStyle): string {
@@ -471,19 +520,24 @@ endstream`;
   // Encodes text as a hex Identity-H string for an embedded font's Tj operator: each codepoint
   // becomes its 2-byte glyph id (CID == GID under /CIDToGIDMap /Identity).
   encodeCustomText(name: string, text: string, style: FontStyle = FontStyle.Normal): string {
-    const ttf = this.getCustomFont(name, style);
-    if (!ttf) return "";
+    const resolved = this.resolveCustomStyle(name, style);
+    if (!resolved) return "";
+    const key = this.customKey(name, resolved);
+    const ttf = this.customFonts.get(key)!;
+    const used = this.customFontEmit.get(key)?.used;
     let hex = "";
     for (const ch of text) {
-      hex += ttf.getGlyphIndex(ch.codePointAt(0)!).toString(16).padStart(4, "0").toUpperCase();
+      const gid = ttf.getGlyphIndex(ch.codePointAt(0)!);
+      used?.add(gid); // record the glyph so the subset keeps it
+      hex += gid.toString(16).padStart(4, "0").toUpperCase();
     }
     return hex;
   }
 
-  // The whole (non-subset) font program. Binary bytes survive as a latin1 string - the final
-  // Windows-1252 encoder passes 0x00-0xFF through unchanged (see getArrayBuffer).
-  private buildFontFile2(ttf: TTFParser): string {
-    const bytes = ttf.getData();
+  // The SUBSET font program (only the used glyphs' outlines). Binary bytes survive as a latin1
+  // string - the final Windows-1252 encoder passes 0x00-0xFF through unchanged (see getArrayBuffer).
+  private buildFontFile2(ttf: TTFParser, used: Set<number>): string {
+    const bytes = subsetTTF(ttf.getData(), used);
     return `<< /Length ${bytes.length} /Length1 ${bytes.length} >>\nstream\n${bytes.toString(
       "latin1",
     )}\nendstream`;
@@ -499,21 +553,36 @@ endstream`;
     );
   }
 
-  // CIDToGIDMap /Identity means CID == GID, so the /W widths are indexed straight by glyph id.
-  private buildCIDFont(name: string, ttf: TTFParser, descriptor: number): string {
-    const widths = ttf.glyphWidths().join(" ");
+  // CIDToGIDMap /Identity means CID == GID. /W lists only the USED glyphs' widths (sparse, one
+  // `gid [w]` entry each); everything else falls back to /DW.
+  private buildCIDFont(
+    name: string,
+    ttf: TTFParser,
+    descriptor: number,
+    used: Set<number>,
+  ): string {
+    const all = ttf.glyphWidths();
+    const w = [...used]
+      .sort((a, b) => a - b)
+      .map((g) => `${g} [${all[g] ?? 1000}]`)
+      .join(" ");
     return (
       `<< /Type /Font /Subtype /CIDFontType2 /BaseFont /${name} ` +
       `/CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> ` +
       `/FontDescriptor ${descriptor} 0 R /CIDToGIDMap /Identity ` +
-      `/DW 1000 /W [0 [${widths}]] >>`
+      `/DW 1000 /W [${w}] >>`
     );
   }
 
-  // Maps glyph id -> Unicode so the text stays copy-/searchable (rendering doesn't need it).
-  private buildToUnicode(ttf: TTFParser): string {
+  // Maps glyph id -> Unicode so the text stays copy-/searchable (rendering doesn't need it). Only
+  // the used glyphs are listed, to match the subset.
+  private buildToUnicode(ttf: TTFParser, used: Set<number>): string {
     const hex4 = (n: number) => n.toString(16).padStart(4, "0").toUpperCase();
-    const entries = [...ttf.reverseCmap().entries()];
+    const rev = ttf.reverseCmap();
+    const entries = [...used]
+      .sort((a, b) => a - b)
+      .filter((g) => rev.has(g))
+      .map((g) => [g, rev.get(g)!] as [number, number]);
     const blocks: string[] = [];
     for (let i = 0; i < entries.length; i += 100) {
       const block = entries.slice(i, i + 100);
