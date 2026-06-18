@@ -6,6 +6,8 @@ export * from "./invoice";
 export { computeInvoice, round2 } from "./compute";
 export type { ComputedInvoice, VatBreakdownEntry } from "./compute";
 export { toCII } from "./cii";
+export type { CiiProfile } from "./cii";
+export { xrechnungProblems } from "./profile-check";
 export { bundledFonts } from "./fonts";
 export { facturxXmp } from "./xmp";
 export type { XmpOptions } from "./xmp";

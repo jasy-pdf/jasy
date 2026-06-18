@@ -11,8 +11,17 @@ const NS = {
   udt: "urn:un:unece:uncefact:data:standard:UnqualifiedDataType:100",
 };
 
-/** EN16931 (COMFORT) guideline identifier (BT-24). */
-const EN16931_GUIDELINE = "urn:cen.eu:en16931:2017";
+/** The profiles this generator emits CII for. */
+export type CiiProfile = "en16931" | "xrechnung";
+
+/** Guideline identifier (BT-24) per profile: plain EN16931, or the German XRechnung 3.0 CIUS. */
+const GUIDELINE: Record<CiiProfile, string> = {
+  en16931: "urn:cen.eu:en16931:2017",
+  xrechnung: "urn:cen.eu:en16931:2017#compliant#urn:xeinkauf.de:kosit:xrechnung_3.0",
+};
+
+/** Business process (BT-23) — the PEPPOL billing process; XRechnung requires it. */
+const BUSINESS_PROCESS = "urn:fdc:peppol.eu:2017:poacc:billing:01:1.0";
 
 /** XML-escape text content (`&`, `<`, `>` are enough for element text + double-quoted attrs). */
 function esc(s: string): string {
@@ -178,7 +187,11 @@ function line(l: InvoiceLine, net: number, index: number): string {
   ]);
 }
 
-export function toCII(invoice: Invoice, computed: ComputedInvoice): string {
+export function toCII(
+  invoice: Invoice,
+  computed: ComputedInvoice,
+  profile: CiiProfile = "en16931",
+): string {
   const notes = (invoice.notes ?? []).map((n) => wrap("ram:IncludedNote", [el("ram:Content", n)])); // BG-1 / BT-22
 
   const header = wrap("rsm:ExchangedDocument", [
@@ -288,7 +301,13 @@ export function toCII(invoice: Invoice, computed: ComputedInvoice): string {
   ]);
 
   const context = wrap("rsm:ExchangedDocumentContext", [
-    wrap("ram:GuidelineSpecifiedDocumentContextParameter", [el("ram:ID", EN16931_GUIDELINE)]), // BT-24
+    // BusinessProcess (BT-23) precedes Guideline in the CII sequence; XRechnung requires it.
+    profile === "xrechnung"
+      ? wrap("ram:BusinessProcessSpecifiedDocumentContextParameter", [
+          el("ram:ID", BUSINESS_PROCESS), // BT-23
+        ])
+      : "",
+    wrap("ram:GuidelineSpecifiedDocumentContextParameter", [el("ram:ID", GUIDELINE[profile])]), // BT-24
   ]);
 
   return (

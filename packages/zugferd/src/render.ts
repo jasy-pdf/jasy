@@ -3,11 +3,12 @@ import * as path from "path";
 import { type PDFDocumentElement, renderToBytes } from "@jasy/pdf";
 import { Invoice } from "./invoice";
 import { computeInvoice } from "./compute";
-import { toCII } from "./cii";
+import { CiiProfile, toCII } from "./cii";
 import { bundledFonts } from "./fonts";
 import { facturxXmp } from "./xmp";
 import { defaultInvoiceTemplate } from "./template";
 import { InvoiceLabels, Locale, makeFormatters, resolveLabels } from "./i18n";
+import { xrechnungProblems } from "./profile-check";
 
 const ICC_PATH = path.resolve(__dirname, "..", "assets", "icc", "sRGB.icc");
 
@@ -20,6 +21,9 @@ export interface RenderZugferdOptions {
   labels?: Partial<InvoiceLabels>;
   /** FlateDecode-compress the PDF streams (default true). */
   compress?: boolean;
+  /** Conformance profile: `"en16931"` (ZUGFeRD, default) or the stricter German B2G `"xrechnung"`.
+   *  `"xrechnung"` pre-checks the mandatory B2G fields and throws a clear error if any are missing. */
+  profile?: CiiProfile;
 }
 
 export interface ZugferdResult {
@@ -40,8 +44,17 @@ export async function renderZugferd(
   invoice: Invoice,
   options: RenderZugferdOptions = {},
 ): Promise<ZugferdResult> {
+  const profile = options.profile ?? "en16931";
+  if (profile === "xrechnung") {
+    // Catch the missing B2G-mandatory fields here, with guidance - not as a cryptic Schematron reject.
+    const problems = xrechnungProblems(invoice);
+    if (problems.length > 0) {
+      throw new Error(`Invoice is not XRechnung-ready:\n  - ${problems.join("\n  - ")}`);
+    }
+  }
+
   const computed = computeInvoice(invoice);
-  const xml = toCII(invoice, computed);
+  const xml = toCII(invoice, computed, profile);
 
   const labels = resolveLabels(options.locale, options.labels);
   const fmt = makeFormatters(options.locale, invoice.currency);
@@ -61,7 +74,11 @@ export async function renderZugferd(
         mimeType: "text/xml",
       },
     ],
-    xmp: facturxXmp({ title: `Invoice ${invoice.number}`, author: invoice.seller.name }),
+    xmp: facturxXmp({
+      title: `Invoice ${invoice.number}`,
+      author: invoice.seller.name,
+      conformanceLevel: profile === "xrechnung" ? "XRECHNUNG" : "EN 16931",
+    }),
     outputIntent: fs.readFileSync(ICC_PATH),
     pdfVersion: "1.7",
     documentId: true,
