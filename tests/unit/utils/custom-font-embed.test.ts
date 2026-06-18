@@ -8,10 +8,11 @@ describe("PDFObjectManager - custom font embedding (slice 2.2a)", () => {
     const before = om.getObjectCount();
     om.registerCustomFont("MyFont", buildTestTtf());
 
-    // FontFile2, FontDescriptor, CIDFontType2, ToUnicode, Type0
+    // FontFile2, FontDescriptor, CIDFontType2, ToUnicode, Type0 (reserved at registration)
     expect(om.getObjectCount()).toBe(before + 5);
     expect(om.getAllFontsRaw().size).toBe(1);
 
+    om.finalizeCustomFonts(); // fills the reserved objects with the subset font program
     const pdf = om.getRenderedObjects();
     expect(pdf).toContain("/Subtype /Type0");
     expect(pdf).toContain("/Encoding /Identity-H");
