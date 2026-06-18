@@ -14,14 +14,15 @@ const NS = {
 /** The profiles this generator emits CII for. */
 export type CiiProfile = "en16931" | "xrechnung";
 
-/** Guideline identifier (BT-24) per profile: plain EN16931, or the German XRechnung 3.0 CIUS. */
-const GUIDELINE: Record<CiiProfile, string> = {
+/** Guideline identifier (BT-24) per profile: plain EN16931, or the German XRechnung 3.0 CIUS.
+ *  Shared with the UBL emitter. */
+export const GUIDELINE: Record<CiiProfile, string> = {
   en16931: "urn:cen.eu:en16931:2017",
   xrechnung: "urn:cen.eu:en16931:2017#compliant#urn:xeinkauf.de:kosit:xrechnung_3.0",
 };
 
 /** Business process (BT-23) — the PEPPOL billing process; XRechnung requires it. */
-const BUSINESS_PROCESS = "urn:fdc:peppol.eu:2017:poacc:billing:01:1.0";
+export const BUSINESS_PROCESS = "urn:fdc:peppol.eu:2017:poacc:billing:01:1.0";
 
 /** XML-escape text content (`&`, `<`, `>` are enough for element text + double-quoted attrs). */
 function esc(s: string): string {
