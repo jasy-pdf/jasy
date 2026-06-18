@@ -34,6 +34,7 @@ describe("PageRenderer", () => {
     // Mock PDFObjectManager
     const mockObjectManager = {
       addObject: vi.fn().mockReturnValue(1),
+      addContentStream: vi.fn().mockReturnValue(1),
       getParentObjectNumber: vi.fn().mockReturnValue(1),
       registerFont: vi.fn(),
       getAllFontsRaw: vi.fn().mockReturnValue(
@@ -54,7 +55,8 @@ describe("PageRenderer", () => {
     const pageNumber = await PageRenderer.render(mockPageElement, mockObjectManager);
 
     expect(mockPageElement.getProps).toHaveBeenCalled();
-    expect(mockObjectManager.addObject).toHaveBeenCalledTimes(2); // Once for content, once for page
+    expect(mockObjectManager.addContentStream).toHaveBeenCalledTimes(1); // content stream
+    expect(mockObjectManager.addObject).toHaveBeenCalledTimes(1); // the page object
     expect(pageNumber).toBe(1); // Returns the page object number
 
     // Check if the renderer was called for the child element
@@ -73,6 +75,7 @@ describe("PageRenderer", () => {
     // Mock PDFObjectManager with image references
     const mockObjectManager = {
       addObject: vi.fn().mockReturnValue(1),
+      addContentStream: vi.fn().mockReturnValue(1),
       getParentObjectNumber: vi.fn().mockReturnValue(1),
       registerFont: vi.fn(),
       getAllFontsRaw: vi.fn().mockReturnValue(new Map()),
@@ -83,7 +86,8 @@ describe("PageRenderer", () => {
     const pageNumber = await PageRenderer.render(mockPageElement, mockObjectManager);
 
     expect(mockPageElement.getProps).toHaveBeenCalled();
-    expect(mockObjectManager.addObject).toHaveBeenCalledTimes(2); // Once for content, once for page
+    expect(mockObjectManager.addContentStream).toHaveBeenCalledTimes(1); // content stream
+    expect(mockObjectManager.addObject).toHaveBeenCalledTimes(1); // the page object
     expect(pageNumber).toBe(1); // Returns the page object number
 
     // Ensure that image references were added to the page
@@ -105,6 +109,7 @@ describe("PageRenderer", () => {
     // Mock PDFObjectManager with multiple fonts
     const mockObjectManager = {
       addObject: vi.fn().mockReturnValue(1),
+      addContentStream: vi.fn().mockReturnValue(1),
       getParentObjectNumber: vi.fn().mockReturnValue(1),
       registerFont: vi.fn(),
       getAllFontsRaw: vi.fn().mockReturnValue(
@@ -132,7 +137,8 @@ describe("PageRenderer", () => {
     const pageNumber = await PageRenderer.render(mockPageElement, mockObjectManager);
 
     expect(mockPageElement.getProps).toHaveBeenCalled();
-    expect(mockObjectManager.addObject).toHaveBeenCalledTimes(2); // Once for content, once for page
+    expect(mockObjectManager.addContentStream).toHaveBeenCalledTimes(1); // content stream
+    expect(mockObjectManager.addObject).toHaveBeenCalledTimes(1); // the page object
     expect(pageNumber).toBe(1); // Returns the page object number
 
     // Ensure that font references were added

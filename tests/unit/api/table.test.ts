@@ -68,6 +68,7 @@ describe("Table factory", () => {
           ]),
         ]),
       ]),
+      { compress: false },
     );
     expect(pdf.startsWith("%PDF")).toBe(true);
     expect(pdf).toContain("(11.06.2026)"); // one run, not split across an empty line

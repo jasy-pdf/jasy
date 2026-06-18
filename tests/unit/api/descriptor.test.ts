@@ -92,7 +92,7 @@ describe("buildDocument + render - a descriptor tree renders a PDF", () => {
   });
 
   it("renders to a valid PDF with the content", async () => {
-    const pdf = await renderPdf(buildDocument(tree));
+    const pdf = await renderPdf(buildDocument(tree), { compress: false });
     expect(pdf.startsWith("%PDF")).toBe(true);
     expect(pdf).toContain("(From a descriptor tree)");
     expect(pdf).toContain("(left)");

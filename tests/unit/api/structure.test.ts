@@ -60,6 +60,7 @@ describe("renderPdf / renderToBytes", () => {
   it("renders a factory tree to a valid PDF string", async () => {
     const pdf = await renderPdf(
       Document([Page([Column({ gap: 12 }, [Text("Hello", { size: 20, bold: true })])])]),
+      { compress: false },
     );
     expect(pdf.startsWith("%PDF")).toBe(true);
     expect(pdf).toContain("(Hello)");
