@@ -1,0 +1,27 @@
+{
+  "name": "@jasy/cli",
+  "version": "0.0.1",
+  "description": "Interactive terminal to validate, read and export ZUGFeRD / XRechnung e-invoices.",
+  "keywords": ["zugferd", "xrechnung", "e-invoice", "cli", "tui", "validator"],
+  "license": "MIT",
+  "author": "Florian Heuberger",
+  "type": "module",
+  "bin": {
+    "jasy": "dist/index.js"
+  },
+  "main": "dist/index.js",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc && node dist/index.js"
+  },
+  "dependencies": {
+    "@jano-editor/ui": "1.0.0-alpha.7",
+    "@jasy/zugferd": "workspace:*",
+    "saxon-js": "^2.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.3"
+  }
+}
