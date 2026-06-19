@@ -1,20 +1,41 @@
+import { readFileSync } from "node:fs";
 import { basename } from "node:path";
-import { createScreen, createDraw, createInputManager } from "@jano-editor/ui";
-import { readInvoiceFile, type ReadResult } from "../core/read.js";
+import { createScreen, createDraw, createInputManager, type RGB } from "@jano-editor/ui";
+import { readInvoice, type ReadResult } from "../core/read.js";
 import { describeInvoice } from "../core/detect.js";
+import { checkPdfA3, type PdfaReport } from "../core/pdfa.js";
+import { validateInvoiceXml, type ValidationReport } from "../core/validate.js";
 import { openFileDialog } from "./file-open.js";
 
-// clip a line so it never spills past the framed box (text starts at col 5, box is 64 wide)
-const fit = (s: string, max = 58): string => (s.length > max ? s.slice(0, max - 1) + "…" : s);
+// The interactive jasy terminal: `o` opens a file picker, then the loaded invoice is shown together
+// with its checks — EN 16931 business rules + structural PDF/A-3. Same core as the `jasy read` command.
 
-// The interactive jasy terminal: a home screen, `o` opens the file picker, the loaded invoice is shown.
-// Both this and the `jasy read` command call the same UI-agnostic core (readInvoiceFile).
+const BRAND: RGB = [26, 79, 138];
+const INK: RGB = [230, 234, 240];
+const MUTED: RGB = [123, 135, 148];
+const FAINT: RGB = [80, 85, 95];
+const OK: RGB = [90, 170, 110];
+const ERR: RGB = [200, 90, 90];
 
-const BRAND: [number, number, number] = [26, 79, 138];
-const INK: [number, number, number] = [230, 234, 240];
-const MUTED: [number, number, number] = [123, 135, 148];
-const OK: [number, number, number] = [90, 170, 110];
-const ERR: [number, number, number] = [200, 90, 90];
+const TOP = 1;
+const MAX_W = 72; // cap so the box doesn't sprawl on very wide terminals
+
+interface Loaded {
+  path: string;
+  read: ReadResult;
+  pdfa: PdfaReport | null;
+  rules: ValidationReport | null;
+}
+
+interface Row {
+  text: string;
+  fg: RGB;
+  status?: string;
+  statusFg?: RGB;
+}
+
+// clip a line so it never spills past the framed box
+const fit = (s: string, max: number): string => (s.length > max ? s.slice(0, max - 1) + "…" : s);
 
 export function launchTui(): void {
   if (!process.stdout.isTTY || !process.stdin.isTTY) {
@@ -28,35 +49,86 @@ export function launchTui(): void {
   const draw = createDraw(screen);
   const input = createInputManager();
 
-  let result: ReadResult | null = null;
+  let loaded: Loaded | null = null;
   let error: string | null = null;
-  let loaded: string | null = null;
 
-  function render(): void {
-    draw.clear();
-    draw.rect(2, 1, 64, 13, { border: "round" });
-    draw.text(5, 1, " jasy ", { fg: BRAND });
-    draw.text(11, 1, "· ZUGFeRD / XRechnung terminal", { fg: INK });
-
-    if (error) {
-      draw.text(5, 4, fit("✗ " + error), { fg: ERR });
-    } else if (result) {
-      draw.text(5, 4, fit("✓ " + basename(loaded ?? "")), { fg: OK });
-      draw.text(5, 6, fit("format     " + describeInvoice(result.meta)), { fg: INK });
-      draw.text(5, 7, fit("guideline  " + (result.meta.guideline ?? "—")), { fg: MUTED });
-      draw.text(5, 8, "source     " + (result.isPdf ? "PDF — embedded XML extracted" : "raw XML"), {
+  function buildRows(w: number): Row[] {
+    if (error) return [{ text: fit("✗ " + error, w - 6), fg: ERR }];
+    if (!loaded) {
+      return [
+        { text: "No invoice loaded.", fg: MUTED },
+        { text: "", fg: MUTED },
+        { text: "Open a ZUGFeRD / XRechnung PDF or XML —", fg: MUTED },
+        { text: "jasy extracts the XML, identifies it, and checks it.", fg: MUTED },
+      ];
+    }
+    const { read, pdfa, rules } = loaded;
+    const rows: Row[] = [
+      { text: fit("✓ " + basename(loaded.path), w - 6), fg: OK },
+      {
+        text: fit(describeInvoice(read.meta) + " · " + read.xml.length + " B XML", w - 6),
         fg: MUTED,
-      });
-      draw.text(5, 9, "XML        " + result.xml.length + " bytes", { fg: INK });
-    } else {
-      draw.text(5, 4, "No invoice loaded.", { fg: MUTED });
-      draw.text(5, 6, "Read a ZUGFeRD / XRechnung PDF or XML and see what it is.", { fg: MUTED });
+      },
+      { text: "", fg: MUTED },
+    ];
+
+    // EN 16931 business rules (XML Schematron)
+    rows.push({
+      text: "EN 16931 rules",
+      fg: INK,
+      status: rules ? (rules.valid ? "OK" : `${rules.errors.length} errors`) : "n/a",
+      statusFg: rules ? (rules.valid ? OK : ERR) : FAINT,
+    });
+    if (rules && !rules.valid) {
+      for (const e of rules.errors.slice(0, 4)) {
+        rows.push({ text: fit("  ✗ " + (e.id ? `[${e.id}] ` : "") + e.text, w - 6), fg: ERR });
+      }
     }
 
-    draw.text(5, 11, "o", { fg: BRAND });
-    draw.text(7, 11, "open" + (result || error ? " another" : "") + "    ", { fg: INK });
-    draw.text(18, 11, "q", { fg: BRAND });
-    draw.text(20, 11, "quit", { fg: INK });
+    // structural PDF/A-3 (per check)
+    rows.push({ text: "", fg: MUTED });
+    rows.push({
+      text: "PDF/A-3 structure",
+      fg: INK,
+      status: pdfa ? `${pdfa.checks.filter((c) => c.ok).length}/${pdfa.checks.length}` : "raw XML",
+      statusFg: pdfa ? (pdfa.ok ? OK : ERR) : FAINT,
+    });
+    if (pdfa) {
+      for (const c of pdfa.checks) {
+        rows.push({
+          text: fit("  " + c.label, w - 14),
+          fg: MUTED,
+          status: c.ok ? "OK" : "FAILED",
+          statusFg: c.ok ? OK : ERR,
+        });
+      }
+    }
+    return rows;
+  }
+
+  function render(): void {
+    const cols = screen.width;
+    const w = Math.max(44, Math.min(cols - 2, MAX_W));
+    const x = Math.max(1, Math.floor((cols - w) / 2)); // centre the box
+    const statusEnd = x + w - 3;
+    const rows = buildRows(w);
+
+    draw.clear();
+    draw.rect(x, TOP, w, rows.length + 5, { border: "round" });
+    draw.text(x + 2, TOP, " jasy · ZUGFeRD / XRechnung ", { fg: BRAND });
+
+    rows.forEach((r, i) => {
+      const y = TOP + 2 + i;
+      draw.text(x + 2, y, r.text, { fg: r.fg });
+      if (r.status) draw.text(statusEnd - r.status.length, y, r.status, { fg: r.statusFg ?? r.fg });
+    });
+
+    // footer (spaced so nothing collides)
+    const footerY = TOP + 2 + rows.length + 1;
+    draw.text(x + 2, footerY, "o", { fg: BRAND });
+    draw.text(x + 4, footerY, loaded || error ? "open another" : "open", { fg: INK });
+    draw.text(x + 20, footerY, "q", { fg: BRAND });
+    draw.text(x + 22, footerY, "quit", { fg: INK });
     draw.flush();
   }
 
@@ -72,12 +144,22 @@ export function launchTui(): void {
     const chosen = await openFileDialog({ screen, draw, input, startDir: process.cwd(), quit });
     if (chosen) {
       try {
-        result = readInvoiceFile(chosen);
+        const bytes = readFileSync(chosen);
+        const read = readInvoice(bytes);
+        const pdfa = read.isPdf ? checkPdfA3(bytes) : null;
+        let rules: ValidationReport | null = null;
+        if (read.meta.syntax === "CII") {
+          try {
+            rules = validateInvoiceXml(read.xml, "en16931-cii");
+          } catch {
+            rules = null; // rule set for this profile not bundled (yet)
+          }
+        }
+        loaded = { path: chosen, read, pdfa, rules };
         error = null;
-        loaded = chosen;
       } catch (e) {
         error = (e as Error).message;
-        result = null;
+        loaded = null;
       }
     }
     render();

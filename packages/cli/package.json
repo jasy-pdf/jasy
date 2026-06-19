@@ -16,7 +16,8 @@
     "jasy": "dist/index.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "assets"
   ],
   "type": "module",
   "main": "dist/index.js",
@@ -28,12 +29,13 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@jano-editor/ui": "1.0.0-alpha.7",
+    "@jano-editor/ui": "1.0.0-alpha.8",
     "@jasy/zugferd": "workspace:*",
     "saxon-js": "^2.6.0"
   },
   "devDependencies": {
     "@types/node": "^25.9.3",
-    "tsx": "^4.19.2"
+    "tsx": "^4.19.2",
+    "xslt3": "^2.7.0"
   }
 }

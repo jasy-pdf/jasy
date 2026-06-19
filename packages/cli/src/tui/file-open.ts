@@ -29,7 +29,13 @@ const MUTED: [number, number, number] = [123, 135, 148];
 const FAINT: [number, number, number] = [80, 85, 95];
 const ROWS = 10; // visible window height; the list scrolls beyond it
 
-export function openFileDialog({ draw, input, startDir, quit }: Deps): Promise<string | null> {
+export function openFileDialog({
+  screen,
+  draw,
+  input,
+  startDir,
+  quit,
+}: Deps): Promise<string | null> {
   return new Promise((done) => {
     let path = startDir.endsWith("/") ? startDir : startDir + "/";
     let items: ListItem[] = [];
@@ -68,9 +74,10 @@ export function openFileDialog({ draw, input, startDir, quit }: Deps): Promise<s
     };
 
     const render = (): void => {
-      const x = 2;
+      const cols = screen.width;
+      const w = Math.max(44, Math.min(cols - 2, 72));
+      const x = Math.max(1, Math.floor((cols - w) / 2)); // centre the dialog
       const y = 2;
-      const w = 64;
       const avail = w - 11; // keep the text + cursor strictly inside the right border
       const shown = path.length > avail ? "…" + path.slice(-(avail - 1)) : path;
       draw.clear();

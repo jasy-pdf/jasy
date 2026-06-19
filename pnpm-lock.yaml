@@ -40,8 +40,8 @@ importers:
   packages/cli:
     dependencies:
       '@jano-editor/ui':
-        specifier: 1.0.0-alpha.7
-        version: 1.0.0-alpha.7
+        specifier: 1.0.0-alpha.8
+        version: 1.0.0-alpha.8
       '@jasy/zugferd':
         specifier: workspace:*
         version: link:../zugferd
@@ -55,6 +55,9 @@ importers:
       tsx:
         specifier: ^4.19.2
         version: 4.22.4
+      xslt3:
+        specifier: ^2.7.0
+        version: 2.7.0
 
   packages/zugferd:
     dependencies:
@@ -397,8 +400,8 @@ packages:
     resolution: {integrity: sha512-+Sg6GCR/wy1oSmQDFq4LQDAhm3ETKnorxN+y5nbLULOR3P0c14f2Wurzj3/xqPXtasLFfHd5iRFQ7AJt4KH2cw==}
     engines: {node: '>=8'}
 
-  '@jano-editor/ui@1.0.0-alpha.7':
-    resolution: {integrity: sha512-HDxJhofrGVS9q/WrlYK1T8ySwYCIB6MabhfwscwUbA17NVMwSTlE8XmHjWePcSis6JvOsLeJ95hS4lw7mCC8kA==}
+  '@jano-editor/ui@1.0.0-alpha.8':
+    resolution: {integrity: sha512-r+RIB8ooYbJwRnbbI+kzupgGrr3+VxZiBTIL8NHCYw/TC7tUsAi/S+WE9WQBsz8eLrSwaXlm7OYy9CyRGVWOoQ==}
 
   '@jimp/core@1.6.1':
     resolution: {integrity: sha512-+BoKC5G6hkrSy501zcJ2EpfnllP+avPevcBfRcZe/CW+EwEfY6X1EZ8QWyT7NpDIvEEJb1fdJnMMfUnFkxmw9A==}
@@ -1553,6 +1556,10 @@ packages:
     resolution: {integrity: sha512-fDlsI/kFEx7gLvbecc0/ohLG50fugQp8ryHzMTuW9vSa1GJ0XYWKnhsUx7oie3G98+r56aTQIUB4kht42R3JvA==}
     engines: {node: '>=4.0'}
 
+  xslt3@2.7.0:
+    resolution: {integrity: sha512-Vt32LhCt4CQULtGPWlGW++PhS+o3LA6z3PDvig9lDfbo2cIHcaEnyrRYDTilw4N0EbAyxCaw5E0B+DICZEYktQ==}
+    hasBin: true
+
   zod@3.25.76:
     resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
 
@@ -1738,7 +1745,7 @@ snapshots:
 
   '@istanbuljs/schema@0.1.6': {}
 
-  '@jano-editor/ui@1.0.0-alpha.7': {}
+  '@jano-editor/ui@1.0.0-alpha.8': {}
 
   '@jimp/core@1.6.1':
     dependencies:
@@ -2935,5 +2942,13 @@ snapshots:
       xmlbuilder: 11.0.1
 
   xmlbuilder@11.0.1: {}
+
+  xslt3@2.7.0:
+    dependencies:
+      axios: 1.18.0
+      saxon-js: 2.7.0
+    transitivePeerDependencies:
+      - debug
+      - supports-color
 
   zod@3.25.76: {}
