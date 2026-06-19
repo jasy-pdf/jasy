@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# jasy — dev launcher: runs the CLI via tsx (no build step), forwarding all args & flags.
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TSX="$ROOT/node_modules/.bin/tsx"
+[ -x "$TSX" ] || TSX="$ROOT/packages/cli/node_modules/.bin/tsx"
+exec "$TSX" "$ROOT/packages/cli/src/index.ts" "$@"

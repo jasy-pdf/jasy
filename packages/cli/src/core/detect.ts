@@ -15,7 +15,8 @@ export interface InvoiceMeta {
 export function detectInvoice(xml: string): InvoiceMeta {
   const syntax: Syntax = /<(?:rsm:)?CrossIndustryInvoice/.test(xml)
     ? "CII"
-    : /<Invoice\b[^>]*urn:oasis:names:specification:ubl/.test(xml) || /<(?:\w+:)?Invoice\b/.test(xml)
+    : /<Invoice\b[^>]*urn:oasis:names:specification:ubl/.test(xml) ||
+        /<(?:\w+:)?Invoice\b/.test(xml)
       ? "UBL"
       : "unknown";
 
@@ -38,7 +39,12 @@ export function detectInvoice(xml: string): InvoiceMeta {
 
 /** A short human label, e.g. "ZUGFeRD · EN 16931 (CII)" or "XRechnung (UBL)". */
 export function describeInvoice(meta: InvoiceMeta): string {
-  const profile = meta.profile === "xrechnung" ? "XRechnung" : meta.profile === "en16931" ? "EN 16931" : "unknown profile";
+  const profile =
+    meta.profile === "xrechnung"
+      ? "XRechnung"
+      : meta.profile === "en16931"
+        ? "EN 16931"
+        : "unknown profile";
   const family = meta.profile === "xrechnung" ? "XRechnung" : "ZUGFeRD";
   return `${family} · ${profile} (${meta.syntax})`;
 }

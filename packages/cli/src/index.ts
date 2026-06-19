@@ -1,51 +1,36 @@
 #!/usr/bin/env node
-import { createScreen, createDraw, createInputManager } from "@jano-editor/ui";
+import { readCommand } from "./commands/read.js";
+import { launchTui } from "./tui/app.js";
 
-// The jasy CLI scaffold: opens the JANO terminal, draws a branded frame, quits on q / Ctrl-C.
-// The real screens (read a PDF → validate → export) hang off this skeleton next.
+// jasy CLI entry. With a command (e.g. `jasy read invoice.pdf`) it runs non-interactively and exits;
+// with no command it opens the interactive JANO terminal.
 
-// JANO's RGB is a [r, g, b] tuple.
-const BRAND: [number, number, number] = [26, 79, 138];
-const INK: [number, number, number] = [230, 234, 240];
-const MUTED: [number, number, number] = [123, 135, 148];
+const argv = process.argv.slice(2);
+const cmd = argv[0];
 
-if (!process.stdout.isTTY) {
-  console.log("jasy — ZUGFeRD / XRechnung terminal. Run me in an interactive terminal.");
+if (cmd === "read") {
+  readCommand(argv.slice(1));
+  process.exit(process.exitCode ?? 0);
+}
+// shorthand: `jasy some-invoice.pdf` == `jasy read some-invoice.pdf`
+if (cmd && /\.(pdf|xml)$/i.test(cmd)) {
+  readCommand(argv);
+  process.exit(process.exitCode ?? 0);
+}
+if (cmd === "-h" || cmd === "--help") {
+  printHelp();
   process.exit(0);
 }
 
-const screen = createScreen();
-const draw = createDraw(screen);
-const input = createInputManager();
+launchTui();
 
-function render(): void {
-  draw.clear();
-  draw.rect(2, 1, 56, 9, { border: "round" });
-  draw.text(5, 3, "jasy", { fg: BRAND });
-  draw.text(10, 3, "· ZUGFeRD / XRechnung terminal", { fg: INK });
-  draw.text(5, 5, "read PDFs · validate · export JSON / TXT / Excel", { fg: MUTED });
-  draw.text(5, 7, "scaffold ready — press q to quit", { fg: MUTED });
-  draw.flush();
+function printHelp(): void {
+  console.log(`jasy — ZUGFeRD / XRechnung terminal
+
+usage:
+  jasy                        open the interactive terminal
+  jasy read <file>            read a PDF/XML invoice and show what it is
+  jasy read <file> --xml      print the embedded XML to stdout
+  jasy read <file> -o x.xml   save the embedded XML to a file
+`);
 }
-
-function quit(): void {
-  input.stop();
-  screen.showCursor();
-  screen.leave();
-  process.exit(0);
-}
-
-screen.enter();
-screen.hideCursor();
-input.start();
-
-const main = input.pushLayer("main");
-main.on("key", (key) => {
-  if (key.name === "q" || (key.ctrl && key.name === "c")) {
-    quit();
-    return true;
-  }
-});
-main.on("resize", () => render());
-
-render();
