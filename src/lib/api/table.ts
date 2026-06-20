@@ -32,6 +32,9 @@ export interface TableOptions {
   /** Grid line colour around every cell. Draws the complete grid once - don't add your own
    *  frame Box, or the outer edges double up. */
   cellBorder?: ColorInput;
+  /** A single thin horizontal rule under the header row and along the foot of the table (e.g. a
+   *  light-grey separator). Independent of `cellBorder`, which draws the full grid. */
+  rule?: ColorInput;
 }
 
 function asElement(c: Cell): PDFElement {
@@ -56,7 +59,7 @@ function resolveAutoColumns(opts: TableOptions, rows: Cell[][], ctx: LayoutConte
   // The composed cell sits in a 1pt-border Box (border-box) that eats 1pt each side, which the
   // measured content doesn't include; add it back, and `ceil` so a single-word cell can't land
   // a hair over the width and wrap to an empty first line.
-  const slack = opts.cellBorder !== undefined ? 2 : 0;
+  const slack = opts.cellBorder !== undefined || opts.rule !== undefined ? 2 : 0;
   return opts.columns.map((col, i) => {
     if (col !== "auto") return col;
     let w = opts.header ? naturalWidth(opts.header[i], opts.cellPadding, ctx) : 0;
@@ -73,6 +76,7 @@ function composeTable(opts: TableOptions, rows: Cell[][], columns: ColumnWidth[]
   const colGap = opts.colGap ?? opts.gap ?? 0;
   const rowGap = opts.rowGap ?? opts.gap ?? 0;
   const cb = opts.cellBorder;
+  const rule = opts.rule;
 
   // The complete grid, once: every cell bottom+right, first row also top, first col also left.
   const borderFor = (firstRow: boolean, firstCol: boolean) =>
@@ -85,32 +89,48 @@ function composeTable(opts: TableOptions, rows: Cell[][], columns: ColumnWidth[]
           ...(firstCol ? { borderLeft: cb } : {}),
         };
 
-  const wrap = (cell: Cell, col: ColumnWidth, firstRow: boolean, firstCol: boolean): PDFElement => {
+  // `ruled` rows get just a bottom line (the header underline / the table foot), without the full grid.
+  const wrap = (
+    cell: Cell,
+    col: ColumnWidth,
+    firstRow: boolean,
+    firstCol: boolean,
+    ruled: boolean,
+  ): PDFElement => {
     const inner =
       cellPadding !== undefined ? Padding(cellPadding, asElement(cell)) : asElement(cell);
     // The border lives on the wrapper, which stretches to the row height (crisp lines).
-    const border = borderFor(firstRow, firstCol);
+    const border = {
+      ...borderFor(firstRow, firstCol),
+      ...(ruled && rule !== undefined ? { borderBottom: rule } : {}),
+    };
+    const boxed = cb !== undefined || (ruled && rule !== undefined);
     if (typeof col === "number") return Box({ width: col, ...border }, [inner]);
     const fr = fractionOf(col);
-    if (fr !== null)
-      return Expanded({ flex: fr }, cb !== undefined ? Box({ ...border }, [inner]) : inner);
+    if (fr !== null) return Expanded({ flex: fr }, boxed ? Box({ ...border }, [inner]) : inner);
     throw new Error(`Unsupported column width "${col}" - use a number of points or "<n>fr"`);
   };
 
   // cross:stretch → equal-height cells, so a wrapping cell keeps the row's bottom rule straight.
-  const buildRow = (cells: Cell[], firstRow: boolean) =>
+  const buildRow = (cells: Cell[], firstRow: boolean, ruled = false) =>
     Row(
       { gap: colGap, cross: "stretch" },
-      cells.map((cell, i) => wrap(cell, columns[i] ?? "1fr", firstRow, i === 0)),
+      cells.map((cell, i) => wrap(cell, columns[i] ?? "1fr", firstRow, i === 0, ruled)),
     );
 
   // The first row (which gets the top border) is the header if present, else body row 0.
+  // `rule` underlines the header and the last body row (the table foot).
+  const last = rows.length - 1;
   const body = Column(
     { gap: rowGap },
-    rows.map((cells, idx) => buildRow(cells, !opts.header && idx === 0)),
+    rows.map((cells, idx) =>
+      buildRow(cells, !opts.header && idx === 0, rule !== undefined && idx === last),
+    ),
   );
 
-  return opts.header ? new RepeatingHeaderElement(buildRow(opts.header, true), body, rowGap) : body;
+  return opts.header
+    ? new RepeatingHeaderElement(buildRow(opts.header, true, rule !== undefined), body, rowGap)
+    : body;
 }
 
 /**

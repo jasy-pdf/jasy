@@ -172,15 +172,23 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     return { width: wrapWidth, height: this.height };
   }
 
-  /** The unwrapped single-line width of the content (used when width is unbounded). */
+  /** The unwrapped single-line width of the content (used when width is unbounded, e.g. inside a Row).
+   *  Mirrors the renderer's advance EXACTLY: per-glyph, WITHOUT kerning. `getStringWidth` subtracts
+   *  kerning, so it under-reserves and the text would wrap inside its own natural-width box — the cause
+   *  of fixed Row children wrapping despite ample space. */
   private naturalWidth(metrics: FontMetrics): number {
+    const advance = (text: string, family: string, size: number, style: FontStyle): number => {
+      let width = 0;
+      for (const ch of text) width += metrics.getCharWidth(ch, size, undefined, family, style);
+      return width;
+    };
     if (typeof this.content === "string") {
-      return metrics.getStringWidth(this.content, this.fontFamily, this.fontSize, this.fontStyle);
+      return advance(this.content, this.fontFamily, this.fontSize, this.fontStyle);
     }
     return this.content.reduce(
       (sum, seg) =>
         sum +
-        metrics.getStringWidth(
+        advance(
           seg.content,
           seg.fontFamily ?? this.fontFamily,
           seg.fontSize ?? this.fontSize,

@@ -29,10 +29,10 @@ describe("RowElement", () => {
   });
 
   it("a Spacer pushes the last child to the right edge (title … page number)", () => {
-    // deterministic metrics: 6 pt per char
+    // deterministic metrics: 6 pt per char (string == sum of chars, i.e. no kerning here)
     const metrics = {
       getStringWidth: (t: string) => t.length * 6,
-      getCharWidth: () => 3,
+      getCharWidth: () => 6,
     } as unknown as FontMetrics;
     const ctx = { metrics, pageConfig: {} } as LayoutContext;
 
@@ -46,5 +46,26 @@ describe("RowElement", () => {
     expect(left.getProps().x).toBe(0);
     // remaining = 200 - 24 - 30 = 146 -> spacer fills it -> right at 24 + 146 = 170.
     expect(right.getProps().x).toBe(170);
+  });
+
+  // Regression: a fixed Text in a Row must reserve its RENDERED width (per-glyph, no kerning) — the
+  // renderer advances without kerning, so reserving the kerning-narrower getStringWidth makes the
+  // text overflow its own box and wrap, even with plenty of space. (CSS: space → never constrains.)
+  it("a fixed Text in a Row reserves its no-kerning render width, so it never wraps with space", () => {
+    const metrics = {
+      getStringWidth: (t: string) => t.length * 6 - 10, // kerning pulls the measured width IN
+      getCharWidth: () => 6, // what Tj actually advances (no kerning)
+    } as unknown as FontMetrics;
+    const ctx = { metrics, pageConfig: {} } as LayoutContext;
+
+    const text = new TextElement({ fontSize: 10, content: "Total due" }); // 9 glyphs
+    new RowElement({ children: [text] }).calculateLayout(
+      BoxConstraints.loose(500, Infinity),
+      { x: 0, y: 0 },
+      ctx,
+    );
+
+    // 9 × 6 = 54 (rendered advance), NOT the kerned getStringWidth (44) — else it would wrap.
+    expect(text.getProps().width).toBe(54);
   });
 });
