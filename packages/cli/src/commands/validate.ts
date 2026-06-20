@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve, basename } from "node:path";
 import { readInvoice } from "../core/read.js";
 import { describeInvoice } from "../core/detect.js";
-import { validateInvoiceXml, type ValidationReport } from "../core/validate.js";
+import { validateInvoiceXml, profileFor, type ValidationReport } from "../core/validate.js";
 import { checkPdfA3, type PdfaReport } from "../core/pdfa.js";
 
 // `jasy validate <file> [-v]` — runs the full local check (EN 16931 business rules + structural
@@ -37,11 +37,12 @@ export function validateCommand(args: string[]): void {
 
   const read = readInvoice(bytes);
 
-  // EN 16931 business rules (XML Schematron) — CII rule set bundled; UBL pending.
+  // XML business rules (Schematron) — EN 16931, plus the XRechnung BR-DE delta when it's an XRechnung.
+  // The rule set is picked automatically from what detect() found (syntax + CIUS).
   let rules: ValidationReport | null = null;
-  if (read.meta.syntax === "CII") {
+  if (read.meta.syntax !== "unknown") {
     try {
-      rules = validateInvoiceXml(read.xml, "en16931-cii");
+      rules = validateInvoiceXml(read.xml, profileFor(read.meta));
     } catch {
       rules = null;
     }
@@ -51,11 +52,12 @@ export function validateCommand(args: string[]): void {
   const label = (s: string): string => s.padEnd(20);
   console.log(`\n  ${bold(basename(file))}  ${dim("·")}  ${describeInvoice(read.meta)}\n`);
 
-  // EN 16931
+  // business rules
   if (rules) {
     const n = rules.errors.length;
+    const name = rules.profile.startsWith("xrechnung") ? "XRechnung rules" : "EN 16931 rules";
     console.log(
-      `  ${label("EN 16931 rules")}${rules.valid ? green("✓ valid") : red(`✗ ${n} error${n === 1 ? "" : "s"}`)}`,
+      `  ${label(name)}${rules.valid ? green("✓ valid") : red(`✗ ${n} error${n === 1 ? "" : "s"}`)}`,
     );
     for (const e of rules.errors)
       console.log(`    ${red("✗")} ${e.id ? bold(`[${e.id}]`) + " " : ""}${e.text}`);
@@ -63,9 +65,7 @@ export function validateCommand(args: string[]): void {
       for (const w of rules.warnings)
         console.log(`    ${dim(`! ${w.id ? `[${w.id}] ` : ""}${w.text}`)}`);
   } else {
-    console.log(
-      `  ${label("EN 16931 rules")}${dim(read.meta.syntax === "UBL" ? "n/a (UBL rules not bundled yet)" : "n/a")}`,
-    );
+    console.log(`  ${label("business rules")}${dim("n/a (unrecognised XML)")}`);
   }
 
   // PDF/A-3 structure

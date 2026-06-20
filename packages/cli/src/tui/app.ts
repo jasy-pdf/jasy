@@ -4,7 +4,7 @@ import { createScreen, createDraw, createInputManager, type RGB } from "@jano-ed
 import { readInvoice, type ReadResult } from "../core/read.js";
 import { describeInvoice } from "../core/detect.js";
 import { checkPdfA3, type PdfaReport } from "../core/pdfa.js";
-import { validateInvoiceXml, type ValidationReport } from "../core/validate.js";
+import { validateInvoiceXml, profileFor, type ValidationReport } from "../core/validate.js";
 import { openFileDialog } from "./file-open.js";
 
 // The interactive jasy terminal: `o` opens a file picker, then the loaded invoice is shown together
@@ -72,9 +72,9 @@ export function launchTui(): void {
       { text: "", fg: MUTED },
     ];
 
-    // EN 16931 business rules (XML Schematron)
+    // XML business rules (Schematron) — EN 16931, + XRechnung BR-DE when applicable
     rows.push({
-      text: "EN 16931 rules",
+      text: rules?.profile.startsWith("xrechnung") ? "XRechnung rules" : "EN 16931 rules",
       fg: INK,
       status: rules ? (rules.valid ? "OK" : `${rules.errors.length} errors`) : "n/a",
       statusFg: rules ? (rules.valid ? OK : ERR) : FAINT,
@@ -148,11 +148,11 @@ export function launchTui(): void {
         const read = readInvoice(bytes);
         const pdfa = read.isPdf ? checkPdfA3(bytes) : null;
         let rules: ValidationReport | null = null;
-        if (read.meta.syntax === "CII") {
+        if (read.meta.syntax !== "unknown") {
           try {
-            rules = validateInvoiceXml(read.xml, "en16931-cii");
+            rules = validateInvoiceXml(read.xml, profileFor(read.meta));
           } catch {
-            rules = null; // rule set for this profile not bundled (yet)
+            rules = null;
           }
         }
         loaded = { path: chosen, read, pdfa, rules };
