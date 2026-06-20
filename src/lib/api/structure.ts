@@ -59,7 +59,7 @@ export function Page(a: PageOptions | PDFElement[], b?: PDFElement[]): PageEleme
     config,
     header: opts.header,
     footer: opts.footer,
-    children: [Column({ gap: opts.gap, main: opts.main, cross: opts.cross }, children)],
+    children: [Column({ gap: opts.gap, justify: opts.justify, align: opts.align }, children)],
   });
 }
 

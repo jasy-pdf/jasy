@@ -29,7 +29,7 @@ const invoice = Document([
       { top: 16 },
       Box({ bg: "#1450aa11", padding: 12, radius: 6 }, [
         // space-between: pushes label + amount apart, never constrains them (the bug is fixed).
-        Row({ main: "between", cross: "center" }, [
+        Row({ justify: "between", align: "center" }, [
           Text("Total due", { size: 12, color: "gray" }),
           Text("7,600 €", { size: 18, bold: true }),
         ]),

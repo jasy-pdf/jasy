@@ -19,8 +19,8 @@ describe("build - descriptor node → engine element via the shared factories", 
     expect(build("hello")).toBeInstanceOf(TextElement);
   });
 
-  it("passes props through to the factory (column gap/cross)", () => {
-    const c = build({ type: "column", props: { gap: 12, cross: "center" }, children: [] });
+  it("passes props through to the factory (column gap/align)", () => {
+    const c = build({ type: "column", props: { gap: 12, align: "center" }, children: [] });
     const p = (c as ContainerElement).getProps();
     expect(p.gap).toBe(12);
     expect(p.cross).toBe("center");
@@ -74,7 +74,7 @@ describe("buildDocument + render - a descriptor tree renders a PDF", () => {
               { type: "divider" },
               {
                 type: "row",
-                props: { main: "between" },
+                props: { justify: "between" },
                 children: [
                   { type: "text", children: ["left"] },
                   { type: "text", children: ["right"] },

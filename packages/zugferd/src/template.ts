@@ -50,7 +50,7 @@ export function defaultInvoiceTemplate(
 
   // A label/value line right-aligned into a fixed value column (totals).
   const valueLine = (label: string, value: string, o: { strong?: boolean; size?: number } = {}) =>
-    Row({ cross: "start" }, [
+    Row({ align: "start" }, [
       Expanded({ flex: 1 }, Text(label, { size: o.size ?? 9.5, color: MUTED, align: "right" })),
       Box({ width: 92 }, [
         Text(value, { size: o.size ?? 9.5, color: INK, bold: o.strong, align: "right" }),
@@ -87,14 +87,17 @@ function sellerHeader(seller: Seller, L: InvoiceLabels): PDFElement {
     seller.contact?.email,
   ].filter((s): s is string => Boolean(s));
 
-  return Row({ cross: "start" }, [
+  return Row({ align: "start" }, [
     Column({ gap: 1 }, [
       Text(seller.name, { size: 18, bold: true, color: BRAND }),
       ...(seller.tradingName ? [Text(seller.tradingName, { size: 10, color: MUTED })] : []),
     ]),
     Spacer(),
     Box({ width: 220 }, [
-      Column({ gap: 1 }, contact.map((l) => Text(l, { size: 9, color: MUTED, align: "right" }))),
+      Column(
+        { gap: 1 },
+        contact.map((l) => Text(l, { size: 9, color: MUTED, align: "right" })),
+      ),
     ]),
   ]);
 }
@@ -134,7 +137,7 @@ function recipientAndMeta(invoice: Invoice, L: InvoiceLabels, fmt: Formatters): 
     ),
   ]);
 
-  return Row({ cross: "start" }, [Expanded({ flex: 1 }, recipient), metaBox]);
+  return Row({ align: "start" }, [Expanded({ flex: 1 }, recipient), metaBox]);
 }
 
 function notes(invoice: Invoice): PDFElement[] {
@@ -203,7 +206,8 @@ function totals(
   }
   lines.push(valueLine(L.netTotal, fmt.money(c.taxBasisTotal)));
 
-  for (const v of c.vatBreakdown) lines.push(valueLine(vatLabel(v, L, fmt), fmt.money(v.taxAmount)));
+  for (const v of c.vatBreakdown)
+    lines.push(valueLine(vatLabel(v, L, fmt), fmt.money(v.taxAmount)));
 
   lines.push(Divider({ color: HAIR, margin: { y: 2 } }));
   lines.push(valueLine(L.grandTotal, fmt.money(c.grandTotal), { strong: true, size: 11 }));
@@ -214,7 +218,7 @@ function totals(
     .filter((v) => v.exemption?.text)
     .map((v) => Text(`${v.category}: ${v.exemption!.text}`, { size: 8, color: MUTED }));
 
-  return Row({ cross: "start" }, [
+  return Row({ align: "start" }, [
     Expanded({ flex: 1 }, Column({ gap: 2 }, exemptions)),
     Box({ width: 250 }, [Column({ gap: 3 }, lines)]),
   ]);
@@ -245,7 +249,7 @@ function paymentPanel(invoice: Invoice, L: InvoiceLabels, fmt: Formatters): PDFE
   ];
 
   return Box({ bg: PANEL, padding: { x: 14, y: 12 }, radius: 4 }, [
-    Row({ gap: 24, cross: "start" }, [
+    Row({ gap: 24, align: "start" }, [
       Expanded({ flex: 1 }, Column({ gap: 2 }, left)),
       Expanded({ flex: 1 }, Column({ gap: 2 }, right)),
     ]),
@@ -259,13 +263,15 @@ function legalFooter(seller: Seller, L: InvoiceLabels): PDFElement {
       { flex: 1 },
       Column(
         { gap: 1 },
-        items.filter((s): s is string => Boolean(s)).map((s) => Text(s, { size: 7.5, color: MUTED })),
+        items
+          .filter((s): s is string => Boolean(s))
+          .map((s) => Text(s, { size: 7.5, color: MUTED })),
       ),
     );
 
   return Column({ gap: 4 }, [
     Divider({ color: HAIR }),
-    Row({ gap: 16, cross: "start" }, [
+    Row({ gap: 16, align: "start" }, [
       col([seller.name, ...addressLines(seller.address)]),
       col([
         seller.vatId && `${L.vatId} ${seller.vatId}`,

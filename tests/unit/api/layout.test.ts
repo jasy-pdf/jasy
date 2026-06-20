@@ -15,8 +15,8 @@ describe("Column factory", () => {
     expect(Column([]).getProps().cross).toBe("start");
   });
 
-  it("passes gap / main / cross through", () => {
-    const c = Column({ gap: 12, main: "between", cross: "center" }, [Text("a")]);
+  it("passes gap / justify / align through (→ engine main / cross)", () => {
+    const c = Column({ gap: 12, justify: "between", align: "center" }, [Text("a")]);
     const p = c.getProps();
     expect(p.gap).toBe(12);
     expect(p.main).toBe("between");
@@ -32,7 +32,7 @@ describe("Row factory", () => {
   });
 
   it("passes options through, opts + children form", () => {
-    const r = Row({ gap: 8, main: "center" }, [Text("a"), Text("b")]);
+    const r = Row({ gap: 8, justify: "center" }, [Text("a"), Text("b")]);
     const p = r.getProps() as { gap: number; main: string; children: unknown[] };
     expect(p.gap).toBe(8);
     expect(p.main).toBe("center");

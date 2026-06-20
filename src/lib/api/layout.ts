@@ -13,10 +13,11 @@ import { splitArgs } from "./args";
 export interface StackOptions {
   /** Space inserted between children, in points. */
   gap?: number;
-  /** Distribution along the stacking axis: start (default) · center · end · between · around. */
-  main?: MainAlign;
-  /** Position across the axis: start (default) · center · end · stretch. */
-  cross?: CrossAlign;
+  /** Distribution along the main axis (CSS `justify-content`): start (default) · center · end ·
+   *  between · around. */
+  justify?: MainAlign;
+  /** Position across the axis (CSS `align-items`): start (default) · center · end · stretch. */
+  align?: CrossAlign;
 }
 
 // The public default for `cross` is `start` (locked §5) - i.e. don't stretch a child unless
@@ -33,8 +34,8 @@ export function Column(a: StackOptions | PDFElement[], b?: PDFElement[]): Contai
     y: 0,
     children,
     gap: opts.gap,
-    main: opts.main, // undefined → engine default `start` (matches §5)
-    cross: opts.cross ?? DEFAULT_CROSS,
+    main: opts.justify, // undefined → engine default `start` (matches §5)
+    cross: opts.align ?? DEFAULT_CROSS,
   });
 }
 
@@ -46,8 +47,8 @@ export function Row(a: StackOptions | PDFElement[], b?: PDFElement[]): RowElemen
   return new RowElement({
     children,
     gap: opts.gap,
-    main: opts.main,
-    cross: opts.cross ?? DEFAULT_CROSS,
+    main: opts.justify,
+    cross: opts.align ?? DEFAULT_CROSS,
   });
 }
 

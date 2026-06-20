@@ -27,7 +27,7 @@ Document([
       Divider(),
       Paragraph(lorem, { font: "Times-Roman" }),
       Box({ border: "steelblue", bg: "#1450aa22", padding: 10, radius: 6 }, [Text("Notiz")]),
-      Row({ gap: 8, cross: "center" }, [Text("links"), Spacer(), Text("rechts")]),
+      Row({ gap: 8, align: "center" }, [Text("links"), Spacer(), Text("rechts")]),
       Spacer(),
       Text("Footer", { size: 8, align: "center", color: rgb(130, 137, 150) }),
     ]),
@@ -88,8 +88,8 @@ _between_ children of a Column/Row).
 
 | Factory                                | Purpose              | Key options                                                               | Maps to                                |
 | -------------------------------------- | -------------------- | ------------------------------------------------------------------------- | -------------------------------------- |
-| `Column(opts, children)`               | vertical stack       | `gap`, `main`, `cross`                                                    | `ContainerElement`                     |
-| `Row(opts, children)`                  | **horizontal** stack | `gap`, `main`, `cross`                                                    | **new `RowElement`**                   |
+| `Column(opts, children)`               | vertical stack       | `gap`, `justify`, `align`                                                    | `ContainerElement`                     |
+| `Row(opts, children)`                  | **horizontal** stack | `gap`, `justify`, `align`                                                    | **new `RowElement`**                   |
 | `Box(opts, children)`                  | bordered/filled box  | `border`, `borderWidth`, `bg`, `padding`, `width`, `height`, **`radius`** | `RectangleElement` (+ inner `Padding`) |
 | `Padding(opts, child)`                 | inset                | `padding: Insets` (`all`/`x`/`y`)                                         | `PaddingElement`                       |
 | `Spacer(flex?)`                        | flexible gap         | `flex`                                                                    | `ExpandedElement` (empty child)        |
@@ -118,9 +118,9 @@ _between_ children of a Column/Row).
 
 Column: main axis vertical, cross axis horizontal. Row: swapped.
 
-- `main`: `start` (default) · `center` · `end` · `between` · `around` — distribute along the axis.
-- `cross`: `start` (default) · `center` · `end` · `stretch` — position across the axis.
-- `Text.align` (left/center/right) is text-internal, independent of `cross`.
+- `justify`: `start` (default) · `center` · `end` · `between` · `around` — distribute along the axis.
+- `align`: `start` (default) · `center` · `end` · `stretch` — position across the axis.
+- `Text.align` (left/center/right) is text-internal, independent of `align`.
 
 Shipping the full model in v1 (foundation work) so we never re-touch alignment.
 
@@ -143,7 +143,7 @@ Shipping the full model in v1 (foundation work) so we never re-touch alignment.
 4. **Named colors: the FULL CSS set** (~148 names incl. `transparent`). ✅
 5. **Border radius: build it now** — into the `Rect` IR + backend; `Box`/`Image` get `radius`. ✅
 6. **Header/footer: in v1** — `Page({header, footer}, body)`, repeated on every physical page. ✅
-7. **Alignment: full `main` + `cross` in v1.** ✅
+7. **Alignment: full `justify` + `align` in v1.** ✅
 8. **Keep the class/engine API exported** alongside the factories. ✅
 
 ---
@@ -157,7 +157,7 @@ Ordered, each its own verified slice (sample stays byte-identical where it can; 
    rounded images. Box/Image `radius`.
 3. **Horizontal layout** — a `RowElement` + a horizontal flex helper (mirror of the vertical engine);
    it must also fragment (basis for `Grid`/`Table` later). Biggest piece.
-4. **Full alignment** — `main` (start/center/end/between/around) + `cross` (start/center/end/stretch)
+4. **Full alignment** — `justify` (start/center/end/between/around) + `align` (start/center/end/stretch)
    in both the vertical and horizontal flex helpers.
 5. **Header/footer** — the page driver lays out `header`/`footer` on every physical page (fixed bands;
    body gets the remaining height). Interacts with pagination.

@@ -111,10 +111,10 @@ function composeTable(opts: TableOptions, rows: Cell[][], columns: ColumnWidth[]
     throw new Error(`Unsupported column width "${col}" - use a number of points or "<n>fr"`);
   };
 
-  // cross:stretch → equal-height cells, so a wrapping cell keeps the row's bottom rule straight.
+  // align:stretch → equal-height cells, so a wrapping cell keeps the row's bottom rule straight.
   const buildRow = (cells: Cell[], firstRow: boolean, ruled = false) =>
     Row(
-      { gap: colGap, cross: "stretch" },
+      { gap: colGap, align: "stretch" },
       cells.map((cell, i) => wrap(cell, columns[i] ?? "1fr", firstRow, i === 0, ruled)),
     );
 
