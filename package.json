@@ -25,6 +25,7 @@
     "copy-assets": "ncp ./src/lib/assets ./dist/assets",
     "cli": "pnpm --filter @jasy/cli dev",
     "cli:watch": "pnpm --filter @jasy/cli watch",
+    "play": "pnpm --filter @jasy/playground play",
     "test": "vitest",
     "test:coverage": "vitest --coverage",
     "build": "tsc && pnpm run copy-assets",

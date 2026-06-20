@@ -1,0 +1,19 @@
+{
+  "name": "@jasy/playground",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Scratch TS playground for the jasy layout API — edit play.ts, run `pnpm play`.",
+  "scripts": {
+    "play": "tsx play.ts",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@jasy/pdf": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.3",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.0"
+  }
+}

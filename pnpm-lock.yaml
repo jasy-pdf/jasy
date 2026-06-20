@@ -59,6 +59,22 @@ importers:
         specifier: ^2.7.0
         version: 2.7.0
 
+  packages/playground:
+    dependencies:
+      '@jasy/pdf':
+        specifier: workspace:*
+        version: link:../..
+    devDependencies:
+      '@types/node':
+        specifier: ^25.9.3
+        version: 25.9.3
+      tsx:
+        specifier: ^4.19.2
+        version: 4.22.4
+      typescript:
+        specifier: ^5.6.0
+        version: 5.9.3
+
   packages/zugferd:
     dependencies:
       '@jasy/pdf':

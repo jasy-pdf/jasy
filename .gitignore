@@ -12,3 +12,7 @@ packages/*/dist
 # Manual DX/showcase harness — depends on local (gitignored) sample assets, so it isn't
 # self-contained for a fresh clone. To be reintroduced as a polished public example later.
 /tests/manual
+
+# Playground scratch output — the source (play.ts) is a committed example, the rendered PDFs aren't.
+packages/playground/*.pdf
+packages/playground/*.png
