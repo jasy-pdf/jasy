@@ -2,7 +2,8 @@
 
 The official **EN 16931 / XRechnung Schematron** business rules, compiled to SaxonJS SEF
 (`.sef.json`, gzipped) so the CLI validates invoices **locally** via `saxon-js` — no upload, DSGVO-safe.
-This covers the XML conformance (the legally decisive part); PDF/A-3 (veraPDF) is a separate Java check.
+This covers the XML conformance (the legally decisive part); full ISO 19005 (PDF/A) is the optional
+veraPDF adapter (`jasy verapdf`), with our own structural checks (`core/pdfa.ts`) as the default.
 
 `validate.ts` picks the rule set from what `detect()` found. **XRechnung is a CIUS on top of EN 16931**,
 so its files carry only the BR-DE delta — an XRechnung is validated against the EN 16931 base **and**

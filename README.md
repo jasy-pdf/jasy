@@ -1,98 +1,171 @@
-# JasyPDF
+<p align="center">
+  <img src="https://raw.githubusercontent.com/jasy-pdf/jasy/main/docs/logo.png" width="130" alt="jasy">
+</p>
 
-> **Ja**vaScript Ea**sy** **PDF** — declarative, component-based PDF generation in pure TypeScript.
+<h1 align="center">jasy</h1>
 
-JasyPDF lets you describe a document as a tree of components — `Page`, `Column`, `Row`, `Box`,
-`Text`, `Image` — the way you'd build a UI in Flutter, and writes the raw PDF byte stream itself.
-**No headless browser, no Java, no `pdf-lib` underneath.** The low-level writer is hand-rolled, and
-text is laid out with the real Adobe **AFM font metrics** of the standard-14 fonts, so word-wrapping
-and kerning are _computed_, not guessed.
+<p align="center">
+  <b>ZUGFeRD &amp; XRechnung e-invoices in pure TypeScript - generate, validate, read.</b><br>
+  A Flutter-style PDF engine underneath. The EN-16931 maths done <i>for</i> you. Zero Java, zero upload.
+</p>
 
-> ⚠️ **Status: 0.0.1, pre-release.** The engine and the API below work and are tested, but the
-> library is young and not yet published. Expect rough edges. Runs on **Node** today (browser support
-> is on the roadmap).
+<p align="center">
+  <code>npm i @jasy/zugferd</code> &nbsp;·&nbsp; <code>npx @jasy/cli</code> &nbsp;·&nbsp; MIT
+</p>
 
-## What works today
+---
 
-- **Declarative factory API** — `Document` / `Page` / `Column` / `Row` / `Box` / `Padding` / `Text` /
-  `Paragraph` / `span` / `Image` / `Divider` / `Spacer` / `Expanded`.
-- **Real text layout** — AFM metrics for the **standard-14 fonts** (Helvetica, Times, Courier, Symbol,
-  ZapfDingbats), with bold/italic, mixed inline styling (`span`), alignment and word-wrapping.
-- **Flexbox-style layout** — `gap`, `main` (start/center/end/between/around) and `cross`
-  (start/center/end/stretch) on Column and Row; `Spacer`/`Expanded` for flexible space.
-- **Boxes** — fill, border, corner `radius`, real transparency (RGBA/alpha), and `padding`.
-- **Images** — JPEG/PNG via `fit` (none/contain/cover/fill) and rounded corners.
-- **Colors** — `"steelblue"` (full CSS set), `"#1450aa"`, `"#1450aacc"` (hex+alpha),
-  `0xff1450aa` (ARGB), `rgb()`/`rgba()`.
-- **Real pagination** — content that overflows a page flows onto the next: text breaks at line
-  boxes, bordered boxes split (each fragment keeps its border), and `header`/`footer` repeat on
-  every physical page.
-- **Tables** — fixed / `Nfr` / `auto` column widths, a header that repeats on every page, crisp
-  `cellBorder` grid lines, equal-height cells, paginating at row boundaries.
-- **Custom fonts** — embed any TrueType (`.ttf`) font via `renderPdf(doc, { fonts })` (Type0/Identity-H,
-  full font). Register a **family** (`{ normal, bold, italic, boldItalic }`) and `Text({ bold, italic })`
-  picks the right file automatically, falling back to `normal` when a style isn't supplied. Unlocks full
-  Unicode (Cyrillic, Greek, …) beyond the standard-14, and text stays copy-/searchable. _Subsetting
-  (smaller files) and OTF/WOFF2 are still to come._
+## Don't believe us. Point it at your own invoice.
 
-## Quick start
-
-```ts
-import { Document, Page, Column, Box, Text, Divider, renderToBytes } from "@jasy/pdf";
-
-const doc = Document([
-  Page({ size: "A4", margin: 56, gap: 12 }, [
-    Text("JasyPDF", { size: 32, bold: true, color: "#1450aa" }),
-    Text("Declarative PDFs in pure TypeScript", { size: 12, color: "gray" }),
-    Divider({ color: "steelblue" }),
-    Box({ border: "steelblue", bg: "#1450aa22", padding: 12, radius: 6 }, [
-      Text("A note box that shrink-wraps its content and paginates cleanly."),
-    ]),
-  ]),
-]);
-
-const bytes: Uint8Array = await renderToBytes(doc); // write to a file or stream it
+```bash
+npx @jasy/cli validate ./your-invoice.pdf
 ```
 
-`renderPdf(doc)` returns the PDF as a string; `renderToBytes(doc)` returns a `Uint8Array`.
-The engine classes (`PageElement`, `ContainerElement`, …) stay exported for power users — the
-factories are sugar over them, never a wall.
+<p align="center">
+  <img src="https://raw.githubusercontent.com/jasy-pdf/jasy/main/docs/validate.png" width="430" alt="jasy validate: VALID">
+</p>
 
-## ZUGFeRD / Factur-X e-invoicing
+That `✓` is the **same official KoSIT Schematron + veraPDF the big players run** - against the EN 16931
+**and** the German XRechnung (BR-DE) rules, plus PDF/A-3. Your file, your terminal, in seconds. No
+account, no upload, nothing leaves your machine.
 
-The sibling package **[`@jasy/zugferd`](packages/zugferd)** turns an invoice into a conformant
-**ZUGFeRD / Factur-X PDF/A-3** — the human-readable invoice PDF with the EN-16931 CII XML embedded —
-in pure TypeScript, no Java.
+> Java has **Mustang**. PHP has **horstoeko**. Python has **factur-x**.<br>
+> Node had nothing. **Now it has jasy.**
+
+---
+
+## You bring the line items. jasy does the rest.
+
+You never compute a total, a VAT breakdown or a rounding again. You hand jasy the line items - it
+**derives** the document totals and the EN-16931 VAT breakdown, spec-correct. That is *why* the
+invoices validate: the amounts are correct **by construction**, so the single biggest class of
+EN-16931 failures (the BR-CO total checks) simply cannot happen.
 
 ```ts
 import { renderZugferd } from "@jasy/zugferd";
 
-const { bytes, xml } = await renderZugferd(invoice); // PDF/A-3 + the embedded factur-x.xml
+const { bytes, xml } = await renderZugferd({
+  number: "RE-2026-001",
+  issueDate: "2026-06-17",
+  currency: "EUR",
+  seller: { name: "Northwind Studio GmbH", vatId: "DE123456789",
+            address: { city: "Berlin", postCode: "10115", country: "DE" } },
+  buyer:  { name: "Globex Corporation Ltd",
+            address: { city: "Munich", postCode: "80331", country: "DE" } },
+  lines: [
+    { name: "Brand identity design", quantity: 2, unit: "HUR", netUnitPrice: 100,
+      vat: { category: "S", ratePercent: 19 } },
+  ],
+});
+// bytes -> a valid ZUGFeRD PDF/A-3   ·   xml -> the embedded EN-16931 XML
+// totals, tax breakdown and rounding: computed for you.
 ```
 
-Early days (one profile, **EN 16931**), but the output is **validator-proven**: it passes **veraPDF**
-(PDF/A-3B) and the **EN-16931** schema + Schematron via Mustangproject. This is the gap the Node
-ecosystem has had — Java has Mustang, PHP has horstoeko, Python has factur-x; pure TS/JS was thin.
+One object in. A conformant, human-readable PDF/A-3 **and** the EN-16931 CII/UBL XML out. ZUGFeRD and
+XRechnung work out of the box - no config, no template wrangling.
 
-## Roadmap
+<p align="center">
+  <img src="https://raw.githubusercontent.com/jasy-pdf/jasy/main/docs/invoice.png" width="450" alt="a generated ZUGFeRD invoice">
+</p>
 
-- **Font subsetting** — embed only the glyphs used, for much smaller files (today the full `.ttf` is
-  embedded); plus OTF/CFF and WOFF2 font formats.
-- **More ZUGFeRD** — the XRechnung profile, a privacy-preserving local validation CLI, and font
-  subsetting to keep invoice PDFs small.
-- **Framework bindings** — author documents as Vue / React components on top of the same vocabulary.
-- **Browser support** — bundle the AFM metrics so the engine runs without Node's filesystem.
+---
 
-## Develop
-
-Package manager is **pnpm**.
+## The whole loop, from the terminal
 
 ```bash
-pnpm install
-pnpm exec vitest run     # unit tests
-pnpm run build           # tsc → dist/
+jasy read invoice.pdf               # identify + show: parties, line items, totals
+jasy validate invoice.pdf           # EN 16931 + XRechnung + PDF/A (exit 1 if invalid)
+jasy export invoice.pdf -o out.xlsx # read it back: JSON · TXT · Excel
 ```
 
-## License
+<p align="center">
+  <img src="https://raw.githubusercontent.com/jasy-pdf/jasy/main/docs/read.png" width="520" alt="the jasy terminal: invoice + checks + export">
+</p>
 
-MIT © Florian Heuberger
+Reads **CII and UBL**, real third-party invoices included - not just our own output.
+
+---
+
+## A PDF engine that reads like Flutter
+
+Underneath it all is a declarative, component-based PDF engine - written from the byte stream up, no
+headless browser, no `pdf-lib`. You describe the document; it lays it out and paginates.
+
+```ts
+import { Document, Page, Column, Text, renderToBytes } from "@jasy/pdf";
+
+const pdf = await renderToBytes(
+  Document([
+    Page({ size: "A4", margin: 48 }, [
+      Column({ gap: 8 }, [
+        Text("Invoice RE-2026-001", { size: 24, bold: true, color: "steelblue" }),
+        Text("Thank you for your business.", { color: "gray" }),
+      ]),
+    ]),
+  ]),
+);
+```
+
+Real text layout (Adobe AFM metrics, kerning, word-wrap), flexbox-style `gap` / `justify` / `align`,
+boxes with radius and alpha, images, custom TrueType fonts, and **real pagination** - content that
+overflows flows onto the next page, headers and footers repeat.
+
+---
+
+## Under the hood - and every bit is real
+
+This is not a wrapper around someone else's renderer. It is built from the byte stream up, and you can
+verify all of it:
+
+- **Hand-rolled PDF writer.** No `pdf-lib`, no PDFKit, no Java, no headless Chrome - the byte stream is ours.
+- **Font subsetting.** Only the glyphs you actually use are embedded, with the PDF/A subset tag - a
+  740 KB font ships as a ~76 KB subset, and the text stays copy- and searchable.
+- **Compression.** Content streams and images are FlateDecode-compressed; the spreadsheets `jasy export`
+  writes are real `.xlsx` ZIPs we deflate with our own writer and CRC32, zero dependencies.
+- **Real font metrics.** Text is laid out with the Adobe AFM metrics of the standard-14 fonts - kerning
+  and word-wrap are *computed*, not guessed.
+- **PDF/A-3, matched not approximated.** The conformance graph is hand-built and **passes veraPDF**, the
+  official ISO 19005 validator.
+- **Byte-exact round-trips.** Generate and parse are inverses: `generate → parse → regenerate` reproduces
+  the identical XML. 307 tests hold the line.
+- **Schematron, local.** The official EN-16931 + XRechnung rules run via saxon-js (the real XSLT, in pure
+  JS) - no Java, no upload.
+
+---
+
+## Packages
+
+| Package | What it is |
+| --- | --- |
+| **[@jasy/zugferd](https://www.npmjs.com/package/@jasy/zugferd)** | ZUGFeRD / XRechnung: your data → PDF/A-3 + EN-16931 XML, with local validation. **The prize.** |
+| **[@jasy/cli](https://www.npmjs.com/package/@jasy/cli)** | the `jasy` terminal: read · validate · export, headless **and** interactive |
+| **[@jasy/pdf](https://www.npmjs.com/package/@jasy/pdf)** | the declarative, Flutter-style PDF layout engine that powers them |
+
+---
+
+## Why you can trust it
+
+- **307 tests, green.** The generator and the parser are **byte-exact inverses**:
+  `generate → parse → regenerate` reproduces the identical XML. Nothing is silently lost.
+- **The same rules the authorities use** - the official KoSIT EN-16931 + XRechnung Schematron, and the
+  official **veraPDF** for the full ISO 19005 (PDF/A) check.
+- **Proven on real third-party invoices**, not only our own.
+- **100% local.** No upload, no service, no account - DSGVO-safe by construction.
+
+---
+
+## Honest scope
+
+jasy targets the documents that matter here: invoices, reports, quotes, datasheets. It is **not** a
+LaTeX / WeasyPrint replacement - no microtypography, hyphenation or bidi, and arbitrary multi-page flow
+of *any* content is still maturing. For e-invoices (a table, totals, a footer) it is complete - they
+even paginate. We would rather under-promise and over-deliver in the demo above.
+
+> **Status:** young and pre-1.0. The API can still shift between minor versions. Everything shown here
+> works and is tested.
+
+---
+
+<p align="center">
+  MIT &nbsp;·&nbsp; built by <a href="https://github.com/jasy-pdf">Florian Heuberger</a>
+</p>
