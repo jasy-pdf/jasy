@@ -2,7 +2,7 @@ import { pageFormats, PageSize } from "../constants/page-sizes";
 import { Orientation } from "../renderer/pdf-config";
 import type { ColorMode, DefaultFont, Margin } from "../renderer";
 import { BoxConstraints, Offset, Size } from "../layout/box-constraints";
-import { LayoutContext, PDFElement, WithChildren } from "./pdf-element";
+import { LayoutContext, PDFElement, PositioningFrame, WithChildren } from "./pdf-element";
 import { TextElement } from "./text-element";
 
 export interface PDFPageConfig {
@@ -126,9 +126,20 @@ export class PageElement extends PDFElement {
     // content box when there is neither - byte-identical to a plain page).
     const bands = layoutPageBands(this.config, this.header, this.footer, pageCtx);
     const childConstraints = BoxConstraints.loose(bands.bodyWidth, bands.bodyHeight);
+
+    // The page body is itself a positioning frame: a `Positioned` with no `relative` ancestor
+    // resolves against the content box (a `relative` Box overrides it for its own subtree). Drained
+    // after the body is laid out, so a page-level Positioned isn't a silent no-op.
+    const frame: PositioningFrame = {
+      origin: bands.bodyOrigin,
+      size: { width: bands.bodyWidth, height: bands.bodyHeight },
+      place: [],
+    };
+    const bodyCtx: LayoutContext = { ...pageCtx, frame };
     this.children.forEach((child) =>
-      child.calculateLayout(childConstraints, bands.bodyOrigin, pageCtx),
+      child.calculateLayout(childConstraints, bands.bodyOrigin, bodyCtx),
     );
+    for (const place of frame.place) place(frame, pageCtx);
 
     const { width, height } = resolvePageContentBox(this.config);
     return { width, height };
