@@ -49,15 +49,22 @@ PDFDocument (abstract, user subclasses it, implements build())
 > "Pass 1 / Pass 2" are the two render passes inside one `render()` call. Don't confuse them with the
 > **roadmap Phases** in `todo.md` (Phase 1 = IR seam, Phase 2 = kill singleton, …). Different things.
 
-### Pass 1 — `calculateLayout(parentConstraints)`
+### Pass 1 — `calculateLayout(constraints, offset, ctx)`
 
-- Defined on every element (`PDFElement.calculateLayout`). Constraints flow **down**; each element
-  mutates its own `x/y/width/height` and returns a `LayoutConstraints` back up.
-- `FlexLayoutHelper` (`utils/flex-layout.ts`) does vertical flex distribution: fixed-size children
-  are measured first, remaining height is split among `ExpandedElement`s by `flex`.
-- **Coordinate flip:** elements build in an intuitive top-left origin, then each calls its own
-  `normalizeCoordinates()` to flip Y into PDF's bottom-left origin (`y = pageHeight - y - height`).
-  Text additionally offsets by the font baseline (`maxLineHeight * 683/1000`).
+- Defined on every element (`PDFElement.calculateLayout`). Signature: `calculateLayout(constraints:
+  BoxConstraints, offset: Offset, ctx: LayoutContext): Size` — constraints (min/max w/h) flow **down**,
+  the parent assigns each child its absolute `offset`, the element returns the `Size` it took **up**.
+  The clean Flutter `RenderObject` contract (since Phase 4; `layout/box-constraints.ts`).
+- `FlexLayoutHelper` (`utils/flex-layout.ts`) is axis-generic: it measures **and** places both `Column`
+  (`VERTICAL_AXIS`) and `Row` (`HORIZONTAL_AXIS`), distributing leftover main-axis space to
+  `ExpandedElement`s by `flex` and offsetting children per `main`/`cross` alignment.
+- **Pagination is real** (Phase 5). A `fragment(maxHeight, width, ctx) → { fitted, remainder }` protocol
+  (`layout/fragmentation.ts`, shared `packChildren`) splits content across pages: text at line boxes,
+  padding/border cloned per fragment, flex containers re-packed. The page driver (`PDFDocumentRenderer`)
+  loops the remainder into fresh physical pages; `header`/`footer` repeat on each.
+- **The Y-flip lives at the IR→backend seam, NOT in elements** (Phase 3). Elements lay out in a top-left
+  origin and are coordinate-blind; `PdfBackend.flipY(nodes, pageHeight)` flips once per page. `grep
+  normalizeCoordinates src/` is empty.
 
 ### Pass 2 — render: display list → backend (the IR seam, since roadmap Phase 1)
 
@@ -69,7 +76,8 @@ sees a component:
   a string. Leaves (`TextRenderer`→`TextRun[]`, `LineRenderer`, `ImageRenderer`, `RectangleRenderer`)
   emit primitives; structural renderers (`Container`/`Expanded`/`Padding`, and `Rectangle` for its
   children) **concatenate** their children's lists. Producers still know about components and still do
-  layout-ish work (text wrapping lives in `TextRenderer._buildRuns` until roadmap Phase 3).
+  layout-ish work; text wrapping is the shared `text/line-breaker.ts` (one canonical wrapper feeding
+  measure, draw and fragmentation — Phase 3).
 - **The seam** — `src/lib/ir/display-list.ts`: `IRNode = TextRun | Rect | Line | Image`. Dumb
   primitives: absolute geometry + semantic style (a `Color`, a font family/style), **no** PDF
   operators, font indices, or object numbers.
@@ -80,8 +88,8 @@ sees a component:
 - `PageRenderer` collects the whole page's `IRNode[]`, calls `PdfBackend.serialize` **once**, wraps the
   result in a `/Contents` stream object + `/Page` object with `MediaBox`, font and image `/Resources`.
   Serialize runs _before_ the resource section because that is what registers the fonts/images.
-- ⚠️ Coordinates in the IR are still already-Y-flipped (producers call `normalizeCoordinates`).
-  Centralizing the flip at the IR→backend seam is roadmap Phase 3, not done yet.
+- Coordinates in the IR are top-left (engine origin); `PdfBackend.flipY(nodes, pageHeight)` flips them
+  to PDF's bottom-left once per page at this seam — no element does a Y-flip (Phase 3 done).
 
 ### The PDF writer — `PDFObjectManager` (`utils/pdf-object-manager.ts`)
 
@@ -109,8 +117,8 @@ shared state.
   context bound to **its** geometry. This is why each page flips Y against its own height.
 - **Render pass (Pass 2)** passes the `objectManager` explicitly to each renderer (for font/image
   resource registration via the backend).
-- This shape is intentionally what the future fragmentation pass (roadmap Phase 5) needs: it threads
-  exactly metrics + per-page geometry, nothing more.
+- This shape is what the fragmentation pass (Phase 5, now built) needs: it threads exactly metrics +
+  per-page geometry, nothing more. A `relative` positioning frame would thread one more geometry here.
 
 ## Element & renderer inventory
 
@@ -170,7 +178,8 @@ rendering. This is the standing visual check; prefer it over one-off `scripts/ru
 - `pnpm test` — Vitest (watch). `pnpm exec vitest run` for a one-shot CI-style run.
   `pnpm run test:coverage` for coverage. Unit tests live in **`tests/unit/`**, mirroring the `src/lib/`
   structure (`tests/unit/{common,elements,renderer,utils}/…`). `src/` is pure production code — the
-  build (`tsconfig.json` includes only `src/**`) therefore keeps `dist/` test-free. **81 tests, green.**
+  build (`tsconfig.json` includes only `src/**`) therefore keeps `dist/` test-free. **~270 tests, green**
+  in the core (plus the `@jasy/zugferd` suite).
 - `pnpm run build` — `tsc` → `dist/`.
 - `pnpm run manual-test` — compiles via `tsconfig.test.json`, copies AFM assets, runs
   `tests/manual/index.ts` (renders the `showcase.ts` capability demo). `tests/manual/` is **gitignored**
@@ -195,41 +204,36 @@ rendering. This is the standing visual check; prefer it over one-off `scripts/ru
   variant in `ir/display-list.ts` + a `case` in `PdfBackend.serializeNode`.
 - Units are PDF points (1/72"). Page formats in `constants/page-sizes.ts`.
 
-## Known weak spots & the refactor that matters
+## What's built, and the genuine gaps
 
-1. **No real pagination yet.** `calculateLayout` is a single-pass, **mutation-based**, single-page
-   model. There is no fragmentation: nothing splits an element across pages, and an overflow cascade
-   re-invalidates ancestors with no fixpoint — this is exactly the "rattenschwanz" wall (text breaks →
-   border breaks → enclosing text breaks → … now inside a split-view → boom). The intended fix is a
-   **pure, recursive `{ fitted, remainder }` fragment protocol** (Flutter RenderObject / CSS
-   fragmentation style): constraints flow down once, sizes flow up once, no information flows back up
-   after a break. Each element owns its own split strategy (text → line boxes; image → atomic, moves
-   whole; padding/border → emits two fragments, `box-decoration-break: slice|clone` decided locally;
-   columns → a fragmentation context that re-packs its remainder). Design the engine **width-stable**:
-   widths finalized in the measure pass, only height fragments — this keeps it O(content), terminating,
-   and loses nothing for documents.
-2. **Duplicated text-wrapping logic.** `TextRenderer.calculateTextHeight` (measure) and
-   `TextRenderer._buildRuns` (the IR producer) each re-implement word wrapping independently — they can
-   diverge (measured height ≠ produced lines). A single shared line-breaker feeding both is the clean
-   fix and a prerequisite for trustworthy fragmentation. **This is roadmap Phase 3's first task.**
-3. ~~**Global mutable singleton** + the mixed-page-size config bug.~~ **FIXED in roadmap Phase 2** —
-   the singleton is gone (explicit `LayoutContext` threading, see "State threading" above) and per-page
-   config is resolved per page, so mixed-size docs place content correctly. Guarded by
-   `tests/unit/elements/page-config.regression.test.ts` + `…/renderer/document-independence.test.ts`.
-4. **Mutating, single-page layout.** `calculateLayout` still mutates each element's absolute x/y once —
-   fine for one page, but fundamentally incompatible with fragmentation (an element split across pages
-   needs several positions). The mutating body gets replaced by the `{fitted, remainder}` fragment pass
-   in roadmap Phase 5; the `LayoutContext` plumbing built in Phase 2 is what survives.
-5. ~~**README over-promises** custom font embedding.~~ **DONE** — TrueType embedding works end-to-end
-   (`TTFParser` → Type0/Identity-H + `/FontFile2`, `renderPdf(doc, { fonts })`), full Unicode, copy-able.
-   Only OTF/CFF/WOFF2 font formats remain (subsetting is **done** — see #7).
-6. `manual-test` has hard-coded machine-specific paths.
-7. **Custom fonts are subsetted + compressed.** `ttf-subsetter.ts` strips unused `glyf` outlines, rebuilds
-   `loca`, keeps composite parts, and tags the font `ABCDEF+` as PDF/A requires for subsets (wired via
-   `pdf-object-manager.finalizeCustomFonts()`, called in the renderer; verified 742 KB → 76 KB). Streams
-   are FlateDecode-compressed. Remaining font gaps: no TrueType kerning, and OTF/CFF/WOFF2 formats. Bold/
-   italic work via registered family variants with a clean fallback to `normal` (we don't _synthesise_
-   faux styles, which is correct, not a gap).
+The big refactors the roadmap set out are **done** (Phases 0-6, shipped as `@jasy/pdf@1.0.0-alpha.1`):
+
+- ✅ **Pagination / fragmentation** — the old "last 15% / rattenschwanz wall" is solved. A pure
+  `fragment(maxHeight, width, ctx) → { fitted, remainder }` protocol (`layout/fragmentation.ts`, shared
+  `packChildren`): text splits at line boxes, padding/border clone per fragment, flex containers re-pack;
+  the page driver loops the remainder into fresh pages, `header`/`footer` repeat. Positions are computed
+  DURING fragmentation, not mutated onto shared instances — constraints down once, sizes up once.
+- ✅ **One shared line-breaker** (`text/line-breaker.ts`) feeds measure, draw AND fragmentation; the old
+  duplicated-wrapping divergence is gone.
+- ✅ **Singleton killed** → explicit `LayoutContext` threading (Phase 2); mixed-page-size bug fixed.
+- ✅ **Typed seams** — `BoxConstraints`/`Size`/`Offset` (Phase 4); `grep ': any' src/lib` empty.
+- ✅ **Custom fonts** — TTF parse → Type0/Identity-H + `/FontFile2`, full Unicode, subsetted
+  (`ttf-subsetter.ts`, `ABCDEF+` tag, ~97% smaller) + FlateDecode-compressed.
+
+Genuine remaining gaps / deferred:
+
+1. **Absolute positioning — Stages 1+2 built** (2026-06-21). CSS-style: `Box({ relative: true })` is a
+   positioning frame (the page is one too); `Positioned({ top,left,right,bottom }, child)` is out-of-flow
+   and anchors to the nearest frame (negative offsets poke out); `Box({ overflow: "hidden" })` crops its
+   children to the rounded box (an image in one is round-cropped for free). Tests + gallery `10-positioning`.
+   Remaining: **`z-index`** (Stage 3, paint order within a frame) and a public `measure()` helper. See
+   `todo.md` "Absolute-positioning layer".
+2. **`slice` border mode** (a split box left open at the break) — `clone` is the default; needs per-side
+   stroke control in the `Rect` IR. True multi-column too (the `packChildren`/region machinery exists).
+3. **Node-only** — AFM metrics read via `fs`; in-browser needs the `.afm` bundled as JS data (Phase 7).
+4. `manual-test` has hard-coded machine-specific paths.
+5. Font gaps: no TrueType kerning; only TTF / TrueType-flavoured OTF parsed (OTF/CFF, WOFF2 not yet).
+   Bold/italic resolve via registered family variants with a clean fallback to `normal` (no faux styles).
 
 ## Roadmap
 
@@ -237,17 +241,20 @@ The authoritative plan + ground rules live in **`todo.md`** (gitignored, repo ro
 starting work. Working agreement: **phase by phase, Flo approves each gate, Claude never commits/pushes
 unprompted, comments English + sensible, don't break the font math.**
 
-Status: **Phase 0 done** (font-metric oracle tests). **Phase 1 done** (IR seam — components → IR →
-backend). **Phase 2 done** (singleton killed → explicit `LayoutContext` threading; mixed-page-size bug
-fixed; 81/81). **Next: Phase 3** — pull layout out of the components (first task: unify the duplicated
-text wrapping into one shared line-breaker), then move `normalizeCoordinates` into the engine.
-Later: Phase 4 types, Phase 5 fragmentation, Phase 6 ZUGFeRD/XRechnung (EN-16931 XML + PDF/A-3 backend
-as a second IR consumer).
+Status: **Phases 0-6 done and shipped.** The engine (IR seam, singleton-free `LayoutContext`, Y-flip at
+the seam, `BoxConstraints` types, `{fitted,remainder}` fragmentation, the intuitive API layer, Tables,
+custom fonts + subsetting + compression) and **ZUGFeRD/XRechnung** (`@jasy/zugferd`: EN-16931 CII + UBL,
+PDF/A-3, Mustang/veraPDF-proven, i18n, XRechnung profile) are all built and **published to npm
+2026-06-21** — `@jasy/pdf`, `@jasy/zugferd`, `@jasy/cli`, all `1.0.0-alpha.1` (alpha dist-tag). Next
+candidates (Flo's call which/when): the **absolute-positioning layer** (`relative`/`Positioned`/
+`overflow`/`z`), the **landing docs** (`~/projects/jasy-landing`, Nuxt Content), framework bindings
+(Phase 7), browser/Node-free.
 
 ## Repo facts
 
 - Single package, `src/lib/` is the library, barrel exports via `index.ts` at each level.
-- License MIT, author Florian Heuberger, version 0.0.1.
+- License MIT, author Florian Heuberger. Published to npm 2026-06-21 as `@jasy/pdf@1.0.0-alpha.1`
+  (alpha dist-tag); `@jasy/zugferd` + `@jasy/cli` shipped the same day, same version.
 - Branch `main`. Feature branches on origin: `decorator-test`, `image-element-feature`,
   `line-feature`, `page-settings`, `text-segments-feature`, `unit-testing`.
 - Runtime deps: `jimp` (images), `reflect-metadata` (DI, now unused — pending removal).
