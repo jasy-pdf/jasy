@@ -197,9 +197,162 @@ export function parseCII(xml: string): Invoice {
   };
 }
 
+// ── UBL (OASIS Invoice-2) - the second EN16931 syntax (PEPPOL; XRechnung accepts it too) ────────────
+
+function parseAddressUbl(s: string): PostalAddress {
+  return {
+    line1: val(s, "cbc:StreetName"),
+    line2: val(s, "cbc:AdditionalStreetName"),
+    line3: val(inner(s, "cac:AddressLine"), "cbc:Line"),
+    city: val(s, "cbc:CityName"),
+    postCode: val(s, "cbc:PostalZone"),
+    subdivision: val(s, "cbc:CountrySubentity"),
+    country: val(inner(s, "cac:Country"), "cbc:IdentificationCode") ?? "",
+  };
+}
+
+function parseContactUbl(s: string | undefined): Contact | undefined {
+  if (!s) return undefined;
+  const c: Contact = {
+    name: val(s, "cbc:Name"),
+    phone: val(s, "cbc:Telephone"),
+    email: val(s, "cbc:ElectronicMail"),
+  };
+  return c.name || c.phone || c.email ? c : undefined;
+}
+
+/** A party's tax id by scheme: the cbc:CompanyID whose cac:TaxScheme is "VAT" (BT-31) or "FC" (BT-32). */
+function ublTaxId(party: string, scheme: string): string | undefined {
+  for (const pts of innerAll(party, "cac:PartyTaxScheme")) {
+    if (val(inner(pts, "cac:TaxScheme"), "cbc:ID") === scheme) return val(pts, "cbc:CompanyID");
+  }
+  return undefined;
+}
+
+function parsePartyUbl(scope: string) {
+  const party = inner(scope, "cac:Party") ?? "";
+  const legal = inner(party, "cac:PartyLegalEntity");
+  return {
+    party,
+    name: val(legal, "cbc:RegistrationName") ?? "",
+    tradingName: val(inner(party, "cac:PartyName"), "cbc:Name"),
+    legalRegistrationId: val(legal, "cbc:CompanyID"),
+    vatId: ublTaxId(party, "VAT"),
+    electronicAddress: val(party, "cbc:EndpointID"),
+    address: parseAddressUbl(inner(party, "cac:PostalAddress") ?? ""),
+    contact: parseContactUbl(inner(party, "cac:Contact")),
+  };
+}
+
+function parseLineUbl(s: string, index: number): InvoiceLine {
+  const item = inner(s, "cac:Item") ?? "";
+  const price = inner(s, "cac:Price") ?? "";
+  const tax = inner(item, "cac:ClassifiedTaxCategory") ?? "";
+  const id = val(s, "cbc:ID");
+  const base = val(price, "cbc:BaseQuantity");
+  return {
+    id: id !== undefined && id !== String(index + 1) ? id : undefined, // omit the auto-number
+    name: val(item, "cbc:Name") ?? "",
+    description: val(item, "cbc:Description"),
+    sellerItemId: val(inner(item, "cac:SellersItemIdentification"), "cbc:ID"),
+    buyerItemId: val(inner(item, "cac:BuyersItemIdentification"), "cbc:ID"),
+    standardItemId: val(inner(item, "cac:StandardItemIdentification"), "cbc:ID"),
+    quantity: num(val(s, "cbc:InvoicedQuantity")),
+    unit: attr(s, "cbc:InvoicedQuantity", "unitCode") ?? "",
+    netUnitPrice: num(val(price, "cbc:PriceAmount")),
+    priceBaseQuantity: base !== undefined ? num(base) : undefined,
+    vat: {
+      category: (val(tax, "cbc:ID") ?? "S") as VatCategory,
+      ratePercent: num(val(tax, "cbc:Percent")),
+    },
+    note: val(s, "cbc:Note"),
+  };
+}
+
+/** Parse an OASIS UBL invoice (EN16931 / PEPPOL / XRechnung-UBL) into the Invoice model. */
+export function parseUBL(xml: string): Invoice {
+  // UBL has no head wrapper; the header fields are direct children before the supplier party
+  const cut = xml.indexOf("<cac:AccountingSupplierParty");
+  const head = cut >= 0 ? xml.slice(0, cut) : xml;
+
+  const seller = parsePartyUbl(inner(xml, "cac:AccountingSupplierParty") ?? "");
+  const buyer = parsePartyUbl(inner(xml, "cac:AccountingCustomerParty") ?? "");
+  const type = num(val(head, "cbc:InvoiceTypeCode"));
+  const notes = innerAll(head, "cbc:Note")
+    .map(unesc)
+    .filter((n) => n.length > 0);
+
+  const del = inner(xml, "cac:Delivery");
+  const dLoc = inner(del, "cac:DeliveryLocation");
+  const deliveryDate = val(del, "cbc:ActualDeliveryDate"); // UBL dates are plain ISO, no 102 format
+  const dParty = inner(del, "cac:DeliveryParty");
+  const delivery =
+    del && (deliveryDate || dParty || dLoc)
+      ? {
+          date: deliveryDate,
+          recipientName: val(inner(dParty, "cac:PartyName"), "cbc:Name"),
+          address: inner(dLoc, "cac:PostalAddress")
+            ? parseAddressUbl(inner(dLoc, "cac:PostalAddress")!)
+            : undefined,
+        }
+      : undefined;
+
+  const pm = inner(xml, "cac:PaymentMeans");
+  const acct = inner(pm, "cac:PayeeFinancialAccount");
+  const terms = inner(xml, "cac:PaymentTerms");
+  const payment: Payment | undefined =
+    pm || terms
+      ? {
+          meansCode: val(pm, "cbc:PaymentMeansCode"),
+          reference: val(pm, "cbc:PaymentID"),
+          iban: val(acct, "cbc:ID"),
+          accountName: val(acct, "cbc:Name"),
+          bic: val(inner(acct, "cac:FinancialInstitutionBranch"), "cbc:ID"),
+          terms: val(terms, "cbc:Note"),
+        }
+      : undefined;
+  const paid = val(inner(xml, "cac:LegalMonetaryTotal"), "cbc:PrepaidAmount");
+
+  return {
+    number: val(head, "cbc:ID") ?? "",
+    issueDate: val(head, "cbc:IssueDate") ?? "",
+    type: type && type !== 380 ? (type as InvoiceTypeCode) : undefined,
+    currency: val(head, "cbc:DocumentCurrencyCode") ?? "",
+    dueDate: val(head, "cbc:DueDate"),
+    buyerReference: val(head, "cbc:BuyerReference"),
+    purchaseOrderRef: val(inner(head, "cac:OrderReference"), "cbc:ID"),
+    contractRef: val(inner(head, "cac:ContractDocumentReference"), "cbc:ID"),
+    notes: notes.length ? notes : undefined,
+    seller: {
+      name: seller.name,
+      tradingName: seller.tradingName,
+      legalRegistrationId: seller.legalRegistrationId,
+      vatId: seller.vatId,
+      taxNumber: ublTaxId(seller.party, "FC"),
+      electronicAddress: seller.electronicAddress,
+      address: seller.address,
+      contact: seller.contact,
+    },
+    buyer: {
+      name: buyer.name,
+      tradingName: buyer.tradingName,
+      legalRegistrationId: buyer.legalRegistrationId,
+      vatId: buyer.vatId,
+      electronicAddress: buyer.electronicAddress,
+      address: buyer.address,
+      contact: buyer.contact,
+    },
+    delivery,
+    lines: innerAll(xml, "cac:InvoiceLine").map(parseLineUbl),
+    payment,
+    paidAmount: paid !== undefined ? num(paid) : undefined,
+  };
+}
+
 /** Parse e-invoice XML into the Invoice model, picking CII/UBL from what it is. */
 export function parseInvoice(xml: string): Invoice {
   const { syntax } = detectInvoice(xml);
+  if (syntax === "UBL") return parseUBL(xml);
   if (syntax === "CII") return parseCII(xml);
   throw new Error(`${syntax} parsing is not implemented yet`);
 }

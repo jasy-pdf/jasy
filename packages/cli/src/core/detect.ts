@@ -37,14 +37,13 @@ export function detectInvoice(xml: string): InvoiceMeta {
   return { syntax, profile, guideline };
 }
 
-/** A short human label, e.g. "ZUGFeRD · EN 16931 (CII)" or "XRechnung (UBL)". */
+/** A short human label, e.g. "ZUGFeRD · EN 16931 (CII)", "EN 16931 (UBL)" or "XRechnung (CII)". */
 export function describeInvoice(meta: InvoiceMeta): string {
-  const profile =
-    meta.profile === "xrechnung"
-      ? "XRechnung"
-      : meta.profile === "en16931"
-        ? "EN 16931"
-        : "unknown profile";
-  const family = meta.profile === "xrechnung" ? "XRechnung" : "ZUGFeRD";
-  return `${family} · ${profile} (${meta.syntax})`;
+  if (meta.profile === "xrechnung") return `XRechnung (${meta.syntax})`;
+  if (meta.profile === "en16931") {
+    // ZUGFeRD / Factur-X is the CII flavour; a bare EN 16931 UBL is PEPPOL territory - don't mislabel it
+    const family = meta.syntax === "CII" ? "ZUGFeRD · " : "";
+    return `${family}EN 16931 (${meta.syntax})`;
+  }
+  return `unknown profile (${meta.syntax})`;
 }
