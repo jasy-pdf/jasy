@@ -8,6 +8,8 @@ import type {
   Payment,
   VatCategory,
   InvoiceTypeCode,
+  AllowanceCharge,
+  VatExemptionReason,
 } from "@jasy/zugferd";
 import { detectInvoice } from "./detect.js";
 
@@ -132,6 +134,33 @@ function parseLine(s: string, index: number): InvoiceLine {
   };
 }
 
+/** A document-level allowance (discount) or charge (surcharge), BG-20 / BG-21. */
+function parseAllowanceCii(ac: string): AllowanceCharge {
+  const cat = inner(ac, "ram:CategoryTradeTax");
+  return {
+    isCharge: val(inner(ac, "ram:ChargeIndicator"), "udt:Indicator") === "true",
+    amount: num(val(ac, "ram:ActualAmount")),
+    reason: val(ac, "ram:Reason"),
+    reasonCode: val(ac, "ram:ReasonCode"),
+    vat: {
+      category: (val(cat, "ram:CategoryCode") ?? "S") as VatCategory,
+      ratePercent: num(val(cat, "ram:RateApplicablePercent")),
+    },
+  };
+}
+
+/** VAT exemption reasons (BT-120/121) keyed by category, read off the BG-23 breakdown groups. */
+function exemptionsCii(set: string): Partial<Record<VatCategory, VatExemptionReason>> | undefined {
+  const out: Partial<Record<VatCategory, VatExemptionReason>> = {};
+  for (const g of innerAll(set, "ram:ApplicableTradeTax")) {
+    const cat = val(g, "ram:CategoryCode") as VatCategory | undefined;
+    const text = val(g, "ram:ExemptionReason");
+    const code = val(g, "ram:ExemptionReasonCode");
+    if (cat && (text || code)) out[cat] = { text, code };
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
 /** Parse a UN/CEFACT CII invoice (EN16931 / ZUGFeRD / XRechnung-CII) into the Invoice model. */
 export function parseCII(xml: string): Invoice {
   const header = inner(xml, "rsm:ExchangedDocument") ?? "";
@@ -176,6 +205,9 @@ export function parseCII(xml: string): Invoice {
       : undefined;
   const totals = inner(set, "ram:SpecifiedTradeSettlementHeaderMonetarySummation");
   const paid = val(totals, "ram:TotalPrepaidAmount");
+  const allowancesCharges = innerAll(set, "ram:SpecifiedTradeAllowanceCharge").map(
+    parseAllowanceCii,
+  );
 
   return {
     number: val(header, "ram:ID") ?? "",
@@ -192,6 +224,8 @@ export function parseCII(xml: string): Invoice {
     delivery,
     payeeName: val(inner(set, "ram:PayeeTradeParty"), "ram:Name"),
     lines: innerAll(tx, "ram:IncludedSupplyChainTradeLineItem").map(parseLine),
+    allowancesCharges: allowancesCharges.length ? allowancesCharges : undefined,
+    vatExemptionReasons: exemptionsCii(set),
     payment,
     paidAmount: paid ? num(paid) : undefined,
   };
@@ -269,6 +303,32 @@ function parseLineUbl(s: string, index: number): InvoiceLine {
   };
 }
 
+function parseAllowanceUbl(ac: string): AllowanceCharge {
+  const cat = inner(ac, "cac:TaxCategory");
+  return {
+    isCharge: val(ac, "cbc:ChargeIndicator") === "true",
+    amount: num(val(ac, "cbc:Amount")),
+    reason: val(ac, "cbc:AllowanceChargeReason"),
+    reasonCode: val(ac, "cbc:AllowanceChargeReasonCode"),
+    vat: {
+      category: (val(cat, "cbc:ID") ?? "S") as VatCategory,
+      ratePercent: num(val(cat, "cbc:Percent")),
+    },
+  };
+}
+
+function exemptionsUbl(xml: string): Partial<Record<VatCategory, VatExemptionReason>> | undefined {
+  const out: Partial<Record<VatCategory, VatExemptionReason>> = {};
+  for (const sub of innerAll(inner(xml, "cac:TaxTotal"), "cac:TaxSubtotal")) {
+    const tc = inner(sub, "cac:TaxCategory");
+    const cat = val(tc, "cbc:ID") as VatCategory | undefined;
+    const text = val(tc, "cbc:TaxExemptionReason");
+    const code = val(tc, "cbc:TaxExemptionReasonCode");
+    if (cat && (text || code)) out[cat] = { text, code };
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
 /** Parse an OASIS UBL invoice (EN16931 / PEPPOL / XRechnung-UBL) into the Invoice model. */
 export function parseUBL(xml: string): Invoice {
   // UBL has no head wrapper; the header fields are direct children before the supplier party
@@ -312,6 +372,11 @@ export function parseUBL(xml: string): Invoice {
         }
       : undefined;
   const paid = val(inner(xml, "cac:LegalMonetaryTotal"), "cbc:PrepaidAmount");
+  // document-level allowances/charges live before the lines (UBL also allows them per-line, which we skip)
+  const li = xml.indexOf("<cac:InvoiceLine");
+  const allowancesCharges = innerAll(li >= 0 ? xml.slice(0, li) : xml, "cac:AllowanceCharge").map(
+    parseAllowanceUbl,
+  );
 
   return {
     number: val(head, "cbc:ID") ?? "",
@@ -344,6 +409,8 @@ export function parseUBL(xml: string): Invoice {
     },
     delivery,
     lines: innerAll(xml, "cac:InvoiceLine").map(parseLineUbl),
+    allowancesCharges: allowancesCharges.length ? allowancesCharges : undefined,
+    vatExemptionReasons: exemptionsUbl(xml),
     payment,
     paidAmount: paid !== undefined ? num(paid) : undefined,
   };

@@ -130,3 +130,60 @@ describe("parseUBL - XML → Invoice", () => {
     expect(parseInvoice(ubl(invoice)).number).toBe("RE-2026-014");
   });
 });
+
+// a reverse-charge invoice with a document discount + a surcharge - exercises BG-20/21 + BT-120/121
+const acInvoice = {
+  number: "RE-AC-1",
+  issueDate: "2026-06-21",
+  currency: "EUR",
+  seller: {
+    name: "Bau GmbH",
+    vatId: "DE111111111",
+    address: { city: "Berlin", postCode: "10115", country: "DE" },
+  },
+  buyer: { name: "Kunde AG", address: { city: "Bonn", postCode: "53113", country: "DE" } },
+  lines: [
+    {
+      name: "Bauleistung",
+      quantity: 10,
+      unit: "HUR",
+      netUnitPrice: 100,
+      vat: { category: "AE" as const, ratePercent: 0 },
+    },
+  ],
+  allowancesCharges: [
+    {
+      isCharge: false,
+      amount: 50,
+      vat: { category: "AE" as const, ratePercent: 0 },
+      reason: "Treuerabatt",
+    },
+    {
+      isCharge: true,
+      amount: 20,
+      vat: { category: "AE" as const, ratePercent: 0 },
+      reason: "Versand",
+    },
+  ],
+  vatExemptionReasons: {
+    AE: { text: "Steuerschuldnerschaft des Leistungsempfängers (§13b UStG)", code: "VATEX-EU-AE" },
+  },
+};
+
+describe("parse - allowances/charges + VAT exemptions (BG-20/21, BT-120/121)", () => {
+  it("CII round-trips a discount, a surcharge and the reverse-charge reason", () => {
+    const xml = toCII(acInvoice, computeInvoice(acInvoice));
+    const p = parseCII(xml);
+    expect(toCII(p, computeInvoice(p))).toBe(xml);
+    expect(p.allowancesCharges).toHaveLength(2);
+    expect(p.vatExemptionReasons?.AE?.code).toBe("VATEX-EU-AE");
+  });
+
+  it("UBL round-trips the same", () => {
+    const xml = toUBL(acInvoice, computeInvoice(acInvoice));
+    const p = parseUBL(xml);
+    expect(toUBL(p, computeInvoice(p))).toBe(xml);
+    expect(p.allowancesCharges).toHaveLength(2);
+    expect(p.vatExemptionReasons?.AE?.code).toBe("VATEX-EU-AE");
+  });
+});
