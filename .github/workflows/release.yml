@@ -43,7 +43,12 @@ jobs:
             cli-v*)     DIR="packages/cli"      ; NAME="@jasy/cli"     ; VER="${TAG#cli-v}" ;;
             *) echo "Unknown tag: $TAG" ; exit 1 ;;
           esac
-          { echo "dir=$DIR"; echo "name=$NAME"; echo "version=$VER"; } >> "$GITHUB_OUTPUT"
+          # npm dist-tag: a prerelease (1.0.0-alpha.1) publishes to its channel (alpha) and NEVER to
+          # 'latest'; a stable version (1.0.0) publishes to 'latest'. Stops 'latest' getting stuck on a
+          # prerelease (the classic "latest points at an older version" trap).
+          DIST=$(printf '%s' "$VER" | sed -nE 's/^[0-9]+\.[0-9]+\.[0-9]+-([a-zA-Z]+).*/\1/p')
+          [ -z "$DIST" ] && DIST="latest"
+          { echo "dir=$DIR"; echo "name=$NAME"; echo "version=$VER"; echo "dist=$DIST"; } >> "$GITHUB_OUTPUT"
 
       # build the target AND its workspace dependencies ("<name>..."), so e.g. @jasy/zugferd has
       # @jasy/pdf's dist available when it compiles - nothing unrelated is built.
@@ -55,15 +60,17 @@ jobs:
 
       - name: Publish
         working-directory: ${{ steps.pkg.outputs.dir }}
-        # pnpm rewrites the workspace:* deps to real versions on publish
-        run: pnpm publish --access public --no-git-checks --provenance
+        # pnpm rewrites the workspace:* deps to real versions on publish; --tag keeps prereleases off 'latest'
+        run: pnpm publish --access public --no-git-checks --provenance --tag "${{ steps.pkg.outputs.dist }}"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create GitHub Release
-        run: >
-          gh release create "${{ github.ref_name }}"
-          --title "${{ steps.pkg.outputs.name }} ${{ steps.pkg.outputs.version }}"
-          --generate-notes
+        run: |
+          FLAG="--latest"
+          [ "${{ steps.pkg.outputs.dist }}" != "latest" ] && FLAG="--prerelease"
+          gh release create "${{ github.ref_name }}" \
+            --title "${{ steps.pkg.outputs.name }} ${{ steps.pkg.outputs.version }}" \
+            --generate-notes $FLAG
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
