@@ -23,11 +23,23 @@ export function extractEmbeddedXml(pdf: Uint8Array): string {
   return (flated ? inflateSync(bytes) : bytes).toString("utf-8");
 }
 
-// The EmbeddedFile object number: prefer the Filespec's /EF reference (the file the /AF points at),
-// else fall back to the object that declares /Type /EmbeddedFile.
+// The e-invoice XML's EmbeddedFile object number. A PDF may embed SEVERAL files (e.g. a tool also
+// attaches its own gobl.json / source) - so we collect every Filespec and pick the invoice XML by name
+// (factur-x.xml / zugferd-invoice.xml / xrechnung.xml / order-x.xml), then any .xml, then the first.
 function findEmbeddedFileObject(s: string): number | null {
-  const ef = s.match(/\/EF\s*<<[^>]*?\/(?:UF|F)\s+(\d+)\s+0\s+R/);
-  if (ef) return Number(ef[1]);
+  const specs: { obj: number; name: string }[] = [];
+  const efRe = /\/EF\s*<<[^>]*?\/(?:UF|F)\s+(\d+)\s+0\s+R/g;
+  for (let m = efRe.exec(s); m; m = efRe.exec(s)) {
+    specs.push({ obj: Number(m[1]), name: filespecName(s, m.index) });
+  }
+  if (specs.length) {
+    const invoiceXml = /(factur-x|zugferd-invoice|xrechnung|order-x|cii)\.xml$/i;
+    const pick =
+      specs.find((sp) => invoiceXml.test(sp.name)) ??
+      specs.find((sp) => /\.xml$/i.test(sp.name)) ??
+      specs[0];
+    return pick.obj;
+  }
 
   const t = s.search(/\/Type\s*\/EmbeddedFile/);
   if (t >= 0) {
@@ -36,6 +48,14 @@ function findEmbeddedFileObject(s: string): number | null {
     if (m) return Number(m[1]);
   }
   return null;
+}
+
+/** The /F or /UF filename of the Filespec that owns the /EF at `idx` (look just before it, else after). */
+function filespecName(s: string, idx: number): string {
+  const before = s.slice(Math.max(0, idx - 400), idx).match(/\/(?:UF|F)\s*\(([^)]*)\)[^(]*$/);
+  if (before) return before[1];
+  const after = s.slice(idx, idx + 400).match(/\/(?:UF|F)\s*\(([^)]*)\)/);
+  return after ? after[1] : "";
 }
 
 function locateObject(s: string, objNum: number): { dict: string; dataStart: number } | null {

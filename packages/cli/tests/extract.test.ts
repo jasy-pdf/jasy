@@ -41,4 +41,20 @@ describe("extractEmbeddedXml", () => {
     const plain = Buffer.from("%PDF-1.7\n1 0 obj\n<< /Type /Catalog >>\nendobj\n");
     expect(() => extractEmbeddedXml(plain)).toThrow(/ZUGFeRD|Factur-X|embedded/i);
   });
+
+  // some tools embed their own source (e.g. a gobl.json from Invopop) ALONGSIDE the invoice XML -
+  // and list it first. We must still pick the e-invoice XML, not the first embedded file.
+  it("picks the invoice XML when several files are embedded (gobl.json listed first)", () => {
+    const pdf = Buffer.from(
+      "%PDF-1.7\n" +
+        "1 0 obj\n<< /Type /Filespec /F (gobl.json) /UF (gobl.json) /EF << /F 2 0 R /UF 2 0 R >> >>\nendobj\n" +
+        '2 0 obj\n<< /Type /EmbeddedFile >>\nstream\n{"gobl":true}\nendstream\nendobj\n' +
+        "3 0 obj\n<< /Type /Filespec /F (xrechnung.xml) /UF (xrechnung.xml) /EF << /F 4 0 R /UF 4 0 R >> >>\nendobj\n" +
+        "4 0 obj\n<< /Type /EmbeddedFile /Subtype /text#2Fxml >>\nstream\n<rsm:CrossIndustryInvoice>OK</rsm:CrossIndustryInvoice>\nendstream\nendobj\n",
+      "latin1",
+    );
+    const xml = extractEmbeddedXml(pdf);
+    expect(xml).toContain("CrossIndustryInvoice");
+    expect(xml).not.toContain("gobl");
+  });
 });
