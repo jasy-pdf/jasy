@@ -50,18 +50,21 @@ jobs:
           [ -z "$DIST" ] && DIST="latest"
           { echo "dir=$DIR"; echo "name=$NAME"; echo "version=$VER"; echo "dist=$DIST"; } >> "$GITHUB_OUTPUT"
 
-      # build the target AND its workspace dependencies ("<name>..."), so e.g. @jasy/zugferd has
-      # @jasy/pdf's dist available when it compiles - nothing unrelated is built.
+      # Build ALL packages - the publish needs the target + its deps built, and the full test suite
+      # below imports across packages (cli tests use @jasy/zugferd), so every package needs its dist.
+      # --include-workspace-root is essential: @jasy/pdf IS the root package; plain `pnpm -r` skips it,
+      # and then @jasy/zugferd can't resolve @jasy/pdf. Publishing still only ships the tagged package.
       - name: Build
-        run: pnpm --filter "${{ steps.pkg.outputs.name }}..." build
+        run: pnpm -r --include-workspace-root build
 
       - name: Test (never ship a red build)
         run: pnpm exec vitest run
 
       - name: Publish
         working-directory: ${{ steps.pkg.outputs.dir }}
-        # pnpm rewrites the workspace:* deps to real versions on publish; --tag keeps prereleases off 'latest'
-        run: pnpm publish --access public --no-git-checks --provenance --tag "${{ steps.pkg.outputs.dist }}"
+        # pnpm rewrites the workspace:* deps to real versions on publish; --tag keeps prereleases off 'latest'.
+        # (--provenance can be added back once the first publish is proven green.)
+        run: pnpm publish --access public --no-git-checks --tag "${{ steps.pkg.outputs.dist }}"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
