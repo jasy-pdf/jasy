@@ -29,7 +29,7 @@
     "test": "vitest",
     "test:coverage": "vitest --coverage",
     "build": "tsc && pnpm run copy-assets",
-    "prepublishOnly": "pnpm run build",
+    "prepack": "pnpm run build",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
     "fmt": "oxfmt",

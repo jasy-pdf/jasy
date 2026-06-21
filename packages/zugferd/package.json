@@ -22,7 +22,7 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
-    "prepublishOnly": "pnpm run build",
+    "prepack": "pnpm run build",
     "test": "vitest run",
     "validate": "tsc && node scripts/validate.cjs"
   },

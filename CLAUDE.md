@@ -222,11 +222,14 @@ rendering. This is the standing visual check; prefer it over one-off `scripts/ru
    in roadmap Phase 5; the `LayoutContext` plumbing built in Phase 2 is what survives.
 5. ~~**README over-promises** custom font embedding.~~ **DONE** — TrueType embedding works end-to-end
    (`TTFParser` → Type0/Identity-H + `/FontFile2`, `renderPdf(doc, { fonts })`), full Unicode, copy-able.
-   Only the size optimisation (subsetting) + OTF/CFF/WOFF2 formats remain.
+   Only OTF/CFF/WOFF2 font formats remain (subsetting is **done** — see #7).
 6. `manual-test` has hard-coded machine-specific paths.
-7. **Custom fonts embed the FULL font** (no subsetting yet) → large PDFs; no TrueType kerning. Deferred,
-   not correctness bugs. (Bold/italic now work via registered family variants with a clean fallback to
-   `normal`; we don't _synthesise_ faux styles, which is correct behaviour, not a gap.)
+7. **Custom fonts are subsetted + compressed.** `ttf-subsetter.ts` strips unused `glyf` outlines, rebuilds
+   `loca`, keeps composite parts, and tags the font `ABCDEF+` as PDF/A requires for subsets (wired via
+   `pdf-object-manager.finalizeCustomFonts()`, called in the renderer; verified 742 KB → 76 KB). Streams
+   are FlateDecode-compressed. Remaining font gaps: no TrueType kerning, and OTF/CFF/WOFF2 formats. Bold/
+   italic work via registered family variants with a clean fallback to `normal` (we don't _synthesise_
+   faux styles, which is correct, not a gap).
 
 ## Roadmap
 

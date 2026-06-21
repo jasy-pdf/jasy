@@ -16,3 +16,5 @@ packages/*/dist
 # Playground scratch output — the source (play.ts) is a committed example, the rendered PDFs aren't.
 packages/playground/*.pdf
 packages/playground/*.png
+# npm pack / release tarballs
+*.tgz
