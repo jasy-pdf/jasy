@@ -18,7 +18,7 @@ export interface VatBreakdownEntry {
   exemption?: VatExemptionReason; // BT-120 / BT-121
 }
 
-/** All amounts derived from an `Invoice` — what the CII emitter writes for BG-22 / BG-23 / BT-131. */
+/** All amounts derived from an `Invoice` - what the CII emitter writes for BG-22 / BG-23 / BT-131. */
 export interface ComputedInvoice {
   lineNets: number[]; // BT-131 per line (parallel to invoice.lines)
   lineTotal: number; // BT-106  sum of line nets

@@ -48,7 +48,7 @@ describe("RowElement", () => {
     expect(right.getProps().x).toBe(170);
   });
 
-  // Regression: a fixed Text in a Row must reserve its RENDERED width (per-glyph, no kerning) — the
+  // Regression: a fixed Text in a Row must reserve its RENDERED width (per-glyph, no kerning) - the
   // renderer advances without kerning, so reserving the kerning-narrower getStringWidth makes the
   // text overflow its own box and wrap, even with plenty of space. (CSS: space → never constrains.)
   it("a fixed Text in a Row reserves its no-kerning render width, so it never wraps with space", () => {
@@ -65,7 +65,7 @@ describe("RowElement", () => {
       ctx,
     );
 
-    // 9 × 6 = 54 (rendered advance), NOT the kerned getStringWidth (44) — else it would wrap.
+    // 9 × 6 = 54 (rendered advance), NOT the kerned getStringWidth (44) - else it would wrap.
     expect(text.getProps().width).toBe(54);
   });
 });

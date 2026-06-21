@@ -1,26 +1,26 @@
 {
   "name": "@jasy/pdf",
   "version": "0.0.1",
-  "description": "Declarative, component-based PDF generation in pure TypeScript — Flutter-style components, real AFM font metrics, a hand-rolled PDF writer. No headless browser, no Java.",
+  "description": "Declarative, component-based PDF generation in pure TypeScript - Flutter-style components, real AFM font metrics, a hand-rolled PDF writer. No headless browser, no Java.",
   "keywords": [
-    "pdf",
-    "pdf-generation",
-    "typescript",
     "declarative",
+    "factur-x",
+    "invoice",
     "layout",
     "pagination",
-    "invoice",
-    "zugferd",
-    "factur-x",
-    "pdf-a"
+    "pdf",
+    "pdf-a",
+    "pdf-generation",
+    "typescript",
+    "zugferd"
   ],
   "license": "MIT",
   "author": "Florian Heuberger",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
   "files": [
     "dist"
   ],
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
     "copy-assets": "ncp ./src/lib/assets ./dist/assets",
     "cli": "pnpm --filter @jasy/cli dev",

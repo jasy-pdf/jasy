@@ -1,12 +1,12 @@
-// The Invoice data model — the public API of @jasy/zugferd and the single source that drives
+// The Invoice data model - the public API of @jasy/zugferd and the single source that drives
 // both the CII XML and the rendered PDF. It mirrors the EN-16931 semantic model: every field is
 // annotated with its Business Term (BT-xx) / Business Group (BG-xx) so the mapping to the standard
 // is traceable and reviewable. Target: ZUGFeRD 2.x / Factur-X, profile EN16931 (COMFORT).
 //
-// DESIGN — provide inputs, we compute the maths. The user supplies line items, prices, VAT rates
+// DESIGN - provide inputs, we compute the maths. The user supplies line items, prices, VAT rates
 // and (optional) allowances/charges; the generator DERIVES the line net amounts (BG-25 BT-131),
 // the document totals (BG-22, BT-106…BT-115) and the VAT breakdown (BG-23, BT-116…BT-121) with
-// spec-correct rounding. That makes the totals consistent BY CONSTRUCTION — the single biggest
+// spec-correct rounding. That makes the totals consistent BY CONSTRUCTION - the single biggest
 // class of validation failures (BR-CO-* total checks) can't happen. (A future option may let an
 // accounting system pass its own totals to assert against ours.)
 //
@@ -69,7 +69,7 @@ export interface Seller {
   tradingName?: string; // BT-28  business/trading name if different
   /** Seller VAT identifier, e.g. `"DE123456789"` (BT-31). Needed whenever VAT is charged. */
   vatId?: string;
-  /** Tax registration identifier / Steuernummer (BT-32) — alternative/additional to the VAT ID. */
+  /** Tax registration identifier / Steuernummer (BT-32) - alternative/additional to the VAT ID. */
   taxNumber?: string;
   /** Legal registration id, e.g. Handelsregisternummer (BT-30). */
   legalRegistrationId?: string;
@@ -85,7 +85,7 @@ export interface Seller {
 export interface Buyer {
   name: string; // BT-44  (MANDATORY)
   tradingName?: string; // BT-45
-  /** Buyer VAT identifier (BT-48) — required e.g. for reverse-charge / intra-community supply. */
+  /** Buyer VAT identifier (BT-48) - required e.g. for reverse-charge / intra-community supply. */
   vatId?: string;
   /** Buyer legal registration id (BT-47). */
   legalRegistrationId?: string;
@@ -127,7 +127,7 @@ export interface LineVat {
  * given per category here and emitted onto each matching BG-23 group by the generator.
  */
 export interface VatExemptionReason {
-  text?: string; // BT-120, e.g. "Reverse charge — Steuerschuldnerschaft des Leistungsempfängers (§13b UStG)"
+  text?: string; // BT-120, e.g. "Reverse charge - Steuerschuldnerschaft des Leistungsempfängers (§13b UStG)"
   code?: string; // BT-121 (VATEX code list), e.g. "VATEX-EU-AE"
 }
 
@@ -145,7 +145,7 @@ export interface InvoiceLine {
   unit: UnitCode; // BT-130  (MANDATORY)
   /** Net price of one unit, before line allowances/charges (BT-146)  (MANDATORY). */
   netUnitPrice: number;
-  /** Quantity the net price refers to (BT-149), default 1 — e.g. price "per 100". */
+  /** Quantity the net price refers to (BT-149), default 1 - e.g. price "per 100". */
   priceBaseQuantity?: number;
   vat: LineVat; // BG-30  (MANDATORY)
   /** Per-line allowances/charges (BG-27 / BG-28). Net line amount BT-131 is computed from these. */
@@ -171,7 +171,7 @@ export interface Payment {
   terms?: string;
 }
 
-/** The complete invoice — the single input to `renderZugferd(invoice, …)`. */
+/** The complete invoice - the single input to `renderZugferd(invoice, …)`. */
 export interface Invoice {
   /** Invoice number (BT-1)  (MANDATORY). */
   number: string;

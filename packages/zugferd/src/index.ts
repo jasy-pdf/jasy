@@ -1,4 +1,4 @@
-// @jasy/zugferd — ZUGFeRD / Factur-X / XRechnung (EN-16931) on top of the @jasy/pdf renderer.
+// @jasy/zugferd - ZUGFeRD / Factur-X / XRechnung (EN-16931) on top of the @jasy/pdf renderer.
 // The invoice data model, the CII XML generator, the PDF/A-3 assembly and the (pluggable)
 // validation live here, NOT in the layout core.
 

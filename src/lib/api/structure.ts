@@ -126,7 +126,7 @@ export interface RenderOptions {
   /** Write a trailer `/ID` (required by PDF/A); the id is a deterministic content hash. */
   documentId?: boolean;
   /** Register the standard-14 fonts (default true). Set false for PDF/A so only embedded fonts
-   *  appear — then every font name used must be supplied via `fonts`. */
+   *  appear - then every font name used must be supplied via `fonts`. */
   standardFonts?: boolean;
   /** FlateDecode-compress the streams (default true). Set false for a greppable, uncompressed PDF. */
   compress?: boolean;

@@ -1,7 +1,7 @@
-// jasy playground — full TypeScript, full autocomplete. Edit, then `pnpm play` (from the repo root)
+// jasy playground - full TypeScript, full autocomplete. Edit, then `pnpm play` (from the repo root)
 // or `pnpm --filter @jasy/playground play`. Writes ./out.pdf next to this file.
 //
-// Hover anything, Ctrl-Space for options — every factory + its options object is typed from @jasy/pdf.
+// Hover anything, Ctrl-Space for options - every factory + its options object is typed from @jasy/pdf.
 
 import { writeFileSync } from "node:fs";
 import { Document, Page, Text, Table, Box, Row, Padding, Divider, renderToBytes } from "@jasy/pdf";

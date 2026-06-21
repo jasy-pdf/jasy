@@ -5,7 +5,7 @@ import { describeInvoice } from "../core/detect.js";
 import { validateInvoiceXml, profileFor, type ValidationReport } from "../core/validate.js";
 import { checkPdfA3, type PdfaReport } from "../core/pdfa.js";
 
-// `jasy validate <file> [-v]` — runs the full local check (EN 16931 business rules + structural
+// `jasy validate <file> [-v]` - runs the full local check (EN 16931 business rules + structural
 // PDF/A-3) on a ZUGFeRD/XRechnung PDF or raw XML, prints a report, and exits non-zero when invalid
 // (so it slots into scripts/CI). Same UI-agnostic core as the TUI.
 
@@ -37,7 +37,7 @@ export function validateCommand(args: string[]): void {
 
   const read = readInvoice(bytes);
 
-  // XML business rules (Schematron) — EN 16931, plus the XRechnung BR-DE delta when it's an XRechnung.
+  // XML business rules (Schematron) - EN 16931, plus the XRechnung BR-DE delta when it's an XRechnung.
   // The rule set is picked automatically from what detect() found (syntax + CIUS).
   let rules: ValidationReport | null = null;
   if (read.meta.syntax !== "unknown") {

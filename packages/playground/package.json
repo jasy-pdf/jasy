@@ -2,8 +2,8 @@
   "name": "@jasy/playground",
   "version": "0.0.0",
   "private": true,
+  "description": "Scratch TS playground for the jasy layout API - edit play.ts, run `pnpm play`.",
   "type": "module",
-  "description": "Scratch TS playground for the jasy layout API — edit play.ts, run `pnpm play`.",
   "scripts": {
     "play": "tsx play.ts",
     "check": "tsc --noEmit"

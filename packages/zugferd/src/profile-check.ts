@@ -13,35 +13,30 @@ export function xrechnungProblems(invoice: Invoice): string[] {
   };
   const { seller, buyer, payment } = invoice;
 
-  require(invoice.buyerReference, "XRechnung needs the Leitweg-ID — set invoice.buyerReference (BT-10).");
+  require(invoice.buyerReference, "XRechnung needs the Leitweg-ID - set invoice.buyerReference (BT-10).");
 
-  require(
-    seller.electronicAddress,
-    "XRechnung needs the seller's electronic address — set invoice.seller.electronicAddress (BT-34).",
-  );
-  require(
-    buyer.electronicAddress,
-    "XRechnung needs the buyer's electronic address — set invoice.buyer.electronicAddress (BT-49).",
-  );
+  require(seller.electronicAddress, "XRechnung needs the seller's electronic address - set invoice.seller.electronicAddress (BT-34).");
+  require(buyer.electronicAddress, "XRechnung needs the buyer's electronic address - set invoice.buyer.electronicAddress (BT-49).");
 
-  require(seller.contact?.name, "XRechnung needs a seller contact name — set invoice.seller.contact.name (BT-41).");
-  require(seller.contact?.phone, "XRechnung needs a seller contact phone — set invoice.seller.contact.phone (BT-42).");
-  require(seller.contact?.email, "XRechnung needs a seller contact email — set invoice.seller.contact.email (BT-43).");
+  require(seller.contact
+    ?.name, "XRechnung needs a seller contact name - set invoice.seller.contact.name (BT-41).");
+  require(seller.contact
+    ?.phone, "XRechnung needs a seller contact phone - set invoice.seller.contact.phone (BT-42).");
+  require(seller.contact
+    ?.email, "XRechnung needs a seller contact email - set invoice.seller.contact.email (BT-43).");
 
-  require(seller.address.city, "XRechnung needs the seller city — set invoice.seller.address.city (BT-37).");
-  require(seller.address.postCode, "XRechnung needs the seller post code — set invoice.seller.address.postCode (BT-38).");
+  require(seller.address
+    .city, "XRechnung needs the seller city - set invoice.seller.address.city (BT-37).");
+  require(seller.address
+    .postCode, "XRechnung needs the seller post code - set invoice.seller.address.postCode (BT-38).");
 
-  require(
-    invoice.dueDate || payment?.terms,
-    "XRechnung needs a due date or payment terms — set invoice.dueDate (BT-9) or invoice.payment.terms (BT-20).",
-  );
+  require(invoice.dueDate ||
+    payment?.terms, "XRechnung needs a due date or payment terms - set invoice.dueDate (BT-9) or invoice.payment.terms (BT-20).");
 
   // A credit transfer (the default / codes 30, 58, 59) must carry an IBAN.
   const creditTransfer = !payment?.meansCode || ["30", "58", "59"].includes(payment.meansCode);
-  require(
-    !creditTransfer || payment?.iban,
-    "XRechnung credit transfer needs an IBAN — set invoice.payment.iban (BT-84).",
-  );
+  require(!creditTransfer ||
+    payment?.iban, "XRechnung credit transfer needs an IBAN - set invoice.payment.iban (BT-84).");
 
   return problems;
 }

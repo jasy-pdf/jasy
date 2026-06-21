@@ -20,7 +20,7 @@ interface Deps {
   draw: Draw;
   input: InputManager;
   startDir: string;
-  quit: () => void; // emergency exit — Ctrl-C must always escape, even from inside the modal
+  quit: () => void; // emergency exit - Ctrl-C must always escape, even from inside the modal
 }
 
 const BRAND: [number, number, number] = [26, 79, 138];
@@ -114,7 +114,7 @@ export function openFileDialog({
 
     layer.on("key", (key) => {
       if (key.ctrl && key.name === "c") {
-        quit(); // never returns — restores the tty and exits
+        quit(); // never returns - restores the tty and exits
         return true;
       }
       if (key.name === "escape" || (key.raw.length === 1 && key.raw[0] === 0x1b)) {

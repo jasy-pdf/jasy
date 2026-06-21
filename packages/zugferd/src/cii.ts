@@ -21,7 +21,7 @@ export const GUIDELINE: Record<CiiProfile, string> = {
   xrechnung: "urn:cen.eu:en16931:2017#compliant#urn:xeinkauf.de:kosit:xrechnung_3.0",
 };
 
-/** Business process (BT-23) — the PEPPOL billing process; XRechnung requires it. */
+/** Business process (BT-23) - the PEPPOL billing process; XRechnung requires it. */
 export const BUSINESS_PROCESS = "urn:fdc:peppol.eu:2017:poacc:billing:01:1.0";
 
 /** XML-escape text content (`&`, `<`, `>` are enough for element text + double-quoted attrs). */
@@ -221,7 +221,7 @@ export function toCII(
   ]);
 
   const d = invoice.delivery;
-  // ApplicableHeaderTradeDelivery is mandatory (1..1) even when empty — emit the wrapper always.
+  // ApplicableHeaderTradeDelivery is mandatory (1..1) even when empty - emit the wrapper always.
   const deliveryChildren = [
     d?.recipientName || d?.address
       ? wrap("ram:ShipToTradeParty", [

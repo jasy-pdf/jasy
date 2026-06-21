@@ -12,7 +12,7 @@ export function extractEmbeddedXml(pdf: Uint8Array): string {
 
   const objNum = findEmbeddedFileObject(s);
   if (objNum === null) {
-    throw new Error("No embedded XML found — is this a ZUGFeRD / Factur-X PDF?");
+    throw new Error("No embedded XML found - is this a ZUGFeRD / Factur-X PDF?");
   }
 
   const obj = locateObject(s, objNum);

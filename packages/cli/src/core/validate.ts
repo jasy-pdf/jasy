@@ -6,14 +6,14 @@ import SaxonJS from "saxon-js";
 import type { InvoiceMeta } from "./detect.js";
 
 // FULL e-invoice validation, pure Node. Runs the official EN16931 / XRechnung **Schematron** business
-// rules (the same ones KoSIT / Mustang apply) locally via SaxonJS — no upload, DSGVO-safe. The rules
+// rules (the same ones KoSIT / Mustang apply) locally via SaxonJS - no upload, DSGVO-safe. The rules
 // are vendored as gzipped SEF (SaxonJS's compiled form). This validates the XML (the legally decisive
 // part). PDF/A-3 structural validation (veraPDF) is Java and stays an external/CI check.
 
 export type ValidationProfile = "en16931-cii" | "en16931-ubl" | "xrechnung-cii" | "xrechnung-ubl";
 
 // Which rule sets to run for a profile. XRechnung is a CIUS *on top of* EN 16931, so its files carry
-// only the BR-DE delta — we run the EN 16931 base AND the XRechnung rules and merge the findings.
+// only the BR-DE delta - we run the EN 16931 base AND the XRechnung rules and merge the findings.
 const RULE_SETS: Record<ValidationProfile, string[]> = {
   "en16931-cii": ["en16931-cii"],
   "en16931-ubl": ["en16931-ubl"],
@@ -37,7 +37,7 @@ export interface ValidationReport {
 
 const RULES_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "assets", "validation");
 
-/** The profile that matches what detect() found — picks the right syntax + CIUS automatically. */
+/** The profile that matches what detect() found - picks the right syntax + CIUS automatically. */
 export function profileFor(meta: InvoiceMeta): ValidationProfile {
   const ubl = meta.syntax === "UBL";
   if (meta.profile === "xrechnung") return ubl ? "xrechnung-ubl" : "xrechnung-cii";

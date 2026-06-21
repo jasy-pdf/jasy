@@ -34,7 +34,7 @@ export interface PDFConfig {
   defaultFont?: DefaultFont;
   metaData?: MetaData;
   /** Register the 14 standard fonts (default true). Set false for PDF/A, where every font must be
-   *  embedded — the non-embeddable standard-14 must not appear in the document at all. */
+   *  embedded - the non-embeddable standard-14 must not appear in the document at all. */
   registerStandardFonts?: boolean;
 }
 

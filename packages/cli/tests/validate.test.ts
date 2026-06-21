@@ -3,7 +3,7 @@ import { renderZugferd } from "@jasy/zugferd";
 import { extractEmbeddedXml } from "../src/core/extract";
 import { validateInvoiceXml } from "../src/core/validate";
 
-// a complete, conformant invoice (mirrors the sample renderer — known EN16931-valid)
+// a complete, conformant invoice (mirrors the sample renderer - known EN16931-valid)
 const invoice = {
   number: "RE-2026-VAL",
   issueDate: "2026-06-19",
@@ -42,7 +42,7 @@ const invoice = {
   payment: { iban: "DE02120300000000202051", terms: "Zahlbar innerhalb 14 Tagen netto." },
 };
 
-describe("validateInvoiceXml — EN16931 CII (saxon-js, local)", () => {
+describe("validateInvoiceXml - EN16931 CII (saxon-js, local)", () => {
   it("passes a conformant ZUGFeRD invoice (0 errors)", async () => {
     const { bytes } = await renderZugferd(invoice);
     const report = validateInvoiceXml(extractEmbeddedXml(bytes), "en16931-cii");
