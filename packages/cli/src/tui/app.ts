@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync } from "node:fs";
-import { basename, resolve } from "node:path";
+import { basename, resolve, dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createScreen, createDraw, createInputManager, type RGB } from "@jano-editor/ui";
 import { readInvoice, type ReadResult } from "../core/read.js";
 import { describeInvoice } from "../core/detect.js";
@@ -17,6 +18,21 @@ const MUTED: RGB = [123, 135, 148];
 const FAINT: RGB = [80, 85, 95];
 const OK: RGB = [90, 170, 110];
 const ERR: RGB = [200, 90, 90];
+const YELLOW: RGB = [243, 220, 41]; // JS yellow - the ▒ accent band on the crane
+
+// the jasy origami crane (assets/jasy.txt), shown on the empty start screen; "▒" cells are the accent
+const CRANE: string[] = (() => {
+  try {
+    const p = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "assets", "jasy.txt");
+    return readFileSync(p, "utf-8")
+      .replace(/\n+$/, "")
+      .split("\n")
+      .map((l) => l.replace(/\s+$/, "")); // keep leading spaces (alignment), drop trailing
+  } catch {
+    return []; // no logo file - the start screen just shows the box
+  }
+})();
+const CRANE_W = CRANE.length ? Math.max(...CRANE.map((l) => l.length)) : 0;
 
 const TOP = 1;
 const MAX_W = 72; // cap so the box doesn't sprawl on very wide terminals
@@ -142,6 +158,25 @@ export function launchTui(): void {
     return rows;
   }
 
+  // draw the crane logo centred above the box: "▒" cells in JS-yellow, the rest in brand blue
+  function drawCrane(cols: number): void {
+    const cx = Math.max(0, Math.floor((cols - CRANE_W) / 2));
+    CRANE.forEach((line, row) => {
+      let i = 0;
+      while (i < line.length) {
+        if (line[i] === " ") {
+          i++;
+          continue;
+        }
+        const yellow = line[i] === "▒";
+        let j = i;
+        while (j < line.length && line[j] !== " " && (line[j] === "▒") === yellow) j++;
+        draw.text(cx + i, TOP + row, line.slice(i, j), { fg: yellow ? YELLOW : BRAND });
+        i = j;
+      }
+    });
+  }
+
   function render(): void {
     const cols = screen.width;
     const screenH = screen.height;
@@ -153,10 +188,15 @@ export function launchTui(): void {
     const body = buildBody(w); // scrollable
     const canExport = !!(loaded?.read.invoice && loaded.read.totals);
 
+    // the crane sits above the box - only on the true start screen (nothing loaded) and only if it fits
+    const showCrane =
+      !loaded && !error && CRANE.length > 0 && cols >= CRANE_W && screenH >= CRANE.length + 9;
+    const boxTop = TOP + (showCrane ? CRANE.length + 1 : 0);
+
     // fit the box to the terminal height: pin the header, scroll the body in whatever is left
     const headBlock = header.length ? header.length + 1 : 0; // header rows + a separator blank
     const overhead = 5 + headBlock + (notice ? 1 : 0); // borders + blanks + footer around the body
-    const maxBodyH = Math.max(1, screenH - TOP - overhead);
+    const maxBodyH = Math.max(1, screenH - boxTop - overhead);
     const viewH = Math.min(body.length, maxBodyH);
     pageSize = viewH;
     const maxScroll = Math.max(0, body.length - viewH);
@@ -170,10 +210,11 @@ export function launchTui(): void {
     };
 
     draw.clear();
-    draw.rect(x, TOP, w, boxH, { border: "round" });
-    draw.text(x + 2, TOP, " jasy · ZUGFeRD / XRechnung ", { fg: BRAND });
+    if (showCrane) drawCrane(cols);
+    draw.rect(x, boxTop, w, boxH, { border: "round" });
+    draw.text(x + 2, boxTop, " jasy · ZUGFeRD / XRechnung ", { fg: BRAND });
 
-    let y = TOP + 2;
+    let y = boxTop + 2;
     for (const r of header) drawRow(r, y++);
     if (header.length) y++; // separator blank
     const bodyTop = y;
