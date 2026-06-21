@@ -4,6 +4,7 @@ import { readInvoice } from "../core/read.js";
 import { describeInvoice } from "../core/detect.js";
 import { validateInvoiceXml, profileFor, type ValidationReport } from "../core/validate.js";
 import { checkPdfA3, type PdfaReport } from "../core/pdfa.js";
+import { findVerapdf, runVeraPdf, type VeraReport } from "../core/verapdf.js";
 
 // `jasy validate <file> [-v]` - runs the full local check (EN 16931 business rules + structural
 // PDF/A-3) on a ZUGFeRD/XRechnung PDF or raw XML, prints a report, and exits non-zero when invalid
@@ -85,7 +86,30 @@ export function validateCommand(args: string[]): void {
     console.log(`  ${label("PDF/A-3 structure")}${dim("n/a (raw XML)")}`);
   }
 
-  const ok = (!rules || rules.valid) && (!pdfa || pdfa.ok);
+  // full ISO 19005 (PDF/A) via veraPDF - only when installed; never blocks, just adds the official seal
+  let vera: VeraReport | null = null;
+  if (read.isPdf && findVerapdf()) {
+    try {
+      vera = runVeraPdf(resolve(base, file));
+    } catch {
+      vera = null;
+    }
+  }
+  if (vera) {
+    const n = vera.failedRules ?? vera.failures.length;
+    console.log(
+      `  ${label("PDF/A (veraPDF)")}${vera.ok ? green("✓ compliant") : red(`✗ ${n} failed`)}`,
+    );
+    if (!vera.ok)
+      for (const f of vera.failures)
+        console.log(`    ${red("✗")} ISO clause ${f.clause}${dim(`  (${f.failedChecks} checks)`)}`);
+  } else if (read.isPdf) {
+    console.log(
+      `  ${label("PDF/A (veraPDF)")}${dim("n/a - `jasy verapdf --install` for the full ISO check")}`,
+    );
+  }
+
+  const ok = (!rules || rules.valid) && (!pdfa || pdfa.ok) && (!vera || vera.ok);
   console.log(`\n  → ${ok ? green(bold("VALID")) : red(bold("INVALID"))}\n`);
   if (!ok) process.exitCode = 1;
 }

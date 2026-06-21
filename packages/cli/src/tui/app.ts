@@ -7,6 +7,7 @@ import { describeInvoice } from "../core/detect.js";
 import { checkPdfA3, type PdfaReport } from "../core/pdfa.js";
 import { validateInvoiceXml, profileFor, type ValidationReport } from "../core/validate.js";
 import { exportInvoice, type ExportFormat } from "../core/export.js";
+import { detectTools } from "../core/verapdf.js";
 import { openFileDialog } from "./file-open.js";
 
 // The interactive jasy terminal: `o` opens a file picker, then the loaded invoice is shown together
@@ -73,6 +74,10 @@ export function launchTui(): void {
   let scroll = 0; // first visible body row (the body scrolls; the header stays pinned)
   let pageSize = 1; // body rows per screen, set in render() - used by PgUp/PgDn
 
+  // checked once at startup: is the optional full-ISO PDF/A validator (veraPDF) ready to run?
+  const tools = detectTools();
+  const veraReady = !!(tools.verapdf && tools.java);
+
   // The pinned top: a one-line confirmation of which file + what it is (stays put while body scrolls).
   function buildHeader(w: number): Row[] {
     if (error || !loaded) return [];
@@ -90,12 +95,21 @@ export function launchTui(): void {
   function buildBody(w: number): Row[] {
     if (error) return [{ text: fit("✗ " + error, w - 6), fg: ERR }];
     if (!loaded) {
-      return [
+      const rows: Row[] = [
         { text: "No invoice loaded.", fg: MUTED },
         { text: "", fg: MUTED },
         { text: "Open a ZUGFeRD / XRechnung PDF or XML -", fg: MUTED },
         { text: "jasy extracts the XML, identifies it, and checks it.", fg: MUTED },
+        { text: "", fg: MUTED },
       ];
+      // full-ISO PDF/A is optional (veraPDF) - tell the user how to enable it right here
+      if (veraReady) {
+        rows.push({ text: "Full PDF/A check (veraPDF)", fg: MUTED, status: "ready", statusFg: OK });
+      } else {
+        rows.push({ text: "Full PDF/A check (veraPDF): not set up", fg: MUTED });
+        rows.push({ text: "→ run  jasy verapdf  to enable it", fg: FAINT });
+      }
+      return rows;
     }
     const { read, pdfa, rules } = loaded;
     const rows: Row[] = [];
