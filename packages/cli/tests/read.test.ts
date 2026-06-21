@@ -24,7 +24,7 @@ const invoice = {
 };
 
 describe("readInvoice", () => {
-  it("reads a ZUGFeRD PDF — detects PDF, extracts the XML, identifies it", async () => {
+  it("reads a ZUGFeRD PDF - detects PDF, extracts the XML, identifies it", async () => {
     const { bytes } = await renderZugferd(invoice);
     const r = readInvoice(bytes);
     expect(r.isPdf).toBe(true);
@@ -38,5 +38,14 @@ describe("readInvoice", () => {
     expect(r.isPdf).toBe(false);
     expect(r.xml).toBe(xml);
     expect(r.meta.syntax).toBe("CII");
+  });
+
+  it("parses the invoice + computes totals", async () => {
+    const { bytes } = await renderZugferd(invoice);
+    const r = readInvoice(bytes);
+    expect(r.invoice?.number).toBe("RE-READ-1");
+    expect(r.invoice?.seller.name).toBe("M GmbH");
+    expect(r.invoice?.lines).toHaveLength(1);
+    expect(r.totals?.grandTotal).toBe(119); // 100 net + 19% VAT
   });
 });

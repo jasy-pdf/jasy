@@ -1,10 +1,17 @@
 import { writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { resolve, basename } from "node:path";
 import { readInvoiceFile, type ReadResult } from "../core/read.js";
 import { describeInvoice } from "../core/detect.js";
 
-// `jasy read <file> [--xml] [-o out]` — the first user-facing taste of the core: read a ZUGFeRD /
-// XRechnung PDF (or a raw XML), say what it is, and either summarise it or dump / save the XML.
+// `jasy read <file> [--xml] [-o out]` - read a ZUGFeRD / XRechnung PDF (or raw XML) and show the actual
+// invoice (number, parties, lines, totals) for humans, or dump / save the embedded XML.
+
+const tty = process.stdout.isTTY;
+const paint = (c: string, s: string): string => (tty ? `\x1b[${c}m${s}\x1b[0m` : s);
+const bold = (s: string): string => paint("1", s);
+const dim = (s: string): string => paint("2", s);
+const money = (n: number): string => n.toFixed(2);
+
 export function readCommand(args: string[]): void {
   let file: string | undefined;
   let out: string | undefined;
@@ -22,7 +29,7 @@ export function readCommand(args: string[]): void {
     return;
   }
 
-  // resolve against where the user actually stood — pnpm scripts cd into the package dir
+  // resolve against where the user actually stood - pnpm scripts cd into the package dir
   const base = process.env.INIT_CWD ?? process.cwd();
   let r: ReadResult;
   try {
@@ -43,10 +50,28 @@ export function readCommand(args: string[]): void {
     return;
   }
 
-  console.log(`✓ ${file}`);
-  console.log(`  source     ${r.isPdf ? "PDF — embedded XML extracted" : "raw XML"}`);
-  console.log(`  format     ${describeInvoice(r.meta)}`);
-  console.log(`  guideline  ${r.meta.guideline ?? "—"}`);
-  console.log(`  XML        ${r.xml.length} bytes`);
-  console.log("\n  → add --xml to print the XML, or -o <file> to save it");
+  console.log(`\n✓ ${bold(basename(file))}  ${dim("·")}  ${describeInvoice(r.meta)}\n`);
+
+  const inv = r.invoice;
+  if (inv && r.totals) {
+    console.log(`  invoice    ${bold(inv.number)}`);
+    console.log(`  date       ${inv.issueDate}${inv.dueDate ? dim(`   due ${inv.dueDate}`) : ""}`);
+    console.log(`  from       ${inv.seller.name}`);
+    console.log(`  to         ${inv.buyer.name}\n`);
+    inv.lines.forEach((l, i) => {
+      const left = `  ${l.quantity} ${l.unit}  ${l.name}`;
+      console.log(left.padEnd(48) + money(r.totals!.lineNets[i]).padStart(12));
+    });
+    const t = r.totals;
+    console.log("  " + dim("─".repeat(58)));
+    console.log(
+      `  ${dim("net")} ${money(t.taxBasisTotal)}   ${dim("VAT")} ${money(t.taxTotal)}   ${bold(`total ${money(t.grandTotal)} ${inv.currency}`)}`,
+    );
+    console.log(`\n  ${dim("→ --xml print the XML · -o <file> save it · jasy validate <file>")}`);
+  } else {
+    console.log(`  source     ${r.isPdf ? "PDF - embedded XML extracted" : "raw XML"}`);
+    console.log(`  guideline  ${r.meta.guideline ?? "-"}`);
+    console.log(`  XML        ${r.xml.length} bytes`);
+    console.log(`\n  ${dim("→ --xml print the XML · -o <file> save it")}`);
+  }
 }

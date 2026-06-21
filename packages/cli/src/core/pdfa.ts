@@ -1,5 +1,5 @@
-// Structural PDF/A-3 + ZUGFeRD/Factur-X conformance checks — pure Node. This is NOT full ISO 19005-3
-// validation (that's veraPDF, Java — offered as an optional adapter). It's the structural / metadata
+// Structural PDF/A-3 + ZUGFeRD/Factur-X conformance checks - pure Node. This is NOT full ISO 19005-3
+// validation (that's veraPDF, Java - offered as an optional adapter). It's the structural / metadata
 // layer that actually trips e-invoice PDFs in practice: the rules our own writer satisfies, read
 // backwards. Great as a regression guard for us and a fast local signal for foreign PDFs.
 
@@ -11,7 +11,7 @@ export interface PdfaCheck {
 }
 
 export interface PdfaReport {
-  /** true when every structural check passed (NOT an ISO certification — see veraPDF for that). */
+  /** true when every structural check passed (NOT an ISO certification - see veraPDF for that). */
   ok: boolean;
   checks: PdfaCheck[];
 }
@@ -24,7 +24,7 @@ export function checkPdfA3(pdf: Uint8Array): PdfaReport {
     checks.push({ id, label, ok, detail });
   };
 
-  // header + binary marker (≥4 bytes > 127 on the comment line) — required for PDF/A
+  // header + binary marker (≥4 bytes > 127 on the comment line) - required for PDF/A
   const version = s.match(/^%PDF-(\d\.\d)/)?.[1];
   add("header", "PDF header & version", !!version, version ? `%PDF-${version}` : "missing");
   const afterHeader = s.slice(s.indexOf("\n") + 1, s.indexOf("\n") + 9);

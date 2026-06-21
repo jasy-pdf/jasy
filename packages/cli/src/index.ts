@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { readCommand } from "./commands/read.js";
 import { validateCommand } from "./commands/validate.js";
+import { exportCommand } from "./commands/export.js";
 import { launchTui } from "./tui/app.js";
 
 // jasy CLI entry. With a command (e.g. `jasy read invoice.pdf`) it runs non-interactively and exits;
@@ -17,6 +18,10 @@ if (cmd === "validate") {
   validateCommand(argv.slice(1));
   process.exit(process.exitCode ?? 0);
 }
+if (cmd === "export") {
+  exportCommand(argv.slice(1));
+  process.exit(process.exitCode ?? 0);
+}
 // shorthand: `jasy some-invoice.pdf` == `jasy read some-invoice.pdf`
 if (cmd && /\.(pdf|xml)$/i.test(cmd)) {
   readCommand(argv);
@@ -30,7 +35,7 @@ if (cmd === "-h" || cmd === "--help") {
 launchTui();
 
 function printHelp(): void {
-  console.log(`jasy — ZUGFeRD / XRechnung terminal
+  console.log(`jasy - ZUGFeRD / XRechnung terminal
 
 usage:
   jasy                        open the interactive terminal
@@ -39,5 +44,7 @@ usage:
   jasy read <file> -o x.xml   save the embedded XML to a file
   jasy validate <file>        check EN 16931 rules + PDF/A-3 structure (exit 1 if invalid)
   jasy validate <file> -v     also list every passing check
+  jasy export <file> -f json  write the invoice as JSON (or txt) to stdout
+  jasy export <file> -o x.xlsx export the invoice as a spreadsheet
 `);
 }
