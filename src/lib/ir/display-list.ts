@@ -71,5 +71,24 @@ export interface Image {
   radius?: number;
 }
 
+/**
+ * Pushes a clipping region (a rectangle, rounded when `radius` is set). Everything between this and
+ * the matching `ClipPop` is clipped to it - what a Box with `overflow: "hidden"` wraps its children
+ * in, so a `Positioned` child gets cropped at the box edge instead of spilling over.
+ */
+export interface ClipPush {
+  type: "clip-push";
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  radius?: number;
+}
+
+/** Closes the most recent `ClipPush` (restores the graphics state). */
+export interface ClipPop {
+  type: "clip-pop";
+}
+
 /** The closed set of primitives the PDF backend knows how to draw. */
-export type IRNode = TextRun | Rect | Line | Image;
+export type IRNode = TextRun | Rect | Line | Image | ClipPush | ClipPop;

@@ -42,6 +42,11 @@ export class PdfBackend {
           }
           return flipped;
         }
+        case "clip-push":
+          // Flip the clip rect around its bottom edge, like a rect.
+          return { ...node, y: pageHeight - node.y - node.height };
+        case "clip-pop":
+          return node;
         default: {
           const unknown: never = node;
           return unknown;
@@ -203,6 +208,17 @@ export class PdfBackend {
             : `${c.x} ${c.y} ${c.width} ${c.height} re `;
         return `q\n${clipPath}\nW n \n` + draw + `Q\n`;
       }
+      case "clip-push": {
+        // Save the graphics state and intersect the clip with this (rounded) rect. Everything
+        // drawn until the matching clip-pop is cropped to it.
+        const path =
+          (node.radius ?? 0) > 0
+            ? PdfBackend.roundedRectPath(node.x, node.y, node.width, node.height, node.radius!)
+            : `${node.x} ${node.y} ${node.width} ${node.height} re`;
+        return `q\n${path}\nW n\n`;
+      }
+      case "clip-pop":
+        return `Q\n`;
       default: {
         // Exhaustiveness guard: if a new IRNode variant is added, this fails to compile.
         const unknown: never = node;

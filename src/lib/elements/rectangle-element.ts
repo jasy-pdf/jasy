@@ -4,6 +4,7 @@ import { Fragmentable, FragmentResult, packChildren } from "../layout/fragmentat
 import {
   LayoutContext,
   PDFElement,
+  PositioningFrame,
   SizedElement,
   SizedPDFElement,
   WithChildren,
@@ -26,6 +27,11 @@ interface RectangleElementParams extends SizedElement, WithChildren {
   radius?: number;
   /** Individual side borders; overrides the uniform `color` border when present. */
   sideBorders?: SideBorders;
+  /** When true, this box is a positioning frame for `Positioned` descendants (CSS `relative`). */
+  relative?: boolean;
+  /** `"hidden"` crops children to the box (CSS `overflow: hidden`); `"visible"` (default) lets a
+   *  `Positioned` child spill over the edge. */
+  overflow?: "hidden" | "visible";
 }
 
 export class RectangleElement extends SizedPDFElement implements Fragmentable {
@@ -35,6 +41,8 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
   private borderWidth: number;
   private radius: number;
   private sideBorders?: SideBorders;
+  private relative: boolean;
+  private overflow: "hidden" | "visible";
 
   private sizeMemory!: {
     x: number;
@@ -52,6 +60,8 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
     height,
     radius,
     sideBorders,
+    relative,
+    overflow,
   }: RectangleElementParams) {
     super({ x: 0, y: 0, width, height });
 
@@ -62,6 +72,8 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
     this.borderWidth = borderWidth ?? 1;
     this.radius = radius ?? 0;
     this.sideBorders = sideBorders;
+    this.relative = relative ?? false;
+    this.overflow = overflow ?? "visible";
     this.sizeMemory = { x: 0, y: 0, width, height };
   }
 
@@ -110,6 +122,8 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
       borderWidth: this.borderWidth,
       radius: this.radius,
       sideBorders: this.sideBorders,
+      relative: this.relative,
+      overflow: this.overflow,
     });
   }
 
@@ -122,6 +136,9 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
         : constraints.hasBoundedWidth
           ? constraints.maxWidth
           : this.width;
+    // Width shrink-wrap: no explicit width AND an unbounded region (e.g. a `Box` badge inside a
+    // `Positioned`). Resolved after the children are measured, just below.
+    const shrinkWrapWidth = this.sizeMemory.width === undefined && !constraints.hasBoundedWidth;
     // Height: explicit wins; otherwise FILL a bounded region (e.g. inside an Expanded) but
     // SHRINK-WRAP the content in an unbounded one (a note box in a stack). Shrink-wrap is
     // resolved after the children are measured, just below.
@@ -135,23 +152,44 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
     this.x = this.sizeMemory.x + offset.x;
     this.y = this.sizeMemory.y + offset.y;
 
+    // A `relative` box is a positioning frame: thread a fresh frame to the subtree so any
+    // `Positioned` descendant registers against it (out of flow), then drain it below once the
+    // box is sized. A plain box leaves `ctx` untouched -> byte-identical.
+    const frame: PositioningFrame | undefined = this.relative
+      ? { origin: { x: 0, y: 0 }, size: { width: 0, height: 0 }, place: [] }
+      : undefined;
+    const childCtx: LayoutContext = frame ? { ...ctx, frame } : ctx;
+
     // Lay out children stacked inside the border (inset by the border width). Width is
     // finalized here; height is left unbounded so each child sizes to its own content.
-    const innerWidth = Math.max(0, (this.width ?? 0) - 2 * this.borderWidth);
+    const innerWidth = shrinkWrapWidth
+      ? Infinity
+      : Math.max(0, (this.width ?? 0) - 2 * this.borderWidth);
+    let contentWidth = 0;
     let contentHeight = 0;
     let yCursor = this.y + this.borderWidth;
     for (const child of this.children) {
       const childSize = child.calculateLayout(
         BoxConstraints.loose(innerWidth, Infinity),
         { x: this.x + this.borderWidth, y: yCursor },
-        ctx,
+        childCtx,
       );
       yCursor += childSize.height;
       contentHeight += childSize.height;
+      contentWidth = Math.max(contentWidth, childSize.width);
     }
 
+    // No explicit width and no bounded region: shrink-wrap to the widest child.
+    if (shrinkWrapWidth) this.width = contentWidth + 2 * this.borderWidth;
     // No explicit height and no bounded region: the border hugs its content.
     if (shrinkWrapHeight) this.height = contentHeight + 2 * this.borderWidth;
+
+    // The box is sized now: place any out-of-flow `Positioned` descendants against its box.
+    if (frame) {
+      frame.origin = { x: this.x, y: this.y };
+      frame.size = { width: this.width ?? 0, height: this.height ?? 0 };
+      for (const place of frame.place) place(frame, ctx);
+    }
 
     // Border-box model: width/height ARE the outer box (the rect we draw); the content
     // is inset by the border on every side. Report the honest box size - no phantom
@@ -175,6 +213,7 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
       borderWidth: this.borderWidth,
       radius: this.radius,
       sideBorders: this.sideBorders,
+      overflow: this.overflow,
     };
   }
 }

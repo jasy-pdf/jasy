@@ -8,9 +8,23 @@ import type { BoxConstraints, Offset, Size } from "../layout/box-constraints";
  * `PageElement` sets `pageConfig` for its subtree, so each page flips against its own
  * height. The PDF byte writer is deliberately absent - layout must not touch it.
  */
+/**
+ * A positioning frame - the CSS "containing block" that `Positioned` children resolve their
+ * offsets against. A `relative` Box (later the page) creates one and threads it to its subtree;
+ * `Positioned` descendants register a placement closure in `place`, which the frame drains once it
+ * has finished sizing itself (so `right`/`bottom` can resolve against the final box).
+ */
+export interface PositioningFrame {
+  origin: Offset;
+  size: Size;
+  place: Array<(frame: { origin: Offset; size: Size }, ctx: LayoutContext) => void>;
+}
+
 export interface LayoutContext {
   metrics: FontMetrics;
   pageConfig: PDFPageConfig;
+  /** The nearest enclosing positioning frame, if any (set by a `relative` Box). */
+  frame?: PositioningFrame;
 }
 
 export abstract class PDFElement {

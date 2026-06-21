@@ -3,6 +3,7 @@ import { RowElement } from "../elements/row-element";
 import { RectangleElement } from "../elements/rectangle-element";
 import { ExpandedElement } from "../elements/layout/expanded-element";
 import { PaddingElement } from "../elements/layout/padding-element";
+import { PositionedElement, PositionedInsets } from "../elements/layout/positioned-element";
 import { PDFElement } from "../elements/pdf-element";
 import { MainAlign, CrossAlign } from "../utils/flex-layout";
 import { ColorInput, toColor } from "./color";
@@ -74,6 +75,12 @@ export interface BoxOptions {
   height?: number;
   /** Corner radius in points. */
   radius?: number;
+  /** Make this box a positioning frame: `Positioned` children placed inside it resolve their
+   *  offsets against this box (CSS `position: relative`). */
+  relative?: boolean;
+  /** `"hidden"` crops children to the box (rounded corners included); `"visible"` (default) lets a
+   *  `Positioned` child spill over the edge. */
+  overflow?: "hidden" | "visible";
 }
 
 /**
@@ -125,12 +132,23 @@ export function Box(a: BoxOptions | PDFElement[], b?: PDFElement[]): RectangleEl
           left: side(opts.borderLeft),
         }
       : undefined,
+    relative: opts.relative,
+    overflow: opts.overflow,
   });
 }
 
 /** Insets a single child by `padding` (a number / `{x,y}` / `{top,…}` / 4-tuple). */
 export function Padding(padding: Insets, child: PDFElement): PaddingElement {
   return new PaddingElement({ margin: toEdges(padding), child });
+}
+
+/**
+ * Places a child OUT OF FLOW, relative to the nearest enclosing `relative` Box. Offsets are from
+ * the frame's edges (points); a negative `top`/`left` lets the child poke into or out of the corner
+ * - a badge, a tab, a ribbon. `Positioned({ top, left, right, bottom }, child)`.
+ */
+export function Positioned(opts: PositionedInsets, child: PDFElement): PositionedElement {
+  return new PositionedElement({ child, ...opts });
 }
 
 /**

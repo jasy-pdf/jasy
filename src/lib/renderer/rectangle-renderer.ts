@@ -21,6 +21,7 @@ export class RectangleRenderer {
       borderWidth,
       radius,
       sideBorders,
+      overflow,
     } = rectangleElement.getProps();
 
     const h = height!;
@@ -50,7 +51,13 @@ export class RectangleRenderer {
       nodes.push(node);
     }
 
-    // Children follow the box (Rectangle is also a container).
+    // Children follow the box (Rectangle is also a container). With overflow: "hidden" they are
+    // wrapped in a clip to the (rounded) box rect, so a Positioned child is cropped at the edge
+    // instead of spilling over. Default "visible" emits no clip - byte-identical.
+    const clip = overflow === "hidden";
+    if (clip) {
+      nodes.push({ type: "clip-push", x, y, width, height: h, ...(radius ? { radius } : {}) });
+    }
     if (children)
       for (const child of children) {
         const renderer = RendererRegistry.getRenderer(child);
@@ -58,6 +65,7 @@ export class RectangleRenderer {
           nodes.push(...(await renderer(child, objectManager)));
         }
       }
+    if (clip) nodes.push({ type: "clip-pop" });
 
     return nodes;
   }

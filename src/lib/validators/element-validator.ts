@@ -26,13 +26,10 @@ export class Validator {
 
     // Layout validation: geometry comes from the typed getSize(), not the props bag.
     if (element instanceof SizedPDFElement) {
-      const { x, y, width, height } = element.getSize();
-      if (x < 0 || y < 0) {
-        throw new Error(
-          `Element ${element.constructor.name} has invalid coordinates (x: ${x}, y: ${y})`,
-        );
-      }
-      // 0 is legitimate (a hairline divider, an empty spacer); only a NEGATIVE size is invalid.
+      const { width, height } = element.getSize();
+      // Negative coordinates are allowed: a `Positioned` child overflows its frame on purpose,
+      // and the page clips anything past its edge. 0 size is legitimate (a hairline divider, an
+      // empty spacer); only a NEGATIVE size is invalid.
       if ((width !== undefined && width < 0) || (height !== undefined && height < 0)) {
         throw new Error(
           `Element ${element.constructor.name} has invalid size (width: ${width}, height: ${height})`,
@@ -47,14 +44,10 @@ export class Validator {
   }
 
   static validateSizedElement(element: SizedPDFElement): void {
-    const { x, y, width, height } = element.getSize();
-    if (x < 0 || y < 0) {
-      throw new Error(
-        `Element ${element.constructor.name} has invalid coordinates (x: ${x}, y: ${y})`,
-      );
-    }
-
-    // A size must be set, but 0 is legitimate (a hairline divider); only NEGATIVE is invalid.
+    const { width, height } = element.getSize();
+    // Negative coordinates are legitimate: a `Positioned` child overflows its frame on purpose
+    // (a corner badge), and the page clips anything off its edge. A size must be set, but 0 is
+    // legitimate (a hairline divider); only a NEGATIVE size is invalid.
     if (width === undefined || height === undefined || width < 0 || height < 0) {
       throw new Error(
         `Element ${element.constructor.name} has invalid size (width: ${width}, height: ${height})`,
