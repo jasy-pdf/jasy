@@ -7,7 +7,7 @@ import { Insets, toEdges } from "./insets";
 
 /** A horizontal rule (locked §4). */
 export interface DividerOptions {
-  /** Line colour (default a light grey). */
+  /** Line color (default a light gray). */
   color?: ColorInput;
   /** Line thickness in points (default 1). */
   thickness?: number;
@@ -21,7 +21,7 @@ const DEFAULT_DIVIDER_MARGIN: Insets = { y: 6 };
 /**
  * A horizontal rule that spans the parent's width. Maps to a `LineElement` (hiding its
  * `xEnd`/`yEnd` mechanics) wrapped in a `PaddingElement` - the line has no height of its
- * own, so the padding gives it vertical room and centres the rule. Use inside a Column.
+ * own, so the padding gives it vertical room and centers the rule. Use inside a Column.
  */
 export function Divider(opts: DividerOptions = {}): PDFElement {
   const line = new LineElement({

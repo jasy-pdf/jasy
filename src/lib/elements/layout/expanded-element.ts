@@ -33,7 +33,7 @@ export class ExpandedElement extends FlexiblePDFElement implements Fragmentable 
     Validator.validateFlexElement(this);
 
     if (constraints.hasBoundedHeight) {
-      // A bounded region: fill it - the normal flex behaviour.
+      // A bounded region: fill it - the normal flex behavior.
       this.height = constraints.maxHeight;
       this.child.calculateLayout(
         BoxConstraints.loose(this.width, this.height),

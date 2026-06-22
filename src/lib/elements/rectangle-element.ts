@@ -10,7 +10,7 @@ import {
   WithChildren,
 } from "./pdf-element";
 
-/** Per-side border colours. When set, each present side is stroked individually (sharp
+/** Per-side border colors. When set, each present side is stroked individually (sharp
  *  corners), instead of the uniform `color` border - this is what enables grid lines. */
 export interface SideBorders {
   top?: Color;

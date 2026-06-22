@@ -55,9 +55,9 @@ export function Row(a: StackOptions | PDFElement[], b?: PDFElement[]): RowElemen
 
 /** A bordered / filled box that wraps its children (locked §4). */
 export interface BoxOptions {
-  /** Border (stroke) colour. A box has a border only when `border` or `borderWidth` is set. */
+  /** Border (stroke) color. A box has a border only when `border` or `borderWidth` is set. */
   border?: ColorInput;
-  /** Per-side border colours - override/add to `border`. Any of these makes the box draw
+  /** Per-side border colors - override/add to `border`. Any of these makes the box draw
    *  individual side lines (sharp corners) instead of a uniform frame - this is how you get
    *  grid lines (e.g. a cell with only `borderBottom` + `borderRight`). */
   borderTop?: ColorInput;
@@ -66,7 +66,7 @@ export interface BoxOptions {
   borderLeft?: ColorInput;
   /** Border thickness in points (default 1 when a border is present). */
   borderWidth?: number;
-  /** Background fill colour. */
+  /** Background fill color. */
   bg?: ColorInput;
   /** Inner padding between the border and the children. */
   padding?: Insets;
@@ -104,7 +104,7 @@ export function Box(a: BoxOptions | PDFElement[], b?: PDFElement[]): RectangleEl
       : children;
 
   // A side is set if it (or the uniform `border`) is given. If ANY differs from a plain
-  // uniform border, we hand the engine per-side colours (which draws individual lines).
+  // uniform border, we hand the engine per-side colors (which draws individual lines).
   const sideKeys = [opts.borderTop, opts.borderRight, opts.borderBottom, opts.borderLeft];
   const hasPerSide = sideKeys.some((s) => s !== undefined);
   const side = (s?: ColorInput) => {
@@ -146,7 +146,7 @@ export function Padding(padding: Insets, child: PDFElement): PaddingElement {
  * Places a child OUT OF FLOW, relative to the nearest enclosing `relative` Box. Two ways, pick per
  * axis: pin to EDGES - `Positioned({ top, left, right, bottom }, child)`, where a negative value
  * pokes into / out of the corner (a badge, a tab, a ribbon) and pinning both sides stretches; or
- * ANCHOR + nudge - `Positioned({ h: "center", v: "end", x: -10, y: -8 }, child)`, i.e. centred /
+ * ANCHOR + nudge - `Positioned({ h: "center", v: "end", x: -10, y: -8 }, child)`, i.e. centered /
  * end-aligned with a pixel offset. An edge wins over an anchor on the same axis.
  */
 export function Positioned(opts: PositionedInsets, child: PDFElement): PositionedElement {

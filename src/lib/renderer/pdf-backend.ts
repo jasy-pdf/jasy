@@ -134,7 +134,7 @@ export class PdfBackend {
           `Q\n`
         );
       case "rect": {
-        // Stroke only with a stroke colour AND a positive width - a 0-width border means
+        // Stroke only with a stroke color AND a positive width - a 0-width border means
         // "no border" (e.g. a filled box with no outline). Nothing to paint at all (no
         // fill, no border) draws nothing. Paint: B = fill+stroke, f = fill, S = stroke.
         const doStroke = !!node.stroke && (node.strokeWidth ?? 0) > 0;

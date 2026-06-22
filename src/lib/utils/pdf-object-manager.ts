@@ -191,11 +191,11 @@ export class PDFObjectManager implements FontMetrics {
   private xmpMetadata?: string;
 
   // The /OutputIntent dict object number (catalog /OutputIntents), set by setOutputIntent. PDF/A
-  // requires one; it names the output colour space via an embedded ICC profile.
+  // requires one; it names the output color space via an embedded ICC profile.
   private outputIntent?: number;
 
   // PDF header version (PDF/A-3 needs 1.7) and whether to write a trailer /ID (PDF/A needs one).
-  // Both default to the pre-PDF/A behaviour, so a normal document stays byte-identical.
+  // Both default to the pre-PDF/A behavior, so a normal document stays byte-identical.
   private pdfVersion = "1.4";
   private documentId = false;
   private compress = false;

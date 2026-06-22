@@ -29,11 +29,11 @@ export interface TableOptions {
   colGap?: number;
   /** Padding inside every cell (default none). */
   cellPadding?: Insets;
-  /** Grid line colour around every cell. Draws the complete grid once - don't add your own
+  /** Grid line color around every cell. Draws the complete grid once - don't add your own
    *  frame Box, or the outer edges double up. */
   cellBorder?: ColorInput;
   /** A single thin horizontal rule under the header row and along the foot of the table (e.g. a
-   *  light-grey separator). Independent of `cellBorder`, which draws the full grid. */
+   *  light-gray separator). Independent of `cellBorder`, which draws the full grid. */
   rule?: ColorInput;
 }
 

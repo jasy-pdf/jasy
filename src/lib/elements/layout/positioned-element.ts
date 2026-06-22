@@ -9,7 +9,7 @@ export type PositionAnchor = "start" | "center" | "end";
  *  - EDGE pinning: `top`/`right`/`bottom`/`left` (points from that edge; negative pokes outside).
  *    Pinning BOTH sides of an axis stretches the child to fill between them.
  *  - ANCHOR + nudge: `h`/`v` anchor the child (start/center/end) and `x`/`y` nudge it from there
- *    (e.g. `{ h: "center", x: -10 }` = centred minus 10pt). The child shrink-wraps to its content.
+ *    (e.g. `{ h: "center", x: -10 }` = centered minus 10pt). The child shrink-wraps to its content.
  * An edge wins over an anchor on the same axis. With nothing set the child sits at the top-left.
  */
 export interface PositionedInsets {

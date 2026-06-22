@@ -152,7 +152,7 @@ export class TextRenderer {
       );
       // yPosition is the top of the text box (top-left); seat line 0's baseline below it, then step
       // DOWN by one line box (fontSize * lineHeight) per line. The lineHeight EXTRA leading is split
-      // half above / half below (CSS/Flutter "half-leading"), so the text sits centred in its line
+      // half above / half below (CSS/Flutter "half-leading"), so the text sits centered in its line
       // box instead of clinging to the top. At lineHeight 1 the half-leading is 0 -> byte-identical.
       const halfLeading = (fontSize * (lineHeight - 1)) / 2;
       const baseline = yPosition + halfLeading + fontSize * BASELINE_RATIO;
@@ -216,7 +216,7 @@ export class TextRenderer {
       overflow,
     )) {
       // Half-leading: shift this line's baseline down by half its own extra leading, so the line
-      // sits centred in its box (CSS/Flutter). At lineHeight 1 the shift is 0 -> byte-identical.
+      // sits centered in its box (CSS/Flutter). At lineHeight 1 the shift is 0 -> byte-identical.
       const halfLeading = (line.maxFontSize * (lineHeight - 1)) / 2;
       pushLine(line, lineY + halfLeading);
       lineY += line.maxFontSize * lineHeight;

@@ -1,12 +1,12 @@
 import { Color } from "../common/color";
 
 /**
- * Every way to name a colour. The FORM picks the convention, so there is never a guess
+ * Every way to name a color. The FORM picks the convention, so there is never a guess
  * (locked design §2):
  *
  * | form                      | example                  | meaning                        |
  * |---------------------------|--------------------------|--------------------------------|
- * | named (full CSS set)      | `"steelblue"`, `"transparent"` | the ~148 CSS colour names |
+ * | named (full CSS set)      | `"steelblue"`, `"transparent"` | the ~148 CSS color names |
  * | hex 6 / 3                 | `"#1450aa"` / `"#14a"`   | CSS RGB                        |
  * | hex 8 / 4                 | `"#1450aacc"` / `"#14ac"`| CSS RGBA (alpha LAST)          |
  * | number                    | `0xff1450aa`             | Flutter ARGB (alpha FIRST)     |
@@ -27,7 +27,7 @@ export function rgba(r: number, g: number, b: number, a: number): Color {
 
 /**
  * Normalizes any `ColorInput` to an engine `Color`. The single funnel every factory uses,
- * so a colour means the same thing no matter how it was written.
+ * so a color means the same thing no matter how it was written.
  */
 export function toColor(input: ColorInput): Color {
   if (input instanceof Color) return input;
