@@ -1,7 +1,10 @@
 import { TextElement, TextSegment } from "../elements/text-element";
 import { HorizontalAlignment } from "../elements/pdf-element";
 import { FontStyle } from "../utils/pdf-object-manager";
+import { TextOverflow } from "../text/line-breaker";
 import { ColorInput, toColor } from "./color";
+
+export type { TextOverflow };
 
 /** Text styling shared by `Text`, `Paragraph` and `span`. `bold`/`italic` are booleans
  *  (locked §7.3) and combine into one engine `FontStyle`. */
@@ -16,6 +19,11 @@ export interface TextStyle {
 export interface TextOptions extends TextStyle {
   /** Text-internal alignment (left/center/right) - independent of a parent's `cross` (§5). */
   align?: "left" | "center" | "right";
+  /** Cap the number of wrapped lines (default: unlimited - the text grows down as far as it needs,
+   *  paginating onto the next page). Needs a bounded width (a Column/Expanded/`Box({ width })`). */
+  maxLines?: number;
+  /** What happens past `maxLines`: `"clip"` (default) cuts hard, `"ellipsis"` ends with "…". */
+  overflow?: TextOverflow;
 }
 
 /** Body-text default size when none is given (matches the engine default font). */
@@ -65,6 +73,8 @@ export function Text(content: string | TextSegment[], opts: TextOptions = {}): T
     fontStyle: toFontStyle(opts.bold, opts.italic),
     color: opts.color !== undefined ? toColor(opts.color) : undefined,
     textAlignment: opts.align ? ALIGN[opts.align] : undefined,
+    maxLines: opts.maxLines,
+    overflow: opts.overflow,
   });
 }
 

@@ -179,3 +179,83 @@ Foundation-free (data/sugar) but landed with the API layer: the **full CSS color
 5. ✅ Update `README` to the real, now-rich API (done).
 
 > **Status: API BUILT (2026-06-16).** The vocabulary above ships. Next: Grid/Table (built on Row/Column).
+
+---
+
+## 10. Font management - `addFont` (managed, not pass-through) - NEW 2026-06-21
+
+**Problem with the shipped API.** Custom fonts go through `renderToBytes(doc, { fonts: { Inter: bytes } })`:
+you read the file yourself, then bury the registration in the OUTPUT call, then must remember to pass it
+every time. Pass-and-forget. No query, no clear "this font is named Inter." This is the anti-pattern we
+are leaving.
+
+**The fix.** A font is a Document resource: you register it once on the document; it remembers, manages
+and embeds it. The render call says nothing about fonts.
+
+```ts
+const doc = Document([
+  Page({ size: "A4" }, [Text("Hi", { font: "Inter" })]),
+]);
+
+doc.addFont("Inter", "Inter-Regular.ttf"); // a path (Node reads it)
+doc.addFont("Brand", { normal: "B.ttf", bold: "B-Bold.ttf" }); // a styled family
+
+doc.getFonts(); // ["Inter", "Brand"]
+doc.hasFont("Inter"); // true
+
+await renderToBytes(doc); // pure output - the fonts are already in the document
+```
+
+### Typed surface
+
+```ts
+/** What you hand `addFont`: a file path (Node reads it), raw bytes (browser), or a styled family. */
+type FontSource = string | Uint8Array | FontFamily;
+
+interface FontFamily {
+  normal: string | Uint8Array;
+  bold?: string | Uint8Array;
+  italic?: string | Uint8Array;
+  boldItalic?: string | Uint8Array;
+}
+
+// methods on the object `Document(...)` returns:
+addFont(name: string, source: FontSource): this; // chainable; re-adding a name overwrites
+getFonts(): string[]; // the registered names
+hasFont(name: string): boolean;
+```
+
+| Method                   | Purpose                                | Returns              |
+| ------------------------ | -------------------------------------- | -------------------- |
+| `addFont(name, source)`  | register a font (path / bytes / family) | `this` (chainable)   |
+| `getFonts()`             | the registered names                   | `string[]`           |
+| `hasFont(name)`          | is it registered?                      | `boolean`            |
+
+### The rule that makes it worth it - DOCUMENT IT
+
+> **Registered is not embedded.** A font is embedded ONLY if it is actually used (some `Text({ font })`
+> references it). Unused registered fonts are dropped at render and cost zero bytes (proven: registering
+> an unused font produces a byte-identical PDF). Used faces are subsetted and FlateDecode-compressed. So
+> register a whole library freely - you pay only for what you set.
+
+This is exactly why there is **no `removeFont` / `deregisterFont`**: the auto-drop already keeps the
+output lean, so removal would be ceremony. (Added later only if a real need appears - preventing
+accidental use, or freeing memory in a long-lived process.)
+
+### Consistency - the same shape for the other resources
+
+Fonts are the first managed resource. The same `add* / get* / has*` pattern is the target for the other
+pass-through render options, so the Document stays one consistent container and we never bolt on a
+second shape:
+
+- **Images** (when registered rather than inline): `addImage` / `getImages` / `hasImage`.
+- **Attachments** (ZUGFeRD embedded files, today `renderPdf(doc, { attachments })`): `addAttachment` / ...
+- Metadata stays declarative on `Document({ meta })`.
+
+### LOCKED (2026-06-21)
+
+1. Verb family: **`add` / `get` / `has`** (collection idiom; generalizes to image/attachment). ✅
+2. `addFont(name, source)` with `source = path | bytes | family`. ✅
+3. **No `removeFont`** - unused fonts auto-drop; documented as the headline rule. ✅
+4. Lives as **Document methods** (`doc.addFont(...)`), returns `this` for chaining. ✅
+5. `renderToBytes(doc, { fonts })` kept for back-compat, but `addFont` is THE way. ✅

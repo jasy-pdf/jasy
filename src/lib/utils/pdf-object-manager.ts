@@ -6,6 +6,7 @@ import { deflateSync } from "zlib";
 import { AFMParser } from "./afm-parser";
 import { TTFParser } from "./ttf-parser";
 import { subsetTTF } from "./ttf-subsetter";
+import { getArrayBuffer } from "./utf8-to-windows1252-encoder";
 // Enums come from the leaf config module (never in a cycle); the config type is
 // erased at runtime so it can come from the cyclic module safely.
 import { ColorMode, Orientation } from "../renderer/pdf-config";
@@ -243,8 +244,11 @@ export class PDFObjectManager implements FontMetrics {
   }
 
   // Adds a page content stream (compressed when enabled). The caller passes the raw operator string.
+  // Bytes go through the Windows-1252 encoder (NOT a latin1 low-byte cast): a Tj literal may carry a
+  // CP1252 char like "…"/"—"/"€" whose codepoint is > 0xFF, and latin1 would mangle it (… -> "&").
+  // For every char <= 0xFF the encoder passes the byte through, so existing streams stay byte-identical.
   addContentStream(content: string): number {
-    return this.addObject(this.stream("", Buffer.from(content, "latin1")));
+    return this.addObject(this.stream("", Buffer.from(getArrayBuffer(content))));
   }
 
   changePDFConfig(config: PDFConfig) {

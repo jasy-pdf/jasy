@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { PDFDocumentElement } from "../elements/pdf-document-element";
 import { PageElement, PDFPageConfig } from "../elements/page-element";
 import { PDFElement } from "../elements/pdf-element";
@@ -68,23 +69,76 @@ export interface DocumentOptions {
   meta?: { title?: string; author?: string };
 }
 
+/** A single font file for `addFont`: a `.ttf` path (read on Node) or its raw bytes (e.g. a browser
+ *  upload). */
+export type FontFileSource = string | Buffer | Uint8Array;
+
+/** A styled font family for `addFont`: one file per style, only `normal` required. `Text({ bold,
+ *  italic })` then picks the right face, falling back to `normal`. */
+export interface FontFamilyInput {
+  normal: FontFileSource;
+  bold?: FontFileSource;
+  italic?: FontFileSource;
+  boldItalic?: FontFileSource;
+}
+
+/** What `addFont` accepts: one file (path or bytes), or a styled family. */
+export type FontSource = FontFileSource | FontFamilyInput;
+
+/** The object the `Document(...)` factory returns: the element tree plus a managed font registry. */
+export interface JasyDocument extends PDFDocumentElement {
+  /** Register a font under `name`, then use it via `Text({ font: name })`. The source is a `.ttf`
+   *  path (read now, on Node), raw bytes, or a styled family. Re-adding a name overwrites it.
+   *  A registered font that no `Text` actually uses is dropped at render and costs nothing. */
+  addFont(name: string, source: FontSource): this;
+  /** The names of the registered fonts. */
+  getFonts(): string[];
+  /** Whether a font is registered under `name`. */
+  hasFont(name: string): boolean;
+}
+
 // Document metadata is a document-render concern, not part of the element tree, so it is
 // kept beside the returned element and picked up by `renderPdf`.
 const docMeta = new WeakMap<PDFDocumentElement, DocumentOptions["meta"]>();
 
+// Fonts registered via doc.addFont(...), kept beside the element (like meta) and registered on the
+// object manager at render time. Path sources are read to bytes in addFont, so the map holds bytes.
+const docFonts = new WeakMap<PDFDocumentElement, Map<string, FontBytes | FontFamily>>();
+
+/** Reads any path sources to bytes, leaving bytes / families as-is. */
+function resolveFontSource(source: FontSource): FontBytes | FontFamily {
+  const read = (s: FontFileSource): FontBytes => (typeof s === "string" ? readFileSync(s) : s);
+  if (typeof source === "string" || source instanceof Uint8Array || Buffer.isBuffer(source)) {
+    return read(source);
+  }
+  const family: FontFamily = { normal: read(source.normal) };
+  if (source.bold) family.bold = read(source.bold);
+  if (source.italic) family.italic = read(source.italic);
+  if (source.boldItalic) family.boldItalic = read(source.boldItalic);
+  return family;
+}
+
 /** The document root. `Document(pages)` or `Document(opts, pages)`. */
-export function Document(pages: PageElement[]): PDFDocumentElement;
-export function Document(opts: DocumentOptions, pages: PageElement[]): PDFDocumentElement;
-export function Document(
-  a: DocumentOptions | PageElement[],
-  b?: PageElement[],
-): PDFDocumentElement {
+export function Document(pages: PageElement[]): JasyDocument;
+export function Document(opts: DocumentOptions, pages: PageElement[]): JasyDocument;
+export function Document(a: DocumentOptions | PageElement[], b?: PageElement[]): JasyDocument {
   const isOpts = !Array.isArray(a);
   const opts = (isOpts ? a : {}) as DocumentOptions;
   const pages = (isOpts ? (b ?? []) : a) as PageElement[];
 
-  const doc = new PDFDocumentElement({ children: pages });
+  const doc = new PDFDocumentElement({ children: pages }) as JasyDocument;
   if (opts.meta) docMeta.set(doc, opts.meta);
+
+  // Managed font registry: addFont registers, getFonts/hasFont query, render reads it (below).
+  const registry = new Map<string, FontBytes | FontFamily>();
+  docFonts.set(doc, registry);
+  doc.addFont = (name, source) => {
+    registry.set(name, resolveFontSource(source));
+    return doc;
+  };
+  doc.getFonts = () => [...registry.keys()];
+  doc.hasFont = (name) => registry.has(name);
+
   return doc;
 }
 
@@ -143,7 +197,12 @@ export async function renderPdf(doc: PDFDocumentElement, options?: RenderOptions
     ...(meta ? { metaData: { title: meta.title, author: meta.author, keywords: [] } } : {}),
     ...(options?.standardFonts === false ? { registerStandardFonts: false } : {}),
   };
-  const fonts = options?.fonts ?? {};
+  // Fonts registered via doc.addFont(...) plus any passed in options (options win on a name clash).
+  const registered = docFonts.get(doc);
+  const fonts: Record<string, FontBytes | FontFamily> = {
+    ...Object.fromEntries(registered ?? []),
+    ...options?.fonts,
+  };
   const attachments = options?.attachments ?? [];
 
   // A throwaway PDFDocument whose build() yields this tree, reusing the engine's standard

@@ -9,6 +9,14 @@ export interface SegmentDefaults {
   fontStyle: FontStyle;
 }
 
+/** What happens to text beyond `maxLines`: `"clip"` drops it, `"ellipsis"` ends the last kept line
+ *  with an ellipsis. Mirrors Flutter's `TextOverflow`. */
+export type TextOverflow = "clip" | "ellipsis";
+
+/** Three ASCII dots, NOT the "…" glyph (U+2026): plain dots encode in every font - standard-14
+ *  (WinAnsi) and any embedded TTF - whereas U+2026 needs a glyph the font may not carry. */
+const ELLIPSIS = "...";
+
 /** One laid-out line of segments. `maxFontSize` is the tallest font ON THIS LINE - its
  *  leading - matching how real engines (and this lib's plain-string path) space lines. */
 export interface SegmentLine {
@@ -32,6 +40,8 @@ export function wrapStringIntoLines(
   fontStyle: FontStyle,
   maxWidth: number,
   metrics: FontMetrics,
+  maxLines?: number,
+  overflow?: TextOverflow,
 ): string[] {
   let currentLine = "";
   let currentWidth = 0;
@@ -54,7 +64,14 @@ export function wrapStringIntoLines(
 
   if (currentLine) lines.push(currentLine.trim());
 
-  return lines;
+  // Open-end by default; cap only when maxLines is set (the others get undefined → untouched).
+  if (maxLines == null || lines.length <= maxLines) return lines;
+  const kept = lines.slice(0, maxLines);
+  if (overflow === "ellipsis") {
+    const last = kept.length - 1;
+    kept[last] = ellipsize(kept[last], fontFamily, fontSize, fontStyle, maxWidth, metrics);
+  }
+  return kept;
 }
 
 /**
@@ -68,6 +85,8 @@ export function breakSegmentsIntoLines(
   defaults: SegmentDefaults,
   maxWidth: number,
   metrics: FontMetrics,
+  maxLines?: number,
+  overflow?: TextOverflow,
 ): SegmentLine[] {
   const lines: SegmentLine[] = [];
   let width = 0;
@@ -116,7 +135,11 @@ export function breakSegmentsIntoLines(
     lines.push({ segments: lineSegments, width, maxFontSize });
   }
 
-  return lines;
+  // Open-end by default; cap only when maxLines is set.
+  if (maxLines == null || lines.length <= maxLines) return lines;
+  const kept = lines.slice(0, maxLines);
+  if (overflow === "ellipsis") ellipsizeSegmentLine(kept[kept.length - 1], defaults, maxWidth, metrics);
+  return kept;
 }
 
 /**
@@ -136,4 +159,62 @@ export function segmentLinesToSegments(lines: SegmentLine[]): TextSegment[] {
     }
   });
   return result;
+}
+
+/** Appends "…" to a single line, dropping trailing words (then characters) until the line plus the
+ *  ellipsis fits `maxWidth`. Falls back to a bare "…" if not even one character fits. */
+function ellipsize(
+  line: string,
+  fontFamily: string,
+  fontSize: number,
+  fontStyle: FontStyle,
+  maxWidth: number,
+  metrics: FontMetrics,
+): string {
+  const fits = (s: string): boolean =>
+    metrics.getStringWidth(s + ELLIPSIS, fontFamily, fontSize, fontStyle) <= maxWidth;
+  if (fits(line)) return line + ELLIPSIS;
+
+  const words = line.split(" ");
+  while (words.length > 1) {
+    words.pop();
+    if (fits(words.join(" "))) return words.join(" ") + ELLIPSIS;
+  }
+  let single = words[0] ?? "";
+  while (single.length > 1) {
+    single = single.slice(0, -1);
+    if (fits(single)) return single + ELLIPSIS;
+  }
+  return ELLIPSIS;
+}
+
+/** Ellipsizes the LAST segment of a truncated segment line in place (within the width left by the
+ *  segments before it) and recomputes the line width. */
+function ellipsizeSegmentLine(
+  line: SegmentLine,
+  defaults: SegmentDefaults,
+  maxWidth: number,
+  metrics: FontMetrics,
+): void {
+  const segs = line.segments;
+  if (segs.length === 0) return;
+  const widthOf = (seg: TextSegment): number =>
+    metrics.getStringWidth(
+      seg.content,
+      seg.fontFamily || defaults.fontFamily,
+      seg.fontSize || defaults.fontSize,
+      seg.fontStyle || defaults.fontStyle,
+    );
+  let prefix = 0;
+  for (let i = 0; i < segs.length - 1; i++) prefix += widthOf(segs[i]);
+  const last = segs[segs.length - 1];
+  last.content = ellipsize(
+    last.content,
+    last.fontFamily || defaults.fontFamily,
+    last.fontSize || defaults.fontSize,
+    last.fontStyle || defaults.fontStyle,
+    maxWidth - prefix,
+    metrics,
+  );
+  line.width = prefix + widthOf(last);
 }

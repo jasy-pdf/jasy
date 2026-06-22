@@ -12,6 +12,7 @@ import {
   wrapStringIntoLines,
   breakSegmentsIntoLines,
   segmentLinesToSegments,
+  TextOverflow,
 } from "../text/line-breaker";
 import { HorizontalAlignment, LayoutContext, SizedPDFElement } from "./pdf-element";
 export interface TextSegment {
@@ -30,6 +31,10 @@ interface TextElementParams {
   content: string | TextSegment[];
   color?: Color; // optional param
   textAlignment?: HorizontalAlignment;
+  /** Cap the wrapped lines (default: unlimited / open-end). */
+  maxLines?: number;
+  /** What to do past `maxLines`: `"clip"` (default) drops them, `"ellipsis"` ends with "…". */
+  overflow?: TextOverflow;
 }
 
 export class TextElement extends SizedPDFElement implements Fragmentable {
@@ -39,6 +44,8 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
   private color: Color;
   private content: string | TextSegment[];
   private textAlignment: HorizontalAlignment;
+  private maxLines?: number;
+  private overflow: TextOverflow;
 
   constructor({
     fontSize,
@@ -47,6 +54,8 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     fontStyle = FontStyle.Normal,
     color = new Color(0, 0, 0),
     textAlignment = HorizontalAlignment.left,
+    maxLines,
+    overflow = "clip",
   }: TextElementParams) {
     super({ x: 0, y: 0 });
 
@@ -56,6 +65,8 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     this.color = color;
     this.content = content;
     this.textAlignment = textAlignment;
+    this.maxLines = maxLines;
+    this.overflow = overflow;
   }
 
   /**
@@ -85,6 +96,8 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       this.fontStyle,
       width,
       ctx.metrics,
+      this.maxLines,
+      this.overflow,
     );
 
     const fittedLineCount = Math.floor(maxHeight / this.fontSize);
@@ -114,6 +127,8 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       },
       width,
       ctx.metrics,
+      this.maxLines,
+      this.overflow,
     );
 
     let used = 0;
@@ -143,6 +158,8 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       fontStyle: this.fontStyle,
       color: this.color,
       textAlignment: this.textAlignment,
+      maxLines: this.maxLines,
+      overflow: this.overflow,
     });
   }
 
@@ -164,6 +181,8 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       this.fontStyle,
       ctx.metrics,
       wrapWidth,
+      this.maxLines,
+      this.overflow,
     );
 
     // Top-left coordinates (y = top of the text box). The baseline offset and the
@@ -173,22 +192,28 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
   }
 
   /** The unwrapped single-line width of the content (used when width is unbounded, e.g. inside a Row).
-   *  Mirrors the renderer's advance EXACTLY: per-glyph, WITHOUT kerning. `getStringWidth` subtracts
-   *  kerning, so it under-reserves and the text would wrap inside its own natural-width box - the cause
-   *  of fixed Row children wrapping despite ample space. */
+   *  Must match the LINE-BREAKER's one-line measure EXACTLY: `getStringWidth` per word plus one space
+   *  between words, accumulated in the same order. A per-glyph `getCharWidth` sum diverged from the
+   *  breaker (it under-reserved), so a text laid out at that width re-wrapped inside its own
+   *  natural-width box - that was the "fixed Row child wraps despite ample space" bug. */
   private naturalWidth(metrics: FontMetrics): number {
-    const advance = (text: string, family: string, size: number, style: FontStyle): number => {
+    const oneLine = (text: string, family: string, size: number, style: FontStyle): number => {
+      const words = text.split(" ");
+      const space = metrics.getCharWidth(" ", size, undefined, family, style);
       let width = 0;
-      for (const ch of text) width += metrics.getCharWidth(ch, size, undefined, family, style);
+      words.forEach((word, i) => {
+        width += metrics.getStringWidth(word, family, size, style);
+        if (i < words.length - 1) width += space;
+      });
       return width;
     };
     if (typeof this.content === "string") {
-      return advance(this.content, this.fontFamily, this.fontSize, this.fontStyle);
+      return oneLine(this.content, this.fontFamily, this.fontSize, this.fontStyle);
     }
     return this.content.reduce(
       (sum, seg) =>
         sum +
-        advance(
+        oneLine(
           seg.content,
           seg.fontFamily ?? this.fontFamily,
           seg.fontSize ?? this.fontSize,
@@ -210,6 +235,8 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       color: this.color,
       content: this.content,
       textAlignment: this.textAlignment,
+      maxLines: this.maxLines,
+      overflow: this.overflow,
     };
   }
 }

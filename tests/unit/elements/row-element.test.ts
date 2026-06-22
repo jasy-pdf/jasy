@@ -51,21 +51,25 @@ describe("RowElement", () => {
   // Regression: a fixed Text in a Row must reserve its RENDERED width (per-glyph, no kerning) - the
   // renderer advances without kerning, so reserving the kerning-narrower getStringWidth makes the
   // text overflow its own box and wrap, even with plenty of space. (CSS: space → never constrains.)
-  it("a fixed Text in a Row reserves its no-kerning render width, so it never wraps with space", () => {
+  it("a fixed Text in a Row takes its one-line width, so it never wraps inside its own box", () => {
     const metrics = {
-      getStringWidth: (t: string) => t.length * 6 - 10, // kerning pulls the measured width IN
-      getCharWidth: () => 6, // what Tj actually advances (no kerning)
+      getStringWidth: (t: string) => t.length * 6 - 10, // per word; kerning pulls it IN
+      getCharWidth: () => 6, // the space advance
     } as unknown as FontMetrics;
     const ctx = { metrics, pageConfig: {} } as LayoutContext;
 
-    const text = new TextElement({ fontSize: 10, content: "Total due" }); // 9 glyphs
+    const text = new TextElement({ fontSize: 10, content: "Total due" });
     new RowElement({ children: [text] }).calculateLayout(
       BoxConstraints.loose(500, Infinity),
       { x: 0, y: 0 },
       ctx,
     );
 
-    // 9 × 6 = 54 (rendered advance), NOT the kerned getStringWidth (44) - else it would wrap.
-    expect(text.getProps().width).toBe(54);
+    const { width, height } = text.getProps();
+    // ONE line, no wrap. The width MUST equal the line-breaker's one-line measure (getStringWidth
+    // per word + the inter-word space), or the text re-wraps inside its own box:
+    // "Total"(20) + space(6) + "due"(8) = 34.
+    expect(width).toBe(34);
+    expect(height).toBe(10); // 1 line x fontSize
   });
 });

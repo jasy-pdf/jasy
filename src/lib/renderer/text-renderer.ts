@@ -4,7 +4,12 @@ import { TextElement, TextSegment } from "../elements/text-element";
 import { FontStyle, PDFObjectManager } from "../utils/pdf-object-manager";
 import type { FontMetrics } from "../utils/font-metrics";
 import { IRNode, TextRun } from "../ir/display-list";
-import { wrapStringIntoLines, breakSegmentsIntoLines, SegmentLine } from "../text/line-breaker";
+import {
+  wrapStringIntoLines,
+  breakSegmentsIntoLines,
+  SegmentLine,
+  TextOverflow,
+} from "../text/line-breaker";
 
 // Distance from the top of a line down to its baseline, as a fraction of the font
 // size. ~0.683 is the standard-14 ascent ratio used to seat the first baseline.
@@ -20,6 +25,8 @@ export class TextRenderer {
     fontStyle: FontStyle,
     objectManager: FontMetrics,
     maxWidth: number,
+    maxLines?: number,
+    overflow?: TextOverflow,
   ): number {
     // Plain string: one line height per wrapped line.
     if (typeof content === "string") {
@@ -30,6 +37,8 @@ export class TextRenderer {
         fontStyle,
         maxWidth,
         objectManager,
+        maxLines,
+        overflow,
       );
       return lines.length * fontSize;
     }
@@ -40,6 +49,8 @@ export class TextRenderer {
       { fontFamily, fontSize, fontStyle },
       maxWidth,
       objectManager,
+      maxLines,
+      overflow,
     );
     return lines.reduce((total, line) => total + line.maxFontSize, 0);
   }
@@ -48,8 +59,19 @@ export class TextRenderer {
     textElement: TextElement,
     objectManager: PDFObjectManager,
   ): Promise<IRNode[]> {
-    const { x, y, width, fontSize, color, content, fontFamily, fontStyle, textAlignment } =
-      textElement.getProps();
+    const {
+      x,
+      y,
+      width,
+      fontSize,
+      color,
+      content,
+      fontFamily,
+      fontStyle,
+      textAlignment,
+      maxLines,
+      overflow,
+    } = textElement.getProps();
 
     // Component -> display list. Wrapping and positioning stay here; the backend
     // turns each run into BT/Tf/Td/Tj/ET. The wrapping algorithm is unchanged from
@@ -65,6 +87,8 @@ export class TextRenderer {
       color,
       x,
       y,
+      maxLines,
+      overflow,
     );
   }
 
@@ -82,6 +106,8 @@ export class TextRenderer {
     color: Color,
     initialX: number,
     yPosition: number,
+    maxLines?: number,
+    overflow?: TextOverflow,
   ): TextRun[] {
     const runs: TextRun[] = [];
 
@@ -117,6 +143,8 @@ export class TextRenderer {
         fontStyle,
         maxWidth,
         objectManager,
+        maxLines,
+        overflow,
       );
       // yPosition is the top of the text box (top-left); seat line 0's baseline below
       // it, then step DOWN per line. The seam flips the whole thing to PDF space.
@@ -177,6 +205,8 @@ export class TextRenderer {
       { fontFamily, fontSize, fontStyle },
       maxWidth,
       objectManager,
+      maxLines,
+      overflow,
     )) {
       pushLine(line, lineY);
       lineY += line.maxFontSize;
