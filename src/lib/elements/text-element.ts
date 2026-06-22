@@ -35,6 +35,8 @@ interface TextElementParams {
   maxLines?: number;
   /** What to do past `maxLines`: `"clip"` (default) drops them, `"ellipsis"` ends with "…". */
   overflow?: TextOverflow;
+  /** Line-height multiplier: each line is `fontSize * lineHeight` tall (default `1`). */
+  lineHeight?: number;
 }
 
 export class TextElement extends SizedPDFElement implements Fragmentable {
@@ -46,6 +48,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
   private textAlignment: HorizontalAlignment;
   private maxLines?: number;
   private overflow: TextOverflow;
+  private lineHeight: number;
 
   constructor({
     fontSize,
@@ -56,6 +59,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     textAlignment = HorizontalAlignment.left,
     maxLines,
     overflow = "clip",
+    lineHeight = 1,
   }: TextElementParams) {
     super({ x: 0, y: 0 });
 
@@ -67,6 +71,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     this.textAlignment = textAlignment;
     this.maxLines = maxLines;
     this.overflow = overflow;
+    this.lineHeight = lineHeight;
   }
 
   /**
@@ -100,7 +105,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       this.overflow,
     );
 
-    const fittedLineCount = Math.floor(maxHeight / this.fontSize);
+    const fittedLineCount = Math.floor(maxHeight / (this.fontSize * this.lineHeight));
     if (fittedLineCount <= 0) return { fitted: null, remainder: this };
     if (fittedLineCount >= lines.length) return { fitted: this, remainder: null };
 
@@ -134,8 +139,9 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     let used = 0;
     let fittedLineCount = 0;
     for (const line of lines) {
-      if (used + line.maxFontSize > maxHeight) break;
-      used += line.maxFontSize;
+      const lineBox = line.maxFontSize * this.lineHeight;
+      if (used + lineBox > maxHeight) break;
+      used += lineBox;
       fittedLineCount++;
     }
 
@@ -160,6 +166,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       textAlignment: this.textAlignment,
       maxLines: this.maxLines,
       overflow: this.overflow,
+      lineHeight: this.lineHeight,
     });
   }
 
@@ -183,6 +190,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       wrapWidth,
       this.maxLines,
       this.overflow,
+      this.lineHeight,
     );
 
     // Top-left coordinates (y = top of the text box). The baseline offset and the
@@ -237,6 +245,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       textAlignment: this.textAlignment,
       maxLines: this.maxLines,
       overflow: this.overflow,
+      lineHeight: this.lineHeight,
     };
   }
 }

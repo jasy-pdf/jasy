@@ -27,8 +27,9 @@ export class TextRenderer {
     maxWidth: number,
     maxLines?: number,
     overflow?: TextOverflow,
+    lineHeight = 1,
   ): number {
-    // Plain string: one line height per wrapped line.
+    // Plain string: one line box (fontSize * lineHeight) per wrapped line.
     if (typeof content === "string") {
       const lines = wrapStringIntoLines(
         content,
@@ -40,10 +41,10 @@ export class TextRenderer {
         maxLines,
         overflow,
       );
-      return lines.length * fontSize;
+      return lines.length * fontSize * lineHeight;
     }
 
-    // Segments: each line contributes its own (tallest-on-line) leading.
+    // Segments: each line contributes its own (tallest-on-line) leading, scaled by lineHeight.
     const lines = breakSegmentsIntoLines(
       content,
       { fontFamily, fontSize, fontStyle },
@@ -52,7 +53,7 @@ export class TextRenderer {
       maxLines,
       overflow,
     );
-    return lines.reduce((total, line) => total + line.maxFontSize, 0);
+    return lines.reduce((total, line) => total + line.maxFontSize * lineHeight, 0);
   }
 
   static async render(
@@ -71,6 +72,7 @@ export class TextRenderer {
       textAlignment,
       maxLines,
       overflow,
+      lineHeight,
     } = textElement.getProps();
 
     // Component -> display list. Wrapping and positioning stay here; the backend
@@ -89,6 +91,7 @@ export class TextRenderer {
       y,
       maxLines,
       overflow,
+      lineHeight,
     );
   }
 
@@ -108,6 +111,7 @@ export class TextRenderer {
     yPosition: number,
     maxLines?: number,
     overflow?: TextOverflow,
+    lineHeight = 1,
   ): TextRun[] {
     const runs: TextRun[] = [];
 
@@ -146,15 +150,18 @@ export class TextRenderer {
         maxLines,
         overflow,
       );
-      // yPosition is the top of the text box (top-left); seat line 0's baseline below
-      // it, then step DOWN per line. The seam flips the whole thing to PDF space.
-      const baseline = yPosition + fontSize * BASELINE_RATIO;
+      // yPosition is the top of the text box (top-left); seat line 0's baseline below it, then step
+      // DOWN by one line box (fontSize * lineHeight) per line. The lineHeight EXTRA leading is split
+      // half above / half below (CSS/Flutter "half-leading"), so the text sits centred in its line
+      // box instead of clinging to the top. At lineHeight 1 the half-leading is 0 -> byte-identical.
+      const halfLeading = (fontSize * (lineHeight - 1)) / 2;
+      const baseline = yPosition + halfLeading + fontSize * BASELINE_RATIO;
       lines.forEach((line, index) => {
         const lineWidth = objectManager.getStringWidth(line, fontFamily, fontSize, fontStyle);
         runs.push({
           type: "text",
           x: initialX + alignmentOffset(lineWidth),
-          y: baseline + fontSize * index,
+          y: baseline + fontSize * lineHeight * index,
           text: line,
           fontFamily,
           fontStyle,
@@ -208,8 +215,11 @@ export class TextRenderer {
       maxLines,
       overflow,
     )) {
-      pushLine(line, lineY);
-      lineY += line.maxFontSize;
+      // Half-leading: shift this line's baseline down by half its own extra leading, so the line
+      // sits centred in its box (CSS/Flutter). At lineHeight 1 the shift is 0 -> byte-identical.
+      const halfLeading = (line.maxFontSize * (lineHeight - 1)) / 2;
+      pushLine(line, lineY + halfLeading);
+      lineY += line.maxFontSize * lineHeight;
     }
 
     return runs;

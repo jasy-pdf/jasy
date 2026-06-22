@@ -24,6 +24,9 @@ export interface TextOptions extends TextStyle {
   maxLines?: number;
   /** What happens past `maxLines`: `"clip"` (default) cuts hard, `"ellipsis"` ends with "…". */
   overflow?: TextOverflow;
+  /** Line-height multiplier (default `1`). `1.4` gives roomier body copy; each line is
+   *  `size * lineHeight` tall. */
+  lineHeight?: number;
 }
 
 /** Body-text default size when none is given (matches the engine default font). */
@@ -75,6 +78,7 @@ export function Text(content: string | TextSegment[], opts: TextOptions = {}): T
     textAlignment: opts.align ? ALIGN[opts.align] : undefined,
     maxLines: opts.maxLines,
     overflow: opts.overflow,
+    lineHeight: opts.lineHeight,
   });
 }
 
