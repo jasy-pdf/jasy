@@ -1,12 +1,26 @@
 import { BoxConstraints, Offset, Size } from "../../layout/box-constraints";
 import { LayoutContext, PDFElement, WithChild } from "../pdf-element";
 
-/** Offsets from the frame's box edges, in points. Negative lets the child poke outside. */
+/** A position anchor along one axis: `start` (left/top), `center`, or `end` (right/bottom). */
+export type PositionAnchor = "start" | "center" | "end";
+
+/**
+ * How a `Positioned` child sits in its frame. Two ways, pick per axis:
+ *  - EDGE pinning: `top`/`right`/`bottom`/`left` (points from that edge; negative pokes outside).
+ *    Pinning BOTH sides of an axis stretches the child to fill between them.
+ *  - ANCHOR + nudge: `h`/`v` anchor the child (start/center/end) and `x`/`y` nudge it from there
+ *    (e.g. `{ h: "center", x: -10 }` = centred minus 10pt). The child shrink-wraps to its content.
+ * An edge wins over an anchor on the same axis. With nothing set the child sits at the top-left.
+ */
 export interface PositionedInsets {
   top?: number;
   right?: number;
   bottom?: number;
   left?: number;
+  h?: PositionAnchor;
+  v?: PositionAnchor;
+  x?: number;
+  y?: number;
 }
 
 interface PositionedElementParams extends WithChild, PositionedInsets {}
@@ -25,10 +39,10 @@ export class PositionedElement extends PDFElement {
   private child: PDFElement;
   private insets: PositionedInsets;
 
-  constructor({ child, top, right, bottom, left }: PositionedElementParams) {
+  constructor({ child, top, right, bottom, left, h, v, x, y }: PositionedElementParams) {
     super();
     this.child = child;
-    this.insets = { top, right, bottom, left };
+    this.insets = { top, right, bottom, left, h, v, x, y };
   }
 
   calculateLayout(_constraints: BoxConstraints, _offset: Offset, ctx: LayoutContext): Size {
@@ -39,10 +53,11 @@ export class PositionedElement extends PDFElement {
 
   /** Lays the child out at the resolved position inside (or overflowing) the frame box. */
   private placeInFrame(frame: { origin: Offset; size: Size }, ctx: LayoutContext): void {
-    const { top, right, bottom, left } = this.insets;
+    const { top, right, bottom, left, h, v, x: nudgeX, y: nudgeY } = this.insets;
 
-    // An axis is PINNED (stretched) only when BOTH of its insets are given; otherwise the child
-    // shrink-wraps its content (unbounded), the CSS rule for an absolutely-positioned element.
+    // An axis is PINNED (stretched) only when BOTH of its EDGES are given; otherwise the child
+    // shrink-wraps its content (unbounded), the CSS rule for an absolutely-positioned element. An
+    // anchor never stretches - it positions a content-sized child.
     const width =
       left !== undefined && right !== undefined
         ? Math.max(0, frame.size.width - left - right)
@@ -53,19 +68,35 @@ export class PositionedElement extends PDFElement {
         : Infinity;
     const constraints = BoxConstraints.loose(width, height);
 
-    // Measure first (so right/bottom can resolve against the child's own size).
+    // Measure first (so end/center anchors and right/bottom edges resolve against the child's size).
     const measured = this.child.calculateLayout(constraints, { x: 0, y: 0 }, ctx);
 
-    let x = frame.origin.x + (left ?? 0);
-    if (left === undefined && right !== undefined) {
-      x = frame.origin.x + frame.size.width - measured.width - right;
-    }
-    let y = frame.origin.y + (top ?? 0);
-    if (top === undefined && bottom !== undefined) {
-      y = frame.origin.y + frame.size.height - measured.height - bottom;
-    }
+    // Resolve one axis: a near-edge pins to origin, a far-edge pins to the far side; otherwise the
+    // anchor (default `start`) positions the child and the nudge shifts it from there.
+    const place = (
+      origin: number,
+      frameExtent: number,
+      childExtent: number,
+      nearEdge: number | undefined,
+      farEdge: number | undefined,
+      anchor: PositionAnchor | undefined,
+      nudge: number | undefined,
+    ): number => {
+      if (nearEdge !== undefined) return origin + nearEdge;
+      if (farEdge !== undefined) return origin + frameExtent - childExtent - farEdge;
+      const base =
+        anchor === "center"
+          ? (frameExtent - childExtent) / 2
+          : anchor === "end"
+            ? frameExtent - childExtent
+            : 0; // start (default)
+      return origin + base + (nudge ?? 0);
+    };
 
-    // Place it for real at the resolved corner.
+    const x = place(frame.origin.x, frame.size.width, measured.width, left, right, h, nudgeX);
+    const y = place(frame.origin.y, frame.size.height, measured.height, top, bottom, v, nudgeY);
+
+    // Place it for real at the resolved position.
     this.child.calculateLayout(constraints, { x, y }, ctx);
   }
 

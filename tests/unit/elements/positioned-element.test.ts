@@ -85,6 +85,39 @@ describe("PositionedElement - placement against the frame", () => {
   });
 });
 
+describe("PositionedElement - anchor + offset (Stage 4)", () => {
+  // frame 100x60 at origin (0,0), child 20x10.
+  const place = (insets: Record<string, unknown>) => {
+    const child = fixed(20, 10);
+    frame({ width: 100, height: 60 }, [
+      new PositionedElement({ child, ...insets }),
+    ]).calculateLayout(BoxConstraints.loose(100, 60), { x: 0, y: 0 }, ctx);
+    return child.getSize();
+  };
+
+  it("centers on an axis with h/v: center", () => {
+    // x = (100-20)/2 = 40 ; y = (60-10)/2 = 25
+    expect(place({ h: "center", v: "center" })).toMatchObject({ x: 40, y: 25 });
+  });
+
+  it("end-anchors to the far edge, accounting for the child size", () => {
+    // x = 100-20 = 80 ; y = 60-10 = 50
+    expect(place({ h: "end", v: "end" })).toMatchObject({ x: 80, y: 50 });
+  });
+
+  it("nudges from the anchor with x/y (center - 10, bottom - 8)", () => {
+    expect(place({ h: "center", x: -10, v: "end", y: -8 })).toMatchObject({ x: 30, y: 42 });
+  });
+
+  it("defaults to the start anchor when only a nudge is given", () => {
+    expect(place({ x: 12, y: 6 })).toMatchObject({ x: 12, y: 6 });
+  });
+
+  it("lets an edge win over an anchor on the same axis", () => {
+    expect(place({ left: 5, h: "center" })).toMatchObject({ x: 5 });
+  });
+});
+
 describe("PositionedElement - the page is the default frame", () => {
   it("anchors a page-level Positioned to the content box (no relative ancestor)", () => {
     const child = fixed(20, 10);

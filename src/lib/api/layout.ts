@@ -143,9 +143,11 @@ export function Padding(padding: Insets, child: PDFElement): PaddingElement {
 }
 
 /**
- * Places a child OUT OF FLOW, relative to the nearest enclosing `relative` Box. Offsets are from
- * the frame's edges (points); a negative `top`/`left` lets the child poke into or out of the corner
- * - a badge, a tab, a ribbon. `Positioned({ top, left, right, bottom }, child)`.
+ * Places a child OUT OF FLOW, relative to the nearest enclosing `relative` Box. Two ways, pick per
+ * axis: pin to EDGES - `Positioned({ top, left, right, bottom }, child)`, where a negative value
+ * pokes into / out of the corner (a badge, a tab, a ribbon) and pinning both sides stretches; or
+ * ANCHOR + nudge - `Positioned({ h: "center", v: "end", x: -10, y: -8 }, child)`, i.e. centred /
+ * end-aligned with a pixel offset. An edge wins over an anchor on the same axis.
  */
 export function Positioned(opts: PositionedInsets, child: PDFElement): PositionedElement {
   return new PositionedElement({ child, ...opts });
