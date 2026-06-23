@@ -1,0 +1,16 @@
+{
+  "name": "@jasy/validator",
+  "version": "0.0.0",
+  "private": true,
+  "description": "HTTP wrapper around `jasy validate --json` - the engine behind the web validator widget.",
+  "type": "module",
+  "scripts": {
+    "dev": "JASY_BIN=../cli/dist/index.js tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.3",
+    "tsx": "^4.19.2"
+  }
+}

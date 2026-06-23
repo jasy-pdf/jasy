@@ -75,7 +75,19 @@ describe("jasy validate command", () => {
     expect(report.summary).toContain("EN 16931");
     expect(report.businessRules.valid).toBe(true);
     expect(report.pdfA3.passed).toBe(report.pdfA3.total);
+    expect(report.recognized).toBe(true);
     expect(process.exitCode).toBe(0);
+  });
+
+  it("flags a non-invoice as not recognised (not 'valid') and exits 1", () => {
+    const f = join(tmpdir(), "jasy-cmd-garbage.txt");
+    writeFileSync(f, "this is not an invoice at all");
+    validateCommand([f, "--json"]);
+    rmSync(f, { force: true });
+    const report = JSON.parse(logs.join("\n"));
+    expect(report.recognized).toBe(false);
+    expect(report.valid).toBe(false);
+    expect(process.exitCode).toBe(1);
   });
 
   it("reports INVALID and exits 1 when the PDF/A structure is broken", async () => {

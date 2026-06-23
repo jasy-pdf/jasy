@@ -66,15 +66,18 @@ export function validateCommand(args: string[]): void {
     }
   }
 
-  const ok = (!rules || rules.valid) && (!pdfa || pdfa.ok) && (!vera || vera.ok);
+  // VALID requires that we actually recognised EN 16931 invoice data: a file we could not parse as an
+  // invoice (random bytes, or a plain PDF with no embedded XML) is "not an invoice" - never "valid".
+  const recognized = read.meta.syntax !== "unknown";
+  const ok = recognized && (!rules || rules.valid) && (!pdfa || pdfa.ok) && (!vera || vera.ok);
   if (!ok) process.exitCode = 1;
 
   if (json) {
-    console.log(JSON.stringify(toJson(file, read, rules, pdfa, vera, ok)));
+    console.log(JSON.stringify(toJson(file, read, rules, pdfa, vera, recognized, ok)));
     return;
   }
 
-  printReport(file, read, rules, pdfa, vera, ok, verbose);
+  printReport(file, read, rules, pdfa, vera, recognized, ok, verbose);
 }
 
 /** The machine-readable report (`--json`): the exact same data the printed report shows. */
@@ -84,11 +87,13 @@ function toJson(
   rules: ValidationReport | null,
   pdfa: PdfaReport | null,
   vera: VeraReport | null,
+  recognized: boolean,
   ok: boolean,
 ) {
   return {
     file: basename(file),
     summary: describeInvoice(read.meta),
+    recognized,
     valid: ok,
     businessRules: rules && {
       kind: rules.profile.startsWith("xrechnung") ? "XRechnung" : "EN 16931",
@@ -125,6 +130,7 @@ function printReport(
   rules: ValidationReport | null,
   pdfa: PdfaReport | null,
   vera: VeraReport | null,
+  recognized: boolean,
   ok: boolean,
   verbose: boolean,
 ): void {
@@ -179,5 +185,9 @@ function printReport(
     );
   }
 
-  console.log(`\n  → ${ok ? green(bold("VALID")) : red(bold("INVALID"))}\n`);
+  if (!recognized)
+    console.log(
+      `\n  → ${red(bold("NOT A ZUGFeRD / XRECHNUNG INVOICE"))}  ${dim("(no EN 16931 data found)")}\n`,
+    );
+  else console.log(`\n  → ${ok ? green(bold("VALID")) : red(bold("INVALID"))}\n`);
 }
