@@ -7,6 +7,8 @@ import { TextElement } from "./text-element";
 
 export interface PDFPageConfig {
   pageSize?: PageSize;
+  /** Explicit [width, height] in points; overrides `pageSize` (e.g. a custom label format). */
+  customSize?: [number, number];
   orientation?: Orientation;
   margin?: Margin;
   colorMode?: ColorMode;
@@ -32,8 +34,9 @@ export function resolvePageContentBox(config: PDFPageConfig): {
   height: number;
 } {
   const margin = config.margin!;
-  let width = pageFormats[config.pageSize!][0] - margin.left - margin.right;
-  let height = pageFormats[config.pageSize!][1] - margin.top - margin.bottom;
+  const [pageW, pageH] = config.customSize ?? pageFormats[config.pageSize!];
+  let width = pageW - margin.left - margin.right;
+  let height = pageH - margin.top - margin.bottom;
   if (config.orientation === Orientation.landscape) {
     [width, height] = [height, width];
   }

@@ -17,7 +17,7 @@ export class PageRenderer {
     // Page geometry (also the MediaBox below). Needed up front because flipping the
     // display list to PDF coordinates uses the page height. config is fully resolved
     // by the layout pass; fall back to the document default rather than asserting.
-    let [width, height] = pageFormats[config?.pageSize ?? PageSize.A4];
+    let [width, height] = config?.customSize ?? pageFormats[config?.pageSize ?? PageSize.A4];
     if (config?.orientation === Orientation.landscape) {
       [width, height] = [height, width];
     }

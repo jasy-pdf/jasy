@@ -10,15 +10,38 @@ import { getArrayBuffer } from "../utils/utf8-to-windows1252-encoder";
 import { Column, StackOptions } from "./layout";
 import { Insets, toEdges } from "./insets";
 
-/** A page size: a `PageSize` enum, or a friendly name like `"A4"` / `"letter"` (any case). */
-export type PageSizeInput = PageSize | string;
+const MM_TO_PT = 72 / 25.4; // 1 mm in PDF points
+
+/** A custom page size. Use the `mm()` helper for millimetres, or pass points directly. */
+export interface CustomSize {
+  width: number;
+  height: number;
+  unit?: "pt" | "mm";
+}
+
+/** Millimetres → a custom page size, e.g. a 50×65 mm label: `Page({ size: mm(50, 65) }, …)`. */
+export function mm(width: number, height: number): CustomSize {
+  return { width, height, unit: "mm" };
+}
+
+/** A page size: a named `PageSize`/string (`"A4"`, `"letter"`, any case), or a `CustomSize`. */
+export type PageSizeInput = PageSize | string | CustomSize;
 
 const PAGE_SIZE_VALUES = new Set<string>(Object.values(PageSize));
 
-function toPageSize(input: PageSizeInput): PageSize {
+function toPageSize(input: PageSize | string): PageSize {
   const v = String(input).toLowerCase();
   if (!PAGE_SIZE_VALUES.has(v)) throw new Error(`Unknown page size: "${input}"`);
   return v as PageSize;
+}
+
+/** Resolve `size` into config fields: a named `pageSize`, or an explicit [width, height] in points. */
+function resolveSize(input: PageSizeInput | undefined): Pick<PDFPageConfig, "pageSize" | "customSize"> {
+  if (input !== undefined && typeof input === "object") {
+    const f = input.unit === "mm" ? MM_TO_PT : 1;
+    return { pageSize: PageSize.A4, customSize: [input.width * f, input.height * f] };
+  }
+  return { pageSize: input !== undefined ? toPageSize(input) : PageSize.A4 };
 }
 
 /** Default page margin (all sides, points) when a `Page` doesn't set one. */
@@ -51,7 +74,7 @@ export function Page(a: PageOptions | PDFElement[], b?: PDFElement[]): PageEleme
 
   const [top, right, bottom, left] = toEdges(opts.margin ?? DEFAULT_MARGIN);
   const config: PDFPageConfig = {
-    pageSize: opts.size !== undefined ? toPageSize(opts.size) : PageSize.A4,
+    ...resolveSize(opts.size),
     orientation: opts.orientation === "landscape" ? Orientation.landscape : Orientation.portrait,
     margin: { top, right, bottom, left },
   };
