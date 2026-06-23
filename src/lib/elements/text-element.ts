@@ -200,18 +200,22 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
   }
 
   /** The unwrapped single-line width of the content (used when width is unbounded, e.g. inside a Row).
-   *  Must match the LINE-BREAKER's one-line measure EXACTLY: `getStringWidth` per word plus one space
-   *  between words, accumulated in the same order. A per-glyph `getCharWidth` sum diverged from the
-   *  breaker (it under-reserved), so a text laid out at that width re-wrapped inside its own
-   *  natural-width box - that was the "fixed Row child wraps despite ample space" bug. */
+   *  Must match the LINE-BREAKER's one-line measure EXACTLY - not just algebraically but BIT-for-bit,
+   *  so a text laid out at this width never re-wraps inside its own natural-width box. The breaker
+   *  accumulates `currentWidth += wordWidth + spaceWidth`, grouping the word and its trailing space
+   *  into one term; we must group the same way. Adding word and space as two separate steps is
+   *  algebraically equal but, because floating-point addition is not associative, drifts by a sub-ULP
+   *  - enough to tip a borderline string (e.g. "20 Jun 2026", wider than "04 Jul 2026" only because
+   *  'n' beats 'l') one bit over its own width, dropping the last word onto a second line. */
   private naturalWidth(metrics: FontMetrics): number {
     const oneLine = (text: string, family: string, size: number, style: FontStyle): number => {
       const words = text.split(" ");
       const space = metrics.getCharWidth(" ", size, undefined, family, style);
       let width = 0;
       words.forEach((word, i) => {
-        width += metrics.getStringWidth(word, family, size, style);
-        if (i < words.length - 1) width += space;
+        const w = metrics.getStringWidth(word, family, size, style);
+        // Group (word + space) as one term, exactly like the breaker - see the note above.
+        width += i < words.length - 1 ? w + space : w;
       });
       return width;
     };

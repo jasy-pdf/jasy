@@ -27,6 +27,13 @@ export enum FontStyle {
   BoldItalic = "boldItalic",
 }
 
+// Escapes a string into a valid PDF /Name token. A raw space or delimiter in a /Name (e.g. a font
+// family like "Great Vibes" or "Times New Roman") breaks the dictionary, so such chars become #XX.
+const pdfName = (s: string): string =>
+  s.replace(/[^\x21-\x7e]|[#()<>[\]{}/%]/g, (c) =>
+    "#" + c.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0"),
+  );
+
 // Suffix appended to an embedded font's PDF /BaseFont so each style variant of a family keeps
 // a distinct name (the variants are otherwise selected by the font resource, not the name).
 const STYLE_SUFFIX: Record<FontStyle, string> = {
@@ -447,7 +454,7 @@ endstream`;
     const fontNumber = this.fonts.getLastFontIndex() + 1; // New font index number
     this.fonts.addFont(fontName, fontNumber, resourceNumber, fontStyle); // Store it
 
-    const fontObject = `<</BaseFont/${fullName}/Type/Font\n/Encoding/WinAnsiEncoding\n/Subtype/Type1>>`;
+    const fontObject = `<</BaseFont/${pdfName(fullName)}/Type/Font\n/Encoding/WinAnsiEncoding\n/Subtype/Type1>>`;
     this.addObject(fontObject);
 
     return {
@@ -589,7 +596,7 @@ endstream`;
   private buildFontDescriptor(name: string, ttf: TTFParser, fontFile: number): string {
     const [x0, y0, x1, y1] = ttf.bbox;
     return (
-      `<< /Type /FontDescriptor /FontName /${name} /Flags 4 ` +
+      `<< /Type /FontDescriptor /FontName /${pdfName(name)} /Flags 4 ` +
       `/FontBBox [${x0} ${y0} ${x1} ${y1}] /ItalicAngle 0 ` +
       `/Ascent ${ttf.ascent} /Descent ${ttf.descent} /CapHeight ${ttf.ascent} /StemV 80 ` +
       `/FontFile2 ${fontFile} 0 R >>`
@@ -610,7 +617,7 @@ endstream`;
       .map((g) => `${g} [${all[g] ?? 1000}]`)
       .join(" ");
     return (
-      `<< /Type /Font /Subtype /CIDFontType2 /BaseFont /${name} ` +
+      `<< /Type /Font /Subtype /CIDFontType2 /BaseFont /${pdfName(name)} ` +
       `/CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> ` +
       `/FontDescriptor ${descriptor} 0 R /CIDToGIDMap /Identity ` +
       `/DW 1000 /W [${w}] >>`
@@ -643,7 +650,7 @@ endstream`;
 
   private buildType0(name: string, cidFont: number, toUnicode: number): string {
     return (
-      `<< /Type /Font /Subtype /Type0 /BaseFont /${name} /Encoding /Identity-H ` +
+      `<< /Type /Font /Subtype /Type0 /BaseFont /${pdfName(name)} /Encoding /Identity-H ` +
       `/DescendantFonts [${cidFont} 0 R] /ToUnicode ${toUnicode} 0 R >>`
     );
   }
