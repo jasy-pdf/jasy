@@ -62,6 +62,22 @@ describe("jasy validate command", () => {
     expect(process.exitCode).toBe(0);
   });
 
+  it("emits a machine-readable report with --json (same data, parseable)", async () => {
+    const { bytes } = await renderZugferd(invoice);
+    const f = join(tmpdir(), "jasy-cmd-json.pdf");
+    writeFileSync(f, bytes);
+    validateCommand([f, "--json"]);
+    rmSync(f, { force: true });
+
+    // The only stdout in --json mode is the JSON itself.
+    const report = JSON.parse(logs.join("\n"));
+    expect(report.valid).toBe(true);
+    expect(report.summary).toContain("EN 16931");
+    expect(report.businessRules.valid).toBe(true);
+    expect(report.pdfA3.passed).toBe(report.pdfA3.total);
+    expect(process.exitCode).toBe(0);
+  });
+
   it("reports INVALID and exits 1 when the PDF/A structure is broken", async () => {
     const { bytes } = await renderZugferd(invoice);
     const broken = Buffer.from(
