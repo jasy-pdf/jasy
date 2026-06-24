@@ -1,16 +1,31 @@
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
-import { toDocumentDescriptor } from "@jasy/vue";
+import { renderToPdf } from "@jasy/vue";
 import VuePdfEmbed from "vue-pdf-embed";
 import Hello from "./samples/Hello.vue";
 import Invoice from "./samples/Invoice.vue";
 import Invitation from "./samples/Invitation.vue";
+import Showcase from "./samples/Showcase.vue";
+import fontUrl from "./assets/GreatVibes-Regular.ttf?url";
+import imgUrl from "./assets/photo.jpg?url";
 
-const samples = [
+const samples: { label: string; comp: any; assets?: boolean }[] = [
   { label: "Hello world", comp: Hello },
   { label: "Invoice", comp: Invoice },
   { label: "Invitation", comp: Invitation },
+  { label: "Showcase", comp: Showcase, assets: true },
 ];
+
+// Fetch the .ttf + image once (in the browser), as Uint8Array - passed to the Showcase sample as props.
+let assetCache: { font: Uint8Array; image: Uint8Array } | null = null;
+async function loadAssets() {
+  if (!assetCache) {
+    const grab = (u: string) => fetch(u).then((r) => r.arrayBuffer()).then((b) => new Uint8Array(b));
+    const [font, image] = await Promise.all([grab(fontUrl), grab(imgUrl)]);
+    assetCache = { font, image };
+  }
+  return assetCache;
+}
 
 // Remember the choice across the full reload Vite does when you edit a sample, so it feels live.
 const STORAGE = "jasy-vue-sample";
@@ -23,16 +38,12 @@ async function render() {
   building.value = true;
   error.value = undefined;
   try {
-    // Browser: Vue component -> serialisable descriptor. Server: descriptor -> PDF (the Node engine).
-    const descriptor = toDocumentDescriptor(samples[currentIndex.value].comp);
-    const res = await fetch("/api/render", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(descriptor),
-    });
-    if (!res.ok) throw new Error(await res.text());
+    // 100% in the browser: the @jasy/pdf engine runs right here, no server. Vue component -> PDF bytes.
+    const sample = samples[currentIndex.value];
+    const props = sample.assets ? await loadAssets() : undefined;
+    const bytes = await renderToPdf(sample.comp, props);
     // vue-pdf-embed paints the PDF onto a <canvas>, so it always shows inline and never downloads.
-    pdfUrl.value = URL.createObjectURL(await res.blob());
+    pdfUrl.value = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
   } catch (e: any) {
     error.value = String(e?.message ?? e);
   } finally {
@@ -63,7 +74,7 @@ onMounted(render);
           {{ s.label }}
         </button>
       </nav>
-      <span class="hint">{{ building ? "rendering…" : "edit samples/*.vue" }}</span>
+      <span class="hint">{{ building ? "rendering…" : "100% in your browser · no server" }}</span>
     </header>
     <main>
       <pre v-if="error" class="error">{{ error }}</pre>
