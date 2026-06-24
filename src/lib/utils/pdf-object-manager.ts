@@ -1,7 +1,6 @@
 import { pageFormats, PageSize } from "../constants/page-sizes";
 import type { OverflowPolicy } from "../layout/fragmentation";
-import * as fs from "fs";
-import * as path from "path";
+import { STANDARD_AFM } from "../assets/font-data";
 import { createHash } from "crypto";
 import { zlibSync } from "fflate";
 import { bytesFromLatin1, latin1FromBytes } from "./bytes";
@@ -448,9 +447,8 @@ endstream`;
       return this.fonts.getFont(fontName, fontStyle)!; // Already exists? Return it!
     }
 
-    const afmFilePath = path.resolve(__dirname, "../", `assets/${fullName}.afm`);
-    if (fs.existsSync(afmFilePath)) {
-      const data = fs.readFileSync(afmFilePath, "utf-8");
+    const data = STANDARD_AFM[fullName];
+    if (data !== undefined) {
       this.afmParsers.push({
         fontName,
         fontStyle,

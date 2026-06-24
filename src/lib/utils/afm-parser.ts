@@ -1,5 +1,4 @@
-import fs from "fs";
-import path from "path";
+import { AGL } from "../assets/font-data";
 
 export class AFMParser {
   private advanceWidths: Record<string, number> = {};
@@ -12,9 +11,7 @@ export class AFMParser {
   }
 
   private loadGlyphList(): void {
-    const afmFilePath = path.resolve(__dirname, "../", "assets/agl.txt");
-    const fileContent = fs.readFileSync(afmFilePath, "utf-8");
-    const lines = fileContent.split("\n");
+    const lines = AGL.split("\n");
 
     for (const line of lines) {
       const parts = line.trim().split(";");
