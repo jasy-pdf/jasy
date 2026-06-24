@@ -104,9 +104,14 @@ _between_ children of a Column/Row).
 | `Text(content, opts)`      | `content` = string OR `Span[]` | `size`, `font`, `bold`, `italic`, `color`, `align` | `TextElement`  |
 | `span(text, opts)`         | inline run for mixed `Text`    | `size`, `font`, `bold`, `italic`, `color`          | `TextSegment`  |
 | `Paragraph(content, opts)` | `Text` with body defaults      | as `Text`                                          | `TextElement`  |
+| `DefaultTextStyle(opts, children)` | cascaded text defaults for a subtree | `size`, `font`, `bold`, `italic`, `color`, `align`, `lineHeight` | `DefaultTextStyleElement` |
 | `Image(src, opts)`         | image                          | `width`, `height`, `fit`, **`radius`**             | `ImageElement` |
 | `Divider(opts?)`           | horizontal rule                | `color`, `thickness`, `margin`                     | `LineElement`  |
 | `Line(opts)`               | explicit line                  | `from`, `to`, `color`, `thickness`                 | `LineElement`  |
+
+> **Text styles inherit** (CSS / Flutter style): `Document(opts, …)` sets document-wide text defaults
+> and `DefaultTextStyle(opts, …)` a subtree's; a `Text` resolves each property
+> `explicit > inherited > built-in default`. Only text properties cascade — never box / layout.
 
 ### After the core API
 

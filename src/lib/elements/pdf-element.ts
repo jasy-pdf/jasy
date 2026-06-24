@@ -1,6 +1,7 @@
 import type { FontMetrics } from "../utils/font-metrics";
 import type { PDFPageConfig } from "./page-element";
 import type { ResolvedTextStyle } from "../text/text-style";
+import type { OverflowPolicy } from "../layout/fragmentation";
 import type { BoxConstraints, Offset, Size } from "../layout/box-constraints";
 
 /**
@@ -30,6 +31,9 @@ export interface LayoutContext {
    *  from the built-in defaults + the `Document` defaults, and carried through page contexts; a
    *  `Text` resolves its own unset properties against it. Absent falls back to the built-in defaults. */
   textStyle?: ResolvedTextStyle;
+  /** What to do when an element overflows a page region and cannot break (set from the render option;
+   *  absent = clip silently). Evaluated in `packChildren` where the forced placement happens. */
+  onOverflow?: OverflowPolicy;
 }
 
 export abstract class PDFElement {

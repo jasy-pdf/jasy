@@ -63,6 +63,7 @@ export class PDFRenderer {
       metrics: objectManager,
       pageConfig: objectManager.getPDFConfig(),
       textStyle: mergeTextStyle(DEFAULT_TEXT_STYLE, document.getDefaultTextStyle()),
+      onOverflow: objectManager.getOverflowPolicy(),
     };
     document.calculateLayout(new BoxConstraints(), { x: 0, y: 0 }, ctx);
 

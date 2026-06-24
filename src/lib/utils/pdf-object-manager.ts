@@ -1,4 +1,5 @@
 import { pageFormats, PageSize } from "../constants/page-sizes";
+import type { OverflowPolicy } from "../layout/fragmentation";
 import * as fs from "fs";
 import * as path from "path";
 import { createHash } from "crypto";
@@ -206,6 +207,7 @@ export class PDFObjectManager implements FontMetrics {
   private pdfVersion = "1.4";
   private documentId = false;
   private compress = false;
+  private overflowPolicy: OverflowPolicy = "error";
 
   constructor();
   constructor(pageSize?: PageSize) {
@@ -232,6 +234,15 @@ export class PDFObjectManager implements FontMetrics {
   // PDF greppable for debugging and the internal tests; the XMP metadata stream is never routed here.
   setCompress(on: boolean): void {
     this.compress = on;
+  }
+
+  // Overflow policy for unbreakable content taller than a page region (default "error"); the renderer
+  // seeds it into the layout-context root so packChildren can act on it.
+  setOverflowPolicy(policy: OverflowPolicy): void {
+    this.overflowPolicy = policy;
+  }
+  getOverflowPolicy(): OverflowPolicy {
+    return this.overflowPolicy;
   }
 
   // Builds a stream object body: `<< extraDict /Length n >> stream … endstream`, FlateDecode-compressed

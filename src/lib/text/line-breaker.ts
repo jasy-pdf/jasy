@@ -52,7 +52,10 @@ export function wrapStringIntoLines(
     const wordWidth = metrics.getStringWidth(word, fontFamily, fontSize, fontStyle);
     const spaceWidth = metrics.getCharWidth(" ", fontSize, undefined, fontFamily, fontStyle);
 
-    if (currentWidth + wordWidth > maxWidth) {
+    // Break before a word that won't fit - but only once the line has content. A single word wider
+    // than maxWidth must sit on its (empty) line and overflow, not push a phantom empty line before
+    // it (which would over-count the height by a line and shift the text down at render).
+    if (currentWidth + wordWidth > maxWidth && currentLine !== "") {
       lines.push(currentLine.trim());
       currentLine = word;
       currentWidth = wordWidth;
@@ -111,7 +114,9 @@ export function breakSegmentsIntoLines(
     words.forEach((word, wordIndex) => {
       const wordWidth = metrics.getStringWidth(word, family, size, style);
 
-      if (width + wordWidth > maxWidth) {
+      // Same guard as the string path: don't open a phantom empty line for an over-wide first word -
+      // place it (overflowing) on the current empty line instead.
+      if (width + wordWidth > maxWidth && width > 0) {
         lines.push({ segments: lineSegments, width, maxFontSize });
         // Start the next line; its leading resets to the wrapping segment's size.
         width = 0;

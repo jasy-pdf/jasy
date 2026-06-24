@@ -24,6 +24,7 @@ describe("PDFRenderer", () => {
       getTrailerAndXRef: vi.fn().mockReturnValue("trailer\nstartxref\n33"),
       getParentObjectNumber: vi.fn().mockReturnValue(1),
       getPDFConfig: vi.fn().mockReturnValue({}),
+      getOverflowPolicy: vi.fn().mockReturnValue("ignore"),
       getAttachments: vi.fn().mockReturnValue([]),
       getXmpMetadata: vi.fn().mockReturnValue(undefined),
       getOutputIntent: vi.fn().mockReturnValue(undefined),

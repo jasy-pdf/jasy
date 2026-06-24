@@ -3,6 +3,7 @@ import { PDFDocumentElement } from "../elements/pdf-document-element";
 import { PageElement, PDFPageConfig } from "../elements/page-element";
 import { PDFElement } from "../elements/pdf-element";
 import { DefaultTextStyleElement } from "../elements/layout/default-text-style-element";
+import type { OverflowPolicy } from "../layout/fragmentation";
 import { PageSize } from "../constants/page-sizes";
 import { Orientation } from "../renderer/pdf-config";
 import { PDFDocument, PDFConfig } from "../renderer/pdf-document-class";
@@ -227,6 +228,9 @@ export interface RenderOptions {
   standardFonts?: boolean;
   /** FlateDecode-compress the streams (default true). Set false for a greppable, uncompressed PDF. */
   compress?: boolean;
+  /** What to do when content is taller than a page and cannot break: `"error"` throws (default),
+   *  `"warn"` logs and clips, `"ignore"` clips silently. It is always clipped either way. */
+  onOverflow?: OverflowPolicy;
 }
 
 function isFontBytes(v: FontBytes | FontFamily): v is FontBytes {
@@ -256,6 +260,7 @@ export async function renderPdf(doc: PDFDocumentElement, options?: RenderOptions
       super(config);
       const om = this.objectManager;
       om.setCompress(options?.compress !== false); // FlateDecode streams by default
+      om.setOverflowPolicy(options?.onOverflow ?? "error");
       for (const [name, value] of Object.entries(fonts)) {
         if (isFontBytes(value)) {
           om.registerCustomFont(name, Buffer.from(value));

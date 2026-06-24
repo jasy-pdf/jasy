@@ -64,6 +64,7 @@ export class PDFDocumentRenderer {
       metrics: ctx.metrics,
       pageConfig: config!,
       textStyle: ctx.textStyle,
+      onOverflow: ctx.onOverflow,
     };
     const { bodyWidth: width, bodyHeight: height } = layoutPageBands(
       config!,

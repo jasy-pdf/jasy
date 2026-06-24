@@ -124,6 +124,7 @@ export class PageElement extends PDFElement {
       metrics: ctx.metrics,
       pageConfig: this.config,
       textStyle: ctx.textStyle,
+      onOverflow: ctx.onOverflow,
     };
 
     // Place the header/footer bands; the body gets the region left in between (the whole

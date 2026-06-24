@@ -33,6 +33,30 @@ export function isFragmentable(element: PDFElement): element is PDFElement & Fra
 }
 
 /**
+ * What to do when an element is taller than the whole page region and cannot be broken. We always
+ * still place it (clipped) so pagination terminates - this only controls how loud we are about it:
+ * `"error"` throws (the default; an unbreakable overflow is almost always a layout bug), `"warn"`
+ * logs and clips, `"ignore"` clips silently.
+ */
+export type OverflowPolicy = "error" | "warn" | "ignore";
+
+function reportOverflow(
+  child: PDFElement,
+  childHeight: number,
+  maxHeight: number,
+  policy: OverflowPolicy,
+): void {
+  if (policy === "ignore") return;
+  const name = child.constructor.name.replace(/Element$/, "");
+  const detail =
+    `${name} is ${Math.round(childHeight)}pt tall but the page region is only ` +
+    `${Math.round(maxHeight)}pt and it cannot be broken - reduce its size, give it a bounded ` +
+    `height, or let it split across pages.`;
+  if (policy === "error") throw new Error(`Layout overflow: ${detail}`);
+  console.warn(`Layout overflow (clipped): ${detail}`);
+}
+
+/**
  * Packs a vertical stack of children into `maxHeight`, in order. Children are measured
  * against `width` (unbounded height) and added until one would overflow; that straddling
  * child is itself fragmented if it can be, otherwise placed/deferred whole. Everything
@@ -86,8 +110,14 @@ export function packChildren(
       }
     }
     if (!placedPart) {
-      if (fitted.length === 0) fitted.push(child);
-      else remainder.push(child);
+      if (fitted.length === 0) {
+        // Taller than the whole region and unsplittable: force it on (it overflows and is clipped)
+        // so the next region still advances - and surface it per the overflow policy.
+        reportOverflow(child, childHeight, maxHeight, ctx.onOverflow ?? "ignore");
+        fitted.push(child);
+      } else {
+        remainder.push(child);
+      }
     }
 
     for (let j = i + 1; j < children.length; j++) remainder.push(children[j]);
