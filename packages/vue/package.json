@@ -1,0 +1,28 @@
+{
+  "name": "@jasy/vue",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Author PDFs as Vue components - a thin Vue custom renderer over @jasy/pdf.",
+  "license": "MIT",
+  "author": "Florian Heuberger",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@jasy/pdf": "workspace:*"
+  },
+  "peerDependencies": {
+    "vue": "^3.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.3",
+    "typescript": "^5.6.0",
+    "vue": "^3.5.13"
+  }
+}
