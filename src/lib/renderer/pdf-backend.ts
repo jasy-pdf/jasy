@@ -1,5 +1,5 @@
-import { IRNode } from "../ir/display-list";
-import { PDFObjectManager } from "../utils/pdf-object-manager";
+import { IRNode } from "../ir/display-list.ts";
+import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 
 /**
  * PDF backend - turns display-list primitives into content-stream operators.

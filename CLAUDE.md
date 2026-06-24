@@ -240,14 +240,15 @@ Genuine remaining gaps / deferred:
    `todo.md` "Absolute-positioning layer".
 2. **`slice` border mode** (a split box left open at the break) — `clone` is the default; needs per-side
    stroke control in the `Rect` IR. True multi-column too (the `packChildren`/region machinery exists).
-3. **Browser support — IN FLIGHT (2026-06-25), most of the way.** `zlib`→`fflate`, `Buffer`→`Uint8Array`
-   (byte helpers in `utils/bytes.ts`), and the AFM metrics bundled (`assets/font-data.ts`, gen
-   `scripts/gen-font-data.mjs`) — **standard-font text renders WITHOUT `fs`**. An empirical browser bundle
-   (`esbuild --platform=browser`) leaves exactly 4 Node imports, all OPTIONAL: `node:fs` (font-from-path),
-   `path`+`fs/promises` (image-from-file), `crypto` (the documentId hash). `jimp` bundles (browser build);
-   `Buffer` is only a runtime polyfill at the one jimp boundary. REMAINING = the **platform-port**
-   (conditional `node`/`browser` exports + browser-safe versions) + ergonomic browser font loading. See
-   todo.md "🌐 Browser migration".
+3. **Browser support — the engine BUNDLES for the browser (2026-06-25).** `zlib`→`fflate`,
+   `Buffer`→`Uint8Array` (`utils/bytes.ts`), AFM bundled (`assets/font-data.ts`), `crypto`→vendored MD5
+   (`utils/md5.ts`), and the **platform-port** (fs/path behind `platform/{node-fs,browser-fs}.ts` + the
+   package.json `browser` field). `esbuild --platform=browser` now bundles clean: 0 errors/warnings, ~187 KB
+   gzipped (jimp lazy-loaded so text never touches it/Buffer). **REMAINING = the FULL-ESM migration** of
+   `@jasy/pdf` + `@jasy/zugferd` (both CJS — rollup can't browser-bundle CJS `export *`; cli/playground/vue
+   are already ESM). Going ESM with `.ts` extensions (`allowImportingTsExtensions` +
+   `rewriteRelativeImportExtensions`). Plus ergonomic browser font loading + compact-AFM. See todo.md
+   "🌐 Browser migration".
 4. `manual-test` has hard-coded machine-specific paths.
 5. Font gaps: no TrueType kerning; only TTF / TrueType-flavoured OTF parsed (OTF/CFF, WOFF2 not yet).
    Bold/italic resolve via registered family variants with a clean fallback to `normal` (no faux styles).

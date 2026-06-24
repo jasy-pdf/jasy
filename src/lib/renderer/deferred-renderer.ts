@@ -1,7 +1,7 @@
-import { PDFObjectManager } from "../utils/pdf-object-manager";
-import { DeferredElement } from "../elements/layout/deferred-element";
-import { RendererRegistry } from "../utils/renderer-registry";
-import { IRNode } from "../ir/display-list";
+import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
+import { DeferredElement } from "../elements/layout/deferred-element.ts";
+import { RendererRegistry } from "../utils/renderer-registry.ts";
+import { IRNode } from "../ir/display-list.ts";
 
 export class DeferredRenderer {
   static async render(

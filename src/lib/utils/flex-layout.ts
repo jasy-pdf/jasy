@@ -1,5 +1,5 @@
-import { PDFElement, LayoutContext, FlexiblePDFElement } from "../elements/pdf-element";
-import { BoxConstraints, Offset, Size } from "../layout/box-constraints";
+import { PDFElement, LayoutContext, FlexiblePDFElement } from "../elements/pdf-element.ts";
+import { BoxConstraints, Offset, Size } from "../layout/box-constraints.ts";
 
 /** Distribution of the children ALONG the stacking (main) axis when there is leftover
  *  space and no flex child to absorb it. */

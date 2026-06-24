@@ -1,21 +1,21 @@
-import { Color } from "../common/color";
+import { Color } from "../common/color.ts";
 // Import the renderer DIRECTLY, not via the "../renderer" barrel: the barrel pulls in
 // pdf-renderer (and every element) while this element module is still loading, which under
 // ESM (Vite/vitest, and the future framework bindings) duplicates the element classes and
 // breaks the constructor-keyed RendererRegistry. A direct import keeps the graph acyclic.
-import { TextRenderer } from "../renderer/text-renderer";
-import { FontStyle } from "../utils/pdf-object-manager";
-import { DEFAULT_TEXT_STYLE, ResolvedTextStyle } from "../text/text-style";
-import type { FontMetrics } from "../utils/font-metrics";
-import { BoxConstraints, Offset, Size } from "../layout/box-constraints";
-import { Fragmentable, FragmentResult } from "../layout/fragmentation";
+import { TextRenderer } from "../renderer/text-renderer.ts";
+import { FontStyle } from "../utils/pdf-object-manager.ts";
+import { DEFAULT_TEXT_STYLE, ResolvedTextStyle } from "../text/text-style.ts";
+import type { FontMetrics } from "../utils/font-metrics.ts";
+import { BoxConstraints, Offset, Size } from "../layout/box-constraints.ts";
+import { Fragmentable, FragmentResult } from "../layout/fragmentation.ts";
 import {
   wrapStringIntoLines,
   breakSegmentsIntoLines,
   segmentLinesToSegments,
   TextOverflow,
-} from "../text/line-breaker";
-import { HorizontalAlignment, LayoutContext, SizedPDFElement } from "./pdf-element";
+} from "../text/line-breaker.ts";
+import { HorizontalAlignment, LayoutContext, SizedPDFElement } from "./pdf-element.ts";
 export interface TextSegment {
   content: string;
   fontStyle?: FontStyle;

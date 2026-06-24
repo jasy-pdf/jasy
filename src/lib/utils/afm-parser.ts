@@ -1,4 +1,4 @@
-import { AGL } from "../assets/font-data";
+import { AGL } from "../assets/font-data.ts";
 
 export class AFMParser {
   private advanceWidths: Record<string, number> = {};

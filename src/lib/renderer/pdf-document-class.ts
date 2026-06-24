@@ -1,11 +1,11 @@
-import { PageSize } from "../constants/page-sizes";
-import { PDFDocumentElement } from "../elements";
-import { FontStyle, PDFObjectManager } from "../utils/pdf-object-manager";
-import { PDFRenderer } from "./pdf-renderer";
-import { ColorMode, Orientation } from "./pdf-config";
+import { PageSize } from "../constants/page-sizes.ts";
+import { PDFDocumentElement } from "../elements/index.ts";
+import { FontStyle, PDFObjectManager } from "../utils/pdf-object-manager.ts";
+import { PDFRenderer } from "./pdf-renderer.ts";
+import { ColorMode, Orientation } from "./pdf-config.ts";
 
 // Re-exported so existing `../renderer` consumers keep importing these from here.
-export { ColorMode, Orientation } from "./pdf-config";
+export { ColorMode, Orientation } from "./pdf-config.ts";
 
 export interface Margin {
   left: number;

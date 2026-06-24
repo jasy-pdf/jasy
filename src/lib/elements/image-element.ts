@@ -1,8 +1,8 @@
-import { getImageDimensions } from "../utils/image-helper";
-import { latin1FromBytes } from "../utils/bytes";
-import { readFileBytesAsync } from "../platform/node-fs";
-import { BoxConstraints, Offset, Size } from "../layout/box-constraints";
-import { LayoutContext, SizedPDFElement } from "./pdf-element";
+import { getImageDimensions } from "../utils/image-helper.ts";
+import { latin1FromBytes } from "../utils/bytes.ts";
+import { readFileBytesAsync } from "../platform/node-fs.ts";
+import { BoxConstraints, Offset, Size } from "../layout/box-constraints.ts";
+import { LayoutContext, SizedPDFElement } from "./pdf-element.ts";
 
 // path.extname without node:path (browser-safe): the substring from the last dot, if it sits after the
 // last slash (so a dot in a directory name does not count). Enough for image file extensions.

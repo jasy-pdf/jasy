@@ -1,5 +1,5 @@
-import { LayoutContext, PDFElement } from "../elements/pdf-element";
-import { BoxConstraints } from "./box-constraints";
+import { LayoutContext, PDFElement } from "../elements/pdf-element.ts";
+import { BoxConstraints } from "./box-constraints.ts";
 
 /**
  * The result of splitting an element against a fragmentation region (a page, later a

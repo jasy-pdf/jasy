@@ -1,8 +1,8 @@
-import type { FontMetrics } from "../utils/font-metrics";
-import type { PDFPageConfig } from "./page-element";
-import type { ResolvedTextStyle } from "../text/text-style";
-import type { OverflowPolicy } from "../layout/fragmentation";
-import type { BoxConstraints, Offset, Size } from "../layout/box-constraints";
+import type { FontMetrics } from "../utils/font-metrics.ts";
+import type { PDFPageConfig } from "./page-element.ts";
+import type { ResolvedTextStyle } from "../text/text-style.ts";
+import type { OverflowPolicy } from "../layout/fragmentation.ts";
+import type { BoxConstraints, Offset, Size } from "../layout/box-constraints.ts";
 
 /**
  * Everything the layout pass needs, threaded explicitly (no global singleton):

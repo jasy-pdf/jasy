@@ -20,11 +20,18 @@
   "files": [
     "dist"
   ],
+  "type": "module",
   "main": "dist/index.js",
   "browser": {
     "./dist/platform/node-fs.js": "./dist/platform/browser-fs.js"
   },
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
   "scripts": {
     "copy-assets": "ncp ./src/lib/assets ./dist/assets",
     "cli": "pnpm --filter @jasy/cli dev",
@@ -32,7 +39,7 @@
     "play": "pnpm --filter @jasy/playground play",
     "test": "vitest",
     "test:coverage": "vitest --coverage",
-    "build": "tsc && pnpm run copy-assets",
+    "build": "tsc && node scripts/fix-dts-ext.mjs && pnpm run copy-assets",
     "prepack": "pnpm run build",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",

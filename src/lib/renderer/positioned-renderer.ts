@@ -1,7 +1,7 @@
-import { PDFObjectManager } from "../utils/pdf-object-manager";
-import { PositionedElement } from "../elements/layout/positioned-element";
-import { RendererRegistry } from "../utils/renderer-registry";
-import { IRNode } from "../ir/display-list";
+import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
+import { PositionedElement } from "../elements/layout/positioned-element.ts";
+import { RendererRegistry } from "../utils/renderer-registry.ts";
+import { IRNode } from "../ir/display-list.ts";
 
 export class PositionedRenderer {
   static async render(

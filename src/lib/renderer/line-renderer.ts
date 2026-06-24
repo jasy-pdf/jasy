@@ -1,6 +1,6 @@
-import { PDFObjectManager } from "../utils/pdf-object-manager";
-import { LineElement } from "../elements";
-import { IRNode, Line } from "../ir/display-list";
+import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
+import { LineElement } from "../elements/index.ts";
+import { IRNode, Line } from "../ir/display-list.ts";
 
 export class LineRenderer {
   static async render(

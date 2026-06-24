@@ -1,6 +1,6 @@
-import type { FontStyle } from "../utils/pdf-object-manager";
-import type { FontMetrics } from "../utils/font-metrics";
-import type { TextSegment } from "../elements/text-element";
+import type { FontStyle } from "../utils/pdf-object-manager.ts";
+import type { FontMetrics } from "../utils/font-metrics.ts";
+import type { TextSegment } from "../elements/text-element.ts";
 
 /** Default font for segments that don't override it. */
 export interface SegmentDefaults {

@@ -1,6 +1,6 @@
-import { BoxConstraints, Offset, Size } from "../layout/box-constraints";
-import { FlexLayoutHelper, HORIZONTAL_AXIS, MainAlign, CrossAlign } from "../utils/flex-layout";
-import { LayoutContext, PDFElement, SizedPDFElement, WithChildren } from "./pdf-element";
+import { BoxConstraints, Offset, Size } from "../layout/box-constraints.ts";
+import { FlexLayoutHelper, HORIZONTAL_AXIS, MainAlign, CrossAlign } from "../utils/flex-layout.ts";
+import { LayoutContext, PDFElement, SizedPDFElement, WithChildren } from "./pdf-element.ts";
 
 interface RowElementParams extends WithChildren {
   /** Space inserted between children, in points. */

@@ -1,7 +1,7 @@
-import { PDFObjectManager } from "../utils/pdf-object-manager";
-import { RepeatingHeaderElement } from "../elements/layout/repeating-header-element";
-import { RendererRegistry } from "../utils/renderer-registry";
-import { IRNode } from "../ir/display-list";
+import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
+import { RepeatingHeaderElement } from "../elements/layout/repeating-header-element.ts";
+import { RendererRegistry } from "../utils/renderer-registry.ts";
+import { IRNode } from "../ir/display-list.ts";
 
 export class RepeatingHeaderRenderer {
   static async render(

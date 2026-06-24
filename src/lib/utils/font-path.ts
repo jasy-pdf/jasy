@@ -1,5 +1,5 @@
-const os = require("os");
-const path = require("path");
+import os from "node:os";
+import path from "node:path";
 
 export function getFontPath(fontName: string) {
   const platform = os.platform();

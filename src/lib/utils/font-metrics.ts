@@ -1,4 +1,4 @@
-import type { FontStyle } from "./pdf-object-manager";
+import type { FontStyle } from "./pdf-object-manager.ts";
 
 /**
  * Read-only font measurement - the slice of the object manager that the layout pass

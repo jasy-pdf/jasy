@@ -1,17 +1,17 @@
-import { readFileBytes } from "../platform/node-fs";
-import { PDFDocumentElement } from "../elements/pdf-document-element";
-import { PageElement, PDFPageConfig } from "../elements/page-element";
-import { PDFElement } from "../elements/pdf-element";
-import { DefaultTextStyleElement } from "../elements/layout/default-text-style-element";
-import type { OverflowPolicy } from "../layout/fragmentation";
-import { PageSize } from "../constants/page-sizes";
-import { Orientation } from "../renderer/pdf-config";
-import { PDFDocument, PDFConfig } from "../renderer/pdf-document-class";
-import { FontStyle } from "../utils/pdf-object-manager";
-import { getArrayBuffer } from "../utils/utf8-to-windows1252-encoder";
-import { Column, StackOptions } from "./layout";
-import { Insets, toEdges } from "./insets";
-import { TextDefaults, toTextStyleOverride } from "./text";
+import { readFileBytes } from "../platform/node-fs.ts";
+import { PDFDocumentElement } from "../elements/pdf-document-element.ts";
+import { PageElement, PDFPageConfig } from "../elements/page-element.ts";
+import { PDFElement } from "../elements/pdf-element.ts";
+import { DefaultTextStyleElement } from "../elements/layout/default-text-style-element.ts";
+import type { OverflowPolicy } from "../layout/fragmentation.ts";
+import { PageSize } from "../constants/page-sizes.ts";
+import { Orientation } from "../renderer/pdf-config.ts";
+import { PDFDocument, PDFConfig } from "../renderer/pdf-document-class.ts";
+import { FontStyle } from "../utils/pdf-object-manager.ts";
+import { getArrayBuffer } from "../utils/utf8-to-windows1252-encoder.ts";
+import { Column, StackOptions } from "./layout.ts";
+import { Insets, toEdges } from "./insets.ts";
+import { TextDefaults, toTextStyleOverride } from "./text.ts";
 
 const MM_TO_PT = 72 / 25.4; // 1 mm in PDF points
 

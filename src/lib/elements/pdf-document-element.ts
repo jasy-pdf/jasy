@@ -1,7 +1,7 @@
-import { PageElement } from "./page-element";
-import { BoxConstraints, Offset, Size } from "../layout/box-constraints";
-import { LayoutContext, PDFElement, WithChildren } from "./pdf-element";
-import type { ResolvedTextStyle } from "../text/text-style";
+import { PageElement } from "./page-element.ts";
+import { BoxConstraints, Offset, Size } from "../layout/box-constraints.ts";
+import { LayoutContext, PDFElement, WithChildren } from "./pdf-element.ts";
+import type { ResolvedTextStyle } from "../text/text-style.ts";
 
 interface PDFDocumentParams extends WithChildren {
   children: PageElement[];

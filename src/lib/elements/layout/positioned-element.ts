@@ -1,5 +1,5 @@
-import { BoxConstraints, Offset, Size } from "../../layout/box-constraints";
-import { LayoutContext, PDFElement, WithChild } from "../pdf-element";
+import { BoxConstraints, Offset, Size } from "../../layout/box-constraints.ts";
+import { LayoutContext, PDFElement, WithChild } from "../pdf-element.ts";
 
 /** A position anchor along one axis: `start` (left/top), `center`, or `end` (right/bottom). */
 export type PositionAnchor = "start" | "center" | "end";

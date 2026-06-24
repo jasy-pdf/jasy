@@ -1,9 +1,9 @@
-import { PDFObjectManager } from "../utils/pdf-object-manager";
+import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 
-import { RectangleElement, SideBorders } from "../elements/rectangle-element";
-import { RendererRegistry } from "../utils/renderer-registry";
-import { IRNode, Rect, Line } from "../ir/display-list";
-import { Color } from "../common/color";
+import { RectangleElement, SideBorders } from "../elements/rectangle-element.ts";
+import { RendererRegistry } from "../utils/renderer-registry.ts";
+import { IRNode, Rect, Line } from "../ir/display-list.ts";
+import { Color } from "../common/color.ts";
 
 export class RectangleRenderer {
   static async render(

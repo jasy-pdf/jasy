@@ -1,6 +1,6 @@
-import { Color } from "../common/color";
-import { BoxConstraints, Offset, Size } from "../layout/box-constraints";
-import { LayoutContext, SizedElement, SizedPDFElement } from "./pdf-element";
+import { Color } from "../common/color.ts";
+import { BoxConstraints, Offset, Size } from "../layout/box-constraints.ts";
+import { LayoutContext, SizedElement, SizedPDFElement } from "./pdf-element.ts";
 
 interface LineElementParams extends SizedElement {
   color?: Color;

@@ -1,11 +1,11 @@
-import { PDFElement, LayoutContext } from "../elements/pdf-element";
-import { BoxConstraints } from "../layout/box-constraints";
-import { RepeatingHeaderElement } from "../elements/layout/repeating-header-element";
-import { DeferredElement } from "../elements/layout/deferred-element";
-import { Column, Row, Box, Expanded, Padding } from "./layout";
-import { Text } from "./text";
-import { Insets } from "./insets";
-import { ColorInput } from "./color";
+import { PDFElement, LayoutContext } from "../elements/pdf-element.ts";
+import { BoxConstraints } from "../layout/box-constraints.ts";
+import { RepeatingHeaderElement } from "../elements/layout/repeating-header-element.ts";
+import { DeferredElement } from "../elements/layout/deferred-element.ts";
+import { Column, Row, Box, Expanded, Padding } from "./layout.ts";
+import { Text } from "./text.ts";
+import { Insets } from "./insets.ts";
+import { ColorInput } from "./color.ts";
 
 /**
  * A column width: a `number` of points (fixed), an `"Nfr"` fraction (splits the leftover

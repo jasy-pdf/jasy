@@ -1,6 +1,6 @@
-import { BoxConstraints, Offset, Size } from "../../layout/box-constraints";
-import { Fragmentable, FragmentResult, isFragmentable } from "../../layout/fragmentation";
-import { LayoutContext, PDFElement } from "../pdf-element";
+import { BoxConstraints, Offset, Size } from "../../layout/box-constraints.ts";
+import { Fragmentable, FragmentResult, isFragmentable } from "../../layout/fragmentation.ts";
+import { LayoutContext, PDFElement } from "../pdf-element.ts";
 
 /**
  * Stacks a `header` above a `body` and, when it paginates, **repeats the header on every

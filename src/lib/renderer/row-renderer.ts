@@ -1,7 +1,7 @@
-import { PDFObjectManager } from "../utils/pdf-object-manager";
-import { RowElement } from "../elements/row-element";
-import { RendererRegistry } from "../utils/renderer-registry";
-import { IRNode } from "../ir/display-list";
+import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
+import { RowElement } from "../elements/row-element.ts";
+import { RendererRegistry } from "../utils/renderer-registry.ts";
+import { IRNode } from "../ir/display-list.ts";
 
 export class RowRenderer {
   static async render(rowElement: RowElement, objectManager: PDFObjectManager): Promise<IRNode[]> {

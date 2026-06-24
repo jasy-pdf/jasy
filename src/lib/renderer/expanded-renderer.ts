@@ -1,7 +1,7 @@
-import { PDFObjectManager } from "../utils/pdf-object-manager";
-import { RendererRegistry } from "../utils/renderer-registry";
-import { ExpandedElement } from "../elements";
-import { IRNode } from "../ir/display-list";
+import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
+import { RendererRegistry } from "../utils/renderer-registry.ts";
+import { ExpandedElement } from "../elements/index.ts";
+import { IRNode } from "../ir/display-list.ts";
 
 export class ExpandedRenderer {
   static async render(

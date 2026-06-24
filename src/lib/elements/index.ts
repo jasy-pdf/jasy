@@ -1,12 +1,12 @@
-export { PDFElement } from "./pdf-element"; // the base element type - public for composing custom layouts
-export * from "./text-element";
-export * from "./pdf-document-element";
-export * from "./page-element";
-export * from "./rectangle-element";
-export * from "./image-element";
-export * from "./layout/expanded-element";
-export * from "./layout/padding-element";
-export * from "./layout/default-text-style-element";
-export * from "./layout/positioned-element";
-export * from "./line-element";
-export * from "./row-element";
+export { PDFElement } from "./pdf-element.ts"; // the base element type - public for composing custom layouts
+export * from "./text-element.ts";
+export * from "./pdf-document-element.ts";
+export * from "./page-element.ts";
+export * from "./rectangle-element.ts";
+export * from "./image-element.ts";
+export * from "./layout/expanded-element.ts";
+export * from "./layout/padding-element.ts";
+export * from "./layout/default-text-style-element.ts";
+export * from "./layout/positioned-element.ts";
+export * from "./line-element.ts";
+export * from "./row-element.ts";

@@ -1,13 +1,13 @@
-import { FlexLayoutHelper, VERTICAL_AXIS, MainAlign, CrossAlign } from "../utils/flex-layout";
-import { BoxConstraints, Offset, Size } from "../layout/box-constraints";
-import { Fragmentable, FragmentResult, packChildren } from "../layout/fragmentation";
+import { FlexLayoutHelper, VERTICAL_AXIS, MainAlign, CrossAlign } from "../utils/flex-layout.ts";
+import { BoxConstraints, Offset, Size } from "../layout/box-constraints.ts";
+import { Fragmentable, FragmentResult, packChildren } from "../layout/fragmentation.ts";
 import {
   LayoutContext,
   PDFElement,
   SizedElement,
   SizedPDFElement,
   WithChildren,
-} from "./pdf-element";
+} from "./pdf-element.ts";
 
 interface ContainerElementParams extends SizedElement, WithChildren {
   /** Space between children. */

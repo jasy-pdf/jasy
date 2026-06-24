@@ -2,7 +2,7 @@
 // Slice 1: glyph advance widths (hmtx) + the Unicode→glyph map (cmap), enough to compute
 // text width the same way AFMParser does for the standard-14. Embedding/subsetting come later.
 
-import { i16, latin1FromBytes, u16, u32 } from "./bytes";
+import { i16, latin1FromBytes, u16, u32 } from "./bytes.ts";
 
 interface TableRecord {
   offset: number;

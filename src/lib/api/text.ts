@@ -1,9 +1,9 @@
-import { TextElement, TextSegment } from "../elements/text-element";
-import { HorizontalAlignment } from "../elements/pdf-element";
-import { FontStyle } from "../utils/pdf-object-manager";
-import { TextOverflow } from "../text/line-breaker";
-import { ResolvedTextStyle } from "../text/text-style";
-import { ColorInput, toColor } from "./color";
+import { TextElement, TextSegment } from "../elements/text-element.ts";
+import { HorizontalAlignment } from "../elements/pdf-element.ts";
+import { FontStyle } from "../utils/pdf-object-manager.ts";
+import { TextOverflow } from "../text/line-breaker.ts";
+import { ResolvedTextStyle } from "../text/text-style.ts";
+import { ColorInput, toColor } from "./color.ts";
 
 export type { TextOverflow };
 

@@ -1,6 +1,6 @@
 import { Jimp, JimpMime } from "jimp";
 import { zlibSync } from "fflate";
-import { latin1FromBytes } from "./bytes";
+import { latin1FromBytes } from "./bytes.ts";
 
 // Declare the new method in the DataView interface
 declare global {

@@ -1,6 +1,6 @@
-import { Color } from "../common/color";
-import { BoxConstraints, Offset, Size } from "../layout/box-constraints";
-import { Fragmentable, FragmentResult, packChildren } from "../layout/fragmentation";
+import { Color } from "../common/color.ts";
+import { BoxConstraints, Offset, Size } from "../layout/box-constraints.ts";
+import { Fragmentable, FragmentResult, packChildren } from "../layout/fragmentation.ts";
 import {
   LayoutContext,
   PDFElement,
@@ -8,7 +8,7 @@ import {
   SizedElement,
   SizedPDFElement,
   WithChildren,
-} from "./pdf-element";
+} from "./pdf-element.ts";
 
 /** Per-side border colors. When set, each present side is stroked individually (sharp
  *  corners), instead of the uniform `color` border - this is what enables grid lines. */

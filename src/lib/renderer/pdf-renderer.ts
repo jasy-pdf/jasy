@@ -1,7 +1,7 @@
-import { PDFDocumentElement } from "../elements/pdf-document-element";
-import { PDFDocumentRenderer } from "./pdf-document-renderer";
-import { PDFObjectManager } from "../utils/pdf-object-manager";
-import { RendererRegistry } from "../utils/renderer-registry";
+import { PDFDocumentElement } from "../elements/pdf-document-element.ts";
+import { PDFDocumentRenderer } from "./pdf-document-renderer.ts";
+import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
+import { RendererRegistry } from "../utils/renderer-registry.ts";
 import {
   DefaultTextStyleElement,
   ExpandedElement,
@@ -9,28 +9,28 @@ import {
   LineElement,
   PaddingElement,
   TextElement,
-} from "../elements";
-import { TextRenderer } from "./text-renderer";
-import { ContainerElement } from "../elements/container-element";
-import { RectangleElement } from "../elements/rectangle-element";
-import { RowElement } from "../elements/row-element";
-import { ContainerRenderer } from "./container-renderer";
-import { RectangleRenderer } from "./rectangle-renderer";
-import { RowRenderer } from "./row-renderer";
-import { ExpandedRenderer } from "./expanded-renderer";
-import { PaddingRenderer } from "./padding-renderer";
-import { DefaultTextStyleRenderer } from "./default-text-style-renderer";
-import { ImageRenderer } from "./image-renderer";
-import { LineRenderer } from "./line-renderer";
-import { RepeatingHeaderElement } from "../elements/layout/repeating-header-element";
-import { RepeatingHeaderRenderer } from "./repeating-header-renderer";
-import { DeferredElement } from "../elements/layout/deferred-element";
-import { DeferredRenderer } from "./deferred-renderer";
-import { PositionedElement } from "../elements/layout/positioned-element";
-import { PositionedRenderer } from "./positioned-renderer";
-import { BoxConstraints } from "../layout/box-constraints";
-import { LayoutContext } from "../elements/pdf-element";
-import { DEFAULT_TEXT_STYLE, mergeTextStyle } from "../text/text-style";
+} from "../elements/index.ts";
+import { TextRenderer } from "./text-renderer.ts";
+import { ContainerElement } from "../elements/container-element.ts";
+import { RectangleElement } from "../elements/rectangle-element.ts";
+import { RowElement } from "../elements/row-element.ts";
+import { ContainerRenderer } from "./container-renderer.ts";
+import { RectangleRenderer } from "./rectangle-renderer.ts";
+import { RowRenderer } from "./row-renderer.ts";
+import { ExpandedRenderer } from "./expanded-renderer.ts";
+import { PaddingRenderer } from "./padding-renderer.ts";
+import { DefaultTextStyleRenderer } from "./default-text-style-renderer.ts";
+import { ImageRenderer } from "./image-renderer.ts";
+import { LineRenderer } from "./line-renderer.ts";
+import { RepeatingHeaderElement } from "../elements/layout/repeating-header-element.ts";
+import { RepeatingHeaderRenderer } from "./repeating-header-renderer.ts";
+import { DeferredElement } from "../elements/layout/deferred-element.ts";
+import { DeferredRenderer } from "./deferred-renderer.ts";
+import { PositionedElement } from "../elements/layout/positioned-element.ts";
+import { PositionedRenderer } from "./positioned-renderer.ts";
+import { BoxConstraints } from "../layout/box-constraints.ts";
+import { LayoutContext } from "../elements/pdf-element.ts";
+import { DEFAULT_TEXT_STYLE, mergeTextStyle } from "../text/text-style.ts";
 
 export class PDFRenderer {
   static async render(

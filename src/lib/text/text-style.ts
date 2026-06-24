@@ -1,6 +1,6 @@
-import { Color } from "../common/color";
-import { FontStyle } from "../utils/pdf-object-manager";
-import { HorizontalAlignment } from "../elements/pdf-element";
+import { Color } from "../common/color.ts";
+import { FontStyle } from "../utils/pdf-object-manager.ts";
+import { HorizontalAlignment } from "../elements/pdf-element.ts";
 
 /**
  * The inheritable text properties - the same set CSS and Flutter cascade. A `Text` resolves each of

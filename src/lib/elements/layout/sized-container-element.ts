@@ -4,8 +4,8 @@ import {
   SizedPDFElement,
   PDFElement,
   LayoutContext,
-} from "../pdf-element";
-import { BoxConstraints, Offset, Size } from "../../layout/box-constraints";
+} from "../pdf-element.ts";
+import { BoxConstraints, Offset, Size } from "../../layout/box-constraints.ts";
 
 interface ContainerElementParams extends SizedElement, WithChildren {
   color?: [number, number, number];

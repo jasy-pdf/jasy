@@ -1,5 +1,5 @@
-import { Color } from "../common/color";
-import { FontStyle } from "../utils/pdf-object-manager";
+import { Color } from "../common/color.ts";
+import { FontStyle } from "../utils/pdf-object-manager.ts";
 
 /**
  * Display list - the seam between layout and the PDF backend.

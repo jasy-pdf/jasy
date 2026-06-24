@@ -1,11 +1,11 @@
-import { PDFElement } from "../elements/pdf-element";
-import { PDFDocumentElement } from "../elements/pdf-document-element";
-import { PageElement } from "../elements/page-element";
-import { TextSegment } from "../elements/text-element";
-import { Text, Paragraph, span } from "./text";
-import { Column, Row, Box, Padding, Spacer, Expanded } from "./layout";
-import { Divider, Image } from "./content";
-import { Page, Document } from "./structure";
+import { PDFElement } from "../elements/pdf-element.ts";
+import { PDFDocumentElement } from "../elements/pdf-document-element.ts";
+import { PageElement } from "../elements/page-element.ts";
+import { TextSegment } from "../elements/text-element.ts";
+import { Text, Paragraph, span } from "./text.ts";
+import { Column, Row, Box, Padding, Spacer, Expanded } from "./layout.ts";
+import { Divider, Image } from "./content.ts";
+import { Page, Document } from "./structure.ts";
 
 /**
  * The framework-agnostic contract (the firewall). A binding (Vue/React, or any tree-builder)

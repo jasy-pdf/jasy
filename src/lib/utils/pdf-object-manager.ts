@@ -1,18 +1,18 @@
-import { pageFormats, PageSize } from "../constants/page-sizes";
-import type { OverflowPolicy } from "../layout/fragmentation";
-import { STANDARD_AFM } from "../assets/font-data";
-import { md5, md5Hex } from "./md5";
+import { pageFormats, PageSize } from "../constants/page-sizes.ts";
+import type { OverflowPolicy } from "../layout/fragmentation.ts";
+import { STANDARD_AFM } from "../assets/font-data.ts";
+import { md5, md5Hex } from "./md5.ts";
 import { zlibSync } from "fflate";
-import { bytesFromLatin1, latin1FromBytes } from "./bytes";
-import { AFMParser } from "./afm-parser";
-import { TTFParser } from "./ttf-parser";
-import { subsetTTF } from "./ttf-subsetter";
-import { getArrayBuffer } from "./utf8-to-windows1252-encoder";
+import { bytesFromLatin1, latin1FromBytes } from "./bytes.ts";
+import { AFMParser } from "./afm-parser.ts";
+import { TTFParser } from "./ttf-parser.ts";
+import { subsetTTF } from "./ttf-subsetter.ts";
+import { getArrayBuffer } from "./utf8-to-windows1252-encoder.ts";
 // Enums come from the leaf config module (never in a cycle); the config type is
 // erased at runtime so it can come from the cyclic module safely.
-import { ColorMode, Orientation } from "../renderer/pdf-config";
-import type { PDFConfig } from "../renderer/pdf-document-class";
-import type { FontMetrics } from "./font-metrics";
+import { ColorMode, Orientation } from "../renderer/pdf-config.ts";
+import type { PDFConfig } from "../renderer/pdf-document-class.ts";
+import type { FontMetrics } from "./font-metrics.ts";
 
 interface FontIndexes {
   fontIndex: number;

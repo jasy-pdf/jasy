@@ -1,7 +1,7 @@
-import { PDFObjectManager } from "../utils/pdf-object-manager";
-import { ContainerElement } from "../elements/container-element";
-import { RendererRegistry } from "../utils/renderer-registry";
-import { IRNode } from "../ir/display-list";
+import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
+import { ContainerElement } from "../elements/container-element.ts";
+import { RendererRegistry } from "../utils/renderer-registry.ts";
+import { IRNode } from "../ir/display-list.ts";
 
 export class ContainerRenderer {
   static async render(

@@ -1,4 +1,4 @@
-import { Color } from "../common/color";
+import { Color } from "../common/color.ts";
 
 /**
  * Every way to name a color. The FORM picks the convention, so there is never a guess

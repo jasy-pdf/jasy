@@ -1,13 +1,13 @@
-import { Validator } from "../../validators/element-validator";
+import { Validator } from "../../validators/element-validator.ts";
 import {
   PDFElement,
   LayoutContext,
   FlexiblePDFElement,
   WithChild,
   FlexibleElement,
-} from "../pdf-element";
-import { BoxConstraints, Offset, Size } from "../../layout/box-constraints";
-import { Fragmentable, FragmentResult, isFragmentable } from "../../layout/fragmentation";
+} from "../pdf-element.ts";
+import { BoxConstraints, Offset, Size } from "../../layout/box-constraints.ts";
+import { Fragmentable, FragmentResult, isFragmentable } from "../../layout/fragmentation.ts";
 
 interface ExpandedElementParams extends FlexibleElement, WithChild {}
 

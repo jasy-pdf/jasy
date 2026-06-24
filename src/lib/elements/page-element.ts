@@ -1,9 +1,9 @@
-import { pageFormats, PageSize } from "../constants/page-sizes";
-import { Orientation } from "../renderer/pdf-config";
-import type { ColorMode, DefaultFont, Margin } from "../renderer";
-import { BoxConstraints, Offset, Size } from "../layout/box-constraints";
-import { LayoutContext, PDFElement, PositioningFrame, WithChildren } from "./pdf-element";
-import { TextElement } from "./text-element";
+import { pageFormats, PageSize } from "../constants/page-sizes.ts";
+import { Orientation } from "../renderer/pdf-config.ts";
+import type { ColorMode, DefaultFont, Margin } from "../renderer/index.ts";
+import { BoxConstraints, Offset, Size } from "../layout/box-constraints.ts";
+import { LayoutContext, PDFElement, PositioningFrame, WithChildren } from "./pdf-element.ts";
+import { TextElement } from "./text-element.ts";
 
 export interface PDFPageConfig {
   pageSize?: PageSize;

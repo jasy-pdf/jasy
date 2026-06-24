@@ -1,6 +1,6 @@
-import { BoxConstraints, Offset, Size } from "../../layout/box-constraints";
-import { Fragmentable, FragmentResult, isFragmentable } from "../../layout/fragmentation";
-import { LayoutContext, PDFElement } from "../pdf-element";
+import { BoxConstraints, Offset, Size } from "../../layout/box-constraints.ts";
+import { Fragmentable, FragmentResult, isFragmentable } from "../../layout/fragmentation.ts";
+import { LayoutContext, PDFElement } from "../pdf-element.ts";
 
 /**
  * Builds its subtree at layout time via `resolve(ctx)`, so the tree can depend on font

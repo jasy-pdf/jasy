@@ -1,10 +1,10 @@
-import { pageFormats, PageSize } from "../constants/page-sizes";
-import { PageElement } from "../elements/page-element";
-import { PDFObjectManager } from "../utils/pdf-object-manager";
-import { RendererRegistry } from "../utils/renderer-registry";
-import { Orientation } from "./pdf-config";
-import { IRNode } from "../ir/display-list";
-import { PdfBackend } from "./pdf-backend";
+import { pageFormats, PageSize } from "../constants/page-sizes.ts";
+import { PageElement } from "../elements/page-element.ts";
+import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
+import { RendererRegistry } from "../utils/renderer-registry.ts";
+import { Orientation } from "./pdf-config.ts";
+import { IRNode } from "../ir/display-list.ts";
+import { PdfBackend } from "./pdf-backend.ts";
 
 export class PageRenderer {
   static async render(page: PageElement, objectManager: PDFObjectManager): Promise<number> {

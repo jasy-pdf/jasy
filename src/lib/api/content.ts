@@ -1,9 +1,9 @@
-import { LineElement } from "../elements/line-element";
-import { PaddingElement } from "../elements/layout/padding-element";
-import { ImageElement, CustomImage, CustomLocalImage, BoxFit } from "../elements/image-element";
-import { PDFElement } from "../elements/pdf-element";
-import { ColorInput, toColor } from "./color";
-import { Insets, toEdges } from "./insets";
+import { LineElement } from "../elements/line-element.ts";
+import { PaddingElement } from "../elements/layout/padding-element.ts";
+import { ImageElement, CustomImage, CustomLocalImage, BoxFit } from "../elements/image-element.ts";
+import { PDFElement } from "../elements/pdf-element.ts";
+import { ColorInput, toColor } from "./color.ts";
+import { Insets, toEdges } from "./insets.ts";
 
 /** A horizontal rule (locked §4). */
 export interface DividerOptions {

@@ -1,7 +1,7 @@
-import { PDFObjectManager } from "../utils/pdf-object-manager";
-import { RendererRegistry } from "../utils/renderer-registry";
-import { PaddingElement } from "../elements/layout/padding-element";
-import { IRNode } from "../ir/display-list";
+import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
+import { RendererRegistry } from "../utils/renderer-registry.ts";
+import { PaddingElement } from "../elements/layout/padding-element.ts";
+import { IRNode } from "../ir/display-list.ts";
 
 export class PaddingRenderer {
   static async render(

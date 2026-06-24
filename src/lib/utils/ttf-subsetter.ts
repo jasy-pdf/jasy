@@ -3,7 +3,7 @@
 // the `glyf` outlines of unused glyphs (the bulk of the file) and rebuild `loca`; every other table
 // is copied verbatim. The used-glyph set is closed over composite-glyph components first, so a glyph
 // built from others (e.g. "ä") keeps its parts. Fonts without `glyf`/`loca` (CFF/OTF) pass through.
-import { concatBytes, i16, latin1FromBytes, u16, u32, wi16, wu16, wu32, writeLatin1 } from "./bytes";
+import { concatBytes, i16, latin1FromBytes, u16, u32, wi16, wu16, wu32, writeLatin1 } from "./bytes.ts";
 
 interface Dir {
   offset: number;

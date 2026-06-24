@@ -1,15 +1,15 @@
-import { Color } from "../common/color";
-import { HorizontalAlignment } from "../elements/pdf-element";
-import { TextElement, TextSegment } from "../elements/text-element";
-import { FontStyle, PDFObjectManager } from "../utils/pdf-object-manager";
-import type { FontMetrics } from "../utils/font-metrics";
-import { IRNode, TextRun } from "../ir/display-list";
+import { Color } from "../common/color.ts";
+import { HorizontalAlignment } from "../elements/pdf-element.ts";
+import { TextElement, TextSegment } from "../elements/text-element.ts";
+import { FontStyle, PDFObjectManager } from "../utils/pdf-object-manager.ts";
+import type { FontMetrics } from "../utils/font-metrics.ts";
+import { IRNode, TextRun } from "../ir/display-list.ts";
 import {
   wrapStringIntoLines,
   breakSegmentsIntoLines,
   SegmentLine,
   TextOverflow,
-} from "../text/line-breaker";
+} from "../text/line-breaker.ts";
 
 // Distance from the top of a line down to its baseline, as a fraction of the font
 // size. ~0.683 is the standard-14 ascent ratio used to seat the first baseline.

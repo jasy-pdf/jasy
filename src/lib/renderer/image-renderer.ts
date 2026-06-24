@@ -1,14 +1,14 @@
-import { BoxFit, ImageElement } from "../elements/image-element";
-import { bytesFromLatin1 } from "../utils/bytes";
+import { BoxFit, ImageElement } from "../elements/image-element.ts";
+import { bytesFromLatin1 } from "../utils/bytes.ts";
 import {
   applyContainFit,
   applyCoverFit,
   applyFillFit,
   applyFitNone,
   decodePngToRgbFlate,
-} from "../utils/image-helper";
-import { PDFObjectManager } from "../utils/pdf-object-manager";
-import { IRNode, Image } from "../ir/display-list";
+} from "../utils/image-helper.ts";
+import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
+import { IRNode, Image } from "../ir/display-list.ts";
 
 export class ImageRenderer {
   static async render(

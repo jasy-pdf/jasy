@@ -1,7 +1,7 @@
-import { Validator } from "../../validators/element-validator";
-import { PDFElement, LayoutContext, WithChild, SizedPDFElement } from "../pdf-element";
-import { BoxConstraints, Offset, Size } from "../../layout/box-constraints";
-import { Fragmentable, FragmentResult, isFragmentable } from "../../layout/fragmentation";
+import { Validator } from "../../validators/element-validator.ts";
+import { PDFElement, LayoutContext, WithChild, SizedPDFElement } from "../pdf-element.ts";
+import { BoxConstraints, Offset, Size } from "../../layout/box-constraints.ts";
+import { Fragmentable, FragmentResult, isFragmentable } from "../../layout/fragmentation.ts";
 
 // Padding sizes itself from its child + margin, so it takes no x/y of its own.
 interface PaddingElementParams extends WithChild {

@@ -1,14 +1,14 @@
-import { ContainerElement } from "../elements/container-element";
-import { RowElement } from "../elements/row-element";
-import { RectangleElement } from "../elements/rectangle-element";
-import { ExpandedElement } from "../elements/layout/expanded-element";
-import { PaddingElement } from "../elements/layout/padding-element";
-import { PositionedElement, PositionedInsets } from "../elements/layout/positioned-element";
-import { PDFElement } from "../elements/pdf-element";
-import { MainAlign, CrossAlign } from "../utils/flex-layout";
-import { ColorInput, toColor } from "./color";
-import { Insets, toEdges } from "./insets";
-import { splitArgs } from "./args";
+import { ContainerElement } from "../elements/container-element.ts";
+import { RowElement } from "../elements/row-element.ts";
+import { RectangleElement } from "../elements/rectangle-element.ts";
+import { ExpandedElement } from "../elements/layout/expanded-element.ts";
+import { PaddingElement } from "../elements/layout/padding-element.ts";
+import { PositionedElement, PositionedInsets } from "../elements/layout/positioned-element.ts";
+import { PDFElement } from "../elements/pdf-element.ts";
+import { MainAlign, CrossAlign } from "../utils/flex-layout.ts";
+import { ColorInput, toColor } from "./color.ts";
+import { Insets, toEdges } from "./insets.ts";
+import { splitArgs } from "./args.ts";
 
 /** Options shared by the `Column` and `Row` stacks (locked §4). */
 export interface StackOptions {

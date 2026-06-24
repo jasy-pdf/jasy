@@ -1,4 +1,4 @@
-import { PDFElement } from "../elements/pdf-element";
+import { PDFElement } from "../elements/pdf-element.ts";
 
 /**
  * Lets a container factory be called either `F(children)` or `F(opts, children)` - the

@@ -1,10 +1,10 @@
-import { PDFDocumentElement } from "../elements/pdf-document-element";
+import { PDFDocumentElement } from "../elements/pdf-document-element.ts";
 import {
   PDFElement,
   FlexiblePDFElement,
   hasChildProp,
   SizedPDFElement,
-} from "../elements/pdf-element";
+} from "../elements/pdf-element.ts";
 
 export class Validator {
   static validateDocument(document: PDFDocumentElement) {

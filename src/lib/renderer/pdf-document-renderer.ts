@@ -1,10 +1,10 @@
-import { PDFDocumentElement } from "../elements/pdf-document-element";
-import { layoutPageBands, PageElement, PDFPageConfig } from "../elements/page-element";
-import { LayoutContext, PDFElement } from "../elements/pdf-element";
-import { BoxConstraints } from "../layout/box-constraints";
-import { isFragmentable } from "../layout/fragmentation";
-import { PDFObjectManager } from "../utils/pdf-object-manager";
-import { PageRenderer } from "./page-renderer";
+import { PDFDocumentElement } from "../elements/pdf-document-element.ts";
+import { layoutPageBands, PageElement, PDFPageConfig } from "../elements/page-element.ts";
+import { LayoutContext, PDFElement } from "../elements/pdf-element.ts";
+import { BoxConstraints } from "../layout/box-constraints.ts";
+import { isFragmentable } from "../layout/fragmentation.ts";
+import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
+import { PageRenderer } from "./page-renderer.ts";
 
 export class PDFDocumentRenderer {
   static async render(
