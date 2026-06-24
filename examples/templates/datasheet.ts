@@ -5,7 +5,6 @@ import { Document, Page, Column, Row, Box, Padding, Text, Divider } from "@jasy/
 const ink = "#1b2433";
 const muted = "#6b7280";
 const brand = "#1450aa";
-const brandSoft = "#9db8e0";
 const accent = "#e3b505";
 const hair = "#e6eaf2";
 const paper = "#f5f8fd";
