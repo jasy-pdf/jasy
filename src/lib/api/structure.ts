@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileBytes } from "../platform/node-fs";
 import { PDFDocumentElement } from "../elements/pdf-document-element";
 import { PageElement, PDFPageConfig } from "../elements/page-element";
 import { PDFElement } from "../elements/pdf-element";
@@ -135,7 +135,7 @@ const docFonts = new WeakMap<PDFDocumentElement, Map<string, FontBytes | FontFam
 
 /** Reads any path sources to bytes, leaving bytes / families as-is. */
 function resolveFontSource(source: FontSource): FontBytes | FontFamily {
-  const read = (s: FontFileSource): FontBytes => (typeof s === "string" ? readFileSync(s) : s);
+  const read = (s: FontFileSource): FontBytes => (typeof s === "string" ? readFileBytes(s) : s);
   if (typeof source === "string" || source instanceof Uint8Array) {
     return read(source);
   }

@@ -21,6 +21,9 @@
     "dist"
   ],
   "main": "dist/index.js",
+  "browser": {
+    "./dist/platform/node-fs.js": "./dist/platform/browser-fs.js"
+  },
   "types": "dist/index.d.ts",
   "scripts": {
     "copy-assets": "ncp ./src/lib/assets ./dist/assets",

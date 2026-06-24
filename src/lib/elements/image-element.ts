@@ -1,7 +1,16 @@
 import { getImageDimensions } from "../utils/image-helper";
 import { latin1FromBytes } from "../utils/bytes";
+import { readFileBytesAsync } from "../platform/node-fs";
 import { BoxConstraints, Offset, Size } from "../layout/box-constraints";
 import { LayoutContext, SizedPDFElement } from "./pdf-element";
+
+// path.extname without node:path (browser-safe): the substring from the last dot, if it sits after the
+// last slash (so a dot in a directory name does not count). Enough for image file extensions.
+function extname(p: string): string {
+  const dot = p.lastIndexOf(".");
+  const slash = p.lastIndexOf("/");
+  return dot > slash + 1 ? p.slice(dot) : "";
+}
 
 export enum BoxFit {
   none = "NONE",
@@ -37,8 +46,7 @@ export class CustomLocalImage extends CustomImage {
   }
 
   async getImageType(): Promise<string> {
-    const path = await import("path"); // Dynamic import
-    const ext = path.extname(this.imagePath).toLowerCase();
+    const ext = extname(this.imagePath).toLowerCase();
 
     switch (ext) {
       case ".jpg":
@@ -56,8 +64,7 @@ export class CustomLocalImage extends CustomImage {
   }
 
   private async loadImage(imagePath: string): Promise<Uint8Array> {
-    const fs = await import("fs/promises"); // Dynamic import
-    const result = await fs.readFile(imagePath);
+    const result = await readFileBytesAsync(imagePath);
     //const result = await convertImageToGrayscaleBuffer(imagePath);
     this.fileBuffer = result;
     this.fileRawData = latin1FromBytes(result);
