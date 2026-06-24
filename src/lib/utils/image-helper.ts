@@ -1,5 +1,6 @@
 import { Jimp, JimpMime } from "jimp";
-import { deflateSync } from "zlib";
+import { zlibSync } from "fflate";
+import { latin1FromBytes } from "./bytes";
 
 // Declare the new method in the DataView interface
 declare global {
@@ -112,7 +113,7 @@ export async function decodePngToRgbFlate(
   }
 
   // Compress so the existing `/Filter /FlateDecode` XObject path embeds it correctly.
-  return { data: deflateSync(rgb).toString("binary"), width, height };
+  return { data: latin1FromBytes(zlibSync(rgb)), width, height };
 }
 
 export async function convertImageToGrayscaleBuffer(imagePath: string): Promise<Buffer> {

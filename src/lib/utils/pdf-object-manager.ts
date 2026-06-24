@@ -3,7 +3,8 @@ import type { OverflowPolicy } from "../layout/fragmentation";
 import * as fs from "fs";
 import * as path from "path";
 import { createHash } from "crypto";
-import { deflateSync } from "zlib";
+import { zlibSync } from "fflate";
+import { latin1FromBytes } from "./bytes";
 import { AFMParser } from "./afm-parser";
 import { TTFParser } from "./ttf-parser";
 import { subsetTTF } from "./ttf-subsetter";
@@ -251,10 +252,10 @@ export class PDFObjectManager implements FontMetrics {
   private stream(extraDict: string, data: Buffer): string {
     const head = extraDict ? extraDict + " " : "";
     if (this.compress) {
-      const z = deflateSync(data);
+      const z = zlibSync(data);
       if (z.length < data.length) {
-        return `<< ${head}/Filter /FlateDecode /Length ${z.length} >>\nstream\n${z.toString(
-          "latin1",
+        return `<< ${head}/Filter /FlateDecode /Length ${z.length} >>\nstream\n${latin1FromBytes(
+          z,
         )}\nendstream`;
       }
     }
@@ -734,11 +735,13 @@ endstream`;
 
     const currentParser = this.getAVMParserByFont(fullFontName, fontName, fontStyle);
 
-    const advanceWidth = currentParser.parser.getAdvanceWidth(char);
+    let advanceWidth = currentParser.parser.getAdvanceWidth(char);
 
-    // Normally we got still zero. TODO: Return a alternative width like the "space"
+    // A character a standard font cannot represent (not in Windows-1252) is drawn as "?" by the
+    // encoder; measure it as "?" too so the width matches the glyph - graceful instead of a crash.
     if (!advanceWidth) {
-      throw new Error(`Kein Metrik-Eintrag für Zeichen: ${char} ${this.getCharCode(char)}`);
+      advanceWidth =
+        currentParser.parser.getAdvanceWidth("?") || currentParser.parser.getAdvanceWidth(" ");
     }
 
     // Width of the character multiplied by the font size (scaled proportionally)

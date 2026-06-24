@@ -258,18 +258,20 @@ formats, the line-breaker fixes added 2026-06-24; **345 tests green**. The **lan
 roadmap section, and a full **SEO + AI-discoverability layer** (OG image, JSON-LD, `robots.txt`,
 `llms.txt`, `sitemap.xml`).
 
-**The next major build is `@jasy/vue`** — author PDFs as **Vue components** ("the react-pdf for Vue"),
-via a Vue `createRenderer` whose host nodes ARE the `descriptor.ts` nodes → `descriptor.build()` →
-engine. The descriptor firewall was designed for exactly this, so the renderer is thin. See `todo.md`
-"⭐ Active" for the agreed architecture (props + an optional `style`-object CSS vocabulary; layout stays
-components) and the spike plan, plus the 🔮 wish-list (read/edit existing PDFs, forms, security +
+**`@jasy/vue` — the spike is BUILT** (2026-06-24): author PDFs as **Vue components** ("the react-pdf for
+Vue", PURE PDF — no ZUGFeRD). A Vue `createRenderer` whose host nodes ARE the `descriptor.ts` nodes →
+`buildDocument` → `renderToBytes` (the firewall made it a ~60-line renderer), plus a **Vite playground**
+that renders real PDFs. `Jasy`-prefixed components, a browser-safe `.` entry + a Node `./node` entry. See
+`todo.md` "⭐ Active" for the full state and what's next (typed props, the `style`-object CSS layer, more
+components, then a Nuxt module), plus the 🔮 wish-list (read/edit existing PDFs, forms, security +
 signatures, more e-invoice profiles, browser, framework bindings).
 
 ## Repo facts
 
 - **pnpm monorepo.** `@jasy/pdf` is the root (`src/lib/` is the library); siblings in `packages/`:
-  `@jasy/zugferd` (e-invoicing), `@jasy/cli` (the `jasy` TUI), `@jasy/playground`. **`@jasy/vue` is the
-  next package** (likely `packages/vue`). Barrel exports via `index.ts` at each level. GitHub org
+  `@jasy/zugferd` (e-invoicing), `@jasy/cli` (the `jasy` TUI), `@jasy/playground`, and **`@jasy/vue`**
+  (`packages/vue`) — author PDFs as Vue components (spike built 2026-06-24). Barrel exports via
+  `index.ts` at each level. GitHub org
   `jasy-pdf`, the lib repo is `jasy-pdf/jasy` (may still be private — make public before launch).
 - The **landing is a separate repo**, `~/projects/jasy-landing` → **jasy.dev** (Nuxt 4 + Nuxt UI 4 +
   Content 3). It has its **own CLAUDE.md + HARD RULES: never start/stop its dev server (Flo runs it),
