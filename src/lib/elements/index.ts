@@ -6,6 +6,7 @@ export * from "./rectangle-element";
 export * from "./image-element";
 export * from "./layout/expanded-element";
 export * from "./layout/padding-element";
+export * from "./layout/default-text-style-element";
 export * from "./layout/positioned-element";
 export * from "./line-element";
 export * from "./row-element";

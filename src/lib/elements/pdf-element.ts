@@ -1,5 +1,6 @@
 import type { FontMetrics } from "../utils/font-metrics";
 import type { PDFPageConfig } from "./page-element";
+import type { ResolvedTextStyle } from "../text/text-style";
 import type { BoxConstraints, Offset, Size } from "../layout/box-constraints";
 
 /**
@@ -25,6 +26,10 @@ export interface LayoutContext {
   pageConfig: PDFPageConfig;
   /** The nearest enclosing positioning frame, if any (set by a `relative` Box). */
   frame?: PositioningFrame;
+  /** The cascaded text style descendants inherit (CSS/Flutter-style). Seeded at the document root
+   *  from the built-in defaults + the `Document` defaults, and carried through page contexts; a
+   *  `Text` resolves its own unset properties against it. Absent falls back to the built-in defaults. */
+  textStyle?: ResolvedTextStyle;
 }
 
 export abstract class PDFElement {

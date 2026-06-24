@@ -41,6 +41,7 @@ describe("PDFRenderer", () => {
   it("should register all renderers", async () => {
     const mockDocumentElement = {
       calculateLayout: vi.fn(),
+      getDefaultTextStyle: vi.fn(),
       getProps: vi.fn().mockReturnValue({ children: [] }),
     } as unknown as PDFDocumentElement;
 
@@ -58,6 +59,7 @@ describe("PDFRenderer", () => {
   it("should call calculateLayout on the document element", async () => {
     const mockDocumentElement = {
       calculateLayout: vi.fn(),
+      getDefaultTextStyle: vi.fn(),
     } as unknown as PDFDocumentElement;
 
     await PDFRenderer.render(mockDocumentElement, mockObjectManager);
@@ -69,6 +71,7 @@ describe("PDFRenderer", () => {
   it("should generate correct PDF content", async () => {
     const mockDocumentElement = {
       calculateLayout: vi.fn(),
+      getDefaultTextStyle: vi.fn(),
     } as unknown as PDFDocumentElement;
 
     const result = await PDFRenderer.render(mockDocumentElement, mockObjectManager);
@@ -83,6 +86,7 @@ describe("PDFRenderer", () => {
   it("should add the catalog object", async () => {
     const mockDocumentElement = {
       calculateLayout: vi.fn(),
+      getDefaultTextStyle: vi.fn(),
     } as unknown as PDFDocumentElement;
 
     await PDFRenderer.render(mockDocumentElement, mockObjectManager);
@@ -93,6 +97,7 @@ describe("PDFRenderer", () => {
   it("should add the correct XRef and trailer", async () => {
     const mockDocumentElement = {
       calculateLayout: vi.fn(),
+      getDefaultTextStyle: vi.fn(),
     } as unknown as PDFDocumentElement;
 
     const result = await PDFRenderer.render(mockDocumentElement, mockObjectManager);
@@ -108,6 +113,7 @@ describe("PDFRenderer", () => {
     const mockDocumentElement = {
       getProps: vi.fn().mockReturnValue({ children: [] }),
       calculateLayout: vi.fn(),
+      getDefaultTextStyle: vi.fn(),
     } as unknown as PDFDocumentElement;
 
     const result = await PDFRenderer.render(mockDocumentElement, mockObjectManager);

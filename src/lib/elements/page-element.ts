@@ -123,6 +123,7 @@ export class PageElement extends PDFElement {
     const pageCtx: LayoutContext = {
       metrics: ctx.metrics,
       pageConfig: this.config,
+      textStyle: ctx.textStyle,
     };
 
     // Place the header/footer bands; the body gets the region left in between (the whole

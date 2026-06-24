@@ -5,6 +5,7 @@ import { Color } from "../common/color";
 // breaks the constructor-keyed RendererRegistry. A direct import keeps the graph acyclic.
 import { TextRenderer } from "../renderer/text-renderer";
 import { FontStyle } from "../utils/pdf-object-manager";
+import { DEFAULT_TEXT_STYLE, ResolvedTextStyle } from "../text/text-style";
 import type { FontMetrics } from "../utils/font-metrics";
 import { BoxConstraints, Offset, Size } from "../layout/box-constraints";
 import { Fragmentable, FragmentResult } from "../layout/fragmentation";
@@ -25,7 +26,8 @@ export interface TextSegment {
 
 interface TextElementParams {
   id?: string;
-  fontSize: number;
+  /** Unset (undefined) inherits the cascaded size; see ResolvedTextStyle. */
+  fontSize?: number;
   fontFamily?: string;
   fontStyle?: FontStyle;
   content: string | TextSegment[];
@@ -40,38 +42,65 @@ interface TextElementParams {
 }
 
 export class TextElement extends SizedPDFElement implements Fragmentable {
-  private fontSize: number;
-  private fontFamily: string;
-  private fontStyle: FontStyle;
-  private color: Color;
+  // Author-set style; `undefined` means "inherit from the cascade". Kept so the style can be
+  // re-resolved against whatever context lays the element out.
+  private readonly rawFontSize?: number;
+  private readonly rawFontFamily?: string;
+  private readonly rawFontStyle?: FontStyle;
+  private readonly rawColor?: Color;
+  private readonly rawTextAlignment?: HorizontalAlignment;
+  private readonly rawLineHeight?: number;
+
+  // Resolved style (raw -> inherited -> built-in default). Seeded to the built-in default in the
+  // constructor so the element is self-sufficient, then refined against the cascade at layout time.
+  private fontSize!: number;
+  private fontFamily!: string;
+  private fontStyle!: FontStyle;
+  private color!: Color;
+  private textAlignment!: HorizontalAlignment;
+  private lineHeight!: number;
+
   private content: string | TextSegment[];
-  private textAlignment: HorizontalAlignment;
   private maxLines?: number;
   private overflow: TextOverflow;
-  private lineHeight: number;
 
   constructor({
     fontSize,
     content,
-    fontFamily = "Helvetica",
-    fontStyle = FontStyle.Normal,
-    color = new Color(0, 0, 0),
-    textAlignment = HorizontalAlignment.left,
+    fontFamily,
+    fontStyle,
+    color,
+    textAlignment,
     maxLines,
     overflow = "clip",
-    lineHeight = 1,
+    lineHeight,
   }: TextElementParams) {
     super({ x: 0, y: 0 });
 
-    this.fontSize = fontSize;
-    this.fontFamily = fontFamily;
-    this.fontStyle = fontStyle;
-    this.color = color;
+    this.rawFontSize = fontSize;
+    this.rawFontFamily = fontFamily;
+    this.rawFontStyle = fontStyle;
+    this.rawColor = color;
+    this.rawTextAlignment = textAlignment;
+    this.rawLineHeight = lineHeight;
     this.content = content;
-    this.textAlignment = textAlignment;
     this.maxLines = maxLines;
     this.overflow = overflow;
-    this.lineHeight = lineHeight;
+    this.applyStyle(DEFAULT_TEXT_STYLE);
+  }
+
+  // Resolve the author-set values against the cascade: explicit > inherited (ctx) > built-in default.
+  private resolveStyle(ctx: LayoutContext): void {
+    this.applyStyle(ctx.textStyle ?? DEFAULT_TEXT_STYLE);
+  }
+
+  private applyStyle(ts: ResolvedTextStyle): void {
+    this.fontSize = this.rawFontSize ?? ts.fontSize;
+    this.fontFamily = this.rawFontFamily ?? ts.fontFamily;
+    this.fontStyle = this.rawFontStyle ?? ts.fontStyle;
+    this.color = this.rawColor ?? ts.color;
+    this.textAlignment = this.rawTextAlignment ?? ts.textAlignment;
+    this.lineHeight = this.rawLineHeight ?? ts.lineHeight;
   }
 
   /**
@@ -81,6 +110,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
    * the whole element on for progress. Handles both plain strings and styled segments.
    */
   fragment(maxHeight: number, width: number, ctx: LayoutContext): FragmentResult {
+    this.resolveStyle(ctx);
     return typeof this.content === "string"
       ? this.fragmentString(this.content, maxHeight, width, ctx)
       : this.fragmentSegments(this.content, maxHeight, width, ctx);
@@ -171,6 +201,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
   }
 
   calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
+    this.resolveStyle(ctx);
     this.x = offset.x;
     this.y = offset.y;
     // Bounded width (e.g. inside a Column) wraps to that width; an unbounded width

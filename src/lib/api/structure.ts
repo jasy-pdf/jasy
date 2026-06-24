@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { PDFDocumentElement } from "../elements/pdf-document-element";
 import { PageElement, PDFPageConfig } from "../elements/page-element";
 import { PDFElement } from "../elements/pdf-element";
+import { DefaultTextStyleElement } from "../elements/layout/default-text-style-element";
 import { PageSize } from "../constants/page-sizes";
 import { Orientation } from "../renderer/pdf-config";
 import { PDFDocument, PDFConfig } from "../renderer/pdf-document-class";
@@ -9,6 +10,7 @@ import { FontStyle } from "../utils/pdf-object-manager";
 import { getArrayBuffer } from "../utils/utf8-to-windows1252-encoder";
 import { Column, StackOptions } from "./layout";
 import { Insets, toEdges } from "./insets";
+import { TextDefaults, toTextStyleOverride } from "./text";
 
 const MM_TO_PT = 72 / 25.4; // 1 mm in PDF points
 
@@ -87,7 +89,9 @@ export function Page(a: PageOptions | PDFElement[], b?: PDFElement[]): PageEleme
   });
 }
 
-export interface DocumentOptions {
+/** Document options: PDF metadata plus the inheritable text defaults (font, size, color, lineHeight,
+ *  align, bold/italic) every `Text` inherits unless it sets its own - Flutter's `DefaultTextStyle`. */
+export interface DocumentOptions extends TextDefaults {
   /** PDF metadata. */
   meta?: { title?: string; author?: string };
 }
@@ -149,7 +153,10 @@ export function Document(a: DocumentOptions | PageElement[], b?: PageElement[]):
   const opts = (isOpts ? a : {}) as DocumentOptions;
   const pages = (isOpts ? (b ?? []) : a) as PageElement[];
 
-  const doc = new PDFDocumentElement({ children: pages }) as JasyDocument;
+  const doc = new PDFDocumentElement({
+    children: pages,
+    defaultTextStyle: toTextStyleOverride(opts),
+  }) as JasyDocument;
   if (opts.meta) docMeta.set(doc, opts.meta);
 
   // Managed font registry: addFont registers, getFonts/hasFont query, render reads it (below).
@@ -163,6 +170,19 @@ export function Document(a: DocumentOptions | PageElement[], b?: PageElement[]):
   doc.hasFont = (name) => registry.has(name);
 
   return doc;
+}
+
+/**
+ * Sets default text properties (font/size/color/lineHeight/align/weight) for a whole subtree -
+ * Flutter's `DefaultTextStyle`, the per-section counterpart to the `Document` defaults. Children
+ * inherit them unless they set their own, and they layer onto whatever is inherited from above.
+ * `DefaultTextStyle(opts, children)`.
+ */
+export function DefaultTextStyle(
+  opts: TextDefaults,
+  children: PDFElement[],
+): DefaultTextStyleElement {
+  return new DefaultTextStyleElement({ style: toTextStyleOverride(opts), child: Column(children) });
 }
 
 export type FontBytes = Buffer | Uint8Array;

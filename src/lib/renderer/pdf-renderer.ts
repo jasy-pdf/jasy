@@ -3,6 +3,7 @@ import { PDFDocumentRenderer } from "./pdf-document-renderer";
 import { PDFObjectManager } from "../utils/pdf-object-manager";
 import { RendererRegistry } from "../utils/renderer-registry";
 import {
+  DefaultTextStyleElement,
   ExpandedElement,
   ImageElement,
   LineElement,
@@ -18,6 +19,7 @@ import { RectangleRenderer } from "./rectangle-renderer";
 import { RowRenderer } from "./row-renderer";
 import { ExpandedRenderer } from "./expanded-renderer";
 import { PaddingRenderer } from "./padding-renderer";
+import { DefaultTextStyleRenderer } from "./default-text-style-renderer";
 import { ImageRenderer } from "./image-renderer";
 import { LineRenderer } from "./line-renderer";
 import { RepeatingHeaderElement } from "../elements/layout/repeating-header-element";
@@ -28,6 +30,7 @@ import { PositionedElement } from "../elements/layout/positioned-element";
 import { PositionedRenderer } from "./positioned-renderer";
 import { BoxConstraints } from "../layout/box-constraints";
 import { LayoutContext } from "../elements/pdf-element";
+import { DEFAULT_TEXT_STYLE, mergeTextStyle } from "../text/text-style";
 
 export class PDFRenderer {
   static async render(
@@ -41,6 +44,7 @@ export class PDFRenderer {
     RendererRegistry.register(RectangleElement, RectangleRenderer.render);
     RendererRegistry.register(ExpandedElement, ExpandedRenderer.render);
     RendererRegistry.register(PaddingElement, PaddingRenderer.render);
+    RendererRegistry.register(DefaultTextStyleElement, DefaultTextStyleRenderer.render);
     RendererRegistry.register(ImageElement, ImageRenderer.render);
     RendererRegistry.register(LineElement, LineRenderer.render);
     RendererRegistry.register(RepeatingHeaderElement, RepeatingHeaderRenderer.render);
@@ -58,6 +62,7 @@ export class PDFRenderer {
     const ctx: LayoutContext = {
       metrics: objectManager,
       pageConfig: objectManager.getPDFConfig(),
+      textStyle: mergeTextStyle(DEFAULT_TEXT_STYLE, document.getDefaultTextStyle()),
     };
     document.calculateLayout(new BoxConstraints(), { x: 0, y: 0 }, ctx);
 

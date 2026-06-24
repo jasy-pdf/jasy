@@ -1,16 +1,26 @@
 import { PageElement } from "./page-element";
 import { BoxConstraints, Offset, Size } from "../layout/box-constraints";
 import { LayoutContext, PDFElement, WithChildren } from "./pdf-element";
+import type { ResolvedTextStyle } from "../text/text-style";
 
 interface PDFDocumentParams extends WithChildren {
   children: PageElement[];
+  /** Document-level text defaults descendants inherit (seeded into the layout-context root). */
+  defaultTextStyle?: Partial<ResolvedTextStyle>;
 }
 export class PDFDocumentElement extends PDFElement {
   private children: PageElement[];
+  private defaultTextStyle?: Partial<ResolvedTextStyle>;
 
-  constructor({ children }: PDFDocumentParams) {
+  constructor({ children, defaultTextStyle }: PDFDocumentParams) {
     super();
     this.children = children;
+    this.defaultTextStyle = defaultTextStyle;
+  }
+
+  /** The document-level text defaults; the renderer merges them into the cascade root. */
+  getDefaultTextStyle(): Partial<ResolvedTextStyle> | undefined {
+    return this.defaultTextStyle;
   }
 
   calculateLayout(_constraints: BoxConstraints, _offset: Offset, ctx: LayoutContext): Size {
@@ -22,6 +32,6 @@ export class PDFDocumentElement extends PDFElement {
   }
 
   override getProps(): PDFDocumentParams {
-    return { children: this.children };
+    return { children: this.children, defaultTextStyle: this.defaultTextStyle };
   }
 }

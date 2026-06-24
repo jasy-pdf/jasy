@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { Document, Page, renderPdf, renderToBytes } from "../../../src/lib/api/structure";
+import {
+  Document,
+  Page,
+  DefaultTextStyle,
+  renderPdf,
+  renderToBytes,
+} from "../../../src/lib/api/structure";
 import { Column } from "../../../src/lib/api/layout";
 import { Text } from "../../../src/lib/api/text";
 import { PDFDocumentElement } from "../../../src/lib/elements/pdf-document-element";
@@ -83,5 +89,37 @@ describe("renderPdf / renderToBytes", () => {
       Document({ meta: { title: "Invoice 42", author: "ACME" } }, [Page([Text("x")])]),
     );
     expect(pdf.startsWith("%PDF")).toBe(true);
+  });
+});
+
+describe("TextStyle inheritance", () => {
+  // The font size lands in the content stream as a `<size> Tf` operator, so it is the cleanest
+  // observable proof that a Text resolved its size to the inherited (vs built-in) value.
+  const usesSize = (pdf: string, size: number) => pdf.includes(`${size} Tf`);
+
+  it("a Document default size cascades to a Text that sets none", async () => {
+    const pdf = await renderPdf(Document({ size: 21 }, [Page([Text("x")])]), { compress: false });
+    expect(usesSize(pdf, 21)).toBe(true);
+    expect(usesSize(pdf, 12)).toBe(false); // the built-in default no longer applies
+  });
+
+  it("a Text overrides the inherited size per-property", async () => {
+    const pdf = await renderPdf(Document({ size: 21 }, [Page([Text("x", { size: 9 })])]), {
+      compress: false,
+    });
+    expect(usesSize(pdf, 9)).toBe(true);
+  });
+
+  it("DefaultTextStyle sets the default for its own subtree", async () => {
+    const pdf = await renderPdf(
+      Document([Page([DefaultTextStyle({ size: 21 }, [Text("x")])])]),
+      { compress: false },
+    );
+    expect(usesSize(pdf, 21)).toBe(true);
+  });
+
+  it("with nothing set, a Text falls back to the built-in default size", async () => {
+    const pdf = await renderPdf(Document([Page([Text("x")])]), { compress: false });
+    expect(usesSize(pdf, 12)).toBe(true);
   });
 });

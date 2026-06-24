@@ -60,7 +60,11 @@ export class PDFDocumentRenderer {
 
     // Header/footer repeat on every physical page, so the body only ever flows into the
     // band between them. Resolve that band once (config is already merged by pass 1).
-    const pageCtx: LayoutContext = { metrics: ctx.metrics, pageConfig: config! };
+    const pageCtx: LayoutContext = {
+      metrics: ctx.metrics,
+      pageConfig: config!,
+      textStyle: ctx.textStyle,
+    };
     const { bodyWidth: width, bodyHeight: height } = layoutPageBands(
       config!,
       header,
