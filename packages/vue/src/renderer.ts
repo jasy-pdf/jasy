@@ -1,17 +1,13 @@
 import { createRenderer, type Component } from "vue";
-import {
-  buildDocument,
-  renderToBytes,
-  renderPdf,
-  type Descriptor,
-  type DescriptorChild,
-  type RenderOptions,
-} from "@jasy/pdf";
+import type { Descriptor, DescriptorChild } from "@jasy/pdf";
 
 /**
  * A host node in our tree. It is shaped like a `Descriptor` already - that is the whole trick: Vue's
  * custom renderer builds this tree, and it maps 1:1 onto the engine's descriptor seam. Text nodes carry
  * `text`; `parent` is bookkeeping the renderer needs (insert/remove/sibling), stripped on the way out.
+ *
+ * This module is browser-safe on purpose: it never imports the Node engine (only the `Descriptor` type,
+ * which is erased). So a browser can turn a component into a descriptor and post it to a Node renderer.
  */
 interface JNode {
   type: string;
@@ -68,8 +64,8 @@ function toDescriptor(n: JNode): DescriptorChild {
 
 /**
  * Mounts a component once (one-shot - a PDF is not interactive) and returns the engine descriptor for
- * its `<Document>` root. The descriptor is a plain serialisable object, so it can also be posted to a
- * Node renderer from the browser.
+ * its `<Document>` root. The descriptor is a plain serialisable object, so it can be posted to a Node
+ * renderer from the browser, or handed straight to `renderToPdf` (from `@jasy/vue/node`) on the server.
  */
 export function toDocumentDescriptor(root: Component, props?: Record<string, any>): Descriptor {
   const container = node("#root");
@@ -77,24 +73,6 @@ export function toDocumentDescriptor(root: Component, props?: Record<string, any
   app.mount(container);
   const doc = container.children.find((c) => c.type === "document");
   app.unmount();
-  if (!doc) throw new Error('@jasy/vue: the root component must render a <Document>.');
+  if (!doc) throw new Error("@jasy/vue: the root component must render a <Document>.");
   return toDescriptor(doc) as Descriptor;
-}
-
-/** Render a Vue component (root `<Document>`) to PDF bytes. Node only (the engine reads font metrics). */
-export function renderToPdf(
-  root: Component,
-  props?: Record<string, any>,
-  options?: RenderOptions,
-): Promise<Uint8Array> {
-  return renderToBytes(buildDocument(toDocumentDescriptor(root, props)), options);
-}
-
-/** Render a Vue component to the raw PDF string. Node only. */
-export function renderToPdfString(
-  root: Component,
-  props?: Record<string, any>,
-  options?: RenderOptions,
-): Promise<string> {
-  return renderPdf(buildDocument(toDocumentDescriptor(root, props)), options);
 }

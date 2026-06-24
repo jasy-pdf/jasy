@@ -1,4 +1,5 @@
-// @jasy/vue - author PDFs as Vue components. A thin custom renderer maps a Vue component tree onto the
-// @jasy/pdf descriptor seam; the host components below are the tags you write.
+// @jasy/vue - author PDFs as Vue components. This entry is browser-safe: the host components plus
+// `toDocumentDescriptor` (Vue component -> serialisable descriptor). The Node-only `renderToPdf`
+// (which pulls in the @jasy/pdf engine) lives in the separate "@jasy/vue/node" entry.
 export * from "./components.js";
-export { renderToPdf, renderToPdfString, toDocumentDescriptor } from "./renderer.js";
+export { toDocumentDescriptor } from "./renderer.js";

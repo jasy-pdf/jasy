@@ -8,11 +8,22 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./node": {
+      "types": "./dist/node.d.ts",
+      "import": "./dist/node.js"
+    }
+  },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "tsc"
+    "build": "tsc",
+    "play": "vite playground --open"
   },
   "dependencies": {
     "@jasy/pdf": "workspace:*"
@@ -22,7 +33,10 @@
   },
   "devDependencies": {
     "@types/node": "^25.9.3",
+    "@vitejs/plugin-vue": "^5.2.1",
     "typescript": "^5.6.0",
-    "vue": "^3.5.13"
+    "vite": "^6.3.4",
+    "vue": "^3.5.13",
+    "vue-pdf-embed": "^2.1.5"
   }
 }
