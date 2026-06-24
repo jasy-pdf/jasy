@@ -25,7 +25,7 @@ interface ImageDimensions {
   height: number;
 }
 
-export async function getImageDimensions(buffer: Buffer): Promise<ImageDimensions> {
+export async function getImageDimensions(buffer: Uint8Array): Promise<ImageDimensions> {
   const dataView = new DataView(
     buffer.buffer,
     // buffer.byteOffset,
@@ -99,12 +99,15 @@ export async function getImageDimensions(buffer: Buffer): Promise<ImageDimension
  * no alpha channel for DeviceRGB, so transparent pixels are composited over white.
  */
 export async function decodePngToRgbFlate(
-  pngBuffer: Buffer,
+  pngBuffer: Uint8Array,
 ): Promise<{ data: string; width: number; height: number }> {
-  const image = await Jimp.fromBuffer(pngBuffer);
+  // jimp (Node-only) wants a Buffer view; the future browser path will decode via canvas instead.
+  const image = await Jimp.fromBuffer(
+    Buffer.from(pngBuffer.buffer, pngBuffer.byteOffset, pngBuffer.byteLength),
+  );
   const { width, height, data: rgba } = image.bitmap;
 
-  const rgb = Buffer.allocUnsafe(width * height * 3);
+  const rgb = new Uint8Array(width * height * 3);
   for (let i = 0, j = 0; i < rgba.length; i += 4, j += 3) {
     const alpha = rgba[i + 3] / 255;
     rgb[j] = Math.round(rgba[i] * alpha + 255 * (1 - alpha));
@@ -116,7 +119,7 @@ export async function decodePngToRgbFlate(
   return { data: latin1FromBytes(zlibSync(rgb)), width, height };
 }
 
-export async function convertImageToGrayscaleBuffer(imagePath: string): Promise<Buffer> {
+export async function convertImageToGrayscaleBuffer(imagePath: string): Promise<Uint8Array> {
   // We get the image from the buffer
   const image = await Jimp.read(imagePath);
 

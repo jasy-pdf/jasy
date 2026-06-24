@@ -1,4 +1,5 @@
 import { BoxFit, ImageElement } from "../elements/image-element";
+import { bytesFromLatin1 } from "../utils/bytes";
 import {
   applyContainFit,
   applyCoverFit,
@@ -29,7 +30,7 @@ export class ImageRenderer {
     // so decode it to raw DeviceRGB samples that the FlateDecode XObject path expects.
     const embedData =
       imageType === "FlateDecode"
-        ? (await decodePngToRgbFlate(Buffer.from(fileData, "binary"))).data
+        ? (await decodePngToRgbFlate(bytesFromLatin1(fileData))).data
         : fileData;
 
     // Now we check the `fit` property and changing the dimensions of the image

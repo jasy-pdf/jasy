@@ -1,4 +1,5 @@
 import { getImageDimensions } from "../utils/image-helper";
+import { latin1FromBytes } from "../utils/bytes";
 import { BoxConstraints, Offset, Size } from "../layout/box-constraints";
 import { LayoutContext, SizedPDFElement } from "./pdf-element";
 
@@ -18,7 +19,7 @@ export abstract class CustomImage {
 
 export class CustomLocalImage extends CustomImage {
   private imagePath: string;
-  private fileBuffer!: Buffer;
+  private fileBuffer!: Uint8Array;
   private fileRawData!: string;
 
   constructor(imagePath: string) {
@@ -54,12 +55,12 @@ export class CustomLocalImage extends CustomImage {
     }
   }
 
-  private async loadImage(imagePath: string): Promise<Buffer> {
+  private async loadImage(imagePath: string): Promise<Uint8Array> {
     const fs = await import("fs/promises"); // Dynamic import
     const result = await fs.readFile(imagePath);
     //const result = await convertImageToGrayscaleBuffer(imagePath);
     this.fileBuffer = result;
-    this.fileRawData = result.toString("binary");
+    this.fileRawData = latin1FromBytes(result);
 
     return result;
   }
