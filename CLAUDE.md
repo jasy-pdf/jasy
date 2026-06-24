@@ -218,7 +218,17 @@ The big refactors the roadmap set out are **done** (Phases 0-6, shipped as `@jas
 - ✅ **Singleton killed** → explicit `LayoutContext` threading (Phase 2); mixed-page-size bug fixed.
 - ✅ **Typed seams** — `BoxConstraints`/`Size`/`Offset` (Phase 4); `grep ': any' src/lib` empty.
 - ✅ **Custom fonts** — TTF parse → Type0/Identity-H + `/FontFile2`, full Unicode, subsetted
-  (`ttf-subsetter.ts`, `ABCDEF+` tag, ~97% smaller) + FlateDecode-compressed.
+  (`ttf-subsetter.ts`, `ABCDEF+` tag, ~97% smaller) + FlateDecode-compressed. Font names with spaces are
+  `#XX`-escaped in the PDF `/Name` (`pdfName`).
+- ✅ **Inheritable text styles** (Flutter `DefaultTextStyle`, 2026-06-24) — `Document({ font, size, color,
+  lineHeight, align, bold, italic }, …)` sets doc-wide text defaults; `DefaultTextStyle(opts, children)`
+  re-defaults a subtree; per-property merge `explicit > inherited > built-in`, threaded via
+  `LayoutContext.textStyle` (`text/text-style.ts`). Box/layout props never inherit — the CSS line.
+- ✅ **Custom page formats** (2026-06-24) — `mm()` / pt: `Page({ size: mm(50, 65) })`; MediaBox + content
+  box + Y-flip all honour `customSize`.
+- ✅ **`onOverflow` safety** (2026-06-24) — over-tall unbreakable content is force-placed (clipped) so
+  pagination always terminates (no infinite loop); render option `onOverflow: "error" (default) | "warn"
+  | "ignore"` (`fragmentation.ts packChildren`).
 
 Genuine remaining gaps / deferred:
 
@@ -241,20 +251,29 @@ The authoritative plan + ground rules live in **`todo.md`** (gitignored, repo ro
 starting work. Working agreement: **phase by phase, Flo approves each gate, Claude never commits/pushes
 unprompted, comments English + sensible, don't break the font math.**
 
-Status: **Phases 0-6 done and shipped.** The engine (IR seam, singleton-free `LayoutContext`, Y-flip at
-the seam, `BoxConstraints` types, `{fitted,remainder}` fragmentation, the intuitive API layer, Tables,
-custom fonts + subsetting + compression) and **ZUGFeRD/XRechnung** (`@jasy/zugferd`: EN-16931 CII + UBL,
-PDF/A-3, Mustang/veraPDF-proven, i18n, XRechnung profile) are all built and **published to npm
-2026-06-21** — `@jasy/pdf`, `@jasy/zugferd`, `@jasy/cli`, all `1.0.0-alpha.1` (alpha dist-tag). Next
-candidates (Flo's call which/when): the **absolute-positioning layer** (`relative`/`Positioned`/
-`overflow`/`z`), the **landing docs** (`~/projects/jasy-landing`, Nuxt Content), framework bindings
-(Phase 7), browser/Node-free.
+Status: **Phases 0-6 + ZUGFeRD shipped** (`@jasy/pdf`/`@jasy/zugferd`/`@jasy/cli` @1.0.0-alpha.1,
+2026-06-21). The engine is now **feature-complete for the alpha** — inheritance, `onOverflow`, custom
+formats, the line-breaker fixes added 2026-06-24; **345 tests green**. The **landing**
+(`~/projects/jasy-landing` → **jasy.dev**) is built: showroom (9 cards), validator, docs, a home-page
+roadmap section, and a full **SEO + AI-discoverability layer** (OG image, JSON-LD, `robots.txt`,
+`llms.txt`, `sitemap.xml`).
+
+**The next major build is `@jasy/vue`** — author PDFs as **Vue components** ("the react-pdf for Vue"),
+via a Vue `createRenderer` whose host nodes ARE the `descriptor.ts` nodes → `descriptor.build()` →
+engine. The descriptor firewall was designed for exactly this, so the renderer is thin. See `todo.md`
+"⭐ Active" for the agreed architecture (props + an optional `style`-object CSS vocabulary; layout stays
+components) and the spike plan, plus the 🔮 wish-list (read/edit existing PDFs, forms, security +
+signatures, more e-invoice profiles, browser, framework bindings).
 
 ## Repo facts
 
-- Single package, `src/lib/` is the library, barrel exports via `index.ts` at each level.
-- License MIT, author Florian Heuberger. Published to npm 2026-06-21 as `@jasy/pdf@1.0.0-alpha.1`
-  (alpha dist-tag); `@jasy/zugferd` + `@jasy/cli` shipped the same day, same version.
-- Branch `main`. Feature branches on origin: `decorator-test`, `image-element-feature`,
-  `line-feature`, `page-settings`, `text-segments-feature`, `unit-testing`.
-- Runtime deps: `jimp` (images), `reflect-metadata` (DI, now unused — pending removal).
+- **pnpm monorepo.** `@jasy/pdf` is the root (`src/lib/` is the library); siblings in `packages/`:
+  `@jasy/zugferd` (e-invoicing), `@jasy/cli` (the `jasy` TUI), `@jasy/playground`. **`@jasy/vue` is the
+  next package** (likely `packages/vue`). Barrel exports via `index.ts` at each level. GitHub org
+  `jasy-pdf`, the lib repo is `jasy-pdf/jasy` (may still be private — make public before launch).
+- The **landing is a separate repo**, `~/projects/jasy-landing` → **jasy.dev** (Nuxt 4 + Nuxt UI 4 +
+  Content 3). It has its **own CLAUDE.md + HARD RULES: never start/stop its dev server (Flo runs it),
+  only Flo commits.** Package links there use **npmx.dev** (Daniel Roe's registry browser), not npmjs.com.
+- License MIT, author Florian Heuberger. npm: `@jasy/pdf`/`@jasy/zugferd`/`@jasy/cli` @1.0.0-alpha.1
+  (alpha dist-tag, 2026-06-21). Branch `main`. Runtime deps: `jimp` (images); the old `reflect-metadata`
+  DI is gone (decorator removed).
