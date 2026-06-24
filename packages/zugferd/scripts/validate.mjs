@@ -1,12 +1,15 @@
 // Reproducible XSD check: generate a sample invoice's CII and validate it against the vendored
 // Factur-X EN16931 schema with xmllint. Used in dev/CI to prove `toCII` stays XSD-conformant.
-// Run: pnpm --filter @jasy-pdf/zugferd run validate   (builds first; needs `xmllint` on PATH).
-const { execFileSync } = require("child_process");
-const fs = require("fs");
-const os = require("os");
-const path = require("path");
-const { toCII } = require("../dist/cii.js");
-const { computeInvoice } = require("../dist/compute.js");
+// Run: pnpm --filter @jasy/zugferd run validate   (builds first; needs `xmllint` on PATH).
+import { execFileSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { toCII } from "../dist/cii.js";
+import { computeInvoice } from "../dist/compute.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const invoice = {
   number: "RE-2026-001",

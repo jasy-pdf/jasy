@@ -31,7 +31,7 @@
     "build": "tsc && node ../../scripts/fix-dts-ext.mjs",
     "prepack": "pnpm run build",
     "test": "vitest run",
-    "validate": "tsc && node scripts/validate.cjs"
+    "validate": "tsc && node scripts/validate.mjs"
   },
   "dependencies": {
     "@jasy/pdf": "workspace:*"
