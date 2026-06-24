@@ -1,6 +1,6 @@
 /dist
 node_modules/
-packages/*/dist
+packages/**/dist
 /coverage
 
 # Claude's private scratch area — tools, scripts, generated PDFs. Not part of the project.
