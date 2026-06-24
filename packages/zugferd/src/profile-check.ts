@@ -1,4 +1,4 @@
-import { Invoice } from "./invoice";
+import { Invoice } from "./invoice.ts";
 
 // A friendly pre-flight for the XRechnung (German B2G) profile: it lists, in plain language, the
 // fields XRechnung makes mandatory on top of EN16931 - so the user gets actionable guidance BEFORE

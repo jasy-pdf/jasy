@@ -1,5 +1,5 @@
-import { AllowanceCharge, Buyer, Invoice, InvoiceLine, PostalAddress, Seller } from "./invoice";
-import { ComputedInvoice, VatBreakdownEntry } from "./compute";
+import { AllowanceCharge, Buyer, Invoice, InvoiceLine, PostalAddress, Seller } from "./invoice.ts";
+import { ComputedInvoice, VatBreakdownEntry } from "./compute.ts";
 
 // Emits the UN/CEFACT Cross Industry Invoice (CII) XML for the EN16931 profile. The structure is
 // order-sensitive (it follows the CII XSD sequence); every element is mapped to its BT/BG code.

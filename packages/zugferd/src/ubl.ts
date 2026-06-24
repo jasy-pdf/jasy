@@ -1,6 +1,6 @@
-import { AllowanceCharge, Buyer, Invoice, InvoiceLine, PostalAddress, Seller } from "./invoice";
-import { ComputedInvoice, VatBreakdownEntry } from "./compute";
-import { BUSINESS_PROCESS, CiiProfile, GUIDELINE } from "./cii";
+import { AllowanceCharge, Buyer, Invoice, InvoiceLine, PostalAddress, Seller } from "./invoice.ts";
+import { ComputedInvoice, VatBreakdownEntry } from "./compute.ts";
+import { BUSINESS_PROCESS, CiiProfile, GUIDELINE } from "./cii.ts";
 
 // Emits the OASIS UBL Invoice XML for the EN16931 profile - the SECOND permitted syntax (PEPPOL is
 // UBL, and XRechnung accepts it too). Same semantic model (BT/BG) + pre-computed totals as the CII

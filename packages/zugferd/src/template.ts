@@ -12,9 +12,9 @@ import {
   Table,
   Text,
 } from "@jasy/pdf";
-import { Invoice, PostalAddress, Seller } from "./invoice";
-import { ComputedInvoice, VatBreakdownEntry } from "./compute";
-import { Formatters, InvoiceLabels } from "./i18n";
+import { Invoice, PostalAddress, Seller } from "./invoice.ts";
+import { ComputedInvoice, VatBreakdownEntry } from "./compute.ts";
+import { Formatters, InvoiceLabels } from "./i18n.ts";
 
 // The built-in invoice layout: a complete, §14-UStG-aware invoice that renders EVERYTHING the
 // Invoice carries (legal mandatory fields + bank details + payment reference + legal footer), not

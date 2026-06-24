@@ -1,15 +1,17 @@
 import * as fs from "fs";
 import * as path from "path";
+import { fileURLToPath } from "node:url";
 import { type PDFDocumentElement, renderToBytes } from "@jasy/pdf";
-import { Invoice } from "./invoice";
-import { computeInvoice } from "./compute";
-import { CiiProfile, toCII } from "./cii";
-import { bundledFonts } from "./fonts";
-import { facturxXmp } from "./xmp";
-import { defaultInvoiceTemplate } from "./template";
-import { InvoiceLabels, Locale, makeFormatters, resolveLabels } from "./i18n";
-import { xrechnungProblems } from "./profile-check";
+import { Invoice } from "./invoice.ts";
+import { computeInvoice } from "./compute.ts";
+import { CiiProfile, toCII } from "./cii.ts";
+import { bundledFonts } from "./fonts.ts";
+import { facturxXmp } from "./xmp.ts";
+import { defaultInvoiceTemplate } from "./template.ts";
+import { InvoiceLabels, Locale, makeFormatters, resolveLabels } from "./i18n.ts";
+import { xrechnungProblems } from "./profile-check.ts";
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ICC_PATH = path.resolve(__dirname, "..", "assets", "icc", "sRGB.icc");
 
 export interface RenderZugferdOptions {

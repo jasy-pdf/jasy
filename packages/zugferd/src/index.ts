@@ -2,21 +2,21 @@
 // The invoice data model, the CII XML generator, the PDF/A-3 assembly and the (pluggable)
 // validation live here, NOT in the layout core.
 
-export * from "./invoice";
-export { computeInvoice, round2 } from "./compute";
-export type { ComputedInvoice, VatBreakdownEntry } from "./compute";
-export { toCII } from "./cii";
-export { toUBL } from "./ubl";
-export type { CiiProfile } from "./cii";
-export { xrechnungProblems } from "./profile-check";
-export { bundledFonts } from "./fonts";
-export { facturxXmp } from "./xmp";
-export type { XmpOptions } from "./xmp";
-export { renderZugferd } from "./render";
-export type { RenderZugferdOptions, ZugferdResult } from "./render";
-export { defaultInvoiceTemplate } from "./template";
-export { resolveLabels, makeFormatters } from "./i18n";
-export type { Locale, InvoiceLabels, Formatters } from "./i18n";
+export * from "./invoice.ts";
+export { computeInvoice, round2 } from "./compute.ts";
+export type { ComputedInvoice, VatBreakdownEntry } from "./compute.ts";
+export { toCII } from "./cii.ts";
+export { toUBL } from "./ubl.ts";
+export type { CiiProfile } from "./cii.ts";
+export { xrechnungProblems } from "./profile-check.ts";
+export { bundledFonts } from "./fonts.ts";
+export { facturxXmp } from "./xmp.ts";
+export type { XmpOptions } from "./xmp.ts";
+export { renderZugferd } from "./render.ts";
+export type { RenderZugferdOptions, ZugferdResult } from "./render.ts";
+export { defaultInvoiceTemplate } from "./template.ts";
+export { resolveLabels, makeFormatters } from "./i18n.ts";
+export type { Locale, InvoiceLabels, Formatters } from "./i18n.ts";
 
 /** ZUGFeRD / Factur-X conformance profiles, in rising order of data completeness. */
 export type ZugferdProfile = "minimum" | "basic" | "en16931" | "extended" | "xrechnung";
