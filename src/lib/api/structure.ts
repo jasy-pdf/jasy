@@ -99,7 +99,7 @@ export interface DocumentOptions extends TextDefaults {
 
 /** A single font file for `addFont`: a `.ttf` path (read on Node) or its raw bytes (e.g. a browser
  *  upload). */
-export type FontFileSource = string | Buffer | Uint8Array;
+export type FontFileSource = string | Uint8Array;
 
 /** A styled font family for `addFont`: one file per style, only `normal` required. `Text({ bold,
  *  italic })` then picks the right face, falling back to `normal`. */
@@ -136,7 +136,7 @@ const docFonts = new WeakMap<PDFDocumentElement, Map<string, FontBytes | FontFam
 /** Reads any path sources to bytes, leaving bytes / families as-is. */
 function resolveFontSource(source: FontSource): FontBytes | FontFamily {
   const read = (s: FontFileSource): FontBytes => (typeof s === "string" ? readFileSync(s) : s);
-  if (typeof source === "string" || source instanceof Uint8Array || Buffer.isBuffer(source)) {
+  if (typeof source === "string" || source instanceof Uint8Array) {
     return read(source);
   }
   const family: FontFamily = { normal: read(source.normal) };
@@ -186,7 +186,7 @@ export function DefaultTextStyle(
   return new DefaultTextStyleElement({ style: toTextStyleOverride(opts), child: Column(children) });
 }
 
-export type FontBytes = Buffer | Uint8Array;
+export type FontBytes = Uint8Array;
 
 /** A font family: one `.ttf` per style. Only `normal` is required; `bold`/`italic`/`boldItalic`
  *  are picked up automatically by `Text({ bold, italic })`, falling back to `normal` if absent. */
@@ -234,7 +234,7 @@ export interface RenderOptions {
 }
 
 function isFontBytes(v: FontBytes | FontFamily): v is FontBytes {
-  return Buffer.isBuffer(v) || v instanceof Uint8Array;
+  return v instanceof Uint8Array;
 }
 
 /** Renders a `Document(...)` tree to the raw PDF string. */
@@ -263,25 +263,24 @@ export async function renderPdf(doc: PDFDocumentElement, options?: RenderOptions
       om.setOverflowPolicy(options?.onOverflow ?? "error");
       for (const [name, value] of Object.entries(fonts)) {
         if (isFontBytes(value)) {
-          om.registerCustomFont(name, Buffer.from(value));
+          om.registerCustomFont(name, value);
         } else {
-          om.registerCustomFont(name, Buffer.from(value.normal), FontStyle.Normal);
-          if (value.bold) om.registerCustomFont(name, Buffer.from(value.bold), FontStyle.Bold);
-          if (value.italic)
-            om.registerCustomFont(name, Buffer.from(value.italic), FontStyle.Italic);
+          om.registerCustomFont(name, value.normal, FontStyle.Normal);
+          if (value.bold) om.registerCustomFont(name, value.bold, FontStyle.Bold);
+          if (value.italic) om.registerCustomFont(name, value.italic, FontStyle.Italic);
           if (value.boldItalic)
-            om.registerCustomFont(name, Buffer.from(value.boldItalic), FontStyle.BoldItalic);
+            om.registerCustomFont(name, value.boldItalic, FontStyle.BoldItalic);
         }
       }
       for (const a of attachments) {
-        om.attachFile(a.name, Buffer.from(a.data), {
+        om.attachFile(a.name, a.data, {
           relationship: a.relationship,
           mimeType: a.mimeType,
           description: a.description,
         });
       }
       if (options?.xmp) om.setXmpMetadata(options.xmp);
-      if (options?.outputIntent) om.setOutputIntent(Buffer.from(options.outputIntent));
+      if (options?.outputIntent) om.setOutputIntent(options.outputIntent);
       if (options?.pdfVersion) om.setPdfVersion(options.pdfVersion);
       if (options?.documentId) om.enableDocumentId();
     }

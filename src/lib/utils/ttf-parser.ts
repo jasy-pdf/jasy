@@ -2,6 +2,8 @@
 // Slice 1: glyph advance widths (hmtx) + the Unicode→glyph map (cmap), enough to compute
 // text width the same way AFMParser does for the standard-14. Embedding/subsetting come later.
 
+import { i16, latin1FromBytes, u16, u32 } from "./bytes";
+
 interface TableRecord {
   offset: number;
   length: number;
@@ -28,27 +30,27 @@ export class TTFParser {
   private cmapGroups: CmapGroup[] = []; // format 12, searched on lookup
   private tables: Record<string, TableRecord> = {};
 
-  constructor(private data: Buffer) {
+  constructor(private data: Uint8Array) {
     this.readTableDirectory();
     const head = this.table("head").offset;
-    this.unitsPerEm = this.data.readUInt16BE(head + 18);
-    this.numGlyphs = this.data.readUInt16BE(this.table("maxp").offset + 4);
-    this.numHMetrics = this.data.readUInt16BE(this.table("hhea").offset + 34);
+    this.unitsPerEm = u16(this.data,head + 18);
+    this.numGlyphs = u16(this.data,this.table("maxp").offset + 4);
+    this.numHMetrics = u16(this.data,this.table("hhea").offset + 34);
     this.bbox = [
-      this.toGlyphSpace(this.data.readInt16BE(head + 36)), // xMin
-      this.toGlyphSpace(this.data.readInt16BE(head + 38)), // yMin
-      this.toGlyphSpace(this.data.readInt16BE(head + 40)), // xMax
-      this.toGlyphSpace(this.data.readInt16BE(head + 42)), // yMax
+      this.toGlyphSpace(i16(this.data,head + 36)), // xMin
+      this.toGlyphSpace(i16(this.data,head + 38)), // yMin
+      this.toGlyphSpace(i16(this.data,head + 40)), // xMax
+      this.toGlyphSpace(i16(this.data,head + 42)), // yMax
     ];
     const hhea = this.table("hhea").offset;
-    this.ascent = this.toGlyphSpace(this.data.readInt16BE(hhea + 4));
-    this.descent = this.toGlyphSpace(this.data.readInt16BE(hhea + 6));
+    this.ascent = this.toGlyphSpace(i16(this.data,hhea + 4));
+    this.descent = this.toGlyphSpace(i16(this.data,hhea + 6));
     this.readHmtx();
     this.readCmap();
   }
 
   // The raw font bytes, for the /FontFile2 stream.
-  getData(): Buffer {
+  getData(): Uint8Array {
     return this.data;
   }
 
@@ -116,13 +118,13 @@ export class TTFParser {
   }
 
   private readTableDirectory(): void {
-    const numTables = this.data.readUInt16BE(4);
+    const numTables = u16(this.data,4);
     let p = 12; // after the offset table (sfntVersion + numTables + 3 fields)
     for (let i = 0; i < numTables; i++) {
-      const tag = this.data.toString("latin1", p, p + 4);
+      const tag = latin1FromBytes(this.data.subarray(p, p + 4));
       this.tables[tag] = {
-        offset: this.data.readUInt32BE(p + 8),
-        length: this.data.readUInt32BE(p + 12),
+        offset: u32(this.data,p + 8),
+        length: u32(this.data,p + 12),
       };
       p += 16;
     }
@@ -133,22 +135,22 @@ export class TTFParser {
     const o = this.table("hmtx").offset;
     let last = 0;
     for (let i = 0; i < this.numGlyphs; i++) {
-      if (i < this.numHMetrics) last = this.data.readUInt16BE(o + i * 4);
+      if (i < this.numHMetrics) last = u16(this.data,o + i * 4);
       this.advanceWidths.push(last);
     }
   }
 
   private readCmap(): void {
     const base = this.table("cmap").offset;
-    const numTables = this.data.readUInt16BE(base + 2);
+    const numTables = u16(this.data,base + 2);
 
     // Prefer the Windows Unicode BMP subtable (3,1); accept full-Unicode (3,10) or any (0,x).
     let subtable = -1;
     let p = base + 4;
     for (let i = 0; i < numTables; i++) {
-      const platform = this.data.readUInt16BE(p);
-      const encoding = this.data.readUInt16BE(p + 2);
-      const offset = this.data.readUInt32BE(p + 4);
+      const platform = u16(this.data,p);
+      const encoding = u16(this.data,p + 2);
+      const offset = u32(this.data,p + 4);
       const unicode = (platform === 3 && (encoding === 1 || encoding === 10)) || platform === 0;
       if (unicode) {
         subtable = base + offset;
@@ -158,7 +160,7 @@ export class TTFParser {
     }
     if (subtable < 0) return;
 
-    const format = this.data.readUInt16BE(subtable);
+    const format = u16(this.data,subtable);
     if (format === 4) this.readCmapFormat4(subtable);
     else if (format === 12) this.readCmapFormat12(subtable);
   }
@@ -166,24 +168,24 @@ export class TTFParser {
   // Format 4: segment mapping. Four parallel arrays keyed by segment; the glyph comes either
   // from idDelta or, when idRangeOffset != 0, from the glyphIdArray it points into.
   private readCmapFormat4(o: number): void {
-    const segCountX2 = this.data.readUInt16BE(o + 6);
+    const segCountX2 = u16(this.data,o + 6);
     const endCodes = o + 14;
     const startCodes = endCodes + segCountX2 + 2; // +2 reservedPad
     const idDeltas = startCodes + segCountX2;
     const idRangeOffsets = idDeltas + segCountX2;
 
     for (let i = 0; i < segCountX2 / 2; i++) {
-      const end = this.data.readUInt16BE(endCodes + i * 2);
-      const start = this.data.readUInt16BE(startCodes + i * 2);
-      const delta = this.data.readUInt16BE(idDeltas + i * 2);
-      const rangeOffset = this.data.readUInt16BE(idRangeOffsets + i * 2);
+      const end = u16(this.data,endCodes + i * 2);
+      const start = u16(this.data,startCodes + i * 2);
+      const delta = u16(this.data,idDeltas + i * 2);
+      const rangeOffset = u16(this.data,idRangeOffsets + i * 2);
 
       for (let c = start; c <= end && c !== 0xffff; c++) {
         let glyph: number;
         if (rangeOffset === 0) {
           glyph = (c + delta) & 0xffff;
         } else {
-          glyph = this.data.readUInt16BE(idRangeOffsets + i * 2 + rangeOffset + (c - start) * 2);
+          glyph = u16(this.data,idRangeOffsets + i * 2 + rangeOffset + (c - start) * 2);
           if (glyph !== 0) glyph = (glyph + delta) & 0xffff;
         }
         if (glyph !== 0) this.cmap.set(c, glyph);
@@ -193,13 +195,13 @@ export class TTFParser {
 
   // Format 12: sequential groups for full Unicode (incl. astral). Kept un-expanded.
   private readCmapFormat12(o: number): void {
-    const nGroups = this.data.readUInt32BE(o + 12);
+    const nGroups = u32(this.data,o + 12);
     let p = o + 16;
     for (let i = 0; i < nGroups; i++) {
       this.cmapGroups.push({
-        start: this.data.readUInt32BE(p),
-        end: this.data.readUInt32BE(p + 4),
-        startGlyph: this.data.readUInt32BE(p + 8),
+        start: u32(this.data,p),
+        end: u32(this.data,p + 4),
+        startGlyph: u32(this.data,p + 8),
       });
       p += 12;
     }

@@ -4,7 +4,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { createHash } from "crypto";
 import { zlibSync } from "fflate";
-import { latin1FromBytes } from "./bytes";
+import { bytesFromLatin1, latin1FromBytes } from "./bytes";
 import { AFMParser } from "./afm-parser";
 import { TTFParser } from "./ttf-parser";
 import { subsetTTF } from "./ttf-subsetter";
@@ -249,7 +249,7 @@ export class PDFObjectManager implements FontMetrics {
   // Builds a stream object body: `<< extraDict /Length n >> stream … endstream`, FlateDecode-compressed
   // when enabled AND it actually helps (tiny streams aren't inflated). Binary bytes ride as a latin1
   // string - the final encoder passes 0x00-0xFF through unchanged.
-  private stream(extraDict: string, data: Buffer): string {
+  private stream(extraDict: string, data: Uint8Array): string {
     const head = extraDict ? extraDict + " " : "";
     if (this.compress) {
       const z = zlibSync(data);
@@ -259,7 +259,7 @@ export class PDFObjectManager implements FontMetrics {
         )}\nendstream`;
       }
     }
-    return `<< ${head}/Length ${data.length} >>\nstream\n${data.toString("latin1")}\nendstream`;
+    return `<< ${head}/Length ${data.length} >>\nstream\n${latin1FromBytes(data)}\nendstream`;
   }
 
   // Adds a page content stream (compressed when enabled). The caller passes the raw operator string.
@@ -267,7 +267,7 @@ export class PDFObjectManager implements FontMetrics {
   // CP1252 char like "…"/"—"/"€" whose codepoint is > 0xFF, and latin1 would mangle it (… -> "&").
   // For every char <= 0xFF the encoder passes the byte through, so existing streams stay byte-identical.
   addContentStream(content: string): number {
-    return this.addObject(this.stream("", Buffer.from(getArrayBuffer(content))));
+    return this.addObject(this.stream("", new Uint8Array(getArrayBuffer(content))));
   }
 
   changePDFConfig(config: PDFConfig) {
@@ -300,11 +300,8 @@ export class PDFObjectManager implements FontMetrics {
       const obj = this.objects[i];
       const objectContent = `${i + 1} 0 obj\n${obj}\nendobj\n`;
 
-      // Convert the object content into a buffer with the correct encoding
-      const encodedContent = Buffer.from(objectContent, "binary");
-
-      // Add the actual byte length to the total length
-      length += encodedContent.length;
+      // The body is a latin1/binary string (every char <= 0xFF), so its length IS its byte length.
+      length += objectContent.length;
     }
     return length;
   }
@@ -346,7 +343,7 @@ endstream`;
   // ride as a latin1 string, like images/fonts (the final encoder passes 0x00-0xFF through).
   attachFile(
     name: string,
-    data: Buffer,
+    data: Uint8Array,
     opts: { relationship?: string; mimeType?: string; description?: string } = {},
   ): void {
     const subtype = (opts.mimeType ?? "application/octet-stream").replace(/\//g, "#2F");
@@ -383,7 +380,7 @@ endstream`;
 
   // Embeds an ICC profile and a PDF/A /OutputIntent that points at it (catalog /OutputIntents).
   // `icc` are the raw profile bytes (an RGB profile, /N 3 - e.g. sRGB).
-  setOutputIntent(icc: Buffer, opts: { identifier?: string; info?: string } = {}): void {
+  setOutputIntent(icc: Uint8Array, opts: { identifier?: string; info?: string } = {}): void {
     const profile = this.addObject(this.stream("/N 3", icc));
     this.outputIntent = this.addObject(
       `<< /Type /OutputIntent /S /GTS_PDFA1 ` +
@@ -480,7 +477,7 @@ endstream`;
   // Registers one variant (default Normal) of an embedded TrueType family `name`: stores it for
   // metrics and emits its PDF font objects. All variants share the family `name`; bold/italic are
   // separate .ttf files registered under the same name with a different style.
-  registerCustomFont(name: string, data: Buffer, style: FontStyle = FontStyle.Normal): void {
+  registerCustomFont(name: string, data: Uint8Array, style: FontStyle = FontStyle.Normal): void {
     const key = this.customKey(name, style);
     if (this.customFonts.has(key)) return;
     this.customFonts.set(key, new TTFParser(data));
@@ -657,7 +654,7 @@ endstream`;
       `/CMapName /Adobe-Identity-UCS def\n/CMapType 2 def\n` +
       `1 begincodespacerange\n<0000> <FFFF>\nendcodespacerange\n${blocks.join("\n")}\n` +
       `endcmap\nCMapName currentdict /CMap defineresource pop\nend\nend`;
-    return this.stream("", Buffer.from(body, "latin1"));
+    return this.stream("", bytesFromLatin1(body));
   }
 
   private buildType0(name: string, cidFont: number, toUnicode: number): string {
