@@ -1,7 +1,7 @@
 import { pageFormats, PageSize } from "../constants/page-sizes";
 import type { OverflowPolicy } from "../layout/fragmentation";
 import { STANDARD_AFM } from "../assets/font-data";
-import { createHash } from "crypto";
+import { md5, md5Hex } from "./md5";
 import { zlibSync } from "fflate";
 import { bytesFromLatin1, latin1FromBytes } from "./bytes";
 import { AFMParser } from "./afm-parser";
@@ -528,9 +528,7 @@ endstream`;
 
   // A deterministic 6-uppercase-letter subset tag (PDF/A wants the "TAG+FontName" form).
   private subsetTag(pdfName: string, used: Set<number>): string {
-    const h = createHash("md5")
-      .update(pdfName + [...used].sort((a, b) => a - b).join(","))
-      .digest();
+    const h = md5(new TextEncoder().encode(pdfName + [...used].sort((a, b) => a - b).join(",")));
     let tag = "";
     for (let i = 0; i < 6; i++) tag += String.fromCharCode(65 + (h[i] % 26));
     return tag;
@@ -804,7 +802,7 @@ endstream`;
   }
 
   private contentId(): string {
-    return `<${createHash("md5").update(this.objects.join("")).digest("hex").toUpperCase()}>`;
+    return `<${md5Hex(new TextEncoder().encode(this.objects.join(""))).toUpperCase()}>`;
   }
 
   // Returns the number of objects

@@ -240,7 +240,14 @@ Genuine remaining gaps / deferred:
    `todo.md` "Absolute-positioning layer".
 2. **`slice` border mode** (a split box left open at the break) — `clone` is the default; needs per-side
    stroke control in the `Rect` IR. True multi-column too (the `packChildren`/region machinery exists).
-3. **Node-only** — AFM metrics read via `fs`; in-browser needs the `.afm` bundled as JS data (Phase 7).
+3. **Browser support — IN FLIGHT (2026-06-25), most of the way.** `zlib`→`fflate`, `Buffer`→`Uint8Array`
+   (byte helpers in `utils/bytes.ts`), and the AFM metrics bundled (`assets/font-data.ts`, gen
+   `scripts/gen-font-data.mjs`) — **standard-font text renders WITHOUT `fs`**. An empirical browser bundle
+   (`esbuild --platform=browser`) leaves exactly 4 Node imports, all OPTIONAL: `node:fs` (font-from-path),
+   `path`+`fs/promises` (image-from-file), `crypto` (the documentId hash). `jimp` bundles (browser build);
+   `Buffer` is only a runtime polyfill at the one jimp boundary. REMAINING = the **platform-port**
+   (conditional `node`/`browser` exports + browser-safe versions) + ergonomic browser font loading. See
+   todo.md "🌐 Browser migration".
 4. `manual-test` has hard-coded machine-specific paths.
 5. Font gaps: no TrueType kerning; only TTF / TrueType-flavoured OTF parsed (OTF/CFF, WOFF2 not yet).
    Bold/italic resolve via registered family variants with a clean fallback to `normal` (no faux styles).
@@ -277,5 +284,6 @@ signatures, more e-invoice profiles, browser, framework bindings).
   Content 3). It has its **own CLAUDE.md + HARD RULES: never start/stop its dev server (Flo runs it),
   only Flo commits.** Package links there use **npmx.dev** (Daniel Roe's registry browser), not npmjs.com.
 - License MIT, author Florian Heuberger. npm: `@jasy/pdf`/`@jasy/zugferd`/`@jasy/cli` @1.0.0-alpha.1
-  (alpha dist-tag, 2026-06-21). Branch `main`. Runtime deps: `jimp` (images); the old `reflect-metadata`
+  (alpha dist-tag, 2026-06-21). Branch `main`. Runtime deps: `jimp` (images), `fflate` (isomorphic deflate);
+  the old `reflect-metadata`
   DI is gone (decorator removed).
