@@ -1,6 +1,12 @@
 import { LineElement } from "../elements/line-element.ts";
 import { PaddingElement } from "../elements/layout/padding-element.ts";
-import { ImageElement, CustomImage, CustomLocalImage, BoxFit } from "../elements/image-element.ts";
+import {
+  ImageElement,
+  CustomImage,
+  CustomLocalImage,
+  CustomBytesImage,
+  BoxFit,
+} from "../elements/image-element.ts";
 import { PDFElement } from "../elements/pdf-element.ts";
 import { ColorInput, toColor } from "./color.ts";
 import { Insets, toEdges } from "./insets.ts";
@@ -38,8 +44,8 @@ export function Divider(opts: DividerOptions = {}): PDFElement {
   });
 }
 
-/** An image source: a local file path, or a `CustomImage` (e.g. a browser-supplied image). */
-export type ImageSource = string | CustomImage;
+/** An image source: a local file path (Node), raw bytes (e.g. a browser fetch/upload), or a `CustomImage`. */
+export type ImageSource = string | Uint8Array | CustomImage;
 
 /** How the image fills its box (locked §4). Mirrors CSS `object-fit`. */
 export type ImageFit = "none" | "contain" | "cover" | "fill";
@@ -66,7 +72,12 @@ export interface ImageOptions {
  */
 export function Image(src: ImageSource, opts: ImageOptions = {}): ImageElement {
   return new ImageElement({
-    image: typeof src === "string" ? new CustomLocalImage(src) : src,
+    image:
+      typeof src === "string"
+        ? new CustomLocalImage(src)
+        : src instanceof Uint8Array
+          ? new CustomBytesImage(src)
+          : src,
     width: opts.width,
     height: opts.height,
     fit: opts.fit ? FIT[opts.fit] : undefined,

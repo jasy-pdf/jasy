@@ -88,6 +88,35 @@ export class CustomLocalImage extends CustomImage {
   }
 }
 
+/**
+ * An image straight from raw bytes (a browser upload / fetch, no filesystem). The PDF filter is sniffed
+ * from the magic bytes: JPEG embeds raw (DCTDecode, no decode step), PNG is decoded to RGB (FlateDecode).
+ */
+export class CustomBytesImage extends CustomImage {
+  private fileRawData: string;
+  constructor(private bytes: Uint8Array) {
+    super();
+    this.fileRawData = latin1FromBytes(bytes);
+  }
+
+  async init(): Promise<void> {}
+
+  async getImageType(): Promise<string> {
+    const b = this.bytes;
+    if (b[0] === 0xff && b[1] === 0xd8) return "DCTDecode"; // JPEG
+    if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return "FlateDecode"; // PNG
+    throw new Error("Unsupported image bytes (only JPEG and PNG are supported).");
+  }
+
+  getFileData(): string {
+    return this.fileRawData;
+  }
+
+  async getImageDimensions(): Promise<{ width: number; height: number }> {
+    return getImageDimensions(this.bytes);
+  }
+}
+
 interface ImageElementParams {
   image: CustomImage; // binary image data
   width?: number;

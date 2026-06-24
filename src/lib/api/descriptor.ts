@@ -46,7 +46,14 @@ function textContent(children: DescriptorChild[]): string | TextSegment[] {
 }
 
 const REGISTRY: Record<string, ElementFactory> = {
-  document: (props, children) => Document(props, elementChildren(children) as PageElement[]),
+  document: (props, children) => {
+    const doc = Document(props, elementChildren(children) as PageElement[]);
+    // A binding can register fonts declaratively: `fonts: { Name: bytes | path | family }`.
+    if (props.fonts) {
+      for (const [name, src] of Object.entries(props.fonts)) doc.addFont(name, src as any);
+    }
+    return doc;
+  },
   page: (props, children) => Page(props, elementChildren(children)),
   column: (props, children) => Column(props, elementChildren(children)),
   row: (props, children) => Row(props, elementChildren(children)),

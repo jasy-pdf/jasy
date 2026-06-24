@@ -1,4 +1,3 @@
-import { Jimp, JimpMime } from "jimp";
 import { zlibSync } from "fflate";
 import { latin1FromBytes } from "./bytes.ts";
 
@@ -101,7 +100,9 @@ export async function getImageDimensions(buffer: Uint8Array): Promise<ImageDimen
 export async function decodePngToRgbFlate(
   pngBuffer: Uint8Array,
 ): Promise<{ data: string; width: number; height: number }> {
-  // jimp (Node-only) wants a Buffer view; the future browser path will decode via canvas instead.
+  // jimp is loaded lazily (it pulls in Node-ish bits) - only here, when an image is actually decoded, so
+  // text-only renders never load it and stay browser-clean. It wants a Buffer view; browser path = canvas later.
+  const { Jimp } = await import("jimp");
   const image = await Jimp.fromBuffer(
     Buffer.from(pngBuffer.buffer, pngBuffer.byteOffset, pngBuffer.byteLength),
   );
@@ -120,7 +121,8 @@ export async function decodePngToRgbFlate(
 }
 
 export async function convertImageToGrayscaleBuffer(imagePath: string): Promise<Uint8Array> {
-  // We get the image from the buffer
+  // We get the image from the buffer (jimp lazily loaded - see decodePngToRgbFlate).
+  const { Jimp, JimpMime } = await import("jimp");
   const image = await Jimp.read(imagePath);
 
   // Get MIME type. If emtpy throw error
