@@ -13,16 +13,16 @@ const items = [
   <Document>
     <Page :size="'A4'" :gap="16">
       <Row :justify="'between'">
-        <Text :size="22" :bold="true" :color="'#0a2348'">Acme GmbH</Text>
-        <Text :size="22" :bold="true" :color="'#1450aa'">INVOICE</Text>
+        <Text :size="22" bold :color="'#0a2348'">Acme GmbH</Text>
+        <Text :size="22" bold :color="'#1450aa'">INVOICE</Text>
       </Row>
       <Text :size="11" :color="'#64748b'">No. 2026-0042  ·  2026-06-24  ·  due in 14 days</Text>
       <Text :size="12">Bill to: Max Mustermann, Musterstrasse 1, 12345 Berlin</Text>
 
       <Box :bg="'#0a2348'" :padding="10" :radius="4">
         <Row :justify="'between'">
-          <Text :size="11" :bold="true" :color="'#ffffff'">Description</Text>
-          <Text :size="11" :bold="true" :color="'#ffffff'">Amount (EUR)</Text>
+          <Text :size="11" bold :color="'#ffffff'">Description</Text>
+          <Text :size="11" bold :color="'#ffffff'">Amount (EUR)</Text>
         </Row>
       </Box>
 
@@ -36,8 +36,8 @@ const items = [
       <Divider />
 
       <Row :justify="'between'">
-        <Text :size="14" :bold="true">Total</Text>
-        <Text :size="14" :bold="true" :color="'#1450aa'">5,400.00 EUR</Text>
+        <Text :size="14" bold>Total</Text>
+        <Text :size="14" bold :color="'#1450aa'">5,400.00 EUR</Text>
       </Row>
 
       <Text :size="10" :color="'#94a3b8'">Thank you for your business. Payment within 14 days.</Text>

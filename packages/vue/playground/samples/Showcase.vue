@@ -40,8 +40,8 @@ const grandTotal = computed(() => products.reduce((s, p) => s + p.qty * p.price,
 
       <Box :bg="'#0a2348'" :padding="10" :radius="4">
         <Row :justify="'between'">
-          <Text :size="11" :bold="true" :color="'#ffffff'">Product</Text>
-          <Text :size="11" :bold="true" :color="'#ffffff'">Qty &times; Price = Total</Text>
+          <Text :size="11" bold :color="'#ffffff'">Product</Text>
+          <Text :size="11" bold :color="'#ffffff'">Qty &times; Price = Total</Text>
         </Row>
       </Box>
 
@@ -54,7 +54,7 @@ const grandTotal = computed(() => products.reduce((s, p) => s + p.qty * p.price,
 
       <Divider />
       <Row :justify="'between'">
-        <Text :size="14" :bold="true">Total</Text>
+        <Text :size="14" bold>Total</Text>
         <Text :font="'GreatVibes'" :size="22" :color="'#1450aa'">{{ grandTotal }} &euro;</Text>
       </Row>
     </Page>

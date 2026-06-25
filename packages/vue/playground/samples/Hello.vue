@@ -6,7 +6,7 @@ import * as Pdf from "@jasy/vue";
 <template>
   <Pdf.Document>
     <Pdf.Page :size="'A4'" :gap="14">
-      <Pdf.Text :size="30" :bold="true" :color="'#1450aa'">Hello from a .vue file</Pdf.Text>
+      <Pdf.Text :size="30" bold :color="'#1450aa'">Hello from a .vue file</Pdf.Text>
       <Pdf.Text :size="13" :color="'#475569'"
         >This whole document is a Vue component tree, rendered to a real PDF by @jasy/vue. Edit the template
         and watch it rebuild.</Pdf.Text
