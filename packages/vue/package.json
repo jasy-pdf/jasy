@@ -23,7 +23,8 @@
   ],
   "scripts": {
     "build": "tsc",
-    "play": "vite playground --open"
+    "play": "vite playground --open",
+    "test": "vitest run"
   },
   "dependencies": {
     "@jasy/pdf": "workspace:*"
