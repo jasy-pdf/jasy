@@ -6,6 +6,7 @@ import { Text, Paragraph, span } from "./text.ts";
 import { Column, Row, Box, Padding, Spacer, Expanded } from "./layout.ts";
 import { Divider, Image } from "./content.ts";
 import { Page, Document } from "./structure.ts";
+import { Table, Cell } from "./table.ts";
 
 /**
  * The framework-agnostic contract (the firewall). A binding (Vue/React, or any tree-builder)
@@ -45,6 +46,24 @@ function textContent(children: DescriptorChild[]): string | TextSegment[] {
   return children.map(toSegment);
 }
 
+// A `<TableCell>`'s content → a `Cell`: a lone string stays a string (the table wraps it in Text);
+// otherwise its children are built (a single element, or a Column of several).
+function buildCell(cell: DescriptorChild): Cell {
+  if (typeof cell === "string") return cell;
+  const kids = cell.children ?? [];
+  if (kids.length === 1 && typeof kids[0] === "string") return kids[0];
+  if (kids.length === 0) return "";
+  const els = kids.map(build);
+  return els.length === 1 ? els[0] : Column(els);
+}
+
+// A `<TableRow>`'s `<TableCell>` children → one row of `Cell`s.
+function rowCells(row: Descriptor): Cell[] {
+  return (row.children ?? [])
+    .filter((c): c is Descriptor => typeof c !== "string" && c.type === "table-cell")
+    .map(buildCell);
+}
+
 const REGISTRY: Record<string, ElementFactory> = {
   document: (props, children) => {
     const doc = Document(props, elementChildren(children) as PageElement[]);
@@ -65,6 +84,15 @@ const REGISTRY: Record<string, ElementFactory> = {
   image: (props) => Image(props.src, props),
   text: (props, children) => Text(textContent(children), props),
   paragraph: (props, children) => Paragraph(textContent(children), props),
+  // `<Table>` reads its `<TableRow>`/`<TableCell>` structure raw; one row may be marked `header`.
+  table: (props, children) => {
+    const rows = children.filter(
+      (c): c is Descriptor => typeof c !== "string" && c.type === "table-row",
+    );
+    const header = rows.find((r) => r.props?.header);
+    const body = rows.filter((r) => !r.props?.header);
+    return Table({ ...props, header: header ? rowCells(header) : undefined }, body.map(rowCells));
+  },
 };
 
 /**

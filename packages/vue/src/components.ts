@@ -1,5 +1,12 @@
 import { defineComponent, h, type App, type Plugin, type PropType } from "vue";
-import type { ColorInput, Insets, ImageSource, FontSource, PageSizeInput } from "@jasy/pdf";
+import type {
+  ColorInput,
+  Insets,
+  ImageSource,
+  FontSource,
+  PageSizeInput,
+  ColumnWidth,
+} from "@jasy/pdf";
 
 const colorProp = [String, Number, Object] as PropType<ColorInput>;
 const insetsProp = [Number, Object, Array] as PropType<Insets>;
@@ -62,6 +69,16 @@ const documentProps = {
   fonts: Object as PropType<Record<string, FontSource>>,
 };
 
+const tableProps = {
+  columns: { type: Array as PropType<ColumnWidth[]>, required: true },
+  gap: Number,
+  rowGap: Number,
+  colGap: Number,
+  cellPadding: insetsProp,
+  cellBorder: colorProp,
+  rule: colorProp,
+};
+
 // Forward the typed props (+ any extra attrs) to the engine host tag; the default slot is the children.
 const fwd =
   (tag: string) =>
@@ -71,22 +88,120 @@ const fwd =
 
 // defineComponent is called directly (not via a helper) so the props object's type reaches the
 // component, giving template type-check + autocomplete. The devtools name stays `Jasy`-prefixed.
-export const Document = defineComponent({ name: "JasyDocument", inheritAttrs: false, props: documentProps, setup: fwd("document") });
-export const Page = defineComponent({ name: "JasyPage", inheritAttrs: false, props: pageProps, setup: fwd("page") });
-export const Column = defineComponent({ name: "JasyColumn", inheritAttrs: false, props: stackProps, setup: fwd("column") });
-export const Row = defineComponent({ name: "JasyRow", inheritAttrs: false, props: stackProps, setup: fwd("row") });
-export const Box = defineComponent({ name: "JasyBox", inheritAttrs: false, props: boxProps, setup: fwd("box") });
-export const Padding = defineComponent({ name: "JasyPadding", inheritAttrs: false, props: { insets: insetsProp }, setup: fwd("padding") });
-export const Expanded = defineComponent({ name: "JasyExpanded", inheritAttrs: false, props: { flex: Number }, setup: fwd("expanded") });
-export const Spacer = defineComponent({ name: "JasySpacer", inheritAttrs: false, props: { flex: Number }, setup: fwd("spacer") });
-export const Divider = defineComponent({ name: "JasyDivider", inheritAttrs: false, props: dividerProps, setup: fwd("divider") });
-export const Image = defineComponent({ name: "JasyImage", inheritAttrs: false, props: imageProps, setup: fwd("image") });
-export const Text = defineComponent({ name: "JasyText", inheritAttrs: false, props: textProps, setup: fwd("text") });
-export const Paragraph = defineComponent({ name: "JasyParagraph", inheritAttrs: false, props: textProps, setup: fwd("paragraph") });
-export const Span = defineComponent({ name: "JasySpan", inheritAttrs: false, props: textStyleProps, setup: fwd("span") });
+export const Document = defineComponent({
+  name: "JasyDocument",
+  inheritAttrs: false,
+  props: documentProps,
+  setup: fwd("document"),
+});
+export const Page = defineComponent({
+  name: "JasyPage",
+  inheritAttrs: false,
+  props: pageProps,
+  setup: fwd("page"),
+});
+export const Column = defineComponent({
+  name: "JasyColumn",
+  inheritAttrs: false,
+  props: stackProps,
+  setup: fwd("column"),
+});
+export const Row = defineComponent({
+  name: "JasyRow",
+  inheritAttrs: false,
+  props: stackProps,
+  setup: fwd("row"),
+});
+export const Box = defineComponent({
+  name: "JasyBox",
+  inheritAttrs: false,
+  props: boxProps,
+  setup: fwd("box"),
+});
+export const Padding = defineComponent({
+  name: "JasyPadding",
+  inheritAttrs: false,
+  props: { insets: insetsProp },
+  setup: fwd("padding"),
+});
+export const Expanded = defineComponent({
+  name: "JasyExpanded",
+  inheritAttrs: false,
+  props: { flex: Number },
+  setup: fwd("expanded"),
+});
+export const Spacer = defineComponent({
+  name: "JasySpacer",
+  inheritAttrs: false,
+  props: { flex: Number },
+  setup: fwd("spacer"),
+});
+export const Divider = defineComponent({
+  name: "JasyDivider",
+  inheritAttrs: false,
+  props: dividerProps,
+  setup: fwd("divider"),
+});
+export const Image = defineComponent({
+  name: "JasyImage",
+  inheritAttrs: false,
+  props: imageProps,
+  setup: fwd("image"),
+});
+export const Text = defineComponent({
+  name: "JasyText",
+  inheritAttrs: false,
+  props: textProps,
+  setup: fwd("text"),
+});
+export const Paragraph = defineComponent({
+  name: "JasyParagraph",
+  inheritAttrs: false,
+  props: textProps,
+  setup: fwd("paragraph"),
+});
+export const Span = defineComponent({
+  name: "JasySpan",
+  inheritAttrs: false,
+  props: textStyleProps,
+  setup: fwd("span"),
+});
+// `<Table :columns>` holds `<TableRow>`s (mark one `header` to repeat it per page) of `<TableCell>`s.
+export const Table = defineComponent({
+  name: "JasyTable",
+  inheritAttrs: false,
+  props: tableProps,
+  setup: fwd("table"),
+});
+export const TableRow = defineComponent({
+  name: "JasyTableRow",
+  inheritAttrs: false,
+  props: { header: { type: Boolean, default: false } },
+  setup: fwd("table-row"),
+});
+export const TableCell = defineComponent({
+  name: "JasyTableCell",
+  inheritAttrs: false,
+  setup: fwd("table-cell"),
+});
 
 const components = {
-  Document, Page, Column, Row, Box, Padding, Expanded, Spacer, Divider, Image, Text, Paragraph, Span,
+  Document,
+  Page,
+  Column,
+  Row,
+  Box,
+  Padding,
+  Expanded,
+  Spacer,
+  Divider,
+  Image,
+  Text,
+  Paragraph,
+  Span,
+  Table,
+  TableRow,
+  TableCell,
 };
 
 // Register the components globally, optionally under a `prefix` to avoid name clashes with a UI library:

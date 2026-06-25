@@ -20,7 +20,10 @@ const samples: { label: string; comp: any; assets?: boolean }[] = [
 let assetCache: { font: Uint8Array; image: Uint8Array } | null = null;
 async function loadAssets() {
   if (!assetCache) {
-    const grab = (u: string) => fetch(u).then((r) => r.arrayBuffer()).then((b) => new Uint8Array(b));
+    const grab = (u: string) =>
+      fetch(u)
+        .then((r) => r.arrayBuffer())
+        .then((b) => new Uint8Array(b));
     const [font, image] = await Promise.all([grab(fontUrl), grab(imgUrl)]);
     assetCache = { font, image };
   }
@@ -33,7 +36,9 @@ const currentIndex = ref(Number(sessionStorage.getItem(STORAGE)) || 0);
 const pdfUrl = ref<string>();
 const error = ref<string>();
 const building = ref(false);
-const downloadName = computed(() => samples[currentIndex.value].label.toLowerCase().replace(/\s+/g, "-") + ".pdf");
+const downloadName = computed(
+  () => samples[currentIndex.value].label.toLowerCase().replace(/\s+/g, "-") + ".pdf",
+);
 
 async function render() {
   building.value = true;
@@ -93,7 +98,10 @@ onMounted(render);
 }
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif;
 }
 .app {
   display: flex;

@@ -1,15 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import {
-  Document,
-  Page,
-  Column,
-  Row,
-  Box,
-  Text,
-  Image,
-  Divider,
-} from "@jasy/vue";
+import { Document, Page, Column, Row, Box, Text, Image, Divider } from "@jasy/vue";
 
 // font + image arrive as raw bytes (App.vue fetched them in the browser) - no filesystem, no server.
 const props = defineProps<{ font: Uint8Array; image: Uint8Array }>();
@@ -33,8 +24,8 @@ const grandTotal = computed(() => products.reduce((s, p) => s + p.qty * p.price,
         <Image :src="props.image" :width="84" :height="84" :fit="'cover'" :radius="42" />
       </Row>
       <Text :size="11" :color="'#64748b'"
-        >Custom .ttf &middot; image bytes &middot; v-for &middot; computed totals &mdash; rendered 100% in your
-        browser</Text
+        >Custom .ttf &middot; image bytes &middot; v-for &middot; computed totals &mdash; rendered
+        100% in your browser</Text
       >
       <Divider />
 
@@ -48,7 +39,9 @@ const grandTotal = computed(() => products.reduce((s, p) => s + p.qty * p.price,
       <Column :gap="7">
         <Row v-for="r in rows" :key="r.name" :justify="'between'">
           <Text :size="12">{{ r.name }}</Text>
-          <Text :size="12">{{ r.qty }} &times; {{ r.price.toFixed(2) }} = {{ r.total }} &euro;</Text>
+          <Text :size="12"
+            >{{ r.qty }} &times; {{ r.price.toFixed(2) }} = {{ r.total }} &euro;</Text
+          >
         </Row>
       </Column>
 
