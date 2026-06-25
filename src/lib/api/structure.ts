@@ -295,6 +295,7 @@ export async function renderPdf(doc: PDFDocumentElement, options?: RenderOptions
 export async function renderToBytes(
   doc: PDFDocumentElement,
   options?: RenderOptions,
-): Promise<Uint8Array> {
+): Promise<Uint8Array<ArrayBuffer>> {
+  // Plain ArrayBuffer-backed, so the bytes drop straight into a Blob/Response (BlobPart needs <ArrayBuffer>).
   return new Uint8Array(getArrayBuffer(await renderPdf(doc, options)));
 }
