@@ -22,8 +22,20 @@ const { pending, open } = usePdf(Invoice);
 
       <section class="card">
         <h2>Server</h2>
-        <p>Hit a Nitro route that builds the PDF with the @jasy/pdf tree API.</p>
+        <p>
+          A Nitro route that builds the PDF with the @jasy/pdf tree API - rendered fresh on every
+          request.
+        </p>
         <a class="btn" href="/api/hello" target="_blank">Render on server &rarr;</a>
+      </section>
+
+      <section class="card">
+        <h2>Cached</h2>
+        <p>
+          The same route wrapped with <code>cache</code>. The timestamp inside stays put on repeat
+          requests within 30s - served from Nitro's cache, not re-rendered.
+        </p>
+        <a class="btn" href="/api/cached" target="_blank">Open cached route &rarr;</a>
       </section>
     </div>
   </div>
@@ -52,9 +64,11 @@ h1 {
 .cards {
   display: grid;
   gap: 18px;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
 }
 .card {
+  display: flex;
+  flex-direction: column;
   background: #fff;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
@@ -71,6 +85,8 @@ h1 {
 }
 button,
 .btn {
+  margin-top: auto;
+  align-self: flex-start;
   display: inline-block;
   padding: 9px 16px;
   border: 1px solid #0a2348;
@@ -85,5 +101,11 @@ button,
 button:disabled {
   opacity: 0.5;
   cursor: default;
+}
+code {
+  background: #eef2f7;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 0.9em;
 }
 </style>
