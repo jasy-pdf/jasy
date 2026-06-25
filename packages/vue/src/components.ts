@@ -1,16 +1,10 @@
-import { defineComponent, h } from "vue";
+import { defineComponent, h, type App, type Plugin } from "vue";
 
-/**
- * A host component: renders the engine host tag (`document`/`page`/`text`/…, which the descriptor seam
- * knows) while exposing a conflict-free, brand-prefixed name (`JasyText` does not clash with the DOM
- * `Text`, `JasyImage` not with `Image`, etc.). Every prop is forwarded via attrs and the default slot
- * becomes the children. So `<JasyBox :bg="'#eef'" :padding="12">` lands as a `box` descriptor with
- * `{ bg, padding }`. (Boolean shorthands like `<JasyText bold>` should be `:bold="true"` for now -
- * typed props per component come next.)
- */
+// Wraps an engine host tag (`document`/`text`/…) as a component, forwarding props as attrs and the default
+// slot as children. The devtools name stays `Jasy`-prefixed to avoid a native-element-name warning.
 function host(tag: string, name: string) {
   return defineComponent({
-    name,
+    name: "Jasy" + name,
     inheritAttrs: false,
     setup(_props, { slots, attrs }) {
       return () => h(tag, { ...attrs }, slots.default?.());
@@ -18,17 +12,31 @@ function host(tag: string, name: string) {
   });
 }
 
-export const JasyDocument = host("document", "JasyDocument");
-export const JasyPage = host("page", "JasyPage");
-export const JasyColumn = host("column", "JasyColumn");
-export const JasyRow = host("row", "JasyRow");
-export const JasyBox = host("box", "JasyBox");
-export const JasyPadding = host("padding", "JasyPadding");
-export const JasyExpanded = host("expanded", "JasyExpanded");
-export const JasySpacer = host("spacer", "JasySpacer");
-export const JasyDivider = host("divider", "JasyDivider");
-export const JasyImage = host("image", "JasyImage");
-export const JasyText = host("text", "JasyText");
-export const JasyParagraph = host("paragraph", "JasyParagraph");
-/** `<JasySpan>` inside a `<JasyText>` for mixed inline styling (font / size / color per run). */
-export const JasySpan = host("span", "JasySpan");
+export const Document = host("document", "Document");
+export const Page = host("page", "Page");
+export const Column = host("column", "Column");
+export const Row = host("row", "Row");
+export const Box = host("box", "Box");
+export const Padding = host("padding", "Padding");
+export const Expanded = host("expanded", "Expanded");
+export const Spacer = host("spacer", "Spacer");
+export const Divider = host("divider", "Divider");
+export const Image = host("image", "Image");
+export const Text = host("text", "Text");
+export const Paragraph = host("paragraph", "Paragraph");
+export const Span = host("span", "Span");
+
+const components = {
+  Document, Page, Column, Row, Box, Padding, Expanded, Spacer, Divider, Image, Text, Paragraph, Span,
+};
+
+// Register the components globally, optionally under a `prefix` to avoid name clashes with a UI library:
+// `app.use(jasyVue, { prefix: "Pdf" })` → `<PdfRow>`, `<PdfText>`, …
+export const jasyVue: Plugin = {
+  install(app: App, options: { prefix?: string } = {}) {
+    const prefix = options.prefix ?? "";
+    for (const [name, comp] of Object.entries(components)) {
+      app.component(prefix + name, comp);
+    }
+  },
+};

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
+import { ref, onMounted, computed } from "vue";
 import { renderToPdf } from "@jasy/vue";
 import VuePdfEmbed from "vue-pdf-embed";
 import Hello from "./samples/Hello.vue";
@@ -33,6 +33,7 @@ const currentIndex = ref(Number(sessionStorage.getItem(STORAGE)) || 0);
 const pdfUrl = ref<string>();
 const error = ref<string>();
 const building = ref(false);
+const downloadName = computed(() => samples[currentIndex.value].label.toLowerCase().replace(/\s+/g, "-") + ".pdf");
 
 async function render() {
   building.value = true;
@@ -74,6 +75,7 @@ onMounted(render);
           {{ s.label }}
         </button>
       </nav>
+      <a v-if="pdfUrl" class="download" :href="pdfUrl" :download="downloadName">↓ Download</a>
       <span class="hint">{{ building ? "rendering…" : "100% in your browser · no server" }}</span>
     </header>
     <main>
@@ -129,8 +131,24 @@ nav button.active {
   color: #0a2348;
   font-weight: 700;
 }
-.hint {
+.download {
   margin-left: auto;
+  padding: 5px 13px;
+  border: 1px solid #f3dc29;
+  border-radius: 6px;
+  color: #f3dc29;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+.download:hover {
+  background: #f3dc29;
+  color: #0a2348;
+}
+.hint {
   opacity: 0.6;
   font-size: 12px;
 }

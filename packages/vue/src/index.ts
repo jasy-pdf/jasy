@@ -13,7 +13,7 @@ export function renderToPdf(
   root: Component,
   props?: Record<string, any>,
   options?: RenderOptions,
-): Promise<Uint8Array> {
+): Promise<Uint8Array<ArrayBuffer>> {
   return renderToBytes(buildDocument(toDocumentDescriptor(root, props)), options);
 }
 

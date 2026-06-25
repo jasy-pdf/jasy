@@ -240,15 +240,15 @@ Genuine remaining gaps / deferred:
    `todo.md` "Absolute-positioning layer".
 2. **`slice` border mode** (a split box left open at the break) — `clone` is the default; needs per-side
    stroke control in the `Rect` IR. True multi-column too (the `packChildren`/region machinery exists).
-3. **Browser support — the engine BUNDLES for the browser (2026-06-25).** `zlib`→`fflate`,
-   `Buffer`→`Uint8Array` (`utils/bytes.ts`), AFM bundled (`assets/font-data.ts`), `crypto`→vendored MD5
-   (`utils/md5.ts`), and the **platform-port** (fs/path behind `platform/{node-fs,browser-fs}.ts` + the
-   package.json `browser` field). `esbuild --platform=browser` now bundles clean: 0 errors/warnings, ~187 KB
-   gzipped (jimp lazy-loaded so text never touches it/Buffer). **REMAINING = the FULL-ESM migration** of
-   `@jasy/pdf` + `@jasy/zugferd` (both CJS — rollup can't browser-bundle CJS `export *`; cli/playground/vue
-   are already ESM). Going ESM with `.ts` extensions (`allowImportingTsExtensions` +
-   `rewriteRelativeImportExtensions`). Plus ergonomic browser font loading + compact-AFM. See todo.md
-   "🌐 Browser migration".
+3. **Browser support — DONE (2026-06-25): the engine renders PDFs 100% in the browser.** ESM + isomorphic:
+   `zlib`→`fflate`, `Buffer`→`Uint8Array` (`utils/bytes.ts`), AFM bundled (`assets/font-data.ts`),
+   `crypto`→vendored MD5 (`utils/md5.ts`), platform-port (`platform/{node-fs,browser-fs}.ts` + the `browser`
+   field), and **FULL ESM** (`module: nodenext` + `.ts` source imports via `allowImportingTsExtensions` +
+   `rewriteRelativeImportExtensions`; the emitted `.d.ts` are fixed post-build by `scripts/fix-dts-ext.mjs`,
+   tsc gap TS#61037). Browser font/image INPUT via `Uint8Array` (`CustomBytesImage` + a `fonts`
+   document-descriptor prop → `addFont`); jimp lazy-loaded so text never bundles it. `@jasy/vue` renders
+   client-side (the playground "Showcase" proves custom .ttf + JPEG + v-for + computed). Nice-to-haves left:
+   compact-AFM (size), PNG-in-browser (jimp Buffer/canvas), `addFontFromUrl()`. See todo.md.
 4. `manual-test` has hard-coded machine-specific paths.
 5. Font gaps: no TrueType kerning; only TTF / TrueType-flavoured OTF parsed (OTF/CFF, WOFF2 not yet).
    Bold/italic resolve via registered family variants with a clean fallback to `normal` (no faux styles).
@@ -266,13 +266,15 @@ formats, the line-breaker fixes added 2026-06-24; **345 tests green**. The **lan
 roadmap section, and a full **SEO + AI-discoverability layer** (OG image, JSON-LD, `robots.txt`,
 `llms.txt`, `sitemap.xml`).
 
-**`@jasy/vue` — the spike is BUILT** (2026-06-24): author PDFs as **Vue components** ("the react-pdf for
-Vue", PURE PDF — no ZUGFeRD). A Vue `createRenderer` whose host nodes ARE the `descriptor.ts` nodes →
-`buildDocument` → `renderToBytes` (the firewall made it a ~60-line renderer), plus a **Vite playground**
-that renders real PDFs. `Jasy`-prefixed components, a browser-safe `.` entry + a Node `./node` entry. See
-`todo.md` "⭐ Active" for the full state and what's next (typed props, the `style`-object CSS layer, more
-components, then a Nuxt module), plus the 🔮 wish-list (read/edit existing PDFs, forms, security +
-signatures, more e-invoice profiles, browser, framework bindings).
+**`@jasy/vue` — renders PDFs as Vue components IN THE BROWSER** (2026-06-25): "the react-pdf for Vue",
+PURE PDF (no ZUGFeRD). A Vue `createRenderer` whose host nodes ARE the `descriptor.ts` nodes → `buildDocument`
+→ `renderToBytes`. Since the engine is now ESM + isomorphic, `renderToPdf` lives in the main entry and runs
+**client-side** (no server, no `/api/render` fetch-bridge); `./node` re-exports it for back-compat. `Jasy`-
+prefixed components; custom fonts + images load as `Uint8Array` (`<JasyDocument :fonts="{ Name: bytes }">`,
+`<JasyImage :src="bytes">`). The Vite playground (`cd packages/vue && pnpm play`) renders in-browser, incl. a
+**"Showcase"** sample (custom .ttf + JPEG + v-for + computed). Next: typed props, the `style`-object CSS
+layer, more components, then a Nuxt module; plus the 🔮 wish-list (read/edit existing PDFs, forms, security +
+signatures, more e-invoice profiles, framework bindings). See `todo.md` "⭐ Active".
 
 ## Repo facts
 

@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import {
-  JasyDocument,
-  JasyPage,
-  JasyColumn,
-  JasyRow,
-  JasyBox,
-  JasyText,
-  JasyImage,
-  JasyDivider,
+  Document,
+  Page,
+  Column,
+  Row,
+  Box,
+  Text,
+  Image,
+  Divider,
 } from "@jasy/vue";
 
 // font + image arrive as raw bytes (App.vue fetched them in the browser) - no filesystem, no server.
@@ -26,37 +26,37 @@ const grandTotal = computed(() => products.reduce((s, p) => s + p.qty * p.price,
 
 <template>
   <!-- :fonts registers the custom .ttf under a name; :font on a Text then selects it. -->
-  <JasyDocument :fonts="{ GreatVibes: props.font }">
-    <JasyPage :size="'A4'" :gap="14">
-      <JasyRow :justify="'between'" :align="'center'">
-        <JasyText :font="'GreatVibes'" :size="44" :color="'#1450aa'">Jasy Atelier</JasyText>
-        <JasyImage :src="props.image" :width="84" :height="84" :fit="'cover'" :radius="42" />
-      </JasyRow>
-      <JasyText :size="11" :color="'#64748b'"
+  <Document :fonts="{ GreatVibes: props.font }">
+    <Page :size="'A4'" :gap="14">
+      <Row :justify="'between'" :align="'center'">
+        <Text :font="'GreatVibes'" :size="44" :color="'#1450aa'">Jasy Atelier</Text>
+        <Image :src="props.image" :width="84" :height="84" :fit="'cover'" :radius="42" />
+      </Row>
+      <Text :size="11" :color="'#64748b'"
         >Custom .ttf &middot; image bytes &middot; v-for &middot; computed totals &mdash; rendered 100% in your
-        browser</JasyText
+        browser</Text
       >
-      <JasyDivider />
+      <Divider />
 
-      <JasyBox :bg="'#0a2348'" :padding="10" :radius="4">
-        <JasyRow :justify="'between'">
-          <JasyText :size="11" :bold="true" :color="'#ffffff'">Product</JasyText>
-          <JasyText :size="11" :bold="true" :color="'#ffffff'">Qty &times; Price = Total</JasyText>
-        </JasyRow>
-      </JasyBox>
+      <Box :bg="'#0a2348'" :padding="10" :radius="4">
+        <Row :justify="'between'">
+          <Text :size="11" :bold="true" :color="'#ffffff'">Product</Text>
+          <Text :size="11" :bold="true" :color="'#ffffff'">Qty &times; Price = Total</Text>
+        </Row>
+      </Box>
 
-      <JasyColumn :gap="7">
-        <JasyRow v-for="r in rows" :key="r.name" :justify="'between'">
-          <JasyText :size="12">{{ r.name }}</JasyText>
-          <JasyText :size="12">{{ r.qty }} &times; {{ r.price.toFixed(2) }} = {{ r.total }} &euro;</JasyText>
-        </JasyRow>
-      </JasyColumn>
+      <Column :gap="7">
+        <Row v-for="r in rows" :key="r.name" :justify="'between'">
+          <Text :size="12">{{ r.name }}</Text>
+          <Text :size="12">{{ r.qty }} &times; {{ r.price.toFixed(2) }} = {{ r.total }} &euro;</Text>
+        </Row>
+      </Column>
 
-      <JasyDivider />
-      <JasyRow :justify="'between'">
-        <JasyText :size="14" :bold="true">Total</JasyText>
-        <JasyText :font="'GreatVibes'" :size="22" :color="'#1450aa'">{{ grandTotal }} &euro;</JasyText>
-      </JasyRow>
-    </JasyPage>
-  </JasyDocument>
+      <Divider />
+      <Row :justify="'between'">
+        <Text :size="14" :bold="true">Total</Text>
+        <Text :font="'GreatVibes'" :size="22" :color="'#1450aa'">{{ grandTotal }} &euro;</Text>
+      </Row>
+    </Page>
+  </Document>
 </template>
