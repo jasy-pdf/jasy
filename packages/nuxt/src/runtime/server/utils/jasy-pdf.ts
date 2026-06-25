@@ -1,5 +1,5 @@
 import { defineEventHandler, setResponseHeader, type H3Event } from "h3";
-// Nitro's function cache, via Nuxt's server virtual - resolved at the app build, no nitropack direct dep.
+// from #imports - nitropack isn't a direct dep.
 import { defineCachedFunction } from "#imports";
 import { renderToBytes, type RenderOptions } from "@jasy/pdf";
 
@@ -16,9 +16,9 @@ export interface SendPdfOptions {
 
 export interface PdfHandlerOptions extends SendPdfOptions {
   /**
-   * Cache the rendered PDF with Nitro. `true` uses Nitro's defaults; pass an object for its cache options
-   * (`maxAge`, `name`, `getKey`, `swr`, ...). The default key is the request path + query, so
-   * `/api/invoice?id=123` caches per id without any extra work. (Caches on a Node runtime - uses Buffer.)
+   * Cache the rendered PDF with Nitro. `true` for defaults, or pass its cache options (`maxAge`, `name`,
+   * `getKey`, `swr`, ...). Default key is path + query (so `/x?id=1` caches per id); `swr` defaults to
+   * false. Node runtime.
    */
   cache?: boolean | Record<string, any>;
 }
@@ -54,14 +54,14 @@ export function definePdfHandler(
     return defineEventHandler(async (event) => sendPdf(event, await build(event), send));
   }
 
-  // Nitro's cache serializes the cached value, which corrupts a raw binary body. So cache the bytes as a
-  // base64 string (round-trips losslessly), then decode and set the headers fresh on every response.
+  // Nitro's cache mangles a raw binary body, so cache base64 (lossless); decode + set headers fresh per response.
   const renderCached = defineCachedFunction(
     async (event: H3Event) => {
       const bytes = await renderToBytes(await build(event), send.renderOptions);
       return Buffer.from(bytes).toString("base64");
     },
-    { getKey: (event: H3Event) => event.path, ...(cache === true ? {} : cache) },
+    // swr:false - never serve a stale (e.g. hour-old) invoice; re-render once the entry expires.
+    { swr: false, getKey: (event: H3Event) => event.path, ...(cache === true ? {} : cache) },
   );
 
   return defineEventHandler(async (event) => {
