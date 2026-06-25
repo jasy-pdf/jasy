@@ -58,7 +58,13 @@ function toDescriptor(n: JNode): DescriptorChild {
   return {
     type: n.type,
     props: n.props,
-    children: n.children.filter((c) => c.type !== "#comment").map(toDescriptor),
+    // Drop comments AND whitespace-only text nodes: Vue inserts empty `#text` anchors around lists
+    // (`v-for`) and templates leave whitespace between tags. As layout children each would become a
+    // 0-height empty Text that still gets a stray `gap` in its parent Column/Row - which silently
+    // inflates the height and can force a spurious extra page. Real text content is never whitespace.
+    children: n.children
+      .filter((c) => c.type !== "#comment" && !(c.type === "#text" && (c.text ?? "").trim() === ""))
+      .map(toDescriptor),
   };
 }
 

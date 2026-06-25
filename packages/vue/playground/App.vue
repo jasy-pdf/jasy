@@ -6,12 +6,14 @@ import Hello from "./samples/Hello.vue";
 import Invoice from "./samples/Invoice.vue";
 import Invitation from "./samples/Invitation.vue";
 import Showcase from "./samples/Showcase.vue";
+import Report from "./samples/Report.vue";
 import fontUrl from "./assets/GreatVibes-Regular.ttf?url";
 import imgUrl from "./assets/photo.jpg?url";
 
 const samples: { label: string; comp: any; assets?: boolean }[] = [
   { label: "Hello world", comp: Hello },
   { label: "Invoice", comp: Invoice },
+  { label: "Report", comp: Report },
   { label: "Invitation", comp: Invitation },
   { label: "Showcase", comp: Showcase, assets: true },
 ];

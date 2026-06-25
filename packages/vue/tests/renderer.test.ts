@@ -79,6 +79,44 @@ describe("toDocumentDescriptor (the firewall)", () => {
     expect(rows[1].props.header).toBe(false);
   });
 
+  it("Page #header / #footer become page-header / page-footer markers; body stays", () => {
+    const desc = toDocumentDescriptor(
+      comp(() =>
+        h(Document, null, () =>
+          h(Page, null, {
+            header: () => h(Text, null, () => "HDR"),
+            footer: () => h(Text, null, () => "FTR"),
+            default: () => h(Text, null, () => "BODY"),
+          }),
+        ),
+      ),
+    );
+    const page = desc.children?.[0] as any;
+    const types = page.children.map((c: any) => c.type);
+    expect(types).toContain("page-header");
+    expect(types).toContain("page-footer");
+    const body = page.children.find((c: any) => c.type === "text");
+    expect(body.children).toEqual(["BODY"]);
+  });
+
+  it("strips Vue's empty #text fragment anchors so a v-for list adds no stray gap children", () => {
+    const items = ["a", "b", "c"];
+    const desc = toDocumentDescriptor(
+      comp(() =>
+        h(Document, null, () =>
+          h(Page, { gap: 10 }, () => [
+            h(Text, null, () => "title"),
+            ...items.map((t) => h(Text, null, () => t)),
+          ]),
+        ),
+      ),
+    );
+    const page = desc.children?.[0] as any;
+    // No empty-string anchor children - exactly the title + three items (a stray "" would each add a gap).
+    expect(page.children).not.toContain("");
+    expect(page.children).toHaveLength(4);
+  });
+
   it("throws if the root does not render a <Document>", () => {
     expect(() => toDocumentDescriptor(comp(() => h(Page, null, () => "x")))).toThrow(/Document/);
   });

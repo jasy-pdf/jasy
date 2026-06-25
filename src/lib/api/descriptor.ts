@@ -3,9 +3,9 @@ import { PDFDocumentElement } from "../elements/pdf-document-element.ts";
 import { PageElement } from "../elements/page-element.ts";
 import { TextSegment } from "../elements/text-element.ts";
 import { Text, Paragraph, span } from "./text.ts";
-import { Column, Row, Box, Padding, Spacer, Expanded } from "./layout.ts";
+import { Column, Row, Box, Padding, Spacer, Expanded, Positioned } from "./layout.ts";
 import { Divider, Image } from "./content.ts";
-import { Page, Document } from "./structure.ts";
+import { Page, Document, DefaultTextStyle } from "./structure.ts";
 import { Table, Cell } from "./table.ts";
 
 /**
@@ -64,6 +64,12 @@ function rowCells(row: Descriptor): Cell[] {
     .map(buildCell);
 }
 
+// A `#header` / `#footer` slot's content → one element (a Column if it holds several; strings → Text).
+function slotElement(node: Descriptor): PDFElement {
+  const els = (node.children ?? []).map((c) => (typeof c === "string" ? Text(c) : build(c)));
+  return els.length === 1 ? els[0] : Column(els);
+}
+
 const REGISTRY: Record<string, ElementFactory> = {
   document: (props, children) => {
     const doc = Document(props, elementChildren(children) as PageElement[]);
@@ -73,7 +79,21 @@ const REGISTRY: Record<string, ElementFactory> = {
     }
     return doc;
   },
-  page: (props, children) => Page(props, elementChildren(children)),
+  page: (props, children) => {
+    // `#header` / `#footer` arrive as `page-header` / `page-footer` marker children (read raw); the rest
+    // is the body. Both repeat on every physical page the body paginates onto.
+    const slot = (type: string) => {
+      const m = children.find((c): c is Descriptor => typeof c !== "string" && c.type === type);
+      return m ? slotElement(m) : undefined;
+    };
+    const body = children.filter(
+      (c) => typeof c === "string" || (c.type !== "page-header" && c.type !== "page-footer"),
+    );
+    return Page(
+      { ...props, header: slot("page-header"), footer: slot("page-footer") },
+      elementChildren(body),
+    );
+  },
   column: (props, children) => Column(props, elementChildren(children)),
   row: (props, children) => Row(props, elementChildren(children)),
   box: (props, children) => Box(props, elementChildren(children)),
@@ -93,6 +113,8 @@ const REGISTRY: Record<string, ElementFactory> = {
     const body = rows.filter((r) => !r.props?.header);
     return Table({ ...props, header: header ? rowCells(header) : undefined }, body.map(rowCells));
   },
+  positioned: (props, children) => Positioned(props, elementChildren(children)[0]),
+  "default-text-style": (props, children) => DefaultTextStyle(props, elementChildren(children)),
 };
 
 /**

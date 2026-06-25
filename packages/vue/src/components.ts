@@ -69,6 +69,22 @@ const documentProps = {
   fonts: Object as PropType<Record<string, FontSource>>,
 };
 
+const positionedProps = {
+  top: Number,
+  right: Number,
+  bottom: Number,
+  left: Number,
+  h: String as PropType<"start" | "center" | "end">,
+  v: String as PropType<"start" | "center" | "end">,
+  x: Number,
+  y: Number,
+};
+const defaultTextStyleProps = {
+  ...textStyleProps,
+  align: String as PropType<"left" | "center" | "right">,
+  lineHeight: Number,
+};
+
 const tableProps = {
   columns: { type: Array as PropType<ColumnWidth[]>, required: true },
   gap: Number,
@@ -94,11 +110,20 @@ export const Document = defineComponent({
   props: documentProps,
   setup: fwd("document"),
 });
+// `<Page>` also takes `#header` / `#footer` named slots - laid out once, repeated on every physical page.
 export const Page = defineComponent({
   name: "JasyPage",
   inheritAttrs: false,
   props: pageProps,
-  setup: fwd("page"),
+  setup(props, { slots }) {
+    return () => {
+      const kids: any[] = [];
+      if (slots.header) kids.push(h("page-header", null, slots.header()));
+      if (slots.footer) kids.push(h("page-footer", null, slots.footer()));
+      if (slots.default) kids.push(...slots.default());
+      return h("page", { ...props }, kids);
+    };
+  },
 });
 export const Column = defineComponent({
   name: "JasyColumn",
@@ -184,6 +209,20 @@ export const TableCell = defineComponent({
   inheritAttrs: false,
   setup: fwd("table-cell"),
 });
+// Out-of-flow child, anchored to the nearest `<Box relative>` (or the page). Edges or `h`/`v` + `x`/`y`.
+export const Positioned = defineComponent({
+  name: "JasyPositioned",
+  inheritAttrs: false,
+  props: positionedProps,
+  setup: fwd("positioned"),
+});
+// Re-defaults the text style for its subtree (the per-section counterpart to `<Document>` defaults).
+export const DefaultTextStyle = defineComponent({
+  name: "JasyDefaultTextStyle",
+  inheritAttrs: false,
+  props: defaultTextStyleProps,
+  setup: fwd("default-text-style"),
+});
 
 const components = {
   Document,
@@ -202,6 +241,8 @@ const components = {
   Table,
   TableRow,
   TableCell,
+  Positioned,
+  DefaultTextStyle,
 };
 
 // Register the components globally, optionally under a `prefix` to avoid name clashes with a UI library:
