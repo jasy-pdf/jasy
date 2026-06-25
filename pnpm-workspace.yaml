@@ -2,3 +2,4 @@ packages:
   - "packages/*"
 allowBuilds:
   esbuild: false # esbuild ships its binary via optional deps; the postinstall build is not needed
+  unrs-resolver: false
