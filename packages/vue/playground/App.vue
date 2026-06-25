@@ -7,27 +7,32 @@ import Invoice from "./samples/Invoice.vue";
 import Invitation from "./samples/Invitation.vue";
 import Showcase from "./samples/Showcase.vue";
 import Report from "./samples/Report.vue";
+import Transparency from "./samples/Transparency.vue";
 import fontUrl from "./assets/GreatVibes-Regular.ttf?url";
 import imgUrl from "./assets/photo.jpg?url";
+import logoUrl from "./assets/logo.png?url";
 
-const samples: { label: string; comp: any; assets?: boolean }[] = [
+type AssetKey = "font" | "image" | "logo";
+const samples: { label: string; comp: any; assets?: AssetKey[] }[] = [
   { label: "Hello world", comp: Hello },
   { label: "Invoice", comp: Invoice },
   { label: "Report", comp: Report },
   { label: "Invitation", comp: Invitation },
-  { label: "Showcase", comp: Showcase, assets: true },
+  { label: "Showcase", comp: Showcase, assets: ["font", "image"] },
+  { label: "Transparency", comp: Transparency, assets: ["logo"] },
 ];
 
-// Fetch the .ttf + image once (in the browser), as Uint8Array - passed to the Showcase sample as props.
-let assetCache: { font: Uint8Array; image: Uint8Array } | null = null;
+// Each sample gets ONLY the keys it declares (above), never the whole cache - a stray asset would fall
+// through to the sample's root <Document> and bind to a real prop like `font` (then crash as a bad family).
+let assetCache: Record<AssetKey, Uint8Array> | null = null;
 async function loadAssets() {
   if (!assetCache) {
     const grab = (u: string) =>
       fetch(u)
         .then((r) => r.arrayBuffer())
         .then((b) => new Uint8Array(b));
-    const [font, image] = await Promise.all([grab(fontUrl), grab(imgUrl)]);
-    assetCache = { font, image };
+    const [font, image, logo] = await Promise.all([grab(fontUrl), grab(imgUrl), grab(logoUrl)]);
+    assetCache = { font, image, logo };
   }
   return assetCache;
 }
@@ -48,7 +53,11 @@ async function render() {
   try {
     // 100% in the browser: the @jasy/pdf engine runs right here, no server. Vue component -> PDF bytes.
     const sample = samples[currentIndex.value];
-    const props = sample.assets ? await loadAssets() : undefined;
+    let props: Record<string, Uint8Array> | undefined;
+    if (sample.assets) {
+      const cache = await loadAssets();
+      props = Object.fromEntries(sample.assets.map((k) => [k, cache[k]]));
+    }
     const bytes = await renderToPdf(sample.comp, props);
     // vue-pdf-embed paints the PDF onto a <canvas>, so it always shows inline and never downloads.
     pdfUrl.value = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
