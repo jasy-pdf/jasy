@@ -7,6 +7,7 @@ on:
       - "pdf-v*"
       - "zugferd-v*"
       - "cli-v*"
+      - "vue-v*"
 
 jobs:
   release:
@@ -41,6 +42,7 @@ jobs:
             pdf-v*)     DIR="."                 ; NAME="@jasy/pdf"     ; VER="${TAG#pdf-v}" ;;
             zugferd-v*) DIR="packages/zugferd"  ; NAME="@jasy/zugferd" ; VER="${TAG#zugferd-v}" ;;
             cli-v*)     DIR="packages/cli"      ; NAME="@jasy/cli"     ; VER="${TAG#cli-v}" ;;
+            vue-v*)     DIR="packages/vue"      ; NAME="@jasy/vue"     ; VER="${TAG#vue-v}" ;;
             *) echo "Unknown tag: $TAG" ; exit 1 ;;
           esac
           # npm dist-tag: a prerelease (1.0.0-alpha.1) publishes to its channel (alpha) and NEVER to

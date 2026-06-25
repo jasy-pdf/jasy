@@ -1,8 +1,17 @@
 {
   "name": "@jasy/vue",
   "version": "0.0.0",
-  "private": true,
   "description": "Author PDFs as Vue components - a thin Vue custom renderer over @jasy/pdf.",
+  "keywords": [
+    "vue",
+    "vue3",
+    "pdf",
+    "pdf-generation",
+    "declarative",
+    "renderer",
+    "invoice",
+    "jasy"
+  ],
   "license": "MIT",
   "author": "Florian Heuberger",
   "type": "module",
@@ -23,6 +32,7 @@
   ],
   "scripts": {
     "build": "tsc",
+    "prepack": "pnpm run build",
     "play": "vite playground --open",
     "test": "vitest run"
   },

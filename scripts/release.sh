@@ -5,15 +5,15 @@ set -e
 # "Release" workflow, which builds (the package + its workspace deps) and publishes to npm.
 #
 # Usage:   ./scripts/release.sh <package> <version>
-#   package = pdf | zugferd | cli   (pdf is the workspace ROOT)
+#   package = pdf | zugferd | cli | vue   (pdf is the workspace ROOT)
 #   version = semver, e.g. 0.1.0 or 0.1.0-alpha.1
 #
-# Release order matters (dependency chain): pdf -> zugferd -> cli. Release pdf first so that, when
-# zugferd publishes, its `@jasy/pdf: workspace:*` resolves to the version pdf was just released at.
+# Release order matters (dependency chain): release pdf first, then its dependents (zugferd -> cli, and
+# vue) so their `@jasy/pdf: workspace:*` resolves to the version pdf was just released at.
 
 usage() {
   echo "Usage: ./scripts/release.sh <package> <version>"
-  echo "  package: pdf | zugferd | cli"
+  echo "  package: pdf | zugferd | cli | vue"
   echo "  example: ./scripts/release.sh pdf 0.1.0"
   exit 1
 }
@@ -27,7 +27,8 @@ case "$PACKAGE" in
   pdf)     DIR="." ;;
   zugferd) DIR="packages/zugferd" ;;
   cli)     DIR="packages/cli" ;;
-  *) echo "Error: unknown package '$PACKAGE' (use: pdf, zugferd, cli)"; exit 1 ;;
+  vue)     DIR="packages/vue" ;;
+  *) echo "Error: unknown package '$PACKAGE' (use: pdf, zugferd, cli, vue)"; exit 1 ;;
 esac
 
 # semver: 1.2.3 or 1.2.3-alpha.1
