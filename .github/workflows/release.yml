@@ -8,6 +8,7 @@ on:
       - "zugferd-v*"
       - "cli-v*"
       - "vue-v*"
+      - "nuxt-v*"
 
 jobs:
   release:
@@ -43,6 +44,7 @@ jobs:
             zugferd-v*) DIR="packages/zugferd"  ; NAME="@jasy/zugferd" ; VER="${TAG#zugferd-v}" ;;
             cli-v*)     DIR="packages/cli"      ; NAME="@jasy/cli"     ; VER="${TAG#cli-v}" ;;
             vue-v*)     DIR="packages/vue"      ; NAME="@jasy/vue"     ; VER="${TAG#vue-v}" ;;
+            nuxt-v*)    DIR="packages/nuxt"     ; NAME="@jasy/nuxt"    ; VER="${TAG#nuxt-v}" ;;
             *) echo "Unknown tag: $TAG" ; exit 1 ;;
           esac
           # npm dist-tag: a prerelease (1.0.0-alpha.1) publishes to its channel (alpha) and NEVER to

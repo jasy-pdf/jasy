@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config";
+import { defineConfig, configDefaults } from "vitest/config";
 import { resolve } from "path";
 import { fileURLToPath } from "url";
 
@@ -13,6 +13,9 @@ export default defineConfig({
     alias: { "@jasy/pdf": resolve(rootDir, "src/lib/index.ts") },
   },
   test: {
+    // @jasy/nuxt is a Nuxt module with heavy @nuxt/test-utils e2e tests - run those via its own
+    // `pnpm --filter @jasy/nuxt test`, not the root suite (which gates every package release).
+    exclude: [...configDefaults.exclude, "packages/nuxt/**"],
     coverage: {
       provider: "v8",
       reporter: ["text", "json", "html"],
