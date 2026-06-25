@@ -70,7 +70,7 @@ EN 16931 and the German **XRechnung** profile, in **both** permitted syntaxes - 
 
 The XML this emits passes the **official KoSIT EN-16931 + XRechnung Schematron**; the PDF passes
 **veraPDF**, the official ISO 19005 (PDF/A) validator. Don't take our word for it - check any invoice,
-yours or ours, with [`@jasy/cli`](https://www.npmjs.com/package/@jasy/cli):
+yours or ours, with [`@jasy/cli`](https://npmx.dev/@jasy/cli):
 
 ```bash
 npx @jasy/cli validate ./invoice.pdf
@@ -81,7 +81,7 @@ npx @jasy/cli validate ./invoice.pdf
 - **Hand-built PDF/A-3** that passes veraPDF - matched, not approximated. No Java.
 - **Font subsetting + compression** - only the glyphs you use are embedded; streams are FlateDecode'd.
 - **Byte-exact round-trips** - `generate → parse → regenerate` reproduces the identical XML (307 tests).
-- Built on [`@jasy/pdf`](https://www.npmjs.com/package/@jasy/pdf), a hand-rolled, Flutter-style PDF engine.
+- Built on [`@jasy/pdf`](https://npmx.dev/@jasy/pdf), a hand-rolled, Flutter-style PDF engine.
 
 ## Why this exists
 

@@ -9,7 +9,7 @@
 </p>
 
 React has [`@react-pdf/renderer`](https://react-pdf.org). Vue had nothing. This is it: a thin Vue custom
-renderer over the [`@jasy/pdf`](https://www.npmjs.com/package/@jasy/pdf) engine. You write a component
+renderer over the [`@jasy/pdf`](https://npmx.dev/@jasy/pdf) engine. You write a component
 tree, you get a real PDF - no headless browser, no server round-trip, no Java.
 
 ```vue

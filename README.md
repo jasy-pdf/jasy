@@ -137,9 +137,9 @@ verify all of it:
 
 | Package | What it is |
 | --- | --- |
-| **[@jasy/zugferd](https://www.npmjs.com/package/@jasy/zugferd)** | ZUGFeRD / XRechnung: your data → PDF/A-3 + EN-16931 XML, with local validation. **The prize.** |
-| **[@jasy/cli](https://www.npmjs.com/package/@jasy/cli)** | the `jasy` terminal: read · validate · export, headless **and** interactive |
-| **[@jasy/pdf](https://www.npmjs.com/package/@jasy/pdf)** | the declarative, Flutter-style PDF layout engine that powers them |
+| **[@jasy/zugferd](https://npmx.dev/@jasy/zugferd)** | ZUGFeRD / XRechnung: your data → PDF/A-3 + EN-16931 XML, with local validation. **The prize.** |
+| **[@jasy/cli](https://npmx.dev/@jasy/cli)** | the `jasy` terminal: read · validate · export, headless **and** interactive |
+| **[@jasy/pdf](https://npmx.dev/@jasy/pdf)** | the declarative, Flutter-style PDF layout engine that powers them |
 
 ---
 
