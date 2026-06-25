@@ -716,6 +716,13 @@ endstream`;
   }
 
   private getAVMParserByFont(fullFontName?: string, fontName?: string, fontStyle?: FontStyle) {
+    // A non-string family means font bytes were passed where a name belongs - hint at the fix instead of
+    // stringifying the byte blob into an unreadable "parser not found".
+    for (const name of [fullFontName, fontName])
+      if (name != null && typeof name !== "string")
+        throw new Error(
+          `Font family must be a string name, got ${typeof name}. Register font bytes via the document \`fonts\` map (or addFont) and reference them by name.`,
+        );
     if (!fullFontName && (!fontName || !fontStyle)) {
       throw new Error(
         "No font family is given. Please set a full font name or a font with font style",

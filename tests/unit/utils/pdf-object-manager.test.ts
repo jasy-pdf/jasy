@@ -58,6 +58,14 @@ describe("PDFObjectManager - Fonts", () => {
     // char width: 600 for each + kerning: 0.1 * 12 (font size)
     expect(width).toBe(600 + 600 + 0.1 * 12); // 1200 + 1.2 = 1201.2
   });
+
+  it("rejects a non-string font family with a clear hint (font bytes passed as a name)", () => {
+    const manager = new PDFObjectManager();
+    const fontBytes = new Uint8Array([0, 1, 0, 0]) as any; // TTF bytes where a family name is expected
+    expect(() => manager.getStringWidth("hi", fontBytes, 12, FontStyle.Normal)).toThrow(
+      /Font family must be a string name, got object.*fonts/,
+    );
+  });
 });
 
 describe("PDFObjectManager - Images", () => {

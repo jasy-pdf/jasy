@@ -54,7 +54,14 @@ describe("ImageRenderer", () => {
     );
 
     expect(mockImageElement.getProps).toHaveBeenCalled();
-    expect(mockObjectManager.registerImage).toHaveBeenCalledWith(200, 200, "jpeg", "mockImageData");
+    // JPEG carries no alpha, so the 5th arg (smask) is undefined.
+    expect(mockObjectManager.registerImage).toHaveBeenCalledWith(
+      200,
+      200,
+      "jpeg",
+      "mockImageData",
+      undefined,
+    );
 
     expect(result).toContain("q");
     expect(result).toContain("/IM1 Do");
@@ -102,7 +109,14 @@ describe("ImageRenderer", () => {
     );
 
     expect(mockImageElement.getProps).toHaveBeenCalled();
-    expect(mockObjectManager.registerImage).toHaveBeenCalledWith(200, 200, "jpeg", "mockImageData");
+    // JPEG carries no alpha, so the 5th arg (smask) is undefined.
+    expect(mockObjectManager.registerImage).toHaveBeenCalledWith(
+      200,
+      200,
+      "jpeg",
+      "mockImageData",
+      undefined,
+    );
 
     expect(result).toContain("q");
     expect(result).toContain("/IM2 Do");
@@ -179,7 +193,14 @@ describe("ImageRenderer", () => {
     );
 
     expect(mockImageElement.getProps).toHaveBeenCalled();
-    expect(mockObjectManager.registerImage).toHaveBeenCalledWith(200, 200, "jpeg", "mockImageData");
+    // JPEG carries no alpha, so the 5th arg (smask) is undefined.
+    expect(mockObjectManager.registerImage).toHaveBeenCalledWith(
+      200,
+      200,
+      "jpeg",
+      "mockImageData",
+      undefined,
+    );
 
     expect(result).toContain("q");
     expect(result).toContain("/IM3 Do");
@@ -227,7 +248,14 @@ describe("ImageRenderer", () => {
     );
 
     expect(mockImageElement.getProps).toHaveBeenCalled();
-    expect(mockObjectManager.registerImage).toHaveBeenCalledWith(200, 200, "jpeg", "mockImageData");
+    // JPEG carries no alpha, so the 5th arg (smask) is undefined.
+    expect(mockObjectManager.registerImage).toHaveBeenCalledWith(
+      200,
+      200,
+      "jpeg",
+      "mockImageData",
+      undefined,
+    );
 
     expect(result).toContain("q");
     expect(result).toContain("/IM4 Do");

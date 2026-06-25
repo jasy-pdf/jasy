@@ -19,21 +19,19 @@ describe("decodePngToRgbFlate", () => {
     expect([raw[0], raw[1], raw[2]]).toEqual([255, 0, 0]); // first pixel is red
   });
 
-  it("composites transparent pixels over white (no black halo)", async () => {
-    const { data } = await decodePngToRgbFlate(
-      await png(1, 1, 0x00000000), // fully transparent
-    );
-    const raw = inflateSync(Buffer.from(data, "binary"));
-    expect([raw[0], raw[1], raw[2]]).toEqual([255, 255, 255]);
+  it("keeps a transparent pixel's raw RGB and emits its alpha as an SMask", async () => {
+    // Transparency rides as a separate DeviceGray /SMask now (not composited over white): the RGB is left
+    // untouched and the alpha=0 lives in the mask.
+    const { data, smask } = await decodePngToRgbFlate(await png(1, 1, 0x00000000));
+    expect([...inflateSync(Buffer.from(data, "binary"))]).toEqual([0, 0, 0]);
+    expect(smask).toBeDefined();
+    expect(inflateSync(Buffer.from(smask!, "binary"))[0]).toBe(0);
   });
 
-  it("keeps a semi-transparent pixel between its color and white", async () => {
-    // 50% red over white -> ~ (255, 128, 128).
-    const { data } = await decodePngToRgbFlate(await png(1, 1, 0xff000080));
-    const raw = inflateSync(Buffer.from(data, "binary"));
-    expect(raw[0]).toBe(255);
-    expect(raw[1]).toBeGreaterThan(120);
-    expect(raw[1]).toBeLessThan(140);
-    expect(raw[2]).toBe(raw[1]);
+  it("keeps a semi-transparent pixel's true color, with its alpha in the SMask", async () => {
+    const { data, smask } = await decodePngToRgbFlate(await png(1, 1, 0xff000080)); // 50% red
+    expect([...inflateSync(Buffer.from(data, "binary"))]).toEqual([255, 0, 0]);
+    expect(smask).toBeDefined();
+    expect(inflateSync(Buffer.from(smask!, "binary"))[0]).toBe(0x80);
   });
 });
