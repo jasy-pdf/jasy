@@ -316,7 +316,30 @@ export class PDFObjectManager implements FontMetrics {
   }
 
   // Registers an image
-  registerImage(width: number, height: number, imageType: string, imageData: string) {
+  registerImage(
+    width: number,
+    height: number,
+    imageType: string,
+    imageData: string,
+    smaskData?: string,
+  ) {
+    // A transparent PNG carries its alpha as a separate DeviceGray /SMask image the viewer composites with.
+    let smaskEntry = "";
+    if (smaskData) {
+      const smaskObject = `<< /Type /XObject
+    /Subtype /Image
+    /Width ${width}
+    /Height ${height}
+    /ColorSpace /DeviceGray
+    /BitsPerComponent 8
+    /Filter /FlateDecode
+    /Length ${smaskData.length} >>
+stream
+${smaskData}
+endstream`;
+      smaskEntry = `    /SMask ${this.addObject(smaskObject)} 0 R\n`;
+    }
+
     const imageObject = `<< /Type /XObject
     /Subtype /Image
     /Width ${width}
@@ -324,9 +347,9 @@ export class PDFObjectManager implements FontMetrics {
     /ColorSpace /DeviceRGB
     /BitsPerComponent 8
     /Filter /${imageType}
-    /Length ${imageData.length} >>
+${smaskEntry}    /Length ${imageData.length} >>
 stream
-${imageData} 
+${imageData}
 endstream`;
 
     // Add the image and its object number to the image manager - return the object number

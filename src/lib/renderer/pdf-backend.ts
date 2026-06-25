@@ -195,6 +195,7 @@ export class PdfBackend {
           node.intrinsicHeight,
           node.imageType,
           node.data,
+          node.smask,
         );
         const draw =
           `q\n${node.width} 0 0 ${node.height} ${node.x} ${node.y} cm\n` + `/IM${ref} Do\nQ\n`;

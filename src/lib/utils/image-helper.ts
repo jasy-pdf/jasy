@@ -1,5 +1,6 @@
 import { zlibSync } from "fflate";
 import { latin1FromBytes } from "./bytes.ts";
+import { pngToRgba } from "../platform/node-image.ts";
 
 // Declare the new method in the DataView interface
 declare global {
@@ -94,30 +95,36 @@ export async function getImageDimensions(buffer: Uint8Array): Promise<ImageDimen
 /**
  * Decodes a PNG into raw DeviceRGB samples, Flate-compressed, ready to embed as a PDF
  * image XObject. A PNG file is NOT a valid `/FlateDecode` stream (it's a signature plus
- * chunks of filtered, zlib-compressed scanlines), so it must be decoded first. PDF has
- * no alpha channel for DeviceRGB, so transparent pixels are composited over white.
+ * chunks of filtered, zlib-compressed scanlines), so it must be decoded first. DeviceRGB has
+ * no alpha itself, so any transparency rides alongside as a DeviceGray `/SMask` (the return's `smask`).
  */
 export async function decodePngToRgbFlate(
   pngBuffer: Uint8Array,
-): Promise<{ data: string; width: number; height: number }> {
-  // jimp is loaded lazily (it pulls in Node-ish bits) - only here, when an image is actually decoded, so
-  // text-only renders never load it and stay browser-clean. It wants a Buffer view; browser path = canvas later.
-  const { Jimp } = await import("jimp");
-  const image = await Jimp.fromBuffer(
-    Buffer.from(pngBuffer.buffer, pngBuffer.byteOffset, pngBuffer.byteLength),
-  );
-  const { width, height, data: rgba } = image.bitmap;
+): Promise<{ data: string; smask?: string; width: number; height: number }> {
+  // The decode (PNG bytes → RGBA) is platform-specific: jimp on Node, an OffscreenCanvas in the browser
+  // (`platform/{node,browser}-image.ts`, swapped by the package `browser` field). The split below is shared.
+  const { width, height, rgba } = await pngToRgba(pngBuffer);
 
+  // Raw DeviceRGB samples + (only when the PNG actually has transparency) a DeviceGray alpha channel that
+  // rides as the XObject's /SMask. An opaque PNG yields the same raw RGB as before and no SMask, so it stays
+  // byte-identical; a transparent one now composites correctly over whatever sits behind it.
   const rgb = new Uint8Array(width * height * 3);
-  for (let i = 0, j = 0; i < rgba.length; i += 4, j += 3) {
-    const alpha = rgba[i + 3] / 255;
-    rgb[j] = Math.round(rgba[i] * alpha + 255 * (1 - alpha));
-    rgb[j + 1] = Math.round(rgba[i + 1] * alpha + 255 * (1 - alpha));
-    rgb[j + 2] = Math.round(rgba[i + 2] * alpha + 255 * (1 - alpha));
+  const alpha = new Uint8Array(width * height);
+  let hasAlpha = false;
+  for (let i = 0, j = 0, k = 0; i < rgba.length; i += 4, j += 3, k++) {
+    rgb[j] = rgba[i];
+    rgb[j + 1] = rgba[i + 1];
+    rgb[j + 2] = rgba[i + 2];
+    alpha[k] = rgba[i + 3];
+    if (rgba[i + 3] !== 255) hasAlpha = true;
   }
 
-  // Compress so the existing `/Filter /FlateDecode` XObject path embeds it correctly.
-  return { data: latin1FromBytes(zlibSync(rgb)), width, height };
+  return {
+    data: latin1FromBytes(zlibSync(rgb)),
+    smask: hasAlpha ? latin1FromBytes(zlibSync(alpha)) : undefined,
+    width,
+    height,
+  };
 }
 
 export async function convertImageToGrayscaleBuffer(imagePath: string): Promise<Uint8Array> {

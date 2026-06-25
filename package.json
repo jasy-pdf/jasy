@@ -23,7 +23,8 @@
   "type": "module",
   "main": "dist/index.js",
   "browser": {
-    "./dist/platform/node-fs.js": "./dist/platform/browser-fs.js"
+    "./dist/platform/node-fs.js": "./dist/platform/browser-fs.js",
+    "./dist/platform/node-image.js": "./dist/platform/browser-image.js"
   },
   "types": "dist/index.d.ts",
   "exports": {

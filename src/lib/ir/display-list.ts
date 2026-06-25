@@ -65,6 +65,8 @@ export interface Image {
   intrinsicHeight: number; // source pixel height, for the XObject /Height
   data: string; // binary string of the encoded image bytes
   imageType: string; // PDF filter name, e.g. "DCTDecode" (JPEG) or "FlateDecode" (PNG)
+  /** Flate-compressed DeviceGray alpha channel for a transparent PNG, embedded as the XObject's /SMask. */
+  smask?: string;
   /** cover/contain fits clip the placement to the element's original frame. */
   clip?: { x: number; y: number; width: number; height: number };
   /** Corner radius in points for the image box; absent/0 = sharp corners. */

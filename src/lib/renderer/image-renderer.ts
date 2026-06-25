@@ -28,10 +28,13 @@ export class ImageRenderer {
 
     // JPEG embeds raw (PDF decodes DCTDecode natively). PNG is not a valid Flate stream,
     // so decode it to raw DeviceRGB samples that the FlateDecode XObject path expects.
-    const embedData =
-      imageType === "FlateDecode"
-        ? (await decodePngToRgbFlate(bytesFromLatin1(fileData))).data
-        : fileData;
+    let embedData = fileData;
+    let smask: string | undefined;
+    if (imageType === "FlateDecode") {
+      const decoded = await decodePngToRgbFlate(bytesFromLatin1(fileData));
+      embedData = decoded.data;
+      smask = decoded.smask;
+    }
 
     // Now we check the `fit` property and changing the dimensions of the image
     // Optionally we must add an overflow container
@@ -98,6 +101,7 @@ export class ImageRenderer {
       intrinsicHeight: dimensions.height,
       data: embedData,
       imageType,
+      ...(smask ? { smask } : {}),
       ...(radius ? { radius } : {}),
       ...(wantsClip
         ? {
