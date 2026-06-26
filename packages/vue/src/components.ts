@@ -1,4 +1,4 @@
-import { defineComponent, h, type App, type Plugin, type PropType } from "vue";
+import { defineComponent, h, type PropType } from "vue";
 import type {
   ColorInput,
   Insets,
@@ -223,35 +223,3 @@ export const DefaultTextStyle = defineComponent({
   props: defaultTextStyleProps,
   setup: fwd("default-text-style"),
 });
-
-const components = {
-  Document,
-  Page,
-  Column,
-  Row,
-  Box,
-  Padding,
-  Expanded,
-  Spacer,
-  Divider,
-  Image,
-  Text,
-  Paragraph,
-  Span,
-  Table,
-  TableRow,
-  TableCell,
-  Positioned,
-  DefaultTextStyle,
-};
-
-// Register the components globally, optionally under a `prefix` to avoid name clashes with a UI library:
-// `app.use(jasyVue, { prefix: "Pdf" })` → `<PdfRow>`, `<PdfText>`, …
-export const jasyVue: Plugin = {
-  install(app: App, options: { prefix?: string } = {}) {
-    const prefix = options.prefix ?? "";
-    for (const [name, comp] of Object.entries(components)) {
-      app.component(prefix + name, comp as any);
-    }
-  },
-};
