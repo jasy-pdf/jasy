@@ -1,0 +1,30 @@
+name: Feature request
+description: Propose a new feature or capability.
+labels: ["enhancement", "pending triage"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem statement / motivation
+      description: What problem are you trying to solve, and for whom?
+      placeholder: The current experience makes it hard to ...
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: Describe the feature or behavior you want.
+      placeholder: We should add ...
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Optional. Other approaches you considered.
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Optional. Links, references, mockups or examples.

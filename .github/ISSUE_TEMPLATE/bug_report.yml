@@ -1,0 +1,71 @@
+name: Bug report
+description: Report a bug so we can fix it.
+labels: ["bug", "pending triage"]
+body:
+  - type: dropdown
+    id: package
+    attributes:
+      label: Package
+      description: Which package is affected?
+      options:
+        - "@jasy/pdf"
+        - "@jasy/vue"
+        - "@jasy/nuxt"
+        - "@jasy/zugferd"
+        - "@jasy/cli"
+        - Not sure
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Which package version? (e.g. 1.0.0-alpha.3)
+      placeholder: "1.0.0-alpha.x"
+    validations:
+      required: true
+  - type: dropdown
+    id: runtime
+    attributes:
+      label: Runtime
+      description: Where does it run?
+      options:
+        - Node
+        - Browser
+        - Both
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A clear, concise description of the bug.
+      placeholder: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: A minimal code snippet or steps that reproduce it. The smaller, the faster we can fix it.
+      placeholder: |
+        1. Build this document ...
+        2. Render it ...
+        3. See the problem ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected-actual
+    attributes:
+      label: Expected vs. actual behavior
+      placeholder: |
+        Expected: ...
+        Actual: ...
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Node / environment
+      description: Node version, and OS / browser if relevant.
+      placeholder: "e.g. Node 22, macOS / Chrome 130"

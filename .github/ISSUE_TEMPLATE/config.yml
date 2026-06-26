@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions & ideas (Discussions)
+    url: https://github.com/jasy-pdf/jasy/discussions
+    about: Questions, ideas or general feedback? Start a discussion.
+  - name: Documentation
+    url: https://jasy.dev/docs
+    about: Guides for @jasy/pdf, Vue, Nuxt and e-invoicing.

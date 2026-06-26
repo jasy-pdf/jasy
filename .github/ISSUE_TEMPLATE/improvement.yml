@@ -1,0 +1,28 @@
+name: Improvement
+description: Enhance an existing feature or behavior.
+labels: ["enhancement", "pending triage"]
+body:
+  - type: textarea
+    id: current
+    attributes:
+      label: What exists today
+      description: Describe the current behavior or feature.
+      placeholder: Today, ...
+    validations:
+      required: true
+  - type: textarea
+    id: change
+    attributes:
+      label: What should change
+      description: Describe the improvement you want.
+      placeholder: We should change ...
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: Why is this change needed or valuable?
+      placeholder: This matters because ...
+    validations:
+      required: true
