@@ -272,21 +272,27 @@ PURE PDF (no ZUGFeRD). A Vue `createRenderer` whose host nodes ARE the `descript
 **client-side** (no server, no `/api/render` fetch-bridge); `./node` re-exports it for back-compat. `Jasy`-
 prefixed components; custom fonts + images load as `Uint8Array` (`<JasyDocument :fonts="{ Name: bytes }">`,
 `<JasyImage :src="bytes">`). The Vite playground (`cd packages/vue && pnpm play`) renders in-browser, incl. a
-**"Showcase"** sample (custom .ttf + JPEG + v-for + computed). Next: typed props, the `style`-object CSS
-layer, more components, then a Nuxt module; plus the 🔮 wish-list (read/edit existing PDFs, forms, security +
-signatures, more e-invoice profiles, framework bindings). See `todo.md` "⭐ Active".
+**"Showcase"** sample (custom .ttf + JPEG + v-for + computed). DONE since: typed props, Table + more
+components; **`@jasy/vue@1.0.0-alpha.2`** — the `jasyVue` GLOBAL plugin was **REMOVED** (global registration
+never resolves in `renderToPdf`'s fresh app; plain Vue = explicit imports, prefix is Nuxt-only). The
+**`@jasy/nuxt` Nuxt module shipped** (`@1.0.0-alpha.1` — client OR server, zero-config; see Repo facts +
+`packages/nuxt`). Still open: the `style`-object CSS layer; plus the 🔮 wish-list (read/edit existing PDFs,
+forms, security + signatures, more e-invoice profiles, framework bindings). See `todo.md` "⭐ Active".
 
 ## Repo facts
 
 - **pnpm monorepo.** `@jasy/pdf` is the root (`src/lib/` is the library); siblings in `packages/`:
-  `@jasy/zugferd` (e-invoicing), `@jasy/cli` (the `jasy` TUI), `@jasy/playground`, and **`@jasy/vue`**
-  (`packages/vue`) — author PDFs as Vue components (spike built 2026-06-24). Barrel exports via
+  `@jasy/zugferd` (e-invoicing), `@jasy/cli` (the `jasy` TUI), `@jasy/playground`, **`@jasy/vue`**
+  (`packages/vue`) — author PDFs as Vue components, and **`@jasy/nuxt`** (`packages/nuxt`) — the Nuxt module
+  (zero-config PDFs client OR server; shipped 2026-06-26). Barrel exports via
   `index.ts` at each level. GitHub org
   `jasy-pdf`, the lib repo is `jasy-pdf/jasy` (may still be private — make public before launch).
 - The **landing is a separate repo**, `~/projects/jasy-landing` → **jasy.dev** (Nuxt 4 + Nuxt UI 4 +
   Content 3). It has its **own CLAUDE.md + HARD RULES: never start/stop its dev server (Flo runs it),
   only Flo commits.** Package links there use **npmx.dev** (Daniel Roe's registry browser), not npmjs.com.
-- License MIT, author Florian Heuberger. npm: `@jasy/pdf`/`@jasy/zugferd`/`@jasy/cli` @1.0.0-alpha.1
-  (alpha dist-tag, 2026-06-21). Branch `main`. Runtime deps: `jimp` (images), `fflate` (isomorphic deflate);
+- License MIT, author Florian Heuberger. npm (alpha dist-tag): `@jasy/pdf`@alpha.2, `@jasy/zugferd`@alpha.1,
+  `@jasy/cli`@alpha.3, `@jasy/vue`@alpha.2, `@jasy/nuxt`@alpha.1 (released via `scripts/release.sh <pkg>
+  <version>` → `<pkg>-v*` tag → CI publish; order matters, deps `workspace:*` pin EXACT so dependents
+  re-release when a dep does). Branch `main`. Runtime deps: `jimp` (images), `fflate` (isomorphic deflate);
   the old `reflect-metadata`
   DI is gone (decorator removed).
