@@ -1,0 +1,19 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: en-US
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  auto_review:
+    enabled: true
+    drafts: false
+  # Skip generated / vendored files - reviewing them is noise.
+  path_filters:
+    - "!**/dist/**"
+    - "!**/coverage/**"
+    - "!**/*.afm"
+    - "!**/pnpm-lock.yaml"
+    - "!src/lib/assets/font-data.ts"
+chat:
+  auto_reply: true
