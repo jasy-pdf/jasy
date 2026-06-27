@@ -23,13 +23,23 @@ const prefix = tag.slice(0, tag.lastIndexOf("-v"));
 // versionsort.suffix makes git treat -alpha/-beta/-rc as prereleases (sorted BELOW the stable release),
 // so the previous-tag lookup is correct across the alpha -> stable boundary, not just between alphas.
 const tags = sh("git", [
-  "-c", "versionsort.suffix=-alpha",
-  "-c", "versionsort.suffix=-beta",
-  "-c", "versionsort.suffix=-rc",
-  "tag", "--sort=-v:refname", "--list", `${prefix}-v*`,
-]).split("\n").filter(Boolean);
+  "-c",
+  "versionsort.suffix=-alpha",
+  "-c",
+  "versionsort.suffix=-beta",
+  "-c",
+  "versionsort.suffix=-rc",
+  "tag",
+  "--sort=-v:refname",
+  "--list",
+  `${prefix}-v*`,
+])
+  .split("\n")
+  .filter(Boolean);
 const i = tags.indexOf(tag);
-const from = (i >= 0 && i + 1 < tags.length && tags[i + 1]) || sh("git", ["rev-list", "--max-parents=0", "HEAD"]);
+const from =
+  (i >= 0 && i + 1 < tags.length && tags[i + 1]) ||
+  sh("git", ["rev-list", "--max-parents=0", "HEAD"]);
 
 // 1) Grouped notes for the delta (changelogen print mode), minus its own header line + contributor block.
 // changelogen still writes a CHANGELOG.md even in print mode; we only want stdout, so remove that
@@ -50,7 +60,9 @@ notes = notes
 // 2) Contributors via per-commit attribution (correct GitHub user, not an email-search org hit).
 const seen = new Set();
 const contributors = [];
-for (const sha of sh("git", ["log", `${from}..${tag}`, "--pretty=format:%H"]).split("\n").filter(Boolean)) {
+for (const sha of sh("git", ["log", `${from}..${tag}`, "--pretty=format:%H"])
+  .split("\n")
+  .filter(Boolean)) {
   let data;
   try {
     data = JSON.parse(gh(["api", `repos/${repo}/commits/${sha}`]));
@@ -85,6 +97,17 @@ try {
 if (exists) {
   gh(["release", "edit", tag, "--title", `${name} ${version}`, "--notes-file", "RELEASE_NOTES.md"]);
 } else {
-  gh(["release", "create", tag, "--title", `${name} ${version}`, "--notes-file", "RELEASE_NOTES.md", dist === "latest" ? "--latest" : "--prerelease"]);
+  gh([
+    "release",
+    "create",
+    tag,
+    "--title",
+    `${name} ${version}`,
+    "--notes-file",
+    "RELEASE_NOTES.md",
+    dist === "latest" ? "--latest" : "--prerelease",
+  ]);
 }
-console.log(`${exists ? "updated" : "created"} release ${tag} (${name} ${version}); ${contributors.length} contributor(s)`);
+console.log(
+  `${exists ? "updated" : "created"} release ${tag} (${name} ${version}); ${contributors.length} contributor(s)`,
+);
