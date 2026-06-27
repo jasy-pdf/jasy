@@ -10,7 +10,12 @@ export default defineConfig({
   // Workspace packages (e.g. @jasy/zugferd, @jasy/vue) import the core as "@jasy/pdf"; resolve that to
   // the TS source so they run against live source without a build step.
   resolve: {
-    alias: { "@jasy/pdf": resolve(rootDir, "src/lib/index.ts") },
+    alias: {
+      "@jasy/pdf": resolve(rootDir, "src/lib/index.ts"),
+      // @jasy/zugferd has no dist in a fresh CI test job (build runs in a separate job); alias it to
+      // source too so the CLI suites resolve it without a build, same as @jasy/pdf above.
+      "@jasy/zugferd": resolve(rootDir, "packages/zugferd/src/index.ts"),
+    },
   },
   test: {
     // @jasy/nuxt is a Nuxt module with heavy @nuxt/test-utils e2e tests - run those via its own
