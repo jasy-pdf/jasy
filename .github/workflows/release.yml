@@ -21,6 +21,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history + tags so the changelog range resolves
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -72,12 +74,14 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+      # Grouped changelog (changelogen) + contributor list (per-commit attribution), upserted with a
+      # per-package title. Idempotent: re-pushing a tag after a failed run updates the release, no dupe.
       - name: Create GitHub Release
-        run: |
-          FLAG="--latest"
-          [ "${{ steps.pkg.outputs.dist }}" != "latest" ] && FLAG="--prerelease"
-          gh release create "${{ github.ref_name }}" \
-            --title "${{ steps.pkg.outputs.name }} ${{ steps.pkg.outputs.version }}" \
-            --generate-notes $FLAG
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+          NAME: ${{ steps.pkg.outputs.name }}
+          VERSION: ${{ steps.pkg.outputs.version }}
+          DIST: ${{ steps.pkg.outputs.dist }}
+        run: node scripts/gh-release.mjs
