@@ -6,7 +6,7 @@ runs.
 
 ## Requirements
 
-- Node 20+
+- Node 22+ (24 recommended)
 - pnpm 9+ (the repo is a pnpm workspace; do not use npm/yarn)
 
 ## Local setup

@@ -1,0 +1,96 @@
+name: PR
+
+# Pull-request gate. Staged + fail-fast: a cheap check blocks the expensive ones via `needs:`, so a
+# bad PR title never spins up a build, and a lint error never spins up tests. Only changed tests run.
+on:
+  pull_request:
+    branches: [main]
+
+# A new push to the same PR cancels the in-flight run - no wasted runner minutes on stale commits.
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  title:
+    name: PR title
+    runs-on: ubuntu-latest
+    steps:
+      # Conventional + our house rule: `type(scope): subject`, all lowercase, only `code` in backticks
+      # may be mixed-case. TITLE is passed via env (never interpolated into the shell) to avoid injection.
+      - name: Lint PR title
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          node -e '
+            const t = (process.env.TITLE || "").trim();
+            const types = "feat|fix|perf|refactor|docs|chore|test|build|ci|style|revert";
+            const shape = new RegExp("^(" + types + ")(\\([a-z0-9._-]+\\))?: .+$");
+            if (!shape.test(t)) {
+              console.error("Bad PR title: " + JSON.stringify(t));
+              console.error("Expected:  type(scope): subject");
+              console.error("  type  one of: " + types);
+              console.error("  scope optional, lowercase, e.g. feat(vue): add table component");
+              process.exit(1);
+            }
+            // Everything lowercase, except spans inside `backticks` (code identifiers).
+            const prose = t.replace(/`[^`]*`/g, "");
+            if (/[A-Z]/.test(prose)) {
+              console.error("PR title must be lowercase (only `code` in backticks may be mixed-case): " + JSON.stringify(t));
+              process.exit(1);
+            }
+            console.log("ok: " + t);
+          '
+
+  static:
+    name: Lint & format
+    needs: title
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run lint
+      - run: pnpm run fmt:check
+
+  build:
+    name: Build
+    needs: static
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # --include-workspace-root: @jasy/pdf IS the root package; plain `pnpm -r` skips it and then the
+      # dependents can't resolve its types. pnpm builds in topological order (engine first).
+      - run: pnpm -r --include-workspace-root build
+
+  test:
+    name: Test (changed)
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      # fetch-depth: 0 so `vitest --changed` can diff against the base branch.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Only run tests reachable from files changed since main (the module graph handles dependents:
+      # an engine change re-runs the vue/zugferd suites). A docs-only PR runs nothing.
+      - run: pnpm exec vitest run --changed origin/${{ github.base_ref }} --passWithNoTests
