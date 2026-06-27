@@ -25,8 +25,9 @@ const panels = ["#0a2348", "#0d9488", "#fb7185"];
       </Row>
 
       <Text :size="10" color="#94a3b8"
-        >The same logo on three colored panels - each shows the panel through the transparent areas, not
-        a white box. Composite-over-white would put an opaque rectangle behind every crane.</Text
+        >The same logo on three colored panels - each shows the panel through the transparent areas,
+        not a white box. Composite-over-white would put an opaque rectangle behind every
+        crane.</Text
       >
     </Page>
   </Document>

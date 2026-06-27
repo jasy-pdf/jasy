@@ -88,8 +88,8 @@ _between_ children of a Column/Row).
 
 | Factory                                | Purpose              | Key options                                                               | Maps to                                |
 | -------------------------------------- | -------------------- | ------------------------------------------------------------------------- | -------------------------------------- |
-| `Column(opts, children)`               | vertical stack       | `gap`, `justify`, `align`                                                    | `ContainerElement`                     |
-| `Row(opts, children)`                  | **horizontal** stack | `gap`, `justify`, `align`                                                    | **new `RowElement`**                   |
+| `Column(opts, children)`               | vertical stack       | `gap`, `justify`, `align`                                                 | `ContainerElement`                     |
+| `Row(opts, children)`                  | **horizontal** stack | `gap`, `justify`, `align`                                                 | **new `RowElement`**                   |
 | `Box(opts, children)`                  | bordered/filled box  | `border`, `borderWidth`, `bg`, `padding`, `width`, `height`, **`radius`** | `RectangleElement` (+ inner `Padding`) |
 | `Padding(opts, child)`                 | inset                | `padding: Insets` (`all`/`x`/`y`)                                         | `PaddingElement`                       |
 | `Spacer(flex?)`                        | flexible gap         | `flex`                                                                    | `ExpandedElement` (empty child)        |
@@ -99,15 +99,15 @@ _between_ children of a Column/Row).
 
 ### Content
 
-| Factory                    | Purpose                        | Key options                                        | Maps to        |
-| -------------------------- | ------------------------------ | -------------------------------------------------- | -------------- |
-| `Text(content, opts)`      | `content` = string OR `Span[]` | `size`, `font`, `bold`, `italic`, `color`, `align` | `TextElement`  |
-| `span(text, opts)`         | inline run for mixed `Text`    | `size`, `font`, `bold`, `italic`, `color`          | `TextSegment`  |
-| `Paragraph(content, opts)` | `Text` with body defaults      | as `Text`                                          | `TextElement`  |
+| Factory                            | Purpose                              | Key options                                                      | Maps to                   |
+| ---------------------------------- | ------------------------------------ | ---------------------------------------------------------------- | ------------------------- |
+| `Text(content, opts)`              | `content` = string OR `Span[]`       | `size`, `font`, `bold`, `italic`, `color`, `align`               | `TextElement`             |
+| `span(text, opts)`                 | inline run for mixed `Text`          | `size`, `font`, `bold`, `italic`, `color`                        | `TextSegment`             |
+| `Paragraph(content, opts)`         | `Text` with body defaults            | as `Text`                                                        | `TextElement`             |
 | `DefaultTextStyle(opts, children)` | cascaded text defaults for a subtree | `size`, `font`, `bold`, `italic`, `color`, `align`, `lineHeight` | `DefaultTextStyleElement` |
-| `Image(src, opts)`         | image                          | `width`, `height`, `fit`, **`radius`**             | `ImageElement` |
-| `Divider(opts?)`           | horizontal rule                | `color`, `thickness`, `margin`                     | `LineElement`  |
-| `Line(opts)`               | explicit line                  | `from`, `to`, `color`, `thickness`                 | `LineElement`  |
+| `Image(src, opts)`                 | image                                | `width`, `height`, `fit`, **`radius`**                           | `ImageElement`            |
+| `Divider(opts?)`                   | horizontal rule                      | `color`, `thickness`, `margin`                                   | `LineElement`             |
+| `Line(opts)`                       | explicit line                        | `from`, `to`, `color`, `thickness`                               | `LineElement`             |
 
 > **Text styles inherit** (CSS / Flutter style): `Document(opts, …)` sets document-wide text defaults
 > and `DefaultTextStyle(opts, …)` a subtree's; a `Text` resolves each property
@@ -198,9 +198,7 @@ are leaving.
 and embeds it. The render call says nothing about fonts.
 
 ```ts
-const doc = Document([
-  Page({ size: "A4" }, [Text("Hi", { font: "Inter" })]),
-]);
+const doc = Document([Page({ size: "A4" }, [Text("Hi", { font: "Inter" })])]);
 
 doc.addFont("Inter", "Inter-Regular.ttf"); // a path (Node reads it)
 doc.addFont("Brand", { normal: "B.ttf", bold: "B-Bold.ttf" }); // a styled family
@@ -230,11 +228,11 @@ getFonts(): string[]; // the registered names
 hasFont(name: string): boolean;
 ```
 
-| Method                   | Purpose                                | Returns              |
-| ------------------------ | -------------------------------------- | -------------------- |
-| `addFont(name, source)`  | register a font (path / bytes / family) | `this` (chainable)   |
-| `getFonts()`             | the registered names                   | `string[]`           |
-| `hasFont(name)`          | is it registered?                      | `boolean`            |
+| Method                  | Purpose                                 | Returns            |
+| ----------------------- | --------------------------------------- | ------------------ |
+| `addFont(name, source)` | register a font (path / bytes / family) | `this` (chainable) |
+| `getFonts()`            | the registered names                    | `string[]`         |
+| `hasFont(name)`         | is it registered?                       | `boolean`          |
 
 ### The rule that makes it worth it - DOCUMENT IT
 

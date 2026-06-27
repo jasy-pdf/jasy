@@ -15,9 +15,7 @@ describe("CP1252 special chars in a content stream", () => {
   });
 
   it("lays a run of CP1252 punctuation out without throwing (metrics resolve via AGL)", async () => {
-    const doc = Document([
-      Page({ size: "A4" }, [Text("… – — € • ™ “ ” ‘ ’ „ Š œ", { size: 12 })]),
-    ]);
+    const doc = Document([Page({ size: "A4" }, [Text("… – — € • ™ “ ” ‘ ’ „ Š œ", { size: 12 })])]);
     await expect(renderPdf(doc)).resolves.toBeTruthy();
   });
 });

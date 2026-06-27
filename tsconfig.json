@@ -32,7 +32,9 @@
     // "paths": {},                                      /* Specify a set of entries that re-map imports to additional lookup locations. */
     // "rootDirs": [],                                   /* Allow multiple folders to be treated as one when resolving modules. */
     // "typeRoots": [],                                  /* Specify multiple folders that act like './node_modules/@types'. */
-    "types": ["node"] /* Explicit so Node globals (Buffer, process, fs) resolve under pnpm's isolated node_modules. */,
+    "types": [
+      "node"
+    ] /* Explicit so Node globals (Buffer, process, fs) resolve under pnpm's isolated node_modules. */,
     // "allowUmdGlobalAccess": true,                     /* Allow accessing UMD globals from modules. */
     // "moduleSuffixes": [],                             /* List of file name suffixes to search when resolving a module. */
     "allowImportingTsExtensions": true /* Source imports carry .ts (honest); emit rewrites them. */,

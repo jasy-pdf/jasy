@@ -19,4 +19,6 @@ const out =
   `export const AGL: string = ${JSON.stringify(agl)};\n`;
 
 writeFileSync(`${dir}/font-data.ts`, out);
-console.log(`wrote ${dir}/font-data.ts (${(out.length / 1024).toFixed(0)} KB, ${Object.keys(afm).length} fonts + agl)`);
+console.log(
+  `wrote ${dir}/font-data.ts (${(out.length / 1024).toFixed(0)} KB, ${Object.keys(afm).length} fonts + agl)`,
+);

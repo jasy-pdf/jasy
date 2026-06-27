@@ -14,7 +14,16 @@ const metrics = {
 } as unknown as FontMetrics;
 
 const wrap = (text: string, maxWidth: number, maxLines?: number, overflow?: "clip" | "ellipsis") =>
-  wrapStringIntoLines(text, "Helvetica", 10, FontStyle.Normal, maxWidth, metrics, maxLines, overflow);
+  wrapStringIntoLines(
+    text,
+    "Helvetica",
+    10,
+    FontStyle.Normal,
+    maxWidth,
+    metrics,
+    maxLines,
+    overflow,
+  );
 
 const TEXT = "alfa bram char dent emil"; // five 4-letter words; at 50pt each lands on its own line
 

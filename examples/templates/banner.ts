@@ -16,7 +16,10 @@ export default Document([
       Box({ relative: true, overflow: "hidden" }, [
         // full-bleed background image: sized a touch over the page and cropped to a clean bleed by
         // overflow:hidden. A Positioned child is out of flow, so even oversized it never paginates.
-        Positioned({ top: 0, left: 0 }, Image("examples/assets/banner.png", { width: 600, height: 425, fit: "cover" })),
+        Positioned(
+          { top: 0, left: 0 },
+          Image("examples/assets/banner.png", { width: 600, height: 425, fit: "cover" }),
+        ),
 
         // message
         Positioned(
@@ -36,7 +39,10 @@ export default Document([
         ),
 
         // footer marks, anchored to the frame corners
-        Positioned({ bottom: 36, left: 56 }, Text("@jasy/pdf", { size: 12, bold: true, color: accent })),
+        Positioned(
+          { bottom: 36, left: 56 },
+          Text("@jasy/pdf", { size: 12, bold: true, color: accent }),
+        ),
         Positioned({ bottom: 36, right: 56 }, Text("v1.0  ·  MIT", { size: 11, color: soft })),
       ]),
     ),

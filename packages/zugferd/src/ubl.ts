@@ -156,7 +156,9 @@ function invoiceLine(l: InvoiceLine, net: number, index: number, currency: strin
       l.sellerItemId ? wrap("cac:SellersItemIdentification", [el("cbc:ID", l.sellerItemId)]) : "", // BT-155
       l.buyerItemId ? wrap("cac:BuyersItemIdentification", [el("cbc:ID", l.buyerItemId)]) : "", // BT-156
       l.standardItemId
-        ? wrap("cac:StandardItemIdentification", [el("cbc:ID", l.standardItemId, { schemeID: "0160" })]) // BT-157
+        ? wrap("cac:StandardItemIdentification", [
+            el("cbc:ID", l.standardItemId, { schemeID: "0160" }),
+          ]) // BT-157
         : "",
       taxCategory("cac:ClassifiedTaxCategory", l.vat.category, l.vat.ratePercent ?? 0), // BG-30
     ]),
@@ -187,7 +189,9 @@ export function toUBL(
     ...(invoice.notes ?? []).map((n) => el("cbc:Note", n)), // BT-22
     el("cbc:DocumentCurrencyCode", cur), // BT-5
     el("cbc:BuyerReference", invoice.buyerReference), // BT-10 (Leitweg-ID)
-    invoice.purchaseOrderRef ? wrap("cac:OrderReference", [el("cbc:ID", invoice.purchaseOrderRef)]) : "", // BT-13
+    invoice.purchaseOrderRef
+      ? wrap("cac:OrderReference", [el("cbc:ID", invoice.purchaseOrderRef)])
+      : "", // BT-13
     invoice.contractRef
       ? wrap("cac:ContractDocumentReference", [el("cbc:ID", invoice.contractRef)]) // BT-12
       : "",
@@ -199,7 +203,9 @@ export function toUBL(
       ? wrap("cac:Delivery", [
           el("cbc:ActualDeliveryDate", d?.date), // BT-72
           d?.address ? wrap("cac:DeliveryLocation", [address(d.address)]) : "", // BG-15
-          d?.recipientName ? wrap("cac:DeliveryParty", [wrap("cac:PartyName", [el("cbc:Name", d.recipientName)])]) : "", // BT-70
+          d?.recipientName
+            ? wrap("cac:DeliveryParty", [wrap("cac:PartyName", [el("cbc:Name", d.recipientName)])])
+            : "", // BT-70
         ])
       : "";
 
@@ -230,7 +236,9 @@ export function toUBL(
     money("cbc:LineExtensionAmount", computed.lineTotal, cur), // BT-106
     money("cbc:TaxExclusiveAmount", computed.taxBasisTotal, cur), // BT-109
     money("cbc:TaxInclusiveAmount", computed.grandTotal, cur), // BT-112
-    docAC.some((a) => !a.isCharge) ? money("cbc:AllowanceTotalAmount", computed.allowanceTotal, cur) : "", // BT-107
+    docAC.some((a) => !a.isCharge)
+      ? money("cbc:AllowanceTotalAmount", computed.allowanceTotal, cur)
+      : "", // BT-107
     docAC.some((a) => a.isCharge) ? money("cbc:ChargeTotalAmount", computed.chargeTotal, cur) : "", // BT-108
     computed.paidAmount ? money("cbc:PrepaidAmount", computed.paidAmount, cur) : "", // BT-113
     money("cbc:PayableAmount", computed.duePayable, cur), // BT-115

@@ -16,8 +16,20 @@ const invoice: Invoice = {
   },
   buyer: { name: "Kunde AG", address: { city: "München", postCode: "80331", country: "DE" } },
   lines: [
-    { name: "Webdesign", quantity: 2, unit: "C62", netUnitPrice: 100, vat: { category: "S", ratePercent: 19 } },
-    { name: "Hosting", quantity: 1, unit: "C62", netUnitPrice: 50, vat: { category: "S", ratePercent: 7 } },
+    {
+      name: "Webdesign",
+      quantity: 2,
+      unit: "C62",
+      netUnitPrice: 100,
+      vat: { category: "S", ratePercent: 19 },
+    },
+    {
+      name: "Hosting",
+      quantity: 1,
+      unit: "C62",
+      netUnitPrice: 50,
+      vat: { category: "S", ratePercent: 7 },
+    },
   ],
   payment: { iban: "DE02120300000000202051", bic: "BYLADEM1001" },
 };

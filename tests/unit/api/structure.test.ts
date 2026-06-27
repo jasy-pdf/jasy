@@ -112,10 +112,9 @@ describe("TextStyle inheritance", () => {
   });
 
   it("DefaultTextStyle sets the default for its own subtree", async () => {
-    const pdf = await renderPdf(
-      Document([Page([DefaultTextStyle({ size: 21 }, [Text("x")])])]),
-      { compress: false },
-    );
+    const pdf = await renderPdf(Document([Page([DefaultTextStyle({ size: 21 }, [Text("x")])])]), {
+      compress: false,
+    });
     expect(usesSize(pdf, 21)).toBe(true);
   });
 
@@ -127,7 +126,8 @@ describe("TextStyle inheritance", () => {
 
 describe("overflow policy", () => {
   // A 300pt line on a tiny page: far taller than the body, with no way to break.
-  const tooTall = () => Document([Page({ size: mm(50, 40), margin: 4 }, [Text("X", { size: 300 })])]);
+  const tooTall = () =>
+    Document([Page({ size: mm(50, 40), margin: 4 }, [Text("X", { size: 300 })])]);
 
   it("throws by default when content is too tall to fit or break", async () => {
     await expect(renderPdf(tooTall())).rejects.toThrow(/overflow/i);

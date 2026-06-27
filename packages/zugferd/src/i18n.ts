@@ -138,7 +138,10 @@ const DICTIONARIES: Record<Locale, InvoiceLabels> = { de, en, fr };
 const LOCALE_TAG: Record<Locale, string> = { de: "de-DE", en: "en-US", fr: "fr-FR" };
 
 /** The label set for a locale, with optional per-key overrides merged on top. */
-export function resolveLabels(locale: Locale = "de", overrides?: Partial<InvoiceLabels>): InvoiceLabels {
+export function resolveLabels(
+  locale: Locale = "de",
+  overrides?: Partial<InvoiceLabels>,
+): InvoiceLabels {
   return { ...DICTIONARIES[locale], ...overrides };
 }
 

@@ -57,7 +57,11 @@ const detail = (label: string, value: string) =>
     Text(value, { size: 10, color: ink, bold: true, align: "right" }),
   ]);
 
-const totalRow = (label: string, value: string, o: { bold?: boolean; size?: number; color?: string } = {}) =>
+const totalRow = (
+  label: string,
+  value: string,
+  o: { bold?: boolean; size?: number; color?: string } = {},
+) =>
   Row({ justify: "between" }, [
     Text(label, { size: o.size ?? 10.5, color: o.color ?? muted, bold: o.bold }),
     Text(value, { size: o.size ?? 10.5, color: o.color ?? ink, bold: o.bold, align: "right" }),
@@ -112,7 +116,12 @@ const page = Page({ gap: 0, margin: 48, footer }, [
     Table(
       {
         columns: ["auto", "1fr", 92, 92],
-        header: [hcell("QTY"), hcell("DESCRIPTION"), hcell("UNIT", "right"), hcell("AMOUNT", "right")],
+        header: [
+          hcell("QTY"),
+          hcell("DESCRIPTION"),
+          hcell("UNIT", "right"),
+          hcell("AMOUNT", "right"),
+        ],
         rowGap: 9,
         colGap: 14,
         cellPadding: { y: 4 },

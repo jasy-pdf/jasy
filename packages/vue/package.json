@@ -3,17 +3,20 @@
   "version": "1.0.0-alpha.3",
   "description": "Author PDFs as Vue components - a thin Vue custom renderer over @jasy/pdf.",
   "keywords": [
-    "vue",
-    "vue3",
+    "declarative",
+    "invoice",
+    "jasy",
     "pdf",
     "pdf-generation",
-    "declarative",
     "renderer",
-    "invoice",
-    "jasy"
+    "vue",
+    "vue3"
   ],
   "license": "MIT",
   "author": "Florian Heuberger",
+  "files": [
+    "dist"
+  ],
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -27,9 +30,6 @@
       "import": "./dist/node.js"
     }
   },
-  "files": [
-    "dist"
-  ],
   "scripts": {
     "build": "tsc",
     "prepack": "pnpm run build",
@@ -39,9 +39,6 @@
   "dependencies": {
     "@jasy/pdf": "workspace:*"
   },
-  "peerDependencies": {
-    "vue": "^3.4.0"
-  },
   "devDependencies": {
     "@types/node": "^25.9.3",
     "@vitejs/plugin-vue": "^5.2.1",
@@ -49,5 +46,8 @@
     "vite": "^6.3.4",
     "vue": "^3.5.13",
     "vue-pdf-embed": "^2.1.5"
+  },
+  "peerDependencies": {
+    "vue": "^3.4.0"
   }
 }

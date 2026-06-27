@@ -21,7 +21,9 @@ for (const name of names) {
     const { bytes, xml } = await renderZugferd(invoice, options);
     writeFileSync(`examples/out/${name}.pdf`, bytes);
     writeFileSync(`examples/out/${name}.xml`, xml);
-    console.log(`rendered examples/out/${name}.pdf + .xml (ZUGFeRD ${options?.profile ?? "en16931"})`);
+    console.log(
+      `rendered examples/out/${name}.pdf + .xml (ZUGFeRD ${options?.profile ?? "en16931"})`,
+    );
   } else {
     writeFileSync(`examples/out/${name}.pdf`, await renderToBytes(mod.default));
     console.log(`rendered examples/out/${name}.pdf`);

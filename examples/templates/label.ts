@@ -38,6 +38,9 @@ export default Document([
 
     Divider({ color: hair, margin: { y: 7 } }),
 
-    Column({ gap: 4 }, [barcode, Text("4 006381 332149", { size: 6.5, color: muted, align: "center" })]),
+    Column({ gap: 4 }, [
+      barcode,
+      Text("4 006381 332149", { size: 6.5, color: muted, align: "center" }),
+    ]),
   ]),
 ]);

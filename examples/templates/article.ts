@@ -72,7 +72,10 @@ const footer = Column({ gap: 6 }, [
 
 const page = Page({ margin: 64, gap: 5, footer }, [
   Text("ON DOCUMENT ENGINEERING", { size: 10, bold: true, color: gold }),
-  Padding({ top: 4 }, Text("Why pagination is the hard part", { size: 29, bold: true, color: ink })),
+  Padding(
+    { top: 4 },
+    Text("Why pagination is the hard part", { size: 29, bold: true, color: ink }),
+  ),
   Text("And what it takes to get right in pure TypeScript", { size: 13, color: muted }),
   Padding({ top: 12, bottom: 6 }, Divider({ color: hair })),
 

@@ -1,7 +1,17 @@
 // A full-bleed cover page: the background runs edge to edge (no page margin), a bold accent disc pokes
 // off the corner and is cropped by overflow:hidden, and the text sits on top - all driven by the
 // positioning layer (a relative Box frame + out-of-flow Positioned children).
-import { Document, Page, Box, Expanded, Positioned, Column, Text, Paragraph, Divider } from "@jasy/pdf";
+import {
+  Document,
+  Page,
+  Box,
+  Expanded,
+  Positioned,
+  Column,
+  Text,
+  Paragraph,
+  Divider,
+} from "@jasy/pdf";
 
 const navy = "#0a2348";
 const navy2 = "#13315f";
@@ -20,8 +30,14 @@ export default Document([
     Expanded(
       Box({ bg: navy, relative: true, overflow: "hidden" }, [
         // subtle disc for depth (bottom-left), then the bold accent disc cropped at the top-right corner
-        Positioned({ bottom: -170, left: -130 }, Box({ width: 380, height: 380, radius: 190, bg: navy2 }, [])),
-        Positioned({ top: -130, right: -120 }, Box({ width: 300, height: 300, radius: 150, bg: accent }, [])),
+        Positioned(
+          { bottom: -170, left: -130 },
+          Box({ width: 380, height: 380, radius: 190, bg: navy2 }, []),
+        ),
+        Positioned(
+          { top: -130, right: -120 },
+          Box({ width: 300, height: 300, radius: 150, bg: accent }, []),
+        ),
 
         // content, inset from the edges
         Positioned(
@@ -35,7 +51,10 @@ export default Document([
         ),
 
         // a corner mark, anchored to the frame
-        Positioned({ bottom: 48, right: 56 }, Text("jasy · 01", { size: 11, bold: true, color: accent })),
+        Positioned(
+          { bottom: 48, right: 56 },
+          Text("jasy · 01", { size: 11, bold: true, color: accent }),
+        ),
       ]),
     ),
   ]),

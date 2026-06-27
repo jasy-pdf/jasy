@@ -1,4 +1,10 @@
-import { AllowanceCharge, Invoice, InvoiceLine, VatCategory, VatExemptionReason } from "./invoice.ts";
+import {
+  AllowanceCharge,
+  Invoice,
+  InvoiceLine,
+  VatCategory,
+  VatExemptionReason,
+} from "./invoice.ts";
 
 // Derives every monetary amount of an invoice from its inputs, so the EN-16931 total/VAT checks
 // (BR-CO-*) hold by construction. All amounts are rounded to 2 decimals (BR-DEC-*); rounding is

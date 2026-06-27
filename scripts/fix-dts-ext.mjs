@@ -16,7 +16,10 @@ let count = 0;
         /(\bfrom\s+|\bimport\s*\(\s*)(['"])(\.\.?\/[^'"]*)\.ts(['"])/g,
         "$1$2$3.js$4",
       );
-      if (next !== orig) { writeFileSync(p, next); count++; }
+      if (next !== orig) {
+        writeFileSync(p, next);
+        count++;
+      }
     }
   }
 })(DIST);

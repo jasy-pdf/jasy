@@ -63,7 +63,9 @@ pnpm add @jasy/vue @jasy/pdf vue
         </TableRow>
         <TableRow v-for="item in items" :key="item.desc">
           <TableCell>{{ item.desc }}</TableCell>
-          <TableCell><Text align="right">{{ item.amount }}</Text></TableCell>
+          <TableCell
+            ><Text align="right">{{ item.amount }}</Text></TableCell
+          >
         </TableRow>
       </Table>
     </Page>

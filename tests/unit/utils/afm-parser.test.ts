@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { AFMParser } from "../../../src/lib/utils/afm-parser";
 import fs from "fs";
-import path from "path";
 
 // Mock-Daten für den AFM-Parser
 const mockAFMData = `
@@ -23,7 +22,7 @@ describe("AFMParser", () => {
 
   beforeEach(() => {
     // Mock für fs.readFileSync mit Vitest
-    vi.spyOn(fs, "readFileSync").mockImplementation((path: any, options?: any): any => {
+    vi.spyOn(fs, "readFileSync").mockImplementation((path: any, _options?: any): any => {
       if (path.includes("agl.txt")) {
         return mockGlyphList;
       } else if (path.includes("afm")) {

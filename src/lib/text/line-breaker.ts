@@ -143,7 +143,8 @@ export function breakSegmentsIntoLines(
   // Open-end by default; cap only when maxLines is set.
   if (maxLines == null || lines.length <= maxLines) return lines;
   const kept = lines.slice(0, maxLines);
-  if (overflow === "ellipsis") ellipsizeSegmentLine(kept[kept.length - 1], defaults, maxWidth, metrics);
+  if (overflow === "ellipsis")
+    ellipsizeSegmentLine(kept[kept.length - 1], defaults, maxWidth, metrics);
   return kept;
 }
 

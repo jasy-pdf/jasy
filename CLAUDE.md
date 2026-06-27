@@ -52,7 +52,7 @@ PDFDocument (abstract, user subclasses it, implements build())
 ### Pass 1 — `calculateLayout(constraints, offset, ctx)`
 
 - Defined on every element (`PDFElement.calculateLayout`). Signature: `calculateLayout(constraints:
-  BoxConstraints, offset: Offset, ctx: LayoutContext): Size` — constraints (min/max w/h) flow **down**,
+BoxConstraints, offset: Offset, ctx: LayoutContext): Size` — constraints (min/max w/h) flow **down**,
   the parent assigns each child its absolute `offset`, the element returns the `Size` it took **up**.
   The clean Flutter `RenderObject` contract (since Phase 4; `layout/box-constraints.ts`).
 - `FlexLayoutHelper` (`utils/flex-layout.ts`) is axis-generic: it measures **and** places both `Column`
@@ -64,7 +64,7 @@ PDFDocument (abstract, user subclasses it, implements build())
   loops the remainder into fresh physical pages; `header`/`footer` repeat on each.
 - **The Y-flip lives at the IR→backend seam, NOT in elements** (Phase 3). Elements lay out in a top-left
   origin and are coordinate-blind; `PdfBackend.flipY(nodes, pageHeight)` flips once per page. `grep
-  normalizeCoordinates src/` is empty.
+normalizeCoordinates src/` is empty.
 
 ### Pass 2 — render: display list → backend (the IR seam, since roadmap Phase 1)
 
@@ -221,14 +221,14 @@ The big refactors the roadmap set out are **done** (Phases 0-6, shipped as `@jas
   (`ttf-subsetter.ts`, `ABCDEF+` tag, ~97% smaller) + FlateDecode-compressed. Font names with spaces are
   `#XX`-escaped in the PDF `/Name` (`pdfName`).
 - ✅ **Inheritable text styles** (Flutter `DefaultTextStyle`, 2026-06-24) — `Document({ font, size, color,
-  lineHeight, align, bold, italic }, …)` sets doc-wide text defaults; `DefaultTextStyle(opts, children)`
+lineHeight, align, bold, italic }, …)` sets doc-wide text defaults; `DefaultTextStyle(opts, children)`
   re-defaults a subtree; per-property merge `explicit > inherited > built-in`, threaded via
   `LayoutContext.textStyle` (`text/text-style.ts`). Box/layout props never inherit — the CSS line.
 - ✅ **Custom page formats** (2026-06-24) — `mm()` / pt: `Page({ size: mm(50, 65) })`; MediaBox + content
   box + Y-flip all honour `customSize`.
 - ✅ **`onOverflow` safety** (2026-06-24) — over-tall unbreakable content is force-placed (clipped) so
   pagination always terminates (no infinite loop); render option `onOverflow: "error" (default) | "warn"
-  | "ignore"` (`fragmentation.ts packChildren`).
+| "ignore"` (`fragmentation.ts packChildren`).
 
 Genuine remaining gaps / deferred:
 
@@ -292,7 +292,7 @@ forms, security + signatures, more e-invoice profiles, framework bindings). See 
   only Flo commits.** Package links there use **npmx.dev** (Daniel Roe's registry browser), not npmjs.com.
 - License MIT, author Florian Heuberger. npm (alpha dist-tag): `@jasy/pdf`@alpha.2, `@jasy/zugferd`@alpha.1,
   `@jasy/cli`@alpha.3, `@jasy/vue`@alpha.2, `@jasy/nuxt`@alpha.1 (released via `scripts/release.sh <pkg>
-  <version>` → `<pkg>-v*` tag → CI publish; order matters, deps `workspace:*` pin EXACT so dependents
+<version>` → `<pkg>-v*` tag → CI publish; order matters, deps `workspace:*` pin EXACT so dependents
   re-release when a dep does). Branch `main`. Runtime deps: `jimp` (images), `fflate` (isomorphic deflate);
   the old `reflect-metadata`
   DI is gone (decorator removed).

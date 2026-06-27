@@ -39,7 +39,9 @@ function toPageSize(input: PageSize | string): PageSize {
 }
 
 /** Resolve `size` into config fields: a named `pageSize`, or an explicit [width, height] in points. */
-function resolveSize(input: PageSizeInput | undefined): Pick<PDFPageConfig, "pageSize" | "customSize"> {
+function resolveSize(
+  input: PageSizeInput | undefined,
+): Pick<PDFPageConfig, "pageSize" | "customSize"> {
   if (input !== undefined && typeof input === "object") {
     const f = input.unit === "mm" ? MM_TO_PT : 1;
     return { pageSize: PageSize.A4, customSize: [input.width * f, input.height * f] };
@@ -268,8 +270,7 @@ export async function renderPdf(doc: PDFDocumentElement, options?: RenderOptions
           om.registerCustomFont(name, value.normal, FontStyle.Normal);
           if (value.bold) om.registerCustomFont(name, value.bold, FontStyle.Bold);
           if (value.italic) om.registerCustomFont(name, value.italic, FontStyle.Italic);
-          if (value.boldItalic)
-            om.registerCustomFont(name, value.boldItalic, FontStyle.BoldItalic);
+          if (value.boldItalic) om.registerCustomFont(name, value.boldItalic, FontStyle.BoldItalic);
         }
       }
       for (const a of attachments) {

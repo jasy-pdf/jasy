@@ -17,7 +17,9 @@ describe("toDocumentDescriptor (the firewall)", () => {
   it("maps a Document > Page > Text tree onto the descriptor seam", () => {
     const desc = toDocumentDescriptor(
       comp(() =>
-        h(Document, null, () => h(Page, { size: "A4" }, () => h(Text, { size: 12 }, () => "Hello"))),
+        h(Document, null, () =>
+          h(Page, { size: "A4" }, () => h(Text, { size: 12 }, () => "Hello")),
+        ),
       ),
     );
     expect(desc.type).toBe("document");

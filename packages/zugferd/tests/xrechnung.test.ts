@@ -22,7 +22,15 @@ const complete: Invoice = {
     electronicAddress: "amt@bund.de",
     address: { city: "Bonn", postCode: "53113", country: "DE" },
   },
-  lines: [{ name: "Service", quantity: 1, unit: "C62", netUnitPrice: 100, vat: { category: "S", ratePercent: 19 } }],
+  lines: [
+    {
+      name: "Service",
+      quantity: 1,
+      unit: "C62",
+      netUnitPrice: 100,
+      vat: { category: "S", ratePercent: 19 },
+    },
+  ],
   payment: { iban: "DE02120300000000202051" },
 };
 

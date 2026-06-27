@@ -6,7 +6,7 @@ import {
   applyFitNone,
   convertImageToGrayscaleBuffer,
 } from "../../../src/lib/utils/image-helper";
-import { Jimp, JimpMime } from "jimp";
+import { Jimp } from "jimp";
 
 vi.mock("jimp", () => ({
   Jimp: {

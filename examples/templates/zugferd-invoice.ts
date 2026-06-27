@@ -28,11 +28,46 @@ const invoice: Invoice = {
   },
 
   lines: [
-    { id: "1", name: "Brand identity workshop", quantity: 2, unit: "HUR", netUnitPrice: 680, vat: { category: "S", ratePercent: 19 } },
-    { id: "2", name: "Logo design, primary and variants", quantity: 1, unit: "C62", netUnitPrice: 1450, vat: { category: "S", ratePercent: 19 } },
-    { id: "3", name: "Design system in Figma", quantity: 1, unit: "C62", netUnitPrice: 1680, vat: { category: "S", ratePercent: 19 } },
-    { id: "4", name: "Frontend implementation", quantity: 8, unit: "HUR", netUnitPrice: 95, vat: { category: "S", ratePercent: 19 } },
-    { id: "5", name: "Deployment and CI setup", quantity: 1, unit: "C62", netUnitPrice: 420, vat: { category: "S", ratePercent: 19 } },
+    {
+      id: "1",
+      name: "Brand identity workshop",
+      quantity: 2,
+      unit: "HUR",
+      netUnitPrice: 680,
+      vat: { category: "S", ratePercent: 19 },
+    },
+    {
+      id: "2",
+      name: "Logo design, primary and variants",
+      quantity: 1,
+      unit: "C62",
+      netUnitPrice: 1450,
+      vat: { category: "S", ratePercent: 19 },
+    },
+    {
+      id: "3",
+      name: "Design system in Figma",
+      quantity: 1,
+      unit: "C62",
+      netUnitPrice: 1680,
+      vat: { category: "S", ratePercent: 19 },
+    },
+    {
+      id: "4",
+      name: "Frontend implementation",
+      quantity: 8,
+      unit: "HUR",
+      netUnitPrice: 95,
+      vat: { category: "S", ratePercent: 19 },
+    },
+    {
+      id: "5",
+      name: "Deployment and CI setup",
+      quantity: 1,
+      unit: "C62",
+      netUnitPrice: 420,
+      vat: { category: "S", ratePercent: 19 },
+    },
   ],
 
   payment: {

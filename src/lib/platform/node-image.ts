@@ -5,7 +5,9 @@ export async function pngToRgba(
   bytes: Uint8Array,
 ): Promise<{ width: number; height: number; rgba: Uint8Array }> {
   const { Jimp } = await import("jimp");
-  const image = await Jimp.fromBuffer(Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength));
+  const image = await Jimp.fromBuffer(
+    Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength),
+  );
   const { width, height, data } = image.bitmap;
   return { width, height, rgba: new Uint8Array(data.buffer, data.byteOffset, data.byteLength) };
 }

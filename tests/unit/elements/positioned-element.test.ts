@@ -129,7 +129,10 @@ describe("PositionedElement - the page is the default frame", () => {
         margin: { top: 50, right: 50, bottom: 50, left: 50 },
       },
     });
-    page.calculateLayout(new BoxConstraints(), { x: 0, y: 0 }, { metrics, pageConfig: {} } as LayoutContext);
+    page.calculateLayout(new BoxConstraints(), { x: 0, y: 0 }, {
+      metrics,
+      pageConfig: {},
+    } as LayoutContext);
     // Body origin = the top-left margin (50, 50); child = origin + (left, top).
     expect(child.getSize().x).toBe(58);
     expect(child.getSize().y).toBe(55);
@@ -138,7 +141,14 @@ describe("PositionedElement - the page is the default frame", () => {
 
 describe("RectangleElement - overflow clips the children", () => {
   const laidOut = (overflow?: "hidden" | "visible") => {
-    const rect = new RectangleElement({ x: 0, y: 0, width: 50, height: 30, borderWidth: 0, overflow });
+    const rect = new RectangleElement({
+      x: 0,
+      y: 0,
+      width: 50,
+      height: 30,
+      borderWidth: 0,
+      overflow,
+    });
     rect.calculateLayout(BoxConstraints.loose(50, 30), { x: 0, y: 0 }, ctx);
     return rect;
   };

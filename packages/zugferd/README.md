@@ -27,15 +27,30 @@ const { bytes, xml } = await renderZugferd(
     issueDate: "2026-06-21",
     dueDate: "2026-07-05",
     currency: "EUR",
-    seller: { name: "Northwind Studio GmbH", vatId: "DE123456789",
-              address: { city: "Berlin", postCode: "10115", country: "DE" } },
-    buyer:  { name: "Globex Corporation Ltd",
-              address: { city: "Munich", postCode: "80331", country: "DE" } },
+    seller: {
+      name: "Northwind Studio GmbH",
+      vatId: "DE123456789",
+      address: { city: "Berlin", postCode: "10115", country: "DE" },
+    },
+    buyer: {
+      name: "Globex Corporation Ltd",
+      address: { city: "Munich", postCode: "80331", country: "DE" },
+    },
     lines: [
-      { name: "Website design & build", quantity: 1, unit: "C62",
-        netUnitPrice: 9600, vat: { category: "S", ratePercent: 19 } },
-      { name: "Printed brand book", quantity: 25, unit: "C62",
-        netUnitPrice: 28, vat: { category: "S", ratePercent: 7 } },
+      {
+        name: "Website design & build",
+        quantity: 1,
+        unit: "C62",
+        netUnitPrice: 9600,
+        vat: { category: "S", ratePercent: 19 },
+      },
+      {
+        name: "Printed brand book",
+        quantity: 25,
+        unit: "C62",
+        netUnitPrice: 28,
+        vat: { category: "S", ratePercent: 7 },
+      },
     ],
   },
   { locale: "en" }, // de / en / fr - or override individual labels
@@ -60,8 +75,8 @@ EN-16931 failures (the BR-CO total checks) simply cannot happen. Discounts, surc
 import { renderZugferd, toCII, toUBL, computeInvoice } from "@jasy/zugferd";
 
 await renderZugferd(invoice, { profile: "xrechnung" }); // the German B2G profile (Leitweg-ID, BR-DE)
-toCII(invoice, computeInvoice(invoice));                // the raw UN/CEFACT CII XML
-toUBL(invoice, computeInvoice(invoice));                // the raw OASIS UBL XML
+toCII(invoice, computeInvoice(invoice)); // the raw UN/CEFACT CII XML
+toUBL(invoice, computeInvoice(invoice)); // the raw OASIS UBL XML
 ```
 
 EN 16931 and the German **XRechnung** profile, in **both** permitted syntaxes - out of the box.

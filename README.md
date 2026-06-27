@@ -37,7 +37,7 @@ account, no upload, nothing leaves your machine.
 ## You bring the line items. jasy does the rest.
 
 You never compute a total, a VAT breakdown or a rounding again. You hand jasy the line items - it
-**derives** the document totals and the EN-16931 VAT breakdown, spec-correct. That is *why* the
+**derives** the document totals and the EN-16931 VAT breakdown, spec-correct. That is _why_ the
 invoices validate: the amounts are correct **by construction**, so the single biggest class of
 EN-16931 failures (the BR-CO total checks) simply cannot happen.
 
@@ -48,13 +48,23 @@ const { bytes, xml } = await renderZugferd({
   number: "RE-2026-001",
   issueDate: "2026-06-17",
   currency: "EUR",
-  seller: { name: "Northwind Studio GmbH", vatId: "DE123456789",
-            address: { city: "Berlin", postCode: "10115", country: "DE" } },
-  buyer:  { name: "Globex Corporation Ltd",
-            address: { city: "Munich", postCode: "80331", country: "DE" } },
+  seller: {
+    name: "Northwind Studio GmbH",
+    vatId: "DE123456789",
+    address: { city: "Berlin", postCode: "10115", country: "DE" },
+  },
+  buyer: {
+    name: "Globex Corporation Ltd",
+    address: { city: "Munich", postCode: "80331", country: "DE" },
+  },
   lines: [
-    { name: "Brand identity design", quantity: 2, unit: "HUR", netUnitPrice: 100,
-      vat: { category: "S", ratePercent: 19 } },
+    {
+      name: "Brand identity design",
+      quantity: 2,
+      unit: "HUR",
+      netUnitPrice: 100,
+      vat: { category: "S", ratePercent: 19 },
+    },
   ],
 });
 // bytes -> a valid ZUGFeRD PDF/A-3   ·   xml -> the embedded EN-16931 XML
@@ -123,7 +133,7 @@ verify all of it:
 - **Compression.** Content streams and images are FlateDecode-compressed; the spreadsheets `jasy export`
   writes are real `.xlsx` ZIPs we deflate with our own writer and CRC32, zero dependencies.
 - **Real font metrics.** Text is laid out with the Adobe AFM metrics of the standard-14 fonts - kerning
-  and word-wrap are *computed*, not guessed.
+  and word-wrap are _computed_, not guessed.
 - **PDF/A-3, matched not approximated.** The conformance graph is hand-built and **passes veraPDF**, the
   official ISO 19005 validator.
 - **Byte-exact round-trips.** Generate and parse are inverses: `generate → parse → regenerate` reproduces
@@ -135,11 +145,11 @@ verify all of it:
 
 ## Packages
 
-| Package | What it is |
-| --- | --- |
+| Package                                             | What it is                                                                                     |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
 | **[@jasy/zugferd](https://npmx.dev/@jasy/zugferd)** | ZUGFeRD / XRechnung: your data → PDF/A-3 + EN-16931 XML, with local validation. **The prize.** |
-| **[@jasy/cli](https://npmx.dev/@jasy/cli)** | the `jasy` terminal: read · validate · export, headless **and** interactive |
-| **[@jasy/pdf](https://npmx.dev/@jasy/pdf)** | the declarative, Flutter-style PDF layout engine that powers them |
+| **[@jasy/cli](https://npmx.dev/@jasy/cli)**         | the `jasy` terminal: read · validate · export, headless **and** interactive                    |
+| **[@jasy/pdf](https://npmx.dev/@jasy/pdf)**         | the declarative, Flutter-style PDF layout engine that powers them                              |
 
 ---
 
@@ -158,7 +168,7 @@ verify all of it:
 
 jasy targets the documents that matter here: invoices, reports, quotes, datasheets. It is **not** a
 LaTeX / WeasyPrint replacement - no microtypography, hyphenation or bidi, and arbitrary multi-page flow
-of *any* content is still maturing. For e-invoices (a table, totals, a footer) it is complete - they
+of _any_ content is still maturing. For e-invoices (a table, totals, a footer) it is complete - they
 even paginate. We would rather under-promise and over-deliver in the demo above.
 
 > **Status:** young and pre-1.0. The API can still shift between minor versions. Everything shown here

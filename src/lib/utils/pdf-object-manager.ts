@@ -31,8 +31,9 @@ export enum FontStyle {
 // Escapes a string into a valid PDF /Name token. A raw space or delimiter in a /Name (e.g. a font
 // family like "Great Vibes" or "Times New Roman") breaks the dictionary, so such chars become #XX.
 const pdfName = (s: string): string =>
-  s.replace(/[^\x21-\x7e]|[#()<>[\]{}/%]/g, (c) =>
-    "#" + c.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0"),
+  s.replace(
+    /[^\x21-\x7e]|[#()<>[\]{}/%]/g,
+    (c) => "#" + c.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0"),
   );
 
 // Suffix appended to an embedded font's PDF /BaseFont so each style variant of a family keeps
