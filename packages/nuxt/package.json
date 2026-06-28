@@ -1,6 +1,6 @@
 {
   "name": "@jasy/nuxt",
-  "version": "1.0.0-alpha.2",
+  "version": "1.0.0-alpha.3",
   "description": "Author PDFs as Vue components in Nuxt - client or server, zero config.",
   "license": "MIT",
   "author": "Florian Heuberger",
