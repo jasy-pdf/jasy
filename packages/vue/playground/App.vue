@@ -8,18 +8,20 @@ import Invitation from "./samples/Invitation.vue";
 import Showcase from "./samples/Showcase.vue";
 import Report from "./samples/Report.vue";
 import Transparency from "./samples/Transparency.vue";
+import Encrypted from "./samples/Encrypted.vue";
 import fontUrl from "./assets/GreatVibes-Regular.ttf?url";
 import imgUrl from "./assets/photo.jpg?url";
 import logoUrl from "./assets/logo.png?url";
 
 type AssetKey = "font" | "image" | "logo";
-const samples: { label: string; comp: any; assets?: AssetKey[] }[] = [
+const samples: { label: string; comp: any; assets?: AssetKey[]; encrypt?: boolean }[] = [
   { label: "Hello world", comp: Hello },
   { label: "Invoice", comp: Invoice },
   { label: "Report", comp: Report },
   { label: "Invitation", comp: Invitation },
   { label: "Showcase", comp: Showcase, assets: ["font", "image"] },
   { label: "Transparency", comp: Transparency, assets: ["logo"] },
+  { label: "Encrypted", comp: Encrypted, encrypt: true },
 ];
 
 // Each sample gets ONLY the keys it declares (above), never the whole cache - a stray asset would fall
@@ -43,6 +45,9 @@ const currentIndex = ref(Number(sessionStorage.getItem(STORAGE)) || 0);
 const pdfUrl = ref<string>();
 const error = ref<string>();
 const building = ref(false);
+// The password for the "Encrypted" sample - editable, so you can watch it gate the PDF.
+const password = ref("secret");
+const isEncrypted = computed(() => !!samples[currentIndex.value].encrypt);
 const downloadName = computed(
   () => samples[currentIndex.value].label.toLowerCase().replace(/\s+/g, "-") + ".pdf",
 );
@@ -58,8 +63,13 @@ async function render() {
       const cache = await loadAssets();
       props = Object.fromEntries(sample.assets.map((k) => [k, cache[k]]));
     }
-    const bytes = await renderToPdf(sample.comp, props);
-    // vue-pdf-embed paints the PDF onto a <canvas>, so it always shows inline and never downloads.
+    // The third arg is plain RenderOptions - `encrypt` flows straight through to the engine.
+    const options = sample.encrypt
+      ? { encrypt: { userPassword: password.value || "secret" } }
+      : undefined;
+    const bytes = await renderToPdf(sample.comp, props, options);
+    // vue-pdf-embed paints the PDF onto a <canvas>; an encrypted PDF can't show without the password,
+    // so for those we skip the preview and offer the download + the password instead (see the template).
     pdfUrl.value = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
   } catch (e: any) {
     error.value = String(e?.message ?? e);
@@ -91,11 +101,22 @@ onMounted(render);
           {{ s.label }}
         </button>
       </nav>
+      <label v-if="isEncrypted" class="pw">
+        password
+        <input v-model="password" @change="render" spellcheck="false" />
+      </label>
       <a v-if="pdfUrl" class="download" :href="pdfUrl" :download="downloadName">↓ Download</a>
       <span class="hint">{{ building ? "rendering…" : "100% in your browser · no server" }}</span>
     </header>
     <main>
       <pre v-if="error" class="error">{{ error }}</pre>
+      <div v-else-if="isEncrypted && pdfUrl" class="locked">
+        <div class="lock">🔒</div>
+        <h2>This PDF is encrypted (AES-256)</h2>
+        <p>The inline viewer can't open it without the password - that's the point.</p>
+        <p>Hit <strong>↓ Download</strong> (top right); your PDF viewer will ask for:</p>
+        <code>{{ password || "secret" }}</code>
+      </div>
       <div v-else class="viewer">
         <VuePdfEmbed v-if="pdfUrl" :key="pdfUrl" :source="pdfUrl" class="page" />
       </div>
@@ -170,6 +191,55 @@ nav button.active {
 .hint {
   opacity: 0.6;
   font-size: 12px;
+}
+.pw {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  font-size: 12px;
+  opacity: 0.85;
+}
+.pw input {
+  width: 120px;
+  padding: 4px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-size: 13px;
+}
+.pw + .download {
+  margin-left: 14px;
+}
+.locked {
+  margin: 60px auto;
+  max-width: 460px;
+  text-align: center;
+  color: #e2e8f0;
+  font-family: system-ui, sans-serif;
+}
+.locked .lock {
+  font-size: 64px;
+}
+.locked h2 {
+  margin: 12px 0 6px;
+  color: #fff;
+}
+.locked p {
+  margin: 6px 0;
+  opacity: 0.8;
+  font-size: 14px;
+}
+.locked code {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 8px 16px;
+  background: #f3dc29;
+  color: #0a2348;
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: 700;
 }
 main {
   flex: 1;

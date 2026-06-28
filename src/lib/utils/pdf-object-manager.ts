@@ -8,6 +8,7 @@ import { AFMParser } from "./afm-parser.ts";
 import { TTFParser } from "./ttf-parser.ts";
 import { subsetTTF } from "./ttf-subsetter.ts";
 import { getArrayBuffer } from "./utf8-to-windows1252-encoder.ts";
+import type { SecurityHandler } from "../crypto/security-handler.ts";
 // Enums come from the leaf config module (never in a cycle); the config type is
 // erased at runtime so it can come from the cyclic module safely.
 import { ColorMode, Orientation } from "../renderer/pdf-config.ts";
@@ -210,6 +211,12 @@ export class PDFObjectManager implements FontMetrics {
   private compress = false;
   private overflowPolicy: OverflowPolicy = "error";
 
+  // Optional encryption (setSecurityHandler). Stream emitters register their raw bytes here during the
+  // render; finalizeEncryption() encrypts them all in one async pass and adds the /Encrypt object.
+  private security?: SecurityHandler;
+  private encJobs: Uint8Array[] = [];
+  private encryptObjNum?: number;
+
   constructor();
   constructor(pageSize?: PageSize) {
     if (pageSize) this.pageFormat = pageFormats[pageSize];
@@ -246,20 +253,36 @@ export class PDFObjectManager implements FontMetrics {
     return this.overflowPolicy;
   }
 
+  // A unique, binary-safe placeholder for a stream's bytes, swapped for ciphertext in finalizeEncryption().
+  private encToken(id: number): string {
+    return ` JENC:${id} `;
+  }
+
+  // The single encryption choke-point every stream emitter routes through (stream(), registerImage). Without
+  // a security handler: the bytes as a latin1 string + their length. With one: register the raw bytes for the
+  // finalize pass and return a placeholder + the pre-computable encrypted length (16-byte IV + PKCS#7 padding).
+  private streamPayload(bytes: Uint8Array): { body: string; length: number } {
+    if (!this.security) return { body: latin1FromBytes(bytes), length: bytes.length };
+    const id = this.encJobs.push(bytes) - 1;
+    return { body: this.encToken(id), length: 16 + (Math.floor(bytes.length / 16) + 1) * 16 };
+  }
+
   // Builds a stream object body: `<< extraDict /Length n >> stream … endstream`, FlateDecode-compressed
-  // when enabled AND it actually helps (tiny streams aren't inflated). Binary bytes ride as a latin1
-  // string - the final encoder passes 0x00-0xFF through unchanged.
+  // when enabled AND it actually helps (tiny streams aren't inflated). The payload rides through
+  // streamPayload, so it is encrypted uniformly when a security handler is set.
   private stream(extraDict: string, data: Uint8Array): string {
     const head = extraDict ? extraDict + " " : "";
+    let body = data;
+    let filter = "";
     if (this.compress) {
       const z = zlibSync(data);
       if (z.length < data.length) {
-        return `<< ${head}/Filter /FlateDecode /Length ${z.length} >>\nstream\n${latin1FromBytes(
-          z,
-        )}\nendstream`;
+        body = z;
+        filter = "/Filter /FlateDecode ";
       }
     }
-    return `<< ${head}/Length ${data.length} >>\nstream\n${latin1FromBytes(data)}\nendstream`;
+    const p = this.streamPayload(body);
+    return `<< ${head}${filter}/Length ${p.length} >>\nstream\n${p.body}\nendstream`;
   }
 
   // Adds a page content stream (compressed when enabled). The caller passes the raw operator string.
@@ -327,6 +350,7 @@ export class PDFObjectManager implements FontMetrics {
     // A transparent PNG carries its alpha as a separate DeviceGray /SMask image the viewer composites with.
     let smaskEntry = "";
     if (smaskData) {
+      const s = this.streamPayload(bytesFromLatin1(smaskData));
       const smaskObject = `<< /Type /XObject
     /Subtype /Image
     /Width ${width}
@@ -334,13 +358,14 @@ export class PDFObjectManager implements FontMetrics {
     /ColorSpace /DeviceGray
     /BitsPerComponent 8
     /Filter /FlateDecode
-    /Length ${smaskData.length} >>
+    /Length ${s.length} >>
 stream
-${smaskData}
+${s.body}
 endstream`;
       smaskEntry = `    /SMask ${this.addObject(smaskObject)} 0 R\n`;
     }
 
+    const img = this.streamPayload(bytesFromLatin1(imageData));
     const imageObject = `<< /Type /XObject
     /Subtype /Image
     /Width ${width}
@@ -348,9 +373,9 @@ endstream`;
     /ColorSpace /DeviceRGB
     /BitsPerComponent 8
     /Filter /${imageType}
-${smaskEntry}    /Length ${imageData.length} >>
+${smaskEntry}    /Length ${img.length} >>
 stream
-${imageData}
+${img.body}
 endstream`;
 
     // Add the image and its object number to the image manager - return the object number
@@ -438,6 +463,31 @@ endstream`;
   // Enables a trailer /ID (required by PDF/A). The id is a content hash, so it is deterministic.
   enableDocumentId(): void {
     this.documentId = true;
+  }
+
+  // Turn on encryption: the handler encrypts every stream and supplies the /Encrypt dict. Forces a trailer
+  // /ID (encrypted PDFs require one) and PDF 2.0 (AES-256 R6). PDF/A forbids encryption - guarded at finalize.
+  setSecurityHandler(handler: SecurityHandler): void {
+    this.security = handler;
+    this.documentId = true;
+    this.setPdfVersion("2.0");
+  }
+
+  // One async pass at the very end: refuse to encrypt a PDF/A document, then encrypt every registered stream
+  // (swap each placeholder for its ciphertext) and add the /Encrypt object the trailer references.
+  async finalizeEncryption(): Promise<void> {
+    if (!this.security) return;
+    if (this.outputIntent !== undefined || this.attachments.length > 0) {
+      throw new Error("@jasy/pdf: cannot encrypt a PDF/A document - PDF/A forbids encryption.");
+    }
+    for (let id = 0; id < this.encJobs.length; id++) {
+      const ciphertext = latin1FromBytes(await this.security.encrypt(this.encJobs[id]));
+      const token = this.encToken(id);
+      const idx = this.objects.findIndex((o) => o.includes(token));
+      // Function replacement: a string replacement would interpret `$&`/`$\``/... in the random ciphertext.
+      if (idx >= 0) this.objects[idx] = this.objects[idx].replace(token, () => ciphertext);
+    }
+    this.encryptObjNum = this.addObject(`<< ${this.security.encryptDict()} >>`);
   }
 
   // Registers (or reuses) a transparency graphics state and returns its resource name
@@ -829,7 +879,8 @@ endstream`;
     const root = this.objects.findIndex((f) => f.toLowerCase().includes("catalog")) + 1;
     // A fresh document uses the same hash for both /ID strings; they only diverge on an update.
     const id = this.documentId ? ` /ID [${this.contentId()} ${this.contentId()}]` : "";
-    return `trailer\n<< /Size ${objectCount + 1} /Root ${root} 0 R${id} >>\nstartxref\n${startxref}\n%%EOF`;
+    const enc = this.encryptObjNum ? ` /Encrypt ${this.encryptObjNum} 0 R` : "";
+    return `trailer\n<< /Size ${objectCount + 1} /Root ${root} 0 R${id}${enc} >>\nstartxref\n${startxref}\n%%EOF`;
   }
 
   private contentId(): string {

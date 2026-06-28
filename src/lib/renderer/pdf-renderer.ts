@@ -101,6 +101,9 @@ export class PDFRenderer {
     // font objects with the subset font program (must happen before the objects are serialized).
     objectManager.finalizeCustomFonts();
 
+    // Encrypt every registered stream + add the /Encrypt object (no-op unless a security handler was set).
+    await objectManager.finalizeEncryption();
+
     // Add rendered objects
     pdfContent += objectManager.getRenderedObjects();
 

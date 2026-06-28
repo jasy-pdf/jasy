@@ -9,6 +9,9 @@ import { Orientation } from "../renderer/pdf-config.ts";
 import { PDFDocument, PDFConfig } from "../renderer/pdf-document-class.ts";
 import { FontStyle } from "../utils/pdf-object-manager.ts";
 import { getArrayBuffer } from "../utils/utf8-to-windows1252-encoder.ts";
+import { createSecurityHandler, type EncryptOptions } from "../crypto/security-handler.ts";
+// Public types so users can name the encryption options.
+export type { EncryptOptions, Permissions } from "../crypto/security-handler.ts";
 import { Column, StackOptions } from "./layout.ts";
 import { Insets, toEdges } from "./insets.ts";
 import { TextDefaults, toTextStyleOverride } from "./text.ts";
@@ -233,6 +236,9 @@ export interface RenderOptions {
   /** What to do when content is taller than a page and cannot break: `"error"` throws (default),
    *  `"warn"` logs and clips, `"ignore"` clips silently. It is always clipped either way. */
   onOverflow?: OverflowPolicy;
+  /** Encrypt the PDF with a password (AES-256, the newest standard). NOT compatible with PDF/A
+   *  (ZUGFeRD invoices) - encrypting one throws, since PDF/A forbids encryption. */
+  encrypt?: EncryptOptions;
 }
 
 function isFontBytes(v: FontBytes | FontFamily): v is FontBytes {
@@ -253,6 +259,11 @@ export async function renderPdf(doc: PDFDocumentElement, options?: RenderOptions
     ...options?.fonts,
   };
   const attachments = options?.attachments ?? [];
+  // The security handler's key derivation is async (WebCrypto), so build it here, before the sync
+  // PDFDocument constructor wires it into the object manager.
+  const securityHandler = options?.encrypt
+    ? await createSecurityHandler(options.encrypt)
+    : undefined;
 
   // A throwaway PDFDocument whose build() yields this tree, reusing the engine's standard
   // font registration + config handling (the constructor does both). Custom fonts are
@@ -284,6 +295,7 @@ export async function renderPdf(doc: PDFDocumentElement, options?: RenderOptions
       if (options?.outputIntent) om.setOutputIntent(options.outputIntent);
       if (options?.pdfVersion) om.setPdfVersion(options.pdfVersion);
       if (options?.documentId) om.enableDocumentId();
+      if (securityHandler) om.setSecurityHandler(securityHandler);
     }
     build(): PDFDocumentElement {
       return doc;

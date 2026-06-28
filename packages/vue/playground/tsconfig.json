@@ -8,7 +8,13 @@
     "strict": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "types": ["vite/client"]
+    "types": ["vite/client"],
+    // Mirror the vite alias so the editor's TS server resolves @jasy/vue from source too (vite aliases are
+    // invisible to tsserver). Paths are relative to this tsconfig (no deprecated baseUrl needed in TS 5+).
+    // @jasy/pdf needs nothing here - it resolves via node_modules + its dist .d.ts.
+    "paths": {
+      "@jasy/vue": ["../src/index.ts"]
+    }
   },
   "include": ["**/*.ts", "**/*.vue", "env.d.ts"]
 }
