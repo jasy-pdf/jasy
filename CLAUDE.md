@@ -178,9 +178,14 @@ rendering. This is the standing visual check; prefer it over one-off `scripts/ru
 - `pnpm test` — Vitest (watch). `pnpm exec vitest run` for a one-shot CI-style run.
   `pnpm run test:coverage` for coverage. Unit tests live in **`tests/unit/`**, mirroring the `src/lib/`
   structure (`tests/unit/{common,elements,renderer,utils}/…`). `src/` is pure production code — the
-  build (`tsconfig.json` includes only `src/**`) therefore keeps `dist/` test-free. **~270 tests, green**
+  build (`tsconfig.json` includes only `src/**`) therefore keeps `dist/` test-free. **~357 tests, green**
   in the core (plus the `@jasy/zugferd` suite).
 - `pnpm run build` — `tsc` → `dist/`.
+- `pnpm run lint` (oxlint) + `pnpm run fmt:check` (oxfmt `--check`); `pnpm run fmt` formats. **Run `pnpm run fmt`
+  before committing** — CI fails on unformatted files.
+- **CI** (`.github/workflows/`, since 2026-06-27): `pr.yml` = the PR gate (PR-title lint → lint+fmt → build →
+  only-changed tests via `vitest --changed`, staged + fail-fast, Node 24); `ci.yml` = full suite on `main`
+  (Node 22 + 24); `release.yml` = publish + GitHub Release on a `<pkg>-v*` tag.
 - `pnpm run manual-test` — compiles via `tsconfig.test.json`, copies AFM assets, runs
   `tests/manual/index.ts` (renders the `showcase.ts` capability demo). `tests/manual/` is **gitignored**
   — a DX/showcase harness that reads sample images from the private `claude-data/` scratch, so it isn't
@@ -247,8 +252,9 @@ Genuine remaining gaps / deferred:
    `rewriteRelativeImportExtensions`; the emitted `.d.ts` are fixed post-build by `scripts/fix-dts-ext.mjs`,
    tsc gap TS#61037). Browser font/image INPUT via `Uint8Array` (`CustomBytesImage` + a `fonts`
    document-descriptor prop → `addFont`); jimp lazy-loaded so text never bundles it. `@jasy/vue` renders
-   client-side (the playground "Showcase" proves custom .ttf + JPEG + v-for + computed). Nice-to-haves left:
-   compact-AFM (size), PNG-in-browser (jimp Buffer/canvas), `addFontFromUrl()`. See todo.md.
+   client-side (the playground "Showcase" proves custom .ttf + JPEG + v-for + computed). PNG in the browser is
+   DONE too: `platform/browser-image.ts` decodes via OffscreenCanvas (transparency → `/SMask`), swapped for the
+   jimp path by the `browser` field. Nice-to-haves left: compact-AFM (size), `addFontFromUrl()`. See todo.md.
 4. `manual-test` has hard-coded machine-specific paths.
 5. Font gaps: no TrueType kerning; only TTF / TrueType-flavoured OTF parsed (OTF/CFF, WOFF2 not yet).
    Bold/italic resolve via registered family variants with a clean fallback to `normal` (no faux styles).
@@ -259,9 +265,10 @@ The authoritative plan + ground rules live in **`todo.md`** (gitignored, repo ro
 starting work. Working agreement: **phase by phase, Flo approves each gate, Claude never commits/pushes
 unprompted, comments English + sensible, don't break the font math.**
 
-Status: **Phases 0-6 + ZUGFeRD shipped** (`@jasy/pdf`/`@jasy/zugferd`/`@jasy/cli` @1.0.0-alpha.1,
-2026-06-21). The engine is now **feature-complete for the alpha** — inheritance, `onOverflow`, custom
-formats, the line-breaker fixes added 2026-06-24; **345 tests green**. The **landing**
+Status: **LAUNCHED 2026-06-27** — all five packages live on npm (`@jasy/pdf`@alpha.3, `@jasy/zugferd`@alpha.1,
+`@jasy/cli`@alpha.3, `@jasy/vue`@alpha.3, `@jasy/nuxt`@alpha.2), repo public + locked, full CI + changelog +
+bots in place (see Repo facts). The engine is **feature-complete for the alpha** — inheritance, `onOverflow`,
+custom formats, the line-breaker fixes; **~357 tests green**. The **landing**
 (`~/projects/jasy-landing` → **jasy.dev**) is built: showroom (9 cards), validator, docs, a home-page
 roadmap section, and a full **SEO + AI-discoverability layer** (OG image, JSON-LD, `robots.txt`,
 `llms.txt`, `sitemap.xml`).
@@ -286,13 +293,19 @@ forms, security + signatures, more e-invoice profiles, framework bindings). See 
   (`packages/vue`) — author PDFs as Vue components, and **`@jasy/nuxt`** (`packages/nuxt`) — the Nuxt module
   (zero-config PDFs client OR server; shipped 2026-06-26). Barrel exports via
   `index.ts` at each level. GitHub org
-  `jasy-pdf`, the lib repo is `jasy-pdf/jasy` (may still be private — make public before launch).
+  `jasy-pdf`, the lib repo is `jasy-pdf/jasy` (**public** since the launch, 2026-06-27).
 - The **landing is a separate repo**, `~/projects/jasy-landing` → **jasy.dev** (Nuxt 4 + Nuxt UI 4 +
   Content 3). It has its **own CLAUDE.md + HARD RULES: never start/stop its dev server (Flo runs it),
   only Flo commits.** Package links there use **npmx.dev** (Daniel Roe's registry browser), not npmjs.com.
-- License MIT, author Florian Heuberger. npm (alpha dist-tag): `@jasy/pdf`@alpha.2, `@jasy/zugferd`@alpha.1,
-  `@jasy/cli`@alpha.3, `@jasy/vue`@alpha.2, `@jasy/nuxt`@alpha.1 (released via `scripts/release.sh <pkg>
-<version>` → `<pkg>-v*` tag → CI publish; order matters, deps `workspace:*` pin EXACT so dependents
-  re-release when a dep does). Branch `main`. Runtime deps: `jimp` (images), `fflate` (isomorphic deflate);
-  the old `reflect-metadata`
+- License MIT, author Florian Heuberger. **Launched 2026-06-27** (Bluesky + npm; landed with the Vue/Nuxt core
+  crew). npm (alpha dist-tag): `@jasy/pdf`@alpha.3, `@jasy/zugferd`@alpha.1, `@jasy/cli`@alpha.3,
+  `@jasy/vue`@alpha.3, `@jasy/nuxt`@alpha.2 (released via `scripts/release.sh <pkg> <version>` → `<pkg>-v*` tag →
+  CI publish; order matters, deps `workspace:*` pin EXACT so dependents re-release when a dep does; the tag also
+  builds the GitHub Release notes via `scripts/gh-release.mjs` — changelogen groups + per-commit contributors,
+  idempotent upsert). `latest` dist-tag points at the newest alpha per package.
+- **Repo locked to the maintainer** (GitHub rulesets, 2026-06-27): only Flo's account pushes/merges/tags; everyone
+  else = issues + fork PRs. **CodeRabbit** (`.coderabbit.yaml`) reviews PRs; **Renovate** (`renovate.json`, app
+  bypass-listed in the ruleset) opens weekly dependency PRs. Community-health files (CONTRIBUTING / CODE_OF_CONDUCT /
+  SECURITY / LICENSE / issue+PR templates / FUNDING) all in. Branch `main`. Runtime deps: `jimp` (images), `fflate`
+  (isomorphic deflate); the old `reflect-metadata`
   DI is gone (decorator removed).
