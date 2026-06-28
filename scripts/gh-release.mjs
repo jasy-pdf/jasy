@@ -52,6 +52,10 @@ try {
   /* empty delta */
 }
 if (!hadChangelog && existsSync("CHANGELOG.md")) rmSync("CHANGELOG.md");
+// changelogen logs via consola; in CI (non-TTY) that leaks a "[log]" prefix line onto stdout, which we
+// capture here. Drop everything before the real changelog: the compare-changes link or the first heading.
+const begin = notes.search(/^(\[compare changes\]|#{1,6}\s)/m);
+if (begin > 0) notes = notes.slice(begin);
 notes = notes
   .replace(/### ❤️ Contributors[\s\S]*$/m, "")
   .replace(/^##\s.*$/m, "")
