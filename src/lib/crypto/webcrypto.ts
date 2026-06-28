@@ -70,6 +70,8 @@ export async function aesCbcEncryptNoPad(
   iv: Uint8Array,
   data: Uint8Array,
 ): Promise<Uint8Array> {
+  if (data.length % 16 !== 0)
+    throw new Error("aesCbcEncryptNoPad: data must be a multiple of 16 bytes.");
   return (await aesCbcEncrypt(key, iv, data)).subarray(0, data.length);
 }
 
@@ -86,6 +88,8 @@ export async function aesCbcDecryptNoPad(
   iv: Uint8Array,
   data: Uint8Array,
 ): Promise<Uint8Array> {
+  if (data.length === 0 || data.length % 16 !== 0)
+    throw new Error("aesCbcDecryptNoPad: data must be a non-zero multiple of 16 bytes.");
   const prev = data.length >= 16 ? data.subarray(data.length - 16) : iv;
   // ECB(x) == first block of CBC(iv=0, x); we want the appended block to decrypt to 0x10*16 after the CBC xor.
   const appended = await aesCbcEncryptNoPad(

@@ -49,6 +49,13 @@ const concat = (...parts: Uint8Array[]): Uint8Array => {
   return out;
 };
 const toHex = (a: Uint8Array) => [...a].map((b) => b.toString(16).padStart(2, "0")).join("");
+// Constant-time-ish equality for password validation (no early-out on the first differing byte).
+const bytesEqual = (a: Uint8Array, b: Uint8Array): boolean => {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
+  return diff === 0;
+};
 
 // ISO 32000-2 Algorithm 2.B: the hardened password hash. Loops AES-128-CBC + SHA-256/384/512 until the
 // stopping rule. `udata` is the 48-byte /U for the owner computations, empty for the user ones.
@@ -146,14 +153,21 @@ class StandardAes256 implements SecurityHandler {
     return aesCbcDecrypt(this.fileKey, data.subarray(0, 16), data.subarray(16));
   }
 
-  /** Test/edit groundwork: recover the file key from a password as a reader would (decrypt /UE). */
+  /** Recover the file key from a password as a reader does: validate it against /U FIRST (so a wrong
+   *  password is rejected, not silently turned into a garbage key), then decrypt /UE. The groundwork the
+   *  future "open/edit existing PDF" path reuses. Throws on a wrong password. */
   static async recoverFileKey(
     userPassword: string,
     u: Uint8Array,
     ue: Uint8Array,
   ): Promise<Uint8Array> {
-    const uKS = u.subarray(40, 48);
-    const intermediate = await hash2B(utf8(userPassword), uKS, new Uint8Array(0));
+    const pw = utf8(userPassword);
+    // Algorithm 11: hash(password + validation salt) must equal the first 32 bytes of /U.
+    const check = await hash2B(pw, u.subarray(32, 40), new Uint8Array(0));
+    if (!bytesEqual(check, u.subarray(0, 32))) {
+      throw new Error("@jasy/pdf: wrong password.");
+    }
+    const intermediate = await hash2B(pw, u.subarray(40, 48), new Uint8Array(0));
     return aesCbcDecryptNoPad(intermediate, new Uint8Array(16), ue);
   }
 }

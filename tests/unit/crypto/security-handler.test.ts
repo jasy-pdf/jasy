@@ -33,21 +33,11 @@ describe("StandardAes256 (V5/R6) security handler", () => {
     expect(toHex(manual)).toBe(toHex(data));
   });
 
-  it("a wrong password does NOT recover the key", async () => {
+  it("rejects a wrong password (validates against /U before deriving a key)", async () => {
     const h = await createSecurityHandler({ userPassword: "right" });
     const d = h.encryptDict();
-    const enc = await h.encrypt(new TextEncoder().encode("0123456789abcdef"));
-    const wrong = await StandardAes256.recoverFileKey(
-      "WRONG",
-      dictBytes(d, "U"),
-      dictBytes(d, "UE"),
-    );
-    let manual: Uint8Array | null = null;
-    try {
-      manual = await aesCbcDecrypt(wrong, enc.subarray(0, 16), enc.subarray(16));
-    } catch {
-      /* bad PKCS#7 padding from the wrong key */
-    }
-    expect(manual === null || toHex(manual) !== toHex(enc.subarray(16))).toBe(true);
+    await expect(
+      StandardAes256.recoverFileKey("WRONG", dictBytes(d, "U"), dictBytes(d, "UE")),
+    ).rejects.toThrow(/wrong password/);
   });
 });
