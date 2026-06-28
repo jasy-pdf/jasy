@@ -11,7 +11,10 @@ export default defineConfig({
     // keeps resolving via its package so its `browser` field still swaps the platform ports for the browser.
     // Dev-only: this file is not part of the published package, so it can never affect the build/release.
     alias: [
-      { find: /^@jasy\/vue$/, replacement: fileURLToPath(new URL("../src/index.ts", import.meta.url)) },
+      {
+        find: /^@jasy\/vue$/,
+        replacement: fileURLToPath(new URL("../src/index.ts", import.meta.url)),
+      },
     ],
   },
   // vue-pdf-embed bundles pdf.js + its worker; excluding it from pre-bundling keeps that worker happy.

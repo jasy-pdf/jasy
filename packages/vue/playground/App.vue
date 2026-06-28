@@ -64,7 +64,9 @@ async function render() {
       props = Object.fromEntries(sample.assets.map((k) => [k, cache[k]]));
     }
     // The third arg is plain RenderOptions - `encrypt` flows straight through to the engine.
-    const options = sample.encrypt ? { encrypt: { userPassword: password.value || "secret" } } : undefined;
+    const options = sample.encrypt
+      ? { encrypt: { userPassword: password.value || "secret" } }
+      : undefined;
     const bytes = await renderToPdf(sample.comp, props, options);
     // vue-pdf-embed paints the PDF onto a <canvas>; an encrypted PDF can't show without the password,
     // so for those we skip the preview and offer the download + the password instead (see the template).

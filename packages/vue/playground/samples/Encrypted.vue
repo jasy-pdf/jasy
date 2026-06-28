@@ -13,7 +13,8 @@ import * as Pdf from "@jasy/vue";
       >
       <Pdf.Box :bg="'#fef3c7'" :padding="16">
         <Pdf.Text :size="12" :color="'#92400e'"
-          >Salary review, Q3 projections, and other things you would not send in plain text.</Pdf.Text
+          >Salary review, Q3 projections, and other things you would not send in plain
+          text.</Pdf.Text
         >
       </Pdf.Box>
       <Pdf.Text :size="11" :color="'#94a3b8'">JasyPDF - no Java, no headless browser.</Pdf.Text>
