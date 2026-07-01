@@ -73,6 +73,7 @@ export class TextRenderer {
       maxLines,
       overflow,
       lineHeight,
+      role,
     } = textElement.getProps();
 
     // Component -> display list. Wrapping and positioning stay here; the backend
@@ -97,7 +98,8 @@ export class TextRenderer {
     // (Heading levels + other roles are a later slice; the default role is P.)
     if (objectManager.struct.enabled) {
       const key = objectManager.struct.nextKey();
-      for (const run of runs) run.tag = { role: "P", key };
+      const pdfRole = role ? role.toUpperCase() : "P"; // "h1" -> "H1"; default paragraph
+      for (const run of runs) run.tag = { role: pdfRole, key };
     }
     return runs;
   }

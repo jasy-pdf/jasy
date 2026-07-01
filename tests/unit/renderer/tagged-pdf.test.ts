@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { Document, Page, Column, Text, renderPdf } from "../../../src/lib/index";
+import { Document, Page, Column, Box, Text, renderPdf } from "../../../src/lib/index";
 
 const doc = () =>
   Document([Page({ margin: 40 }, [Column([Text("Heading"), Text("A paragraph of body text.")])])]);
@@ -25,5 +25,21 @@ describe("accessible tagging (PDF/UA foundation)", () => {
     expect(off).not.toContain("/MarkInfo");
     expect(off).not.toContain("BDC");
     expect(on).not.toBe(off); // sanity: tagging did change the output
+  });
+  it("tags heading roles and auto-marks decoration as an artifact", async () => {
+    const doc = Document([
+      Page({ margin: 40 }, [
+        Column([
+          Text("Title", { role: "h1" }),
+          Text("Body paragraph."),
+          Box({ bg: "#eeeeee", padding: 8 }, [Text("Boxed text.")]),
+        ]),
+      ]),
+    ]);
+    const pdf = await renderPdf(doc, { accessible: true, compress: false });
+    expect(pdf).toContain("/S /H1");
+    expect(pdf).toContain("/S /P");
+    expect(pdf).toMatch(/\/H1 <<\/MCID \d+>> BDC/);
+    expect(pdf).toContain("/Artifact BDC"); // the box background rect
   });
 });

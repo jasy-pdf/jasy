@@ -1,4 +1,4 @@
-import { TextElement, TextSegment } from "../elements/text-element.ts";
+import { TextElement, TextRole, TextSegment } from "../elements/text-element.ts";
 import { HorizontalAlignment } from "../elements/pdf-element.ts";
 import { FontStyle } from "../utils/pdf-object-manager.ts";
 import { TextOverflow } from "../text/line-breaker.ts";
@@ -28,6 +28,9 @@ export interface TextOptions extends TextStyle {
   /** Line-height multiplier (default `1`). `1.4` gives roomier body copy; each line is
    *  `size * lineHeight` tall. */
   lineHeight?: number;
+  /** Accessibility role for the tagged structure tree (only when rendered with `accessible`): a heading
+   *  level `"h1"`..`"h6"` or `"p"` (default). Purely semantic - it does not change the visual style. */
+  role?: TextRole;
 }
 
 /** bold + italic → the single engine `FontStyle`. */
@@ -82,6 +85,7 @@ export function Text(content: string | TextSegment[], opts: TextOptions = {}): T
     maxLines: opts.maxLines,
     overflow: opts.overflow,
     lineHeight: opts.lineHeight,
+    role: opts.role,
   });
 }
 
