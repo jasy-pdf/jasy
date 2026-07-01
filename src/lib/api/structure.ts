@@ -12,6 +12,7 @@ import { getArrayBuffer } from "../utils/utf8-to-windows1252-encoder.ts";
 import { createSecurityHandler, type EncryptOptions } from "../crypto/security-handler.ts";
 // Public types so users can name the encryption options.
 export type { EncryptOptions, Permissions } from "../crypto/security-handler.ts";
+import { uaXmp } from "../utils/ua-xmp.ts";
 import { Column, StackOptions } from "./layout.ts";
 import { Insets, toEdges } from "./insets.ts";
 import { TextDefaults, toTextStyleOverride } from "./text.ts";
@@ -306,6 +307,8 @@ export async function renderPdf(doc: PDFDocumentElement, options?: RenderOptions
         om.struct.enabled = true;
         if (options.lang) om.struct.lang = options.lang;
         if (options.title) om.struct.title = options.title;
+        // Declare PDF/UA-1 in the XMP metadata, unless the caller supplied their own packet.
+        if (!options.xmp) om.setXmpMetadata(uaXmp({ title: options.title, lang: options.lang }));
       }
     }
     build(): PDFDocumentElement {

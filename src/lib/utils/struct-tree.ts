@@ -113,10 +113,13 @@ export class StructTree {
         ...e.mc.map((m) => `<< /Type /MCR /Pg ${pg(m.structParents)} 0 R /MCID ${m.mcid} >>`),
       ].join(" ");
       const alt = e.alt ? ` /Alt (${esc(e.alt)})` : "";
+      // PDF/UA 7.5: a header cell needs a Scope so a reader can associate data cells with it. Our headers
+      // are a header ROW (the Table `header` option), so each TH is the head of its Column.
+      const attr = e.role === "TH" ? " /A << /O /Table /Scope /Column >>" : "";
       const parentRef = e.parent !== undefined ? objNum.get(e.parent)! : docNum;
       om.replaceObject(
         objNum.get(e.key)!,
-        `<< /Type /StructElem /S /${e.role} /P ${parentRef} 0 R${alt} /K [ ${kids} ] >>`,
+        `<< /Type /StructElem /S /${e.role} /P ${parentRef} 0 R${alt}${attr} /K [ ${kids} ] >>`,
       );
     }
 

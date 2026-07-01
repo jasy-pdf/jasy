@@ -100,7 +100,11 @@ export class PDFRenderer {
     // Accessible tagging: finalize the structure tree (emits StructTreeRoot + StructElems + ParentTree) and
     // fold /MarkInfo + /StructTreeRoot + /Lang into the catalog. Returns "" (no-op) when tagging is off.
     const structCatalog = objectManager.struct.finalize(objectManager);
-    if (structCatalog) catalogParts.push(structCatalog);
+    if (structCatalog) {
+      catalogParts.push(structCatalog);
+      // PDF/UA requires the viewer to show the document title (not the file name).
+      catalogParts.push("/ViewerPreferences << /DisplayDocTitle true >>");
+    }
 
     const catalogObject = `<< ${catalogParts.join(" ")} >>`;
     objectManager.addObject(catalogObject);

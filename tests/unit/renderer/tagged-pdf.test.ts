@@ -70,4 +70,24 @@ describe("accessible tagging (PDF/UA foundation)", () => {
     expect(pdf).toContain("/S /TH");
     expect(pdf).toContain("/S /TD");
   });
+
+  it("declares PDF/UA-1: metadata, DisplayDocTitle, page Tabs, TH scope, title", async () => {
+    const doc = Document([
+      Page({ margin: 40 }, [
+        Text("Title", { role: "h1" }),
+        Table({ columns: ["1fr", "auto"], header: ["Name", "Value"] }, [["a", "1"]]),
+      ]),
+    ]);
+    const pdf = await renderPdf(doc, {
+      accessible: true,
+      title: "My Doc",
+      lang: "de-DE",
+      compress: false,
+    });
+    expect(pdf).toContain("<pdfuaid:part>1</pdfuaid:part>"); // PDF/UA-1 identification (XMP)
+    expect(pdf).toContain("/ViewerPreferences << /DisplayDocTitle true >>");
+    expect(pdf).toContain("/Tabs /S"); // logical tab/reading order on the page
+    expect(pdf).toContain("/Scope /Column"); // header cells carry a Scope
+    expect(pdf).toContain("My Doc"); // dc:title
+  });
 });

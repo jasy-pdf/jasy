@@ -769,10 +769,6 @@ endstream`;
     return width;
   }
 
-  private getCharCode(char: string): string {
-    return char.charCodeAt(0).toString();
-  }
-
   private getAVMParserByFont(fullFontName?: string, fontName?: string, fontStyle?: FontStyle) {
     // A non-string family means font bytes were passed where a name belongs - hint at the fix instead of
     // stringifying the byte blob into an unreadable "parser not found".

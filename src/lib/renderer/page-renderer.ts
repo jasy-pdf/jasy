@@ -80,11 +80,12 @@ export class PageRenderer {
         ? "/ExtGState <<\n" + extGStateReferences.join("\n") + "\n>>\n"
         : "";
 
-    // /StructParents ties this page's marked content to the structure tree's ParentTree (tagging only).
-    const structParents = structCtx ? ` /StructParents ${structCtx.structParents}` : "";
+    // Tagging only: /StructParents links this page's marked content to the ParentTree, /Tabs /S makes the
+    // logical structure order the tab/reading order (a PDF/UA requirement).
+    const structAttrs = structCtx ? ` /StructParents ${structCtx.structParents} /Tabs /S` : "";
     const pageObject = `<< /Type /Page /Parent ${parentObjectNumber} 0 R /Contents ${contentObjectNumber} 0 R /Resources <<\n/Font <<\n${fontReferences.join(
       "\n",
-    )}\n>>\n${imageCode}${extGStateCode}>>\n/MediaBox [0 0 ${width} ${height}]${structParents} >>`;
+    )}\n>>\n${imageCode}${extGStateCode}>>\n/MediaBox [0 0 ${width} ${height}]${structAttrs} >>`;
 
     // Add page as new object; register its object number with the struct tree (for /Pg refs), then return it.
     const pageObjNum = objectManager.addObject(pageObject);
