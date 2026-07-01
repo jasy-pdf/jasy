@@ -1,4 +1,5 @@
 import { IRNode } from "../ir/display-list.ts";
+import { Color } from "../common/color.ts";
 import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 
 /**
@@ -47,6 +48,23 @@ export class PdfBackend {
           return { ...node, y: pageHeight - node.y - node.height };
         case "clip-pop":
           return node;
+        case "path": {
+          // Flip every point's y directly (like a line endpoint); `z` carries no coordinates.
+          const commands = node.commands.map((c) => {
+            if (c.op === "z") return c;
+            if (c.op === "c") {
+              return { ...c, y1: pageHeight - c.y1, y2: pageHeight - c.y2, y: pageHeight - c.y };
+            }
+            return { ...c, y: pageHeight - c.y };
+          });
+          // A gradient fill carries its own page-space anchor points; flip their y too (radii and
+          // x stay). A solid Color fill has no geometry.
+          const fill =
+            node.fill instanceof Color
+              ? node.fill
+              : { ...node.fill, y0: pageHeight - node.fill.y0, y1: pageHeight - node.fill.y1 };
+          return { ...node, commands, fill };
+        }
         default: {
           const unknown: never = node;
           return unknown;
@@ -217,6 +235,28 @@ export class PdfBackend {
             ? PdfBackend.roundedRectPath(node.x, node.y, node.width, node.height, node.radius!)
             : `${node.x} ${node.y} ${node.width} ${node.height} re`;
         return `q\n${path}\nW n\n`;
+      }
+      case "path": {
+        // A filled vector path (one color-glyph layer). Emit the subpath ops, then either a solid
+        // nonzero fill (a Color) or, for a gradient, clip to the path and paint a shading inside it.
+        const f = (n: number) => n.toFixed(3);
+        let path = "";
+        for (const c of node.commands) {
+          if (c.op === "m") path += `${f(c.x)} ${f(c.y)} m\n`;
+          else if (c.op === "l") path += `${f(c.x)} ${f(c.y)} l\n`;
+          else if (c.op === "c")
+            path += `${f(c.x1)} ${f(c.y1)} ${f(c.x2)} ${f(c.y2)} ${f(c.x)} ${f(c.y)} c\n`;
+          else path += `h\n`;
+        }
+        if (!(node.fill instanceof Color)) {
+          // Gradient: clip to the path (W n keeps it as the clip without painting it), then paint
+          // the registered shading across that clip. The q/Q isolates the clip.
+          const shading = om.registerShading(node.fill);
+          return `q\n${path}W n\n/${shading} sh\nQ\n`;
+        }
+        const body = `${node.fill.toPDFColorString()} rg\n${path}f\n`;
+        const gs = PdfBackend.alphaPrefix(om, node.fill.getAlpha(), 1);
+        return gs ? `q\n${gs}${body}Q\n` : body;
       }
       case "clip-pop":
         return `Q\n`;

@@ -53,6 +53,18 @@ describe("text truncation - maxLines + overflow", () => {
     expect(wrap("alfa", 50, 2, "ellipsis")).toEqual(["alfa"]); // one line, no ...
   });
 
+  it("ellipsis trims a word by code point - never splits an emoji into a lone surrogate", () => {
+    // A single wide emoji word forces char-level trimming. Each emoji is a UTF-16 pair; the old
+    // unit-by-unit slice would stop on a half-surrogate. maxWidth 65 = one emoji (20) + "..." (30).
+    const [line] = wrap("😀😀😀😀 x", 65, 1, "ellipsis");
+    expect(line).toBe("😀..."); // one WHOLE emoji + ellipsis, not "😀<lone surrogate>..."
+    const wellFormed = [...line].every((c) => {
+      const cp = c.codePointAt(0)!;
+      return cp < 0xd800 || cp > 0xdfff; // no bare surrogate survived the trim
+    });
+    expect(wellFormed).toBe(true);
+  });
+
   it("TextElement: maxLines caps the laid-out height", () => {
     const ctx = { metrics, pageConfig: {} } as LayoutContext;
     const el = new TextElement({ fontSize: 10, content: TEXT, maxLines: 2 });

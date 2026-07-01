@@ -3,7 +3,8 @@ import { HorizontalAlignment } from "../elements/pdf-element.ts";
 import { TextElement, TextSegment } from "../elements/text-element.ts";
 import { FontStyle, PDFObjectManager } from "../utils/pdf-object-manager.ts";
 import type { FontMetrics } from "../utils/font-metrics.ts";
-import { IRNode, TextRun } from "../ir/display-list.ts";
+import type { GlyphPathCommand, Paint } from "../utils/ttf-parser.ts";
+import { IRNode, TextRun, PathCommand, Gradient } from "../ir/display-list.ts";
 import {
   wrapStringIntoLines,
   breakSegmentsIntoLines,
@@ -78,7 +79,7 @@ export class TextRenderer {
     // Component -> display list. Wrapping and positioning stay here; the backend
     // turns each run into BT/Tf/Td/Tj/ET. The wrapping algorithm is unchanged from
     // the original renderer - unifying it into the engine is Phase 3.
-    return TextRenderer._buildRuns(
+    const runs = TextRenderer._buildRuns(
       content,
       fontSize,
       fontFamily,
@@ -93,6 +94,153 @@ export class TextRenderer {
       overflow,
       lineHeight,
     );
+
+    // Color fonts (COLR/CPAL): expand each run's emoji into filled vector layers; plain runs and
+    // monochrome fonts pass straight through unchanged.
+    return runs.flatMap((run) => TextRenderer._expandColorGlyphs(run, objectManager));
+  }
+
+  // Splits a text run into normal text sub-runs + filled `Path` layers for any COLR color glyphs,
+  // walking code point by code point and advancing the pen by each glyph's width. Returns `[run]`
+  // untouched when the font has no color glyphs (the common case).
+  private static _expandColorGlyphs(run: TextRun, om: PDFObjectManager): IRNode[] {
+    const ttf = om.getColorFont(run.fontFamily, run.fontStyle);
+    if (!ttf) return [run];
+
+    const scale = run.fontSize / ttf.unitsPerEm;
+    const nodes: IRNode[] = [];
+    let cursorX = run.x; // absolute x of the next glyph
+    let pending = ""; // run of consecutive non-color characters
+    let pendingX = run.x; // where that run started
+
+    const flushPending = (): void => {
+      if (pending) {
+        nodes.push({ ...run, x: pendingX, text: pending });
+        pending = "";
+      }
+    };
+
+    for (const ch of run.text) {
+      const gid = ttf.getGlyphIndex(ch.codePointAt(0)!);
+      const layers = gid ? ttf.getColorGlyph(gid) : null;
+      const advance = om.getCharWidth(ch, run.fontSize, undefined, run.fontFamily, run.fontStyle);
+
+      if (layers) {
+        flushPending();
+        for (const layer of layers) {
+          const commands = TextRenderer._glyphToPath(
+            ttf.getGlyphPath(layer.glyphId),
+            cursorX,
+            run.y,
+            scale,
+          );
+          if (commands.length === 0) continue; // an empty layer outline draws nothing
+          const paint = layer.paint;
+          let fill;
+          if (paint.type === "solid") {
+            const c = paint.color;
+            fill = c ? new Color(c.r, c.g, c.b, c.a / 255) : run.color; // null -> foreground
+          } else {
+            fill = TextRenderer._toGradient(paint, cursorX, run.y, scale, run.color);
+          }
+          nodes.push({ type: "path", commands, fill });
+        }
+      } else {
+        if (!pending) pendingX = cursorX;
+        pending += ch;
+      }
+      cursorX += advance;
+    }
+    flushPending();
+    return nodes;
+  }
+
+  // Maps a glyph outline (font units, y-up) to absolute IR path commands at the pen origin, scaling
+  // by `scale` and flipping the axis into the engine's top-left space (the seam flips it once more
+  // to PDF space). TrueType quadratics become cubics: C1 = P0 + 2/3(C-P0), C2 = P1 + 2/3(C-P1).
+  private static _glyphToPath(
+    cmds: GlyphPathCommand[],
+    originX: number,
+    baselineY: number,
+    scale: number,
+  ): PathCommand[] {
+    const mapX = (gx: number): number => originX + gx * scale;
+    const mapY = (gy: number): number => baselineY - gy * scale;
+    const out: PathCommand[] = [];
+    let curX = 0;
+    let curY = 0;
+    for (const c of cmds) {
+      if (c.type === "M") {
+        curX = mapX(c.x);
+        curY = mapY(c.y);
+        out.push({ op: "m", x: curX, y: curY });
+      } else if (c.type === "L") {
+        curX = mapX(c.x);
+        curY = mapY(c.y);
+        out.push({ op: "l", x: curX, y: curY });
+      } else if (c.type === "Q") {
+        const ctrlX = mapX(c.cx);
+        const ctrlY = mapY(c.cy);
+        const endX = mapX(c.x);
+        const endY = mapY(c.y);
+        out.push({
+          op: "c",
+          x1: curX + (2 / 3) * (ctrlX - curX),
+          y1: curY + (2 / 3) * (ctrlY - curY),
+          x2: endX + (2 / 3) * (ctrlX - endX),
+          y2: endY + (2 / 3) * (ctrlY - endY),
+          x: endX,
+          y: endY,
+        });
+        curX = endX;
+        curY = endY;
+      } else {
+        out.push({ op: "z" });
+      }
+    }
+    return out;
+  }
+
+  // Maps a COLR v1 gradient paint (font-unit coordinates) into an IR `Gradient` positioned at the
+  // pen origin, using the SAME scale + baseline flip as the glyph outline so the gradient axis lines
+  // up with the shape. Radii scale uniformly (the em scale is uniform). A null stop color (the COLR
+  // "use foreground" sentinel) becomes the text color.
+  private static _toGradient(
+    paint: Exclude<Paint, { type: "solid" }>,
+    originX: number,
+    baselineY: number,
+    scale: number,
+    foreground: Color,
+  ): Gradient {
+    const mapX = (gx: number): number => originX + gx * scale;
+    const mapY = (gy: number): number => baselineY - gy * scale;
+    const stops = paint.stops.map((s) => ({
+      offset: s.offset,
+      color: s.color ? new Color(s.color.r, s.color.g, s.color.b, s.color.a / 255) : foreground,
+    }));
+
+    if (paint.type === "linearGradient") {
+      return {
+        type: "linear",
+        x0: mapX(paint.p0[0]),
+        y0: mapY(paint.p0[1]),
+        x1: mapX(paint.p1[0]),
+        y1: mapY(paint.p1[1]),
+        stops,
+        extend: paint.extend,
+      };
+    }
+    return {
+      type: "radial",
+      x0: mapX(paint.c0[0]),
+      y0: mapY(paint.c0[1]),
+      r0: paint.c0[2] * scale,
+      x1: mapX(paint.c1[0]),
+      y1: mapY(paint.c1[1]),
+      r1: paint.c1[2] * scale,
+      stops,
+      extend: paint.extend,
+    };
   }
 
   // Lay the content out into absolutely-positioned text runs. Glyph positions match

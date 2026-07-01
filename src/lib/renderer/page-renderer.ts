@@ -73,9 +73,17 @@ export class PageRenderer {
         ? "/ExtGState <<\n" + extGStateReferences.join("\n") + "\n>>\n"
         : "";
 
+    // - Gradient shadings (color-glyph fills), registered during serialize above
+    const shadingReferences: string[] = [];
+    objectManager.getAllShadingsRaw().forEach((objectNumber, name) => {
+      shadingReferences.push(`/${name} ${objectNumber} 0 R`);
+    });
+    const shadingCode =
+      shadingReferences.length > 0 ? "/Shading <<\n" + shadingReferences.join("\n") + "\n>>\n" : "";
+
     const pageObject = `<< /Type /Page /Parent ${parentObjectNumber} 0 R /Contents ${contentObjectNumber} 0 R /Resources <<\n/Font <<\n${fontReferences.join(
       "\n",
-    )}\n>>\n${imageCode}${extGStateCode}>>\n/MediaBox [0 0 ${width} ${height}] >>`;
+    )}\n>>\n${imageCode}${extGStateCode}${shadingCode}>>\n/MediaBox [0 0 ${width} ${height}] >>`;
 
     // Add page as new object and return the page number
     return objectManager.addObject(pageObject);

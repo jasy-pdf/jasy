@@ -9,6 +9,7 @@ import { TTFParser } from "./ttf-parser.ts";
 import { subsetTTF } from "./ttf-subsetter.ts";
 import { getArrayBuffer } from "./utf8-to-windows1252-encoder.ts";
 import type { SecurityHandler } from "../crypto/security-handler.ts";
+import type { Gradient, GradientStop } from "../ir/display-list.ts";
 // Enums come from the leaf config module (never in a cycle); the config type is
 // erased at runtime so it can come from the cyclic module safely.
 import { ColorMode, Orientation } from "../renderer/pdf-config.ts";
@@ -164,6 +165,7 @@ export class PDFObjectManager implements FontMetrics {
   private fonts: FontManager = new FontManager(); // Stores the fonts
   private images: ImageManager = new ImageManager(); // Stores the images (object numbers and names)
   private extGStates: ExtGStateManager = new ExtGStateManager(); // Transparency states
+  private shadings = new Map<string, number>(); // gradient resource name -> object number
   private pdfConfig!: PDFConfig;
   public pageFormat = pageFormats[PageSize.A4];
 
@@ -511,6 +513,59 @@ endstream`;
     return this.extGStates.getAll();
   }
 
+  // Registers a gradient as a PDF shading (+ its color-stop function) and returns the resource name
+  // (e.g. "Sh1"). Used to fill a color-glyph layer with a COLR v1 gradient. Not deduped: each layer
+  // carries page-absolute coordinates, so two calls rarely match.
+  registerShading(g: Gradient): string {
+    const fn = this.buildShadingFunction(g.stops);
+    const n = (x: number): string => x.toFixed(3);
+    const coords =
+      g.type === "linear"
+        ? `${n(g.x0)} ${n(g.y0)} ${n(g.x1)} ${n(g.y1)}`
+        : `${n(g.x0)} ${n(g.y0)} ${n(g.r0)} ${n(g.x1)} ${n(g.y1)} ${n(g.r1)}`;
+    const shadingType = g.type === "linear" ? 2 : 3;
+    // PDF shadings extend by clamping the end colors; "repeat"/"reflect" would need a tiling pattern,
+    // so we approximate them as clamp (pad) for now - correct for the common pad case.
+    const objectNumber = this.addObject(
+      `<< /ShadingType ${shadingType} /ColorSpace /DeviceRGB /Coords [${coords}] ` +
+        `/Function ${fn} 0 R /Extend [true true] >>`,
+    );
+    const name = `Sh${this.shadings.size + 1}`;
+    this.shadings.set(name, objectNumber);
+    return name;
+  }
+
+  // Builds the PDF function mapping t in [0,1] to a color along the stops. Two stops collapse to one
+  // exponential (linear) function; more stops stitch one linear piece per interval (FunctionType 3).
+  private buildShadingFunction(stops: GradientStop[]): number {
+    const c = (i: number): string => stops[i].color.toPDFColorString(); // "r g b" in 0..1
+    if (stops.length <= 2) {
+      const c0 = c(0);
+      const c1 = c(stops.length - 1);
+      return this.addObject(`<< /FunctionType 2 /Domain [0 1] /C0 [${c0}] /C1 [${c1}] /N 1 >>`);
+    }
+    const pieces: number[] = [];
+    for (let i = 0; i < stops.length - 1; i++) {
+      pieces.push(
+        this.addObject(`<< /FunctionType 2 /Domain [0 1] /C0 [${c(i)}] /C1 [${c(i + 1)}] /N 1 >>`),
+      );
+    }
+    const functions = pieces.map((p) => `${p} 0 R`).join(" ");
+    const bounds = stops
+      .slice(1, -1)
+      .map((s) => s.offset.toFixed(4))
+      .join(" ");
+    const encode = pieces.map(() => "0 1").join(" ");
+    return this.addObject(
+      `<< /FunctionType 3 /Domain [0 1] /Functions [${functions}] /Bounds [${bounds}] /Encode [${encode}] >>`,
+    );
+  }
+
+  // Returns all registered gradient shadings (name -> object number) for the page /Resources.
+  getAllShadingsRaw(): Map<string, number> {
+    return this.shadings;
+  }
+
   // Registers a font
   registerFont(
     fontName: string,
@@ -634,6 +689,14 @@ endstream`;
     return !!this.resolveCustomStyle(name, style);
   }
 
+  // The parsed font for a color-capable custom family (COLR/CPAL), for drawing emoji as vector
+  // layers. Returns undefined for standard-14 fonts, unknown names, or fonts with no color glyphs -
+  // the caller then draws normal monochrome text.
+  getColorFont(name: string, style: FontStyle = FontStyle.Normal): TTFParser | undefined {
+    const ttf = this.getCustomFont(name, style);
+    return ttf?.hasColorGlyphs() ? ttf : undefined;
+  }
+
   // The page font resource for the resolved variant - same resolution as getCustomFont, so the
   // selected Type0 object and the emitted glyph ids always come from the SAME font file.
   getCustomFontResource(
@@ -743,10 +806,13 @@ endstream`;
   ): number {
     let width = 0;
 
-    // We must calculate each sign
-    for (let i = 0; i < text.length; i++) {
-      const char = text[i];
-      const nextChar = text[i + 1] || null;
+    // Iterate code points, not UTF-16 units: an astral char (emoji, CJK-ext) is a surrogate pair,
+    // and indexing by unit would measure each half as its own (zero-width) "char". The spread splits
+    // on code points; for BMP text this is one unit each, so the result is unchanged.
+    const chars = [...text];
+    for (let i = 0; i < chars.length; i++) {
+      const char = chars[i];
+      const nextChar = chars[i + 1] || null;
 
       // Get signs width
       const charWidth = this.getCharWidth(char, fontSize, undefined, fontFamily, fontStyle);
@@ -760,10 +826,6 @@ endstream`;
     }
 
     return width;
-  }
-
-  private getCharCode(char: string): string {
-    return char.charCodeAt(0).toString();
   }
 
   private getAVMParserByFont(fullFontName?: string, fontName?: string, fontStyle?: FontStyle) {
