@@ -78,7 +78,7 @@ export class TextRenderer {
     // Component -> display list. Wrapping and positioning stay here; the backend
     // turns each run into BT/Tf/Td/Tj/ET. The wrapping algorithm is unchanged from
     // the original renderer - unifying it into the engine is Phase 3.
-    return TextRenderer._buildRuns(
+    const runs = TextRenderer._buildRuns(
       content,
       fontSize,
       fontFamily,
@@ -93,6 +93,13 @@ export class TextRenderer {
       overflow,
       lineHeight,
     );
+    // Accessible tagging: every line of this text block is one paragraph (P), grouped under one struct key.
+    // (Heading levels + other roles are a later slice; the default role is P.)
+    if (objectManager.struct.enabled) {
+      const key = objectManager.struct.nextKey();
+      for (const run of runs) run.tag = { role: "P", key };
+    }
+    return runs;
   }
 
   // Lay the content out into absolutely-positioned text runs. Glyph positions match

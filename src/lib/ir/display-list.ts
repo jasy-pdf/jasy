@@ -14,6 +14,18 @@ import { FontStyle } from "../utils/pdf-object-manager.ts";
  */
 
 /**
+ * Structure tag for accessible (PDF/UA) tagging. `role` is the PDF structure type the content maps to
+ * (`P`, `H1`..`H6`, `Figure`, `TD`, …); `key` groups the IR nodes of one logical element (e.g. every line
+ * of a paragraph) into a single structure element; `alt` is the alternate text for a figure. A drawable
+ * node WITHOUT a tag is emitted as an Artifact (decoration, skipped by screen readers).
+ */
+export interface StructTag {
+  role: string;
+  key: number;
+  alt?: string;
+}
+
+/**
  * A single positioned run of text in one font / size / color. Line wrapping has
  * already happened upstream: the producer emits one `TextRun` per laid-out line or
  * per styled segment within a line.
@@ -27,6 +39,7 @@ export interface TextRun {
   fontStyle: FontStyle;
   fontSize: number;
   color: Color;
+  tag?: StructTag; // accessible tagging; absent = Artifact
 }
 
 /** An axis-aligned rectangle. An absent `fill` or `stroke` means that part is not drawn. */
@@ -41,6 +54,7 @@ export interface Rect {
   strokeWidth: number;
   /** Corner radius in points; absent/0 = sharp corners (plain `re`). */
   radius?: number;
+  tag?: StructTag; // accessible tagging; absent = Artifact
 }
 
 /** A straight line segment between two points. */
@@ -52,6 +66,7 @@ export interface Line {
   y2: number;
   stroke: Color;
   strokeWidth: number;
+  tag?: StructTag; // accessible tagging; absent = Artifact
 }
 
 /** A raster image, already resolved to bytes by the producer (no `CustomImage` here). */
@@ -71,6 +86,7 @@ export interface Image {
   clip?: { x: number; y: number; width: number; height: number };
   /** Corner radius in points for the image box; absent/0 = sharp corners. */
   radius?: number;
+  tag?: StructTag; // accessible tagging (a Figure needs `alt`); absent = Artifact
 }
 
 /**

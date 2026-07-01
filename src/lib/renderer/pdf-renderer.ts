@@ -94,6 +94,11 @@ export class PDFRenderer {
       catalogParts.push(`/AF [${af}]`, `/Names << /EmbeddedFiles << /Names [${names}] >> >>`);
     }
 
+    // Accessible tagging: finalize the structure tree (emits StructTreeRoot + StructElems + ParentTree) and
+    // fold /MarkInfo + /StructTreeRoot + /Lang into the catalog. Returns "" (no-op) when tagging is off.
+    const structCatalog = objectManager.struct.finalize(objectManager);
+    if (structCatalog) catalogParts.push(structCatalog);
+
     const catalogObject = `<< ${catalogParts.join(" ")} >>`;
     objectManager.addObject(catalogObject);
 

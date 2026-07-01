@@ -239,6 +239,12 @@ export interface RenderOptions {
   /** Encrypt the PDF with a password (AES-256, the newest standard). NOT compatible with PDF/A
    *  (ZUGFeRD invoices) - encrypting one throws, since PDF/A forbids encryption. */
   encrypt?: EncryptOptions;
+  /** Emit an accessible, tagged PDF (structure tree for screen readers). */
+  accessible?: boolean;
+  /** Document language for accessibility, e.g. `"en-US"` / `"de-DE"` (default `"en-US"`). */
+  lang?: string;
+  /** Document title (used by accessible readers; also good metadata). */
+  title?: string;
 }
 
 function isFontBytes(v: FontBytes | FontFamily): v is FontBytes {
@@ -296,6 +302,11 @@ export async function renderPdf(doc: PDFDocumentElement, options?: RenderOptions
       if (options?.pdfVersion) om.setPdfVersion(options.pdfVersion);
       if (options?.documentId) om.enableDocumentId();
       if (securityHandler) om.setSecurityHandler(securityHandler);
+      if (options?.accessible) {
+        om.struct.enabled = true;
+        if (options.lang) om.struct.lang = options.lang;
+        if (options.title) om.struct.title = options.title;
+      }
     }
     build(): PDFDocumentElement {
       return doc;
