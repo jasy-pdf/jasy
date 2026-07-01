@@ -13,10 +13,10 @@ import { IRNode, Image } from "../ir/display-list.ts";
 export class ImageRenderer {
   static async render(
     imageElement: ImageElement,
-    _objectManager: PDFObjectManager,
+    objectManager: PDFObjectManager,
   ): Promise<IRNode[]> {
     // Load the image and convert it in a binary string
-    let { x, y, width, height, image, fit, radius } = imageElement.getProps();
+    let { x, y, width, height, image, fit, radius, alt } = imageElement.getProps();
     await image.init(); // Load and initialize the image
     const imageType = await image.getImageType(); // For the moment we can handle `png` and `jpg/jpeg` files
     const fileData = await image.getFileData();
@@ -114,6 +114,12 @@ export class ImageRenderer {
           }
         : {}),
     };
+
+    // Accessible tagging: an image WITH alt text is a Figure; without, it stays untagged and the backend
+    // treats it as decoration (an Artifact). One struct element per image.
+    if (objectManager.struct.enabled && alt) {
+      node.tag = { role: "Figure", key: objectManager.struct.nextKey(), alt };
+    }
 
     return [node];
   }
