@@ -20,9 +20,8 @@ import { FontStyle } from "../utils/pdf-object-manager.ts";
  * node WITHOUT a tag is emitted as an Artifact (decoration, skipped by screen readers).
  */
 export interface StructTag {
-  role: string;
-  key: number;
-  alt?: string;
+  role: string; // the PDF structure type for the BDC marked-content (P, H1, Figure, …)
+  key: number; // the StructElem this content belongs to (registered via StructTree.openElement)
 }
 
 /**

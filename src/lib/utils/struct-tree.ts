@@ -1,23 +1,25 @@
 import type { StructTag } from "../ir/display-list.ts";
 import type { PDFObjectManager } from "./pdf-object-manager.ts";
 
-// The structure tree for accessible (PDF/UA) tagging: a StructTreeRoot -> Document -> per-element StructElem
-// graph, plus the ParentTree that maps each page's marked-content ids (MCIDs) back to their StructElem. The
-// engine owns all of this; components only declare a `role` on the IR (see StructTag). New elements become
-// taggable just by tagging their IR - nothing here needs to change.
+// The structure tree for accessible (PDF/UA) tagging: a StructTreeRoot -> Document -> nested StructElem
+// graph, plus the ParentTree that maps each page's marked-content ids (MCIDs) back to their StructElem.
+//
+// The tree is built DURING the render pass: leaves (a paragraph, a figure) and containers (a table, a row,
+// a cell) both register via openElement(); containers additionally push()/pop() around their children so
+// descendants attach to them (the render pass is sequential depth-first, so a simple stack is exact).
 
-interface McRecord {
-  key: number; // logical-element key (groups the IR nodes of one element)
+interface StructElem {
+  key: number;
   role: string;
   alt?: string;
-  structParents: number; // the page's StructParents index
-  mcid: number; // page-local marked-content id
+  parent?: number; // parent element key; undefined = a direct child of the Document
+  mc: { structParents: number; mcid: number }[]; // marked-content pieces (for leaves)
 }
 
 // Escapes a PDF literal string ( ... ) - the language tag is safe ASCII, but /Alt can carry arbitrary text.
 const esc = (s: string) => s.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
 
-/** Per-page tagging context: hands out page-local MCIDs and records which StructElem owns each. */
+/** Per-page tagging context: hands out page-local MCIDs and links them to their StructElem. */
 export class PageStructContext {
   private mcid = 0;
   constructor(
@@ -25,18 +27,13 @@ export class PageStructContext {
     private readonly tree: StructTree,
   ) {}
 
-  /** Marked-content delimiters for one drawable node. Tagged content gets an MCID + a record; untagged
-   *  content becomes an Artifact (decoration, skipped by assistive technology). */
+  /** Marked-content delimiters for one drawable node. Tagged content gets an MCID linked to its (already
+   *  registered) StructElem; untagged content becomes an Artifact (decoration, skipped by assistive tech). */
   mark(tag?: StructTag): { open: string; close: string } {
-    if (!tag) return { open: "/Artifact BDC\n", close: "EMC\n" };
+    // Artifact = decoration, no properties -> BMC (BDC would need a second operand and is a syntax error).
+    if (!tag) return { open: "/Artifact BMC\n", close: "EMC\n" };
     const mcid = this.mcid++;
-    this.tree.record({
-      key: tag.key,
-      role: tag.role,
-      alt: tag.alt,
-      structParents: this.structParents,
-      mcid,
-    });
+    this.tree.linkMarkedContent(tag.key, this.structParents, mcid);
     return { open: `/${tag.role} <</MCID ${mcid}>> BDC\n`, close: "EMC\n" };
   }
 }
@@ -46,17 +43,39 @@ export class StructTree {
   enabled = false;
   lang = "en-US";
   title?: string;
-  private keyCounter = 0;
+  private counter = 0;
   private structParentsCounter = 0;
-  private records: McRecord[] = [];
+  private elems = new Map<number, StructElem>(); // insertion order = render order = reading order
+  private byStructId = new Map<number, number>(); // element structId -> element key (dedup across pages)
+  private stack: number[] = []; // open containers; top is the current parent
   private pageObjByStructParents = new Map<number, number>();
 
-  /** A fresh logical-element key - groups the IR nodes of one element (e.g. a paragraph's lines) into one StructElem. */
-  nextKey(): number {
-    return this.keyCounter++;
+  /** Register a structure element for a logical element (keyed by its stable `structId`, so a paragraph or
+   *  table split across pages resolves to the SAME element - MCIDs then accrue from every page). Its parent
+   *  is the currently-open container, else the Document. Containers also push()/pop() around their children. */
+  openElement(structId: number, role: string, opts?: { alt?: string }): number {
+    const existing = this.byStructId.get(structId);
+    if (existing !== undefined) return existing; // already opened on an earlier page/fragment
+    const key = this.counter++;
+    this.byStructId.set(structId, key);
+    this.elems.set(key, {
+      key,
+      role,
+      alt: opts?.alt,
+      parent: this.stack[this.stack.length - 1],
+      mc: [],
+    });
+    return key;
   }
 
-  /** Begin a page: allocate its StructParents index. Returns the per-page tagging context. */
+  push(key: number): void {
+    this.stack.push(key);
+  }
+  pop(): void {
+    this.stack.pop();
+  }
+
+  /** Begin a page: allocates its StructParents index (its slot in the ParentTree). */
   beginPage(): PageStructContext {
     return new PageStructContext(this.structParentsCounter++, this);
   }
@@ -66,72 +85,67 @@ export class StructTree {
     this.pageObjByStructParents.set(structParents, pageObjNum);
   }
 
-  record(r: McRecord): void {
-    this.records.push(r);
+  /** Link a page-local MCID to an element (called by the backend while serializing). */
+  linkMarkedContent(key: number, structParents: number, mcid: number): void {
+    this.elems.get(key)?.mc.push({ structParents, mcid });
   }
 
   /** Emit the struct-tree objects and return the catalog additions (`/MarkInfo`, `/StructTreeRoot`, `/Lang`).
    *  A no-op returning "" when disabled or nothing was tagged, so a plain document stays byte-identical. */
   finalize(om: PDFObjectManager): string {
-    if (!this.enabled || this.records.length === 0) return "";
-
-    // Group records into elements by key, preserving first-seen (reading) order.
-    const order: number[] = [];
-    const byKey = new Map<number, { role: string; alt?: string; refs: McRecord[] }>();
-    for (const r of this.records) {
-      let e = byKey.get(r.key);
-      if (!e) {
-        e = { role: r.role, alt: r.alt, refs: [] };
-        byKey.set(r.key, e);
-        order.push(r.key);
-      }
-      e.refs.push(r);
-    }
+    if (!this.enabled || this.elems.size === 0) return "";
 
     // Reserve object numbers first - root <-> Document <-> elements <-> ParentTree reference each other.
     const rootNum = om.addObject("");
     const docNum = om.addObject("");
     const parentTreeNum = om.addObject("");
-    const elemNum = new Map<number, number>();
-    for (const key of order) elemNum.set(key, om.addObject(""));
+    const objNum = new Map<number, number>();
+    for (const key of this.elems.keys()) objNum.set(key, om.addObject(""));
 
     const pg = (structParents: number) => this.pageObjByStructParents.get(structParents)!;
+    const childrenOf = (parent: number | undefined) =>
+      [...this.elems.values()].filter((e) => e.parent === parent); // Map order = reading order
 
-    // One StructElem per logical element, its kids the marked-content references (MCR) on their pages.
-    for (const key of order) {
-      const e = byKey.get(key)!;
-      const kids = e.refs
-        .map((r) => `<< /Type /MCR /Pg ${pg(r.structParents)} 0 R /MCID ${r.mcid} >>`)
-        .join(" ");
+    // One StructElem per registered element: /K = its child elements ++ its marked-content references.
+    for (const e of this.elems.values()) {
+      const kids = [
+        ...childrenOf(e.key).map((c) => `${objNum.get(c.key)!} 0 R`),
+        ...e.mc.map((m) => `<< /Type /MCR /Pg ${pg(m.structParents)} 0 R /MCID ${m.mcid} >>`),
+      ].join(" ");
       const alt = e.alt ? ` /Alt (${esc(e.alt)})` : "";
+      const parentRef = e.parent !== undefined ? objNum.get(e.parent)! : docNum;
       om.replaceObject(
-        elemNum.get(key)!,
-        `<< /Type /StructElem /S /${e.role} /P ${docNum} 0 R${alt} /K [ ${kids} ] >>`,
+        objNum.get(e.key)!,
+        `<< /Type /StructElem /S /${e.role} /P ${parentRef} 0 R${alt} /K [ ${kids} ] >>`,
       );
     }
 
-    // The Document element wraps every element in reading order.
-    const docKids = order.map((k) => `${elemNum.get(k)!} 0 R`).join(" ");
+    // The Document element wraps the top-level elements in reading order.
+    const docKids = childrenOf(undefined)
+      .map((e) => `${objNum.get(e.key)!} 0 R`)
+      .join(" ");
     om.replaceObject(
       docNum,
       `<< /Type /StructElem /S /Document /P ${rootNum} 0 R /K [ ${docKids} ] >>`,
     );
 
     // ParentTree: for each page (StructParents index), an array where [mcid] = the owning StructElem.
-    const bySp = new Map<number, McRecord[]>();
-    for (const r of this.records) {
-      const list = bySp.get(r.structParents) ?? [];
-      list.push(r);
-      bySp.set(r.structParents, list);
+    const byPage = new Map<number, { mcid: number; key: number }[]>();
+    for (const e of this.elems.values()) {
+      for (const m of e.mc) {
+        const list = byPage.get(m.structParents) ?? [];
+        list.push({ mcid: m.mcid, key: e.key });
+        byPage.set(m.structParents, list);
+      }
     }
-    const nums = [...bySp.keys()]
+    const nums = [...byPage.keys()]
       .sort((a, b) => a - b)
       .map((sp) => {
-        const refs = bySp
+        const refs = byPage
           .get(sp)!
           .slice()
           .sort((a, b) => a.mcid - b.mcid)
-          .map((r) => `${elemNum.get(r.key)!} 0 R`)
+          .map((r) => `${objNum.get(r.key)!} 0 R`)
           .join(" ");
         return `${sp} [ ${refs} ]`;
       });

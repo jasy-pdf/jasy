@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { Document, Page, Column, Box, Text, renderPdf } from "../../../src/lib/index";
+import { Document, Page, Column, Box, Text, Table, mm, renderPdf } from "../../../src/lib/index";
 
 const doc = () =>
   Document([Page({ margin: 40 }, [Column([Text("Heading"), Text("A paragraph of body text.")])])]);
@@ -40,6 +40,34 @@ describe("accessible tagging (PDF/UA foundation)", () => {
     expect(pdf).toContain("/S /H1");
     expect(pdf).toContain("/S /P");
     expect(pdf).toMatch(/\/H1 <<\/MCID \d+>> BDC/);
-    expect(pdf).toContain("/Artifact BDC"); // the box background rect
+    expect(pdf).toContain("/Artifact BMC"); // the box background rect
+  });
+
+  it("keeps a paragraph split across pages as ONE P element (Acrobat-level)", async () => {
+    const long = Array.from(
+      { length: 60 },
+      (_, i) => `Sentence number ${i} of a long paragraph.`,
+    ).join(" ");
+    const doc = Document([Page({ size: mm(80, 45), margin: 8 }, [Text(long)])]);
+    const pdf = await renderPdf(doc, { accessible: true, compress: false });
+    // It paginates onto several physical pages...
+    expect((pdf.match(/\/Type \/Page\b/g) ?? []).length).toBeGreaterThan(1);
+    // ...but the structure tree has exactly ONE P (its content marked across those pages).
+    expect((pdf.match(/\/S \/P\b/g) ?? []).length).toBe(1);
+  });
+
+  it("tags a table as Table > TR > TH/TD, ONE logical Table across pages", async () => {
+    const rows = Array.from({ length: 24 }, (_, i) => [`Item ${i}`, `${i} EUR`]);
+    const doc = Document([
+      Page({ size: mm(95, 55), margin: 8 }, [
+        Table({ columns: ["1fr", "auto"], header: ["Item", "Price"], cellPadding: 4 }, rows),
+      ]),
+    ]);
+    const pdf = await renderPdf(doc, { accessible: true, compress: false });
+    expect((pdf.match(/\/Type \/Page\b/g) ?? []).length).toBeGreaterThan(1); // paginates
+    expect((pdf.match(/\/S \/Table\b/g) ?? []).length).toBe(1); // ONE logical <Table>
+    expect(pdf).toContain("/S /TR");
+    expect(pdf).toContain("/S /TH");
+    expect(pdf).toContain("/S /TD");
   });
 });

@@ -218,8 +218,7 @@ export class PDFObjectManager implements FontMetrics {
   private encJobs: Uint8Array[] = [];
   private encryptObjNum?: number;
 
-  // Accessible (PDF/UA) tagging. Off by default (byte-identical output); the API turns it on. The backend
-  // records marked content here during serialize; PDFRenderer finalizes the structure tree into the catalog.
+  // Accessible (PDF/UA) tagging, off by default (byte-identical output); the API turns it on.
   private _struct = new StructTree();
   get struct(): StructTree {
     return this._struct;

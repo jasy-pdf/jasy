@@ -36,7 +36,22 @@ export interface LayoutContext {
   onOverflow?: OverflowPolicy;
 }
 
+let _nextStructId = 0;
+
 export abstract class PDFElement {
+  // Stable identity for accessible (PDF/UA) tagging: assigned once at construction and carried through
+  // fragmentation copies (adoptStructId), so a paragraph or table split across pages stays ONE structure
+  // element. Only the elements that actually tag (Text, Image, StructGroup) read it.
+  private _structId = _nextStructId++;
+  get structId(): number {
+    return this._structId;
+  }
+  /** Make this element share `from`'s tagging identity - used by fragmentation clones. Returns this. */
+  adoptStructId(from: PDFElement): this {
+    this._structId = from._structId;
+    return this;
+  }
+
   // Each subclass overrides this with its own concrete props type; `unknown` forces
   // callers holding only a base `PDFElement` to narrow before reading props.
   abstract getProps(): unknown;

@@ -28,6 +28,8 @@ import { DeferredElement } from "../elements/layout/deferred-element.ts";
 import { DeferredRenderer } from "./deferred-renderer.ts";
 import { PositionedElement } from "../elements/layout/positioned-element.ts";
 import { PositionedRenderer } from "./positioned-renderer.ts";
+import { StructGroup } from "../elements/layout/struct-group.ts";
+import { StructGroupRenderer } from "./struct-group-renderer.ts";
 import { BoxConstraints } from "../layout/box-constraints.ts";
 import { LayoutContext } from "../elements/pdf-element.ts";
 import { DEFAULT_TEXT_STYLE, mergeTextStyle } from "../text/text-style.ts";
@@ -50,6 +52,7 @@ export class PDFRenderer {
     RendererRegistry.register(RepeatingHeaderElement, RepeatingHeaderRenderer.render);
     RendererRegistry.register(DeferredElement, DeferredRenderer.render);
     RendererRegistry.register(PositionedElement, PositionedRenderer.render);
+    RendererRegistry.register(StructGroup, StructGroupRenderer.render);
 
     let pdfContent = "";
 

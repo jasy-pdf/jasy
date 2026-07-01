@@ -118,7 +118,10 @@ export class ImageRenderer {
     // Accessible tagging: an image WITH alt text is a Figure; without, it stays untagged and the backend
     // treats it as decoration (an Artifact). One struct element per image.
     if (objectManager.struct.enabled && alt) {
-      node.tag = { role: "Figure", key: objectManager.struct.nextKey(), alt };
+      node.tag = {
+        role: "Figure",
+        key: objectManager.struct.openElement(imageElement.structId, "Figure", { alt }),
+      };
     }
 
     return [node];

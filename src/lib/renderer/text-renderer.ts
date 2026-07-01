@@ -97,8 +97,9 @@ export class TextRenderer {
     // Accessible tagging: every line of this text block is one paragraph (P), grouped under one struct key.
     // (Heading levels + other roles are a later slice; the default role is P.)
     if (objectManager.struct.enabled) {
-      const key = objectManager.struct.nextKey();
       const pdfRole = role ? role.toUpperCase() : "P"; // "h1" -> "H1"; default paragraph
+      // Keyed by the element's structId so a paragraph split across pages stays one P (MCIDs from each page).
+      const key = objectManager.struct.openElement(textElement.structId, pdfRole);
       for (const run of runs) run.tag = { role: pdfRole, key };
     }
     return runs;

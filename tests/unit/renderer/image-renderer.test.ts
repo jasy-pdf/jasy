@@ -277,7 +277,7 @@ describe("ImageRenderer", () => {
     } as unknown as ImageElement;
     const mockObjectManager = {
       registerImage: vi.fn().mockReturnValue(1),
-      struct: { enabled: true, nextKey: () => 7 },
+      struct: { enabled: true, openElement: () => 7 },
     } as unknown as PDFObjectManager;
     vi.spyOn(imageHelper, "applyFitNone").mockReturnValue({
       width: 100,
@@ -286,10 +286,6 @@ describe("ImageRenderer", () => {
       offsetY: 0,
     });
     const [node] = await ImageRenderer.render(mockImageElement, mockObjectManager);
-    expect((node as { tag?: unknown }).tag).toEqual({
-      role: "Figure",
-      key: 7,
-      alt: "a sample photo",
-    });
+    expect((node as { tag?: unknown }).tag).toEqual({ role: "Figure", key: 7 });
   });
 });

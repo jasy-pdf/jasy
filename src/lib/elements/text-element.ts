@@ -206,7 +206,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       overflow: this.overflow,
       lineHeight: this.lineHeight,
       role: this.role,
-    });
+    }).adoptStructId(this); // a wrapped remainder is the SAME logical paragraph (one P across pages)
   }
 
   calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
