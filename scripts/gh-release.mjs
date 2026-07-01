@@ -82,7 +82,9 @@ const PATHSPEC = {
 };
 const pathspec = PATHSPEC[prefix] ? ["--", ...PATHSPEC[prefix]] : [];
 const inScope = new Set(
-  sh("git", ["log", `${from}..${tag}`, "--format=%H", ...pathspec]).split("\n").filter(Boolean),
+  sh("git", ["log", `${from}..${tag}`, "--format=%H", ...pathspec])
+    .split("\n")
+    .filter(Boolean),
 );
 const shaInScope = (short) => [...inScope].some((full) => full.startsWith(short));
 

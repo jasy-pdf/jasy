@@ -234,6 +234,13 @@ lineHeight, align, bold, italic }, …)` sets doc-wide text defaults; `DefaultTe
 - ✅ **`onOverflow` safety** (2026-06-24) — over-tall unbreakable content is force-placed (clipped) so
   pagination always terminates (no infinite loop); render option `onOverflow: "error" (default) | "warn"
 | "ignore"` (`fragmentation.ts packChildren`).
+- ✅ **Encryption** (2026-06-28, `@jasy/pdf@alpha.4`) — AES-256, V5/R6 (ISO 32000-2, the newest standard).
+  `renderToBytes(doc, { encrypt: { userPassword, ownerPassword?, permissions? } })`. Built on **WebCrypto**
+  (`crypto/webcrypto.ts`, isomorphic, zero-dep) behind a pluggable **`SecurityHandler` seam**
+  (`crypto/security-handler.ts`) — a future algorithm/revision is just a second impl. Streams encrypt at one
+  choke-point (`streamPayload`) + a finalize pass (`finalizeEncryption`) writes `/Encrypt` + forces `/ID`;
+  `EncryptMetadata false` keeps XMP plaintext. Mutually exclusive with PDF/A (ZUGFeRD throws). `recoverFileKey`
+  (validates the password vs `/U`) is the groundwork for a future decrypt/edit path. Proven against poppler.
 
 Genuine remaining gaps / deferred:
 
