@@ -117,8 +117,8 @@ const pdf = await renderToBytes(
 ```
 
 Real text layout (Adobe AFM metrics, kerning, word-wrap), flexbox-style `gap` / `justify` / `align`,
-boxes with radius and alpha, images, custom TrueType fonts, and **real pagination** - content that
-overflows flows onto the next page, headers and footers repeat.
+boxes with radius and alpha, images, custom TrueType fonts, **AES-256 password encryption**, and **real
+pagination** - content that overflows flows onto the next page, headers and footers repeat.
 
 ---
 
@@ -132,6 +132,9 @@ verify all of it:
   740 KB font ships as a ~76 KB subset, and the text stays copy- and searchable.
 - **Compression.** Content streams and images are FlateDecode-compressed; the spreadsheets `jasy export`
   writes are real `.xlsx` ZIPs we deflate with our own writer and CRC32, zero dependencies.
+- **AES-256 encryption, pure JS.** Lock a PDF with `renderToBytes(doc, { encrypt: { userPassword } })` - the
+  newest standard handler (AES-256, R6 / ISO 32000-2) via the platform WebCrypto: no native crypto, no deps,
+  the same code in Node **and** the browser. Owner password + permissions optional.
 - **Real font metrics.** Text is laid out with the Adobe AFM metrics of the standard-14 fonts - kerning
   and word-wrap are _computed_, not guessed.
 - **PDF/A-3, matched not approximated.** The conformance graph is hand-built and **passes veraPDF**, the

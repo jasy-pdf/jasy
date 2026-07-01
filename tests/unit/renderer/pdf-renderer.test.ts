@@ -32,6 +32,7 @@ describe("PDFRenderer", () => {
       getHeader: vi.fn().mockReturnValue("%PDF-1.4\n"),
       finalizeCustomFonts: vi.fn(),
       finalizeEncryption: vi.fn().mockResolvedValue(undefined),
+      struct: { enabled: false, finalize: vi.fn().mockReturnValue("") },
     } as unknown as PDFObjectManager;
 
     vi.spyOn(PDFDocumentRenderer, "render").mockResolvedValue(1);

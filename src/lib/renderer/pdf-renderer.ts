@@ -28,6 +28,8 @@ import { DeferredElement } from "../elements/layout/deferred-element.ts";
 import { DeferredRenderer } from "./deferred-renderer.ts";
 import { PositionedElement } from "../elements/layout/positioned-element.ts";
 import { PositionedRenderer } from "./positioned-renderer.ts";
+import { StructGroup } from "../elements/layout/struct-group.ts";
+import { StructGroupRenderer } from "./struct-group-renderer.ts";
 import { BoxConstraints } from "../layout/box-constraints.ts";
 import { LayoutContext } from "../elements/pdf-element.ts";
 import { DEFAULT_TEXT_STYLE, mergeTextStyle } from "../text/text-style.ts";
@@ -50,6 +52,7 @@ export class PDFRenderer {
     RendererRegistry.register(RepeatingHeaderElement, RepeatingHeaderRenderer.render);
     RendererRegistry.register(DeferredElement, DeferredRenderer.render);
     RendererRegistry.register(PositionedElement, PositionedRenderer.render);
+    RendererRegistry.register(StructGroup, StructGroupRenderer.render);
 
     let pdfContent = "";
 
@@ -92,6 +95,15 @@ export class PDFRenderer {
       const names = attachments.map((a) => `(${a.name}) ${a.filespec} 0 R`).join(" ");
       const af = attachments.map((a) => `${a.filespec} 0 R`).join(" ");
       catalogParts.push(`/AF [${af}]`, `/Names << /EmbeddedFiles << /Names [${names}] >> >>`);
+    }
+
+    // Accessible tagging: finalize the structure tree (emits StructTreeRoot + StructElems + ParentTree) and
+    // fold /MarkInfo + /StructTreeRoot + /Lang into the catalog. Returns "" (no-op) when tagging is off.
+    const structCatalog = objectManager.struct.finalize(objectManager);
+    if (structCatalog) {
+      catalogParts.push(structCatalog);
+      // PDF/UA requires the viewer to show the document title (not the file name).
+      catalogParts.push("/ViewerPreferences << /DisplayDocTitle true >>");
     }
 
     const catalogObject = `<< ${catalogParts.join(" ")} >>`;

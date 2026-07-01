@@ -12,6 +12,35 @@ import { existsSync, rmSync, writeFileSync } from "node:fs";
 const sh = (cmd, args) => execFileSync(cmd, args, { encoding: "utf8" }).trim();
 const gh = (args) => sh("gh", args);
 
+// Filter changelogen's grouped markdown down to commits in scope, dropping any group heading left without
+// entries. Entry lines look like "- Subject ([abc1234](…/commit/abc1234))"; the compare-changes link and
+// blank lines before the first heading are kept as-is.
+function scopeNotes(md, inScopeSha) {
+  const out = [];
+  let header = null;
+  let items = [];
+  const flush = () => {
+    if (header && items.length) out.push(header, "", ...items, "");
+    header = null;
+    items = [];
+  };
+  for (const line of md.split("\n")) {
+    if (/^#{2,6}\s/.test(line)) {
+      flush();
+      header = line;
+      continue;
+    }
+    const m = line.match(/\(\[([0-9a-f]{7,40})\]\(/);
+    if (m && /^\s*-\s/.test(line)) {
+      if (inScopeSha(m[1])) items.push(line);
+      continue;
+    }
+    if (!header && line.trim()) out.push(line); // compare-changes link etc., before any heading
+  }
+  flush();
+  return out.join("\n").trim();
+}
+
 const { TAG: tag, NAME: name, VERSION: version, DIST: dist, GITHUB_REPOSITORY: repo } = process.env;
 if (!tag || !name || !version || !repo) {
   throw new Error("missing env: TAG, NAME, VERSION, GITHUB_REPOSITORY required");
@@ -41,6 +70,24 @@ const from =
   (i >= 0 && i + 1 < tags.length && tags[i + 1]) ||
   sh("git", ["rev-list", "--max-parents=0", "HEAD"]);
 
+// Path-scope per package: a changelog only lists commits that touched THIS package's files. The root `pdf`
+// package = everything EXCEPT the sub-packages. A commit touching several packages shows up in each of them,
+// which is correct. inScope = the set of full shas in the range that touched the package's path.
+const PATHSPEC = {
+  pdf: [".", ":(exclude)packages"],
+  zugferd: ["packages/zugferd"],
+  cli: ["packages/cli"],
+  vue: ["packages/vue"],
+  nuxt: ["packages/nuxt"],
+};
+const pathspec = PATHSPEC[prefix] ? ["--", ...PATHSPEC[prefix]] : [];
+const inScope = new Set(
+  sh("git", ["log", `${from}..${tag}`, "--format=%H", ...pathspec])
+    .split("\n")
+    .filter(Boolean),
+);
+const shaInScope = (short) => [...inScope].some((full) => full.startsWith(short));
+
 // 1) Grouped notes for the delta (changelogen print mode), minus its own header line + contributor block.
 // changelogen still writes a CHANGELOG.md even in print mode; we only want stdout, so remove that
 // artifact afterwards (option B = no committed changelog file).
@@ -60,11 +107,13 @@ notes = notes
   .replace(/### ❤️ Contributors[\s\S]*$/m, "")
   .replace(/^##\s.*$/m, "")
   .trim();
+// Drop entries for commits that did not touch this package, plus any group heading left empty.
+notes = scopeNotes(notes, shaInScope);
 
 // 2) Contributors via per-commit attribution (correct GitHub user, not an email-search org hit).
 const seen = new Set();
 const contributors = [];
-for (const sha of sh("git", ["log", `${from}..${tag}`, "--pretty=format:%H"])
+for (const sha of sh("git", ["log", `${from}..${tag}`, "--pretty=format:%H", ...pathspec])
   .split("\n")
   .filter(Boolean)) {
   let data;

@@ -7,9 +7,15 @@ import { ExpandedElement } from "../../../src/lib/elements/layout/expanded-eleme
 import { RepeatingHeaderElement } from "../../../src/lib/elements/layout/repeating-header-element";
 import { DeferredElement } from "../../../src/lib/elements/layout/deferred-element";
 import { PDFElement } from "../../../src/lib/elements/pdf-element";
+import { StructGroup } from "../../../src/lib/elements/layout/struct-group";
 
-const rowsOf = (t: PDFElement) => (t.getProps() as { children: RowElement[] }).children;
-const cellsOf = (r: RowElement) => (r.getProps() as { children: unknown[] }).children;
+// Tables now wrap the table / rows / cells in layout-transparent StructGroups (accessibility). These
+// helpers see through them, so the tests still assert the underlying Column / Row / Box structure.
+const unwrap = (el: PDFElement): PDFElement =>
+  el instanceof StructGroup ? unwrap((el.getProps() as { child: PDFElement }).child) : el;
+const rowsOf = (t: PDFElement) =>
+  (unwrap(t).getProps() as { children: PDFElement[] }).children.map(unwrap) as RowElement[];
+const cellsOf = (r: RowElement) => (unwrap(r).getProps() as { children: unknown[] }).children;
 
 describe("Table factory", () => {
   it("is a Column of Rows (one Row per data row)", () => {
@@ -17,7 +23,7 @@ describe("Table factory", () => {
       ["a", "b"],
       ["c", "d"],
     ]);
-    expect(t).toBeInstanceOf(ContainerElement);
+    expect(unwrap(t)).toBeInstanceOf(ContainerElement);
     const rows = rowsOf(t);
     expect(rows).toHaveLength(2);
     expect(rows[0]).toBeInstanceOf(RowElement);
@@ -35,7 +41,7 @@ describe("Table factory", () => {
   it("string cells are wrapped in Text", () => {
     const t = Table({ columns: [100] }, [["hello"]]);
     const box = cellsOf(rowsOf(t)[0])[0] as RectangleElement;
-    const inner = (box.getProps().children as unknown[])[0];
+    const inner = unwrap((box.getProps().children as PDFElement[])[0]); // Box > StructGroup(TD) > Text
     expect((inner as { getProps(): { content: unknown } }).getProps().content).toBe("hello");
   });
 
@@ -44,7 +50,7 @@ describe("Table factory", () => {
       ["a", "b"],
       ["c", "d"],
     ]);
-    expect((t.getProps() as { gap: number }).gap).toBe(8); // rowGap falls back to gap
+    expect((unwrap(t).getProps() as { gap: number }).gap).toBe(8); // rowGap falls back to gap
     expect((rowsOf(t)[0].getProps() as { gap: number }).gap).toBe(4); // colGap overrides
   });
 
@@ -80,8 +86,8 @@ describe("Table factory", () => {
   });
 
   it("a `header` option returns a repeating-header element; without it, a plain Column", () => {
-    expect(Table({ columns: ["1fr"] }, [["a"]])).toBeInstanceOf(ContainerElement);
-    expect(Table({ columns: ["1fr"], header: ["H"] }, [["a"]])).toBeInstanceOf(
+    expect(unwrap(Table({ columns: ["1fr"] }, [["a"]]))).toBeInstanceOf(ContainerElement);
+    expect(unwrap(Table({ columns: ["1fr"], header: ["H"] }, [["a"]]))).toBeInstanceOf(
       RepeatingHeaderElement,
     );
   });

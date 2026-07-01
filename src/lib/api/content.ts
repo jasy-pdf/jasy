@@ -64,6 +64,9 @@ export interface ImageOptions {
   fit?: ImageFit;
   /** Corner radius in points (rounds the image box). */
   radius?: number;
+  /** Alternate text for accessibility (tagged PDF): describes the image for screen readers. With `alt`
+   *  the image is a `Figure`; without it (and when rendered `accessible`) it counts as decoration. */
+  alt?: string;
 }
 
 /**
@@ -82,5 +85,6 @@ export function Image(src: ImageSource, opts: ImageOptions = {}): ImageElement {
     height: opts.height,
     fit: opts.fit ? FIT[opts.fit] : undefined,
     radius: opts.radius,
+    alt: opts.alt,
   });
 }

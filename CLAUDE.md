@@ -234,6 +234,25 @@ lineHeight, align, bold, italic }, …)` sets doc-wide text defaults; `DefaultTe
 - ✅ **`onOverflow` safety** (2026-06-24) — over-tall unbreakable content is force-placed (clipped) so
   pagination always terminates (no infinite loop); render option `onOverflow: "error" (default) | "warn"
 | "ignore"` (`fragmentation.ts packChildren`).
+- ✅ **Encryption** (2026-06-28, `@jasy/pdf@alpha.4`) — AES-256, V5/R6 (ISO 32000-2, the newest standard).
+  `renderToBytes(doc, { encrypt: { userPassword, ownerPassword?, permissions? } })`. Built on **WebCrypto**
+  (`crypto/webcrypto.ts`, isomorphic, zero-dep) behind a pluggable **`SecurityHandler` seam**
+  (`crypto/security-handler.ts`) — a future algorithm/revision is just a second impl. Streams encrypt at one
+  choke-point (`streamPayload`) + a finalize pass (`finalizeEncryption`) writes `/Encrypt` + forces `/ID`;
+  `EncryptMetadata false` keeps XMP plaintext. Mutually exclusive with PDF/A (ZUGFeRD throws). `recoverFileKey`
+  (validates the password vs `/U`) is the groundwork for a future decrypt/edit path. Proven against poppler.
+- ✅ **Accessibility / tagged PDF (PDF/UA-1)** (2026-07-01) — `renderToBytes(doc, { accessible, lang, title })`
+  emits a full structure tree, **verified `isCompliant` by veraPDF** (local at `~/.jasy/verapdf/verapdf -f ua1`).
+  Engine owns it; components only declare a role: `Text({ role: "h1".."h6"|"p" })`, `Image({ alt })` → Figure,
+  `Table` → Table/TR/TH/TD (auto), decoration → Artifact. The **`StructTree`** (`utils/struct-tree.ts`) builds
+  StructTreeRoot → nested StructElem + ParentTree; a leaf/container both `openElement(structId, role)`, containers
+  `push`/`pop`. **Keyed by a stable `structId`** (base `PDFElement`, carried through fragmentation clones) so a
+  paragraph or table split across pages stays ONE logical element (Acrobat-level). A layout-**transparent**
+  **`StructGroup`** (`elements/layout/struct-group.ts`) wraps table rows/cells; it fragments only if its child
+  does (`canFragment` veto → rows move whole, never clipped). Backend wraps each node `/Role <</MCID>> BDC…EMC`
+  (untagged → `/Artifact **BMC**`); catalog gets `/MarkInfo`, `/StructTreeRoot`, `/Lang`, `/ViewerPreferences
+/DisplayDocTitle`, pages `/Tabs /S`, TH `/Scope /Column`, XMP `pdfuaid:part 1` (`utils/ua-xmp.ts`). Off =
+  byte-identical. Full conformance needs embedded fonts + a title (same as PDF/A). **~377 tests.**
 
 Genuine remaining gaps / deferred:
 
