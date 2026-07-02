@@ -267,6 +267,43 @@ export function buildColorV1Ttf(codePoint = 0x1f600): Buffer {
   return colorFontShell(colr, codePoint);
 }
 
+// A COLR v1 font whose base glyph is a PaintScale(1.5) -> PaintGlyph(square) -> PaintSolid(red).
+// Exercises the transform threading: getColorGlyph should return the layer with transform
+// [1.5, 0, 0, 1.5, 0, 0].
+export function buildColorV1TransformTtf(codePoint = 0x1f600): Buffer {
+  const colr = Buffer.alloc(63);
+  const u24 = (v: number, o: number): void => {
+    colr.writeUInt8((v >> 16) & 0xff, o);
+    colr.writeUInt8((v >> 8) & 0xff, o + 1);
+    colr.writeUInt8(v & 0xff, o + 2);
+  };
+  colr.writeUInt16BE(1, 0); // version 1
+  colr.writeUInt32BE(34, 14); // baseGlyphListOffset (no LayerList needed for a single layer)
+
+  // BaseGlyphList @34: glyph 1 -> paint at rel 10 (COLR 44).
+  colr.writeUInt32BE(1, 34);
+  colr.writeUInt16BE(1, 38);
+  colr.writeUInt32BE(10, 40);
+
+  // PaintScale @44: scaleX = scaleY = 1.5, child at rel 8 (COLR 52).
+  colr.writeUInt8(16, 44);
+  u24(8, 45);
+  colr.writeInt16BE(24576, 48); // 1.5 in F2Dot14
+  colr.writeInt16BE(24576, 50);
+
+  // PaintGlyph @52: glyph 2, fill at rel 6 (COLR 58).
+  colr.writeUInt8(10, 52);
+  u24(6, 53);
+  colr.writeUInt16BE(2, 56);
+
+  // PaintSolid @58: palette 0, alpha 1.0.
+  colr.writeUInt8(2, 58);
+  colr.writeUInt16BE(0, 59);
+  colr.writeInt16BE(16384, 61);
+
+  return colorFontShell(colr, codePoint);
+}
+
 // Wraps a COLR table (v0 or v1) into a full color font: 4 glyphs (.notdef, an empty base at
 // `codePoint`, then a square and a curve as layer outlines) plus a CPAL palette [red, blue].
 function colorFontShell(colr: Buffer, codePoint: number): Buffer {

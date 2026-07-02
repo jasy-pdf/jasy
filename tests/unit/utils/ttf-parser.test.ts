@@ -6,6 +6,7 @@ import {
   buildQuadTtf,
   buildColorTtf,
   buildColorV1Ttf,
+  buildColorV1TransformTtf,
   buildDualCmapTtf,
 } from "./ttf-fixture";
 
@@ -139,5 +140,17 @@ describe("TTFParser - COLR/CPAL color glyphs", () => {
         { offset: 1, color: { r: 0, g: 0, b: 255, a: 255 } },
       ]);
     }
+  });
+
+  it("threads a v1 PaintScale transform down onto the layer", () => {
+    const font = new TTFParser(buildColorV1TransformTtf(0x1f600));
+    const layers = font.getColorGlyph(font.getGlyphIndex(0x1f600));
+    expect(layers).toEqual([
+      {
+        glyphId: 2,
+        paint: { type: "solid", color: { r: 255, g: 0, b: 0, a: 255 } },
+        transform: [1.5, 0, 0, 1.5, 0, 0],
+      },
+    ]);
   });
 });

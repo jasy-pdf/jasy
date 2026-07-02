@@ -66,12 +66,52 @@ export type Paint =
       extend: "pad" | "repeat" | "reflect";
     };
 
-// One layer of a color glyph: an outline glyph filled with a `Paint`. Back-to-front order (first
-// drawn underneath). Unifies COLR v0 (all solid) and v1 (a paint graph), so the renderer has one
-// shape to draw whichever version the font uses.
+// A 2x3 affine transform [a, b, c, d, e, f] in font units: (x, y) -> (a*x + c*y + e, b*x + d*y + f).
+// Matches the PDF/SVG matrix convention.
+export type Affine = [number, number, number, number, number, number];
+
+// One layer of a color glyph: an outline glyph filled with a `Paint`, optionally under an affine
+// `transform` (COLR v1 PaintTransform & co.; absent = identity). Back-to-front order (first drawn
+// underneath). Unifies COLR v0 (all solid) and v1 (a paint graph), so the renderer has one shape to
+// draw whichever version the font uses.
 export interface ColorGlyphLayer {
   glyphId: number;
   paint: Paint;
+  transform?: Affine;
+}
+
+const IDENTITY: Affine = [1, 0, 0, 1, 0, 0];
+
+function isIdentity(m: Affine): boolean {
+  return m[0] === 1 && m[1] === 0 && m[2] === 0 && m[3] === 1 && m[4] === 0 && m[5] === 0;
+}
+
+// compose(m, n): the transform that applies n first, then m (the matrix product m . n).
+function compose(m: Affine, n: Affine): Affine {
+  return [
+    m[0] * n[0] + m[2] * n[1],
+    m[1] * n[0] + m[3] * n[1],
+    m[0] * n[2] + m[2] * n[3],
+    m[1] * n[2] + m[3] * n[3],
+    m[0] * n[4] + m[2] * n[5] + m[4],
+    m[1] * n[4] + m[3] * n[5] + m[5],
+  ];
+}
+
+// A transform applied about a center point: translate(c) . t . translate(-c).
+function aroundCenter(t: Affine, cx: number, cy: number): Affine {
+  return compose([1, 0, 0, 1, cx, cy], compose(t, [1, 0, 0, 1, -cx, -cy]));
+}
+
+// Applies an affine to a point (font units).
+function applyAffine(m: Affine, x: number, y: number): [number, number] {
+  return [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]];
+}
+
+// The affine's mean scale factor sqrt(|det|), used to scale a gradient radius (a circle can only
+// stay a circle under uniform scaling; this is the best single-radius approximation otherwise).
+function detScale(m: Affine): number {
+  return Math.sqrt(Math.abs(m[0] * m[3] - m[1] * m[2]));
 }
 
 export class TTFParser {
@@ -436,7 +476,7 @@ export class TTFParser {
   // when present, else reads the v0 records; both resolve to the same `ColorGlyphLayer` shape.
   getColorGlyph(glyphId: number): ColorGlyphLayer[] | null {
     const v1 = this.colrBaseV1.get(glyphId);
-    if (v1 !== undefined) return this.walkColrLayers(v1, new Set());
+    if (v1 !== undefined) return this.walkColrLayers(v1, IDENTITY, new Set());
 
     const rec = this.colrBase.get(glyphId);
     if (!rec) return null;
@@ -452,83 +492,197 @@ export class TTFParser {
     return layers;
   }
 
-  // Walks a v1 paint (sub)tree into the flat list of glyph-clipped layers it draws. Handles the
-  // structural paints - PaintColrLayers (a list), PaintGlyph (a glyph + its fill) and PaintColrGlyph
-  // (a reference to another base glyph). Unsupported structural paints (transforms, composites) are
-  // skipped for now. `seen` guards against cyclic PaintColrGlyph references.
-  private walkColrLayers(paintOffset: number, seen: Set<number>): ColorGlyphLayer[] {
-    if (seen.has(paintOffset)) return [];
-    seen.add(paintOffset);
+  // Walks a v1 paint (sub)tree into the flat list of glyph-clipped layers it draws, carrying the
+  // accumulated affine `m` down the graph. Handles the structural paints: PaintColrLayers (a list),
+  // PaintGlyph (a glyph + its fill), PaintColrGlyph (a reference), the transform paints (compose
+  // into `m`), and PaintComposite (backdrop under source). Unhandled paints (rotate/skew, the
+  // variable variants) are skipped. `seen` guards against cyclic references.
+  private walkColrLayers(paintOffset: number, m: Affine, seen: Set<number>): ColorGlyphLayer[] {
+    const key = paintOffset;
+    if (seen.has(key)) return [];
+    seen.add(key);
 
     const format = u8(this.data, paintOffset);
-    if (format === 1) {
-      // PaintColrLayers: numLayers (u8) starting at firstLayerIndex (u32) into the LayerList.
-      const numLayers = u8(this.data, paintOffset + 1);
-      const first = u32(this.data, paintOffset + 2);
-      const out: ColorGlyphLayer[] = [];
-      for (let i = 0; i < numLayers; i++) {
-        const layerPaint =
-          this.colrLayerListOffset + u32(this.data, this.colrLayerListOffset + 4 + (first + i) * 4);
-        out.push(...this.walkColrLayers(layerPaint, seen));
+    const child = (): number => paintOffset + this.u24(paintOffset + 1);
+    const descend = (t: Affine): ColorGlyphLayer[] =>
+      this.walkColrLayers(child(), compose(m, t), seen);
+
+    switch (format) {
+      case 1: {
+        // PaintColrLayers: numLayers (u8) starting at firstLayerIndex (u32) into the LayerList.
+        const numLayers = u8(this.data, paintOffset + 1);
+        const first = u32(this.data, paintOffset + 2);
+        const out: ColorGlyphLayer[] = [];
+        for (let i = 0; i < numLayers; i++) {
+          const layerPaint =
+            this.colrLayerListOffset +
+            u32(this.data, this.colrLayerListOffset + 4 + (first + i) * 4);
+          out.push(...this.walkColrLayers(layerPaint, m, new Set(seen)));
+        }
+        return out;
       }
-      return out;
-    }
-    if (format === 10) {
-      // PaintGlyph: paint (Offset24 to the fill) + glyphID (u16). The fill paints inside the glyph.
-      const fill = this.resolveFill(paintOffset + this.u24(paintOffset + 1));
-      return fill ? [{ glyphId: u16(this.data, paintOffset + 4), paint: fill }] : [];
-    }
-    if (format === 11) {
-      // PaintColrGlyph: draw another base glyph's paint graph.
-      const ref = this.colrBaseV1.get(u16(this.data, paintOffset + 1));
-      return ref !== undefined ? this.walkColrLayers(ref, seen) : [];
-    }
-    return []; // a bare fill with no glyph, or a paint format not supported yet
-  }
-
-  // Resolves the fill of a PaintGlyph to a solid or gradient `Paint`, or null when it is a paint
-  // format not handled yet (a nested layer list, a transform, a composite - added later).
-  private resolveFill(paintOffset: number): Paint | null {
-    const format = u8(this.data, paintOffset);
-    if (format === 2) {
-      // PaintSolid: paletteIndex (u16) + alpha (F2Dot14).
-      const paletteIndex = u16(this.data, paintOffset + 1);
-      return {
-        type: "solid",
-        color: this.paletteColor(paletteIndex, this.f2dot14(paintOffset + 3)),
-      };
-    }
-    if (format === 4) {
-      // PaintLinearGradient: a color line + p0/p1 (and a rotation point p2 we treat axially).
-      const stops = this.readColorLine(paintOffset + this.u24(paintOffset + 1));
-      return {
-        type: "linearGradient",
-        p0: [i16(this.data, paintOffset + 4), i16(this.data, paintOffset + 6)],
-        p1: [i16(this.data, paintOffset + 8), i16(this.data, paintOffset + 10)],
-        stops: stops.stops,
-        extend: stops.extend,
-      };
-    }
-    if (format === 6) {
-      // PaintRadialGradient: a color line + two circles (center + radius).
-      const stops = this.readColorLine(paintOffset + this.u24(paintOffset + 1));
-      return {
-        type: "radialGradient",
-        c0: [
+      case 10: {
+        // PaintGlyph: paint (Offset24 to the fill) + glyphID (u16). The fill paints inside the glyph.
+        const fill = this.resolveFill(paintOffset + this.u24(paintOffset + 1), IDENTITY);
+        if (!fill) return [];
+        const layer: ColorGlyphLayer = { glyphId: u16(this.data, paintOffset + 4), paint: fill };
+        if (!isIdentity(m)) layer.transform = m;
+        return [layer];
+      }
+      case 11: {
+        // PaintColrGlyph: draw another base glyph's paint graph under the current transform.
+        const ref = this.colrBaseV1.get(u16(this.data, paintOffset + 1));
+        return ref !== undefined ? this.walkColrLayers(ref, m, new Set(seen)) : [];
+      }
+      case 12: // PaintTransform: child + an Affine2x3 (six Fixed 16.16 values).
+        return descend(this.readAffine(paintOffset + this.u24(paintOffset + 4)));
+      case 14: // PaintTranslate: dx, dy (FWORD).
+        return descend([
+          1,
+          0,
+          0,
+          1,
           i16(this.data, paintOffset + 4),
           i16(this.data, paintOffset + 6),
-          u16(this.data, paintOffset + 8),
-        ],
-        c1: [
-          i16(this.data, paintOffset + 10),
-          i16(this.data, paintOffset + 12),
-          u16(this.data, paintOffset + 14),
-        ],
-        stops: stops.stops,
-        extend: stops.extend,
-      };
+        ]);
+      case 16: // PaintScale: scaleX, scaleY (F2Dot14).
+        return descend([this.f2dot14(paintOffset + 4), 0, 0, this.f2dot14(paintOffset + 6), 0, 0]);
+      case 18: // PaintScaleAroundCenter: scaleX, scaleY, centerX, centerY.
+        return descend(
+          aroundCenter(
+            [this.f2dot14(paintOffset + 4), 0, 0, this.f2dot14(paintOffset + 6), 0, 0],
+            i16(this.data, paintOffset + 8),
+            i16(this.data, paintOffset + 10),
+          ),
+        );
+      case 20: {
+        // PaintScaleUniform: a single scale for both axes.
+        const s = this.f2dot14(paintOffset + 4);
+        return descend([s, 0, 0, s, 0, 0]);
+      }
+      case 22: {
+        // PaintScaleUniformAroundCenter: uniform scale about a center.
+        const s = this.f2dot14(paintOffset + 4);
+        return descend(
+          aroundCenter(
+            [s, 0, 0, s, 0, 0],
+            i16(this.data, paintOffset + 6),
+            i16(this.data, paintOffset + 8),
+          ),
+        );
+      }
+      case 32: {
+        // PaintComposite: sourcePaint, mode (u8), backdropPaint. We treat every mode as source-over:
+        // draw the backdrop underneath, then the source on top (correct for the common case).
+        const source = paintOffset + this.u24(paintOffset + 1);
+        const backdrop = paintOffset + this.u24(paintOffset + 5);
+        return [
+          ...this.walkColrLayers(backdrop, m, new Set(seen)),
+          ...this.walkColrLayers(source, m, new Set(seen)),
+        ];
+      }
+      default:
+        return []; // a bare fill with no glyph, or a paint format not supported yet
     }
-    return null;
+  }
+
+  // Resolves the fill under a PaintGlyph to a solid or gradient `Paint`, descending through any
+  // transform paints and baking the accumulated affine `t` into the gradient's coordinates (so the
+  // renderer only has to apply the OUTER glyph transform). Returns null for a still-unsupported fill.
+  private resolveFill(paintOffset: number, t: Affine): Paint | null {
+    const format = u8(this.data, paintOffset);
+    const child = (): number => paintOffset + this.u24(paintOffset + 1);
+    const p = (x: number, y: number): [number, number] => applyAffine(t, x, y);
+    switch (format) {
+      case 2: {
+        // PaintSolid: paletteIndex (u16) + alpha (F2Dot14). A solid fill ignores the transform.
+        const paletteIndex = u16(this.data, paintOffset + 1);
+        return {
+          type: "solid",
+          color: this.paletteColor(paletteIndex, this.f2dot14(paintOffset + 3)),
+        };
+      }
+      case 4: {
+        // PaintLinearGradient: a color line + p0/p1 (a rotation point p2 we treat axially).
+        const line = this.readColorLine(paintOffset + this.u24(paintOffset + 1));
+        return {
+          type: "linearGradient",
+          p0: p(i16(this.data, paintOffset + 4), i16(this.data, paintOffset + 6)),
+          p1: p(i16(this.data, paintOffset + 8), i16(this.data, paintOffset + 10)),
+          stops: line.stops,
+          extend: line.extend,
+        };
+      }
+      case 6: {
+        // PaintRadialGradient: a color line + two circles. Radii scale by the affine's mean scale.
+        const line = this.readColorLine(paintOffset + this.u24(paintOffset + 1));
+        const rScale = detScale(t);
+        const [c0x, c0y] = p(i16(this.data, paintOffset + 4), i16(this.data, paintOffset + 6));
+        const [c1x, c1y] = p(i16(this.data, paintOffset + 10), i16(this.data, paintOffset + 12));
+        return {
+          type: "radialGradient",
+          c0: [c0x, c0y, u16(this.data, paintOffset + 8) * rScale],
+          c1: [c1x, c1y, u16(this.data, paintOffset + 14) * rScale],
+          stops: line.stops,
+          extend: line.extend,
+        };
+      }
+      // Transform paints wrapping the fill: compose into `t` and descend to the actual gradient.
+      case 12:
+        return this.resolveFill(
+          child(),
+          compose(t, this.readAffine(paintOffset + this.u24(paintOffset + 4))),
+        );
+      case 14:
+        return this.resolveFill(
+          child(),
+          compose(t, [
+            1,
+            0,
+            0,
+            1,
+            i16(this.data, paintOffset + 4),
+            i16(this.data, paintOffset + 6),
+          ]),
+        );
+      case 16:
+        return this.resolveFill(
+          child(),
+          compose(t, [this.f2dot14(paintOffset + 4), 0, 0, this.f2dot14(paintOffset + 6), 0, 0]),
+        );
+      case 18:
+        return this.resolveFill(
+          child(),
+          compose(
+            t,
+            aroundCenter(
+              [this.f2dot14(paintOffset + 4), 0, 0, this.f2dot14(paintOffset + 6), 0, 0],
+              i16(this.data, paintOffset + 8),
+              i16(this.data, paintOffset + 10),
+            ),
+          ),
+        );
+      case 20: {
+        const s = this.f2dot14(paintOffset + 4);
+        return this.resolveFill(child(), compose(t, [s, 0, 0, s, 0, 0]));
+      }
+      case 22: {
+        const s = this.f2dot14(paintOffset + 4);
+        return this.resolveFill(
+          child(),
+          compose(
+            t,
+            aroundCenter(
+              [s, 0, 0, s, 0, 0],
+              i16(this.data, paintOffset + 6),
+              i16(this.data, paintOffset + 8),
+            ),
+          ),
+        );
+      }
+      default:
+        return null;
+    }
   }
 
   // A ColorLine: an extend mode then color stops (position + palette color).
@@ -563,6 +717,18 @@ export class TTFParser {
   // An F2Dot14 fixed-point number (signed, 2 integer + 14 fraction bits) as a float.
   private f2dot14(o: number): number {
     return i16(this.data, o) / 16384;
+  }
+
+  // A signed 32-bit big-endian integer.
+  private i32(o: number): number {
+    const v = u32(this.data, o);
+    return v >= 0x80000000 ? v - 0x100000000 : v;
+  }
+
+  // An Affine2x3 struct: six Fixed (16.16) values xx, yx, xy, yy, dx, dy -> [a, b, c, d, e, f].
+  private readAffine(o: number): Affine {
+    const fixed = (p: number): number => this.i32(p) / 65536;
+    return [fixed(o), fixed(o + 4), fixed(o + 8), fixed(o + 12), fixed(o + 16), fixed(o + 20)];
   }
 
   // COLR header (v0 and v1). v0: base-glyph + layer records (solid). v1 (version >= 1): additionally

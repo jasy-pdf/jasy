@@ -3,7 +3,7 @@ import { HorizontalAlignment } from "../elements/pdf-element.ts";
 import { TextElement, TextSegment } from "../elements/text-element.ts";
 import { FontStyle, PDFObjectManager } from "../utils/pdf-object-manager.ts";
 import type { FontMetrics } from "../utils/font-metrics.ts";
-import type { GlyphPathCommand, Paint } from "../utils/ttf-parser.ts";
+import type { GlyphPathCommand, Paint, Affine } from "../utils/ttf-parser.ts";
 import { IRNode, TextRun, PathCommand, Gradient } from "../ir/display-list.ts";
 import {
   wrapStringIntoLines,
@@ -133,6 +133,7 @@ export class TextRenderer {
             cursorX,
             run.y,
             scale,
+            layer.transform,
           );
           if (commands.length === 0) continue; // an empty layer outline draws nothing
           const paint = layer.paint;
@@ -141,7 +142,14 @@ export class TextRenderer {
             const c = paint.color;
             fill = c ? new Color(c.r, c.g, c.b, c.a / 255) : run.color; // null -> foreground
           } else {
-            fill = TextRenderer._toGradient(paint, cursorX, run.y, scale, run.color);
+            fill = TextRenderer._toGradient(
+              paint,
+              cursorX,
+              run.y,
+              scale,
+              run.color,
+              layer.transform,
+            );
           }
           nodes.push({ type: "path", commands, fill });
         }
@@ -163,26 +171,30 @@ export class TextRenderer {
     originX: number,
     baselineY: number,
     scale: number,
+    transform?: Affine,
   ): PathCommand[] {
-    const mapX = (gx: number): number => originX + gx * scale;
-    const mapY = (gy: number): number => baselineY - gy * scale;
+    // Apply the layer's affine (font units) first, then scale to points, position at the pen origin
+    // and flip into engine space. `mapX`/`mapY` take BOTH glyph coords because an affine mixes them.
+    const [a, b, c, d, e, f] = transform ?? [1, 0, 0, 1, 0, 0];
+    const mapX = (gx: number, gy: number): number => originX + (a * gx + c * gy + e) * scale;
+    const mapY = (gx: number, gy: number): number => baselineY - (b * gx + d * gy + f) * scale;
     const out: PathCommand[] = [];
     let curX = 0;
     let curY = 0;
-    for (const c of cmds) {
-      if (c.type === "M") {
-        curX = mapX(c.x);
-        curY = mapY(c.y);
+    for (const cmd of cmds) {
+      if (cmd.type === "M") {
+        curX = mapX(cmd.x, cmd.y);
+        curY = mapY(cmd.x, cmd.y);
         out.push({ op: "m", x: curX, y: curY });
-      } else if (c.type === "L") {
-        curX = mapX(c.x);
-        curY = mapY(c.y);
+      } else if (cmd.type === "L") {
+        curX = mapX(cmd.x, cmd.y);
+        curY = mapY(cmd.x, cmd.y);
         out.push({ op: "l", x: curX, y: curY });
-      } else if (c.type === "Q") {
-        const ctrlX = mapX(c.cx);
-        const ctrlY = mapY(c.cy);
-        const endX = mapX(c.x);
-        const endY = mapY(c.y);
+      } else if (cmd.type === "Q") {
+        const ctrlX = mapX(cmd.cx, cmd.cy);
+        const ctrlY = mapY(cmd.cx, cmd.cy);
+        const endX = mapX(cmd.x, cmd.y);
+        const endY = mapY(cmd.x, cmd.y);
         out.push({
           op: "c",
           x1: curX + (2 / 3) * (ctrlX - curX),
@@ -211,9 +223,14 @@ export class TextRenderer {
     baselineY: number,
     scale: number,
     foreground: Color,
+    transform?: Affine,
   ): Gradient {
-    const mapX = (gx: number): number => originX + gx * scale;
-    const mapY = (gy: number): number => baselineY - gy * scale;
+    const [a, b, c, d, e, f] = transform ?? [1, 0, 0, 1, 0, 0];
+    const mapX = (gx: number, gy: number): number => originX + (a * gx + c * gy + e) * scale;
+    const mapY = (gx: number, gy: number): number => baselineY - (b * gx + d * gy + f) * scale;
+    // A radius has no single value under a general affine (a circle can shear into an ellipse); use
+    // the affine's geometric-mean scale sqrt(|det|) times the em scale - exact for uniform scaling.
+    const radiusScale = scale * Math.sqrt(Math.abs(a * d - b * c));
     const stops = paint.stops.map((s) => ({
       offset: s.offset,
       color: s.color ? new Color(s.color.r, s.color.g, s.color.b, s.color.a / 255) : foreground,
@@ -222,22 +239,22 @@ export class TextRenderer {
     if (paint.type === "linearGradient") {
       return {
         type: "linear",
-        x0: mapX(paint.p0[0]),
-        y0: mapY(paint.p0[1]),
-        x1: mapX(paint.p1[0]),
-        y1: mapY(paint.p1[1]),
+        x0: mapX(paint.p0[0], paint.p0[1]),
+        y0: mapY(paint.p0[0], paint.p0[1]),
+        x1: mapX(paint.p1[0], paint.p1[1]),
+        y1: mapY(paint.p1[0], paint.p1[1]),
         stops,
         extend: paint.extend,
       };
     }
     return {
       type: "radial",
-      x0: mapX(paint.c0[0]),
-      y0: mapY(paint.c0[1]),
-      r0: paint.c0[2] * scale,
-      x1: mapX(paint.c1[0]),
-      y1: mapY(paint.c1[1]),
-      r1: paint.c1[2] * scale,
+      x0: mapX(paint.c0[0], paint.c0[1]),
+      y0: mapY(paint.c0[0], paint.c0[1]),
+      r0: paint.c0[2] * radiusScale,
+      x1: mapX(paint.c1[0], paint.c1[1]),
+      y1: mapY(paint.c1[0], paint.c1[1]),
+      r1: paint.c1[2] * radiusScale,
       stops,
       extend: paint.extend,
     };

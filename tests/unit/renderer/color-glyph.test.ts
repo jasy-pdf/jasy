@@ -5,7 +5,7 @@ import { PDFObjectManager, FontStyle } from "../../../src/lib/utils/pdf-object-m
 import { HorizontalAlignment } from "../../../src/lib/elements/pdf-element";
 import { Color } from "../../../src/lib/common/color";
 import { IRNode, Path, TextRun } from "../../../src/lib/ir/display-list";
-import { buildColorTtf, buildColorV1Ttf } from "../utils/ttf-fixture";
+import { buildTestTtf, buildColorTtf, buildColorV1Ttf } from "../utils/ttf-fixture";
 
 // A laid-out TextElement carrying `content` in the "Emoji" family at a known origin.
 const textElement = (content: string): TextElement =>
@@ -101,5 +101,25 @@ describe("TextRenderer - COLR color glyph expansion", () => {
     );
     expect(nodes).toHaveLength(1);
     expect(nodes[0].type).toBe("text");
+  });
+
+  // Regression: a color font co-registered in the same document must not disturb a normal custom
+  // font's embedding/subsetting - the normal font still embeds (one /FontFile2), and the emoji draws
+  // as a vector fill rather than as embedded-font text (so the color font itself is not embedded).
+  it("a co-registered color font does not interfere with a normal font's embedding", async () => {
+    const { renderPdf, Document, Page } = await import("../../../src/lib/api/structure");
+    const { Text } = await import("../../../src/lib/api");
+
+    const pdf = await renderPdf(
+      Document([Page([Text("AB", { font: "Normal" }), Text("😀", { font: "Emoji", size: 20 })])]),
+      { fonts: { Normal: buildTestTtf(), Emoji: buildColorTtf() }, compress: false },
+    );
+
+    expect(pdf.startsWith("%PDF")).toBe(true);
+    // The normal font is embedded + subsetted (a subset-tagged BaseFont + a FontFile2 program)...
+    expect(pdf).toMatch(/\/BaseFont \/[A-Z]{6}\+/);
+    expect((pdf.match(/\/FontFile2/g) ?? []).length).toBe(1); // ...and ONLY it (emoji font not embedded)
+    // The emoji renders as its red vector layer, not as embedded-font glyphs.
+    expect(pdf).toContain("1.000 0.000 0.000 rg");
   });
 });
