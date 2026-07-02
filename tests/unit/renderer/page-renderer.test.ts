@@ -50,6 +50,7 @@ describe("PageRenderer", () => {
       ),
       getAllImagesRaw: vi.fn().mockReturnValue(new Map()),
       getAllExtGStatesRaw: vi.fn().mockReturnValue(new Map()),
+      struct: { enabled: false },
     } as unknown as PDFObjectManager;
 
     const pageNumber = await PageRenderer.render(mockPageElement, mockObjectManager);
@@ -81,6 +82,7 @@ describe("PageRenderer", () => {
       getAllFontsRaw: vi.fn().mockReturnValue(new Map()),
       getAllImagesRaw: vi.fn().mockReturnValue(new Map([["image1", 2]])),
       getAllExtGStatesRaw: vi.fn().mockReturnValue(new Map()),
+      struct: { enabled: false },
     } as unknown as PDFObjectManager;
 
     const pageNumber = await PageRenderer.render(mockPageElement, mockObjectManager);
@@ -132,6 +134,7 @@ describe("PageRenderer", () => {
       ),
       getAllImagesRaw: vi.fn().mockReturnValue(new Map()),
       getAllExtGStatesRaw: vi.fn().mockReturnValue(new Map()),
+      struct: { enabled: false },
     } as unknown as PDFObjectManager;
 
     const pageNumber = await PageRenderer.render(mockPageElement, mockObjectManager);

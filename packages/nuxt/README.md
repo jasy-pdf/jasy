@@ -92,6 +92,21 @@ export default definePdfHandler(build, { cache: { maxAge: 3600 } });
 
 Expired entries re-render fresh (`swr` is off by default) - a stale invoice is never served.
 
+### Password protection
+
+`usePdf` and `definePdfHandler` / `sendPdf` forward `@jasy/pdf` render options via `renderOptions` - so
+AES-256 password protection is one option away, client or server:
+
+```ts
+// client
+const { download } = usePdf(Invoice, { renderOptions: { encrypt: { userPassword: "secret" } } });
+
+// server
+export default definePdfHandler(build, { renderOptions: { encrypt: { userPassword: "secret" } } });
+```
+
+`ownerPassword` + `permissions` are optional. (AES-256 ≠ PDF/A, so this is not for ZUGFeRD invoices.)
+
 ## What the module sets up
 
 - **Components** for templates: `Document` · `Page` · `Column` · `Row` · `Box` · `Padding` · `Text` ·

@@ -32,7 +32,14 @@ export class PageRenderer {
         nodes.push(...(await renderer(element, objectManager)));
       }
     }
-    const pageContent = PdfBackend.serialize(PdfBackend.flipY(nodes, height), objectManager);
+    // Accessible tagging: one struct context per page (allocates its StructParents index), threaded into
+    // serialize so each drawable node is wrapped in marked content. Undefined = tagging off (byte-identical).
+    const structCtx = objectManager.struct.enabled ? objectManager.struct.beginPage() : undefined;
+    const pageContent = PdfBackend.serialize(
+      PdfBackend.flipY(nodes, height),
+      objectManager,
+      structCtx,
+    );
 
     // Add the page content as a new object (FlateDecode-compressed when enabled). The /Length is
     // computed inside, with an explicit EOL before `endstream` (PDF/A clause 6.1.7.1).
@@ -73,11 +80,16 @@ export class PageRenderer {
         ? "/ExtGState <<\n" + extGStateReferences.join("\n") + "\n>>\n"
         : "";
 
+    // Tagging only: /StructParents links this page's marked content to the ParentTree, /Tabs /S makes the
+    // logical structure order the tab/reading order (a PDF/UA requirement).
+    const structAttrs = structCtx ? ` /StructParents ${structCtx.structParents} /Tabs /S` : "";
     const pageObject = `<< /Type /Page /Parent ${parentObjectNumber} 0 R /Contents ${contentObjectNumber} 0 R /Resources <<\n/Font <<\n${fontReferences.join(
       "\n",
-    )}\n>>\n${imageCode}${extGStateCode}>>\n/MediaBox [0 0 ${width} ${height}] >>`;
+    )}\n>>\n${imageCode}${extGStateCode}>>\n/MediaBox [0 0 ${width} ${height}]${structAttrs} >>`;
 
-    // Add page as new object and return the page number
-    return objectManager.addObject(pageObject);
+    // Add page as new object; register its object number with the struct tree (for /Pg refs), then return it.
+    const pageObjNum = objectManager.addObject(pageObject);
+    if (structCtx) objectManager.struct.setPageObject(structCtx.structParents, pageObjNum);
+    return pageObjNum;
   }
 }

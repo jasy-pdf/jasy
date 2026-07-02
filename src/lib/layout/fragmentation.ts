@@ -26,10 +26,17 @@ export interface Fragmentable {
 }
 
 export function isFragmentable(element: PDFElement): element is PDFElement & Fragmentable {
-  return (
-    "fragment" in element &&
-    typeof (element as PDFElement & { fragment: unknown }).fragment === "function"
-  );
+  if (
+    !("fragment" in element) ||
+    typeof (element as PDFElement & { fragment: unknown }).fragment !== "function"
+  ) {
+    return false;
+  }
+  // An element may veto splitting at runtime via canFragment() - a transparent StructGroup only fragments
+  // when its wrapped child does, so a non-splittable wrapped child (e.g. a table row) is moved whole to the
+  // next page instead of being clipped at the boundary. Elements without canFragment() are always splittable.
+  const canFragment = (element as PDFElement & { canFragment?: () => boolean }).canFragment;
+  return typeof canFragment !== "function" || canFragment.call(element);
 }
 
 /**

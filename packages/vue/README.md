@@ -115,6 +115,9 @@ const props = defineProps<{ font: Uint8Array; logo: Uint8Array }>();
 
 - `renderToPdf(root, props?, options?) => Promise<Uint8Array>` - the PDF bytes. Browser or Node.
 - `renderToPdfString(root, props?, options?) => Promise<string>` - the raw PDF string.
+- `options` are the `@jasy/pdf` `RenderOptions` and flow straight through - e.g.
+  `renderToPdf(Doc, props, { encrypt: { userPassword: "secret" } })` for AES-256 password protection (also
+  `fonts`, `compress`, `onOverflow`, …).
 - `toDocumentDescriptor(root, props?)` - the framework-agnostic descriptor (the seam a Node service can
   receive from the browser).
 - `jasyVue` - the global-registration plugin (`{ prefix }`).

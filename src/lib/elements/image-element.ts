@@ -124,20 +124,24 @@ interface ImageElementParams {
   fit?: BoxFit;
   /** Corner radius in points; rounds the image box (0 = sharp, default). */
   radius?: number;
+  /** Alternate text for accessibility (tagged PDF). With `alt` the image is a Figure; without, decoration. */
+  alt?: string;
 }
 
 export class ImageElement extends SizedPDFElement {
   private image: CustomImage;
   private fit: BoxFit;
   private radius: number;
+  private readonly alt?: string;
 
-  constructor({ image, width, height, fit = BoxFit.none, radius }: ImageElementParams) {
+  constructor({ image, width, height, fit = BoxFit.none, radius, alt }: ImageElementParams) {
     super({ x: 0, y: 0, width });
 
     this.image = image;
     this.height = height;
     this.fit = fit;
     this.radius = radius ?? 0;
+    this.alt = alt;
   }
 
   calculateLayout(constraints: BoxConstraints, offset: Offset, _ctx: LayoutContext): Size {
@@ -160,6 +164,7 @@ export class ImageElement extends SizedPDFElement {
       image: this.image,
       fit: this.fit,
       radius: this.radius,
+      alt: this.alt,
     };
   }
 }

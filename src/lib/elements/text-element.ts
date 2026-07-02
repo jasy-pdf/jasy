@@ -24,6 +24,9 @@ export interface TextSegment {
   fontSize?: number;
 }
 
+/** Accessibility role for the tagged structure tree: a heading level or a paragraph (the default). */
+export type TextRole = "h1" | "h2" | "h3" | "h4" | "h5" | "h6" | "p";
+
 interface TextElementParams {
   id?: string;
   /** Unset (undefined) inherits the cascaded size; see ResolvedTextStyle. */
@@ -39,6 +42,8 @@ interface TextElementParams {
   overflow?: TextOverflow;
   /** Line-height multiplier: each line is `fontSize * lineHeight` tall (default `1`). */
   lineHeight?: number;
+  /** Accessibility role for the tagged structure tree (heading level or paragraph; default `"p"`). */
+  role?: TextRole;
 }
 
 export class TextElement extends SizedPDFElement implements Fragmentable {
@@ -63,6 +68,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
   private content: string | TextSegment[];
   private maxLines?: number;
   private overflow: TextOverflow;
+  private readonly role?: TextRole; // accessibility role (tagged PDF); undefined = paragraph
 
   constructor({
     fontSize,
@@ -74,8 +80,10 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     maxLines,
     overflow = "clip",
     lineHeight,
+    role,
   }: TextElementParams) {
     super({ x: 0, y: 0 });
+    this.role = role;
 
     this.rawFontSize = fontSize;
     this.rawFontFamily = fontFamily;
@@ -197,7 +205,8 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       maxLines: this.maxLines,
       overflow: this.overflow,
       lineHeight: this.lineHeight,
-    });
+      role: this.role,
+    }).adoptStructId(this); // a wrapped remainder is the SAME logical paragraph (one P across pages)
   }
 
   calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
@@ -281,6 +290,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       maxLines: this.maxLines,
       overflow: this.overflow,
       lineHeight: this.lineHeight,
+      role: this.role,
     };
   }
 }
