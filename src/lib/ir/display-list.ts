@@ -107,5 +107,61 @@ export interface ClipPop {
   type: "clip-pop";
 }
 
+/**
+ * One drawing command of a `Path`, in absolute page coordinates. Curves are CUBIC because PDF
+ * content streams have no quadratic operator - a producer converts TrueType quads to cubics before
+ * emitting. `z` closes the current subpath (a glyph contour).
+ */
+export type PathCommand =
+  | { op: "m"; x: number; y: number }
+  | { op: "l"; x: number; y: number }
+  | { op: "c"; x1: number; y1: number; x2: number; y2: number; x: number; y: number }
+  | { op: "z" };
+
+/** One color stop of a gradient: a position 0..1 along the axis and its color. */
+export interface GradientStop {
+  offset: number;
+  color: Color;
+}
+
+/** An axial (linear) gradient between two points, in absolute page coordinates. */
+export interface LinearGradient {
+  type: "linear";
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+  stops: GradientStop[];
+  extend: "pad" | "repeat" | "reflect";
+}
+
+/** A radial gradient between two circles, in absolute page coordinates. */
+export interface RadialGradient {
+  type: "radial";
+  x0: number;
+  y0: number;
+  r0: number;
+  x1: number;
+  y1: number;
+  r1: number;
+  stops: GradientStop[];
+  extend: "pad" | "repeat" | "reflect";
+}
+
+export type Gradient = LinearGradient | RadialGradient;
+
+/**
+ * A filled vector path - one or more closed subpaths sharing a single fill, using the nonzero
+ * winding rule (so a glyph's inner contour cuts a hole). This is what a color glyph's layers draw
+ * onto: each COLR layer is one `Path` filled with a solid `Color` (v0) or a `Gradient` (v1).
+ */
+export interface Path {
+  type: "path";
+  commands: PathCommand[];
+  fill: Color | Gradient;
+  /** Accessibility structure tag (absent = drawn as an artifact); color-emoji layers stay untagged. */
+  tag?: StructTag;
+}
+
 /** The closed set of primitives the PDF backend knows how to draw. */
-export type IRNode = TextRun | Rect | Line | Image | ClipPush | ClipPop;
+export type IRNode = TextRun | Rect | Line | Image | ClipPush | ClipPop | Path;

@@ -186,9 +186,12 @@ function ellipsize(
     words.pop();
     if (fits(words.join(" "))) return words.join(" ") + ELLIPSIS;
   }
-  let single = words[0] ?? "";
-  while (single.length > 1) {
-    single = single.slice(0, -1);
+  // Drop one code point at a time (not one UTF-16 unit) so an astral char is never split into a
+  // lone surrogate. `chars` is the code-point view; rebuild the string from its shrinking prefix.
+  const chars = [...(words[0] ?? "")];
+  while (chars.length > 1) {
+    chars.pop();
+    const single = chars.join("");
     if (fits(single)) return single + ELLIPSIS;
   }
   return ELLIPSIS;

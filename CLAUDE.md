@@ -100,7 +100,8 @@ is what makes text wrapping possible without a browser. Standard text is encoded
 WinAnsiEncoding (`utils/utf8-to-windows1252-encoder.ts`). **Custom TrueType fonts** plug in beside this:
 `TTFParser` (`utils/ttf-parser.ts`) reads the same metrics straight from the `.ttf` (hmtx/cmap), and
 `registerCustomFont` embeds the font as a Type0/Identity-H graph (`/FontFile2`) — the metric + emission
-paths branch on the font name (`isCustomFont`), leaving the AFM/WinAnsi path byte-identical.
+paths branch on the font name (`isCustomFont`), leaving the AFM/WinAnsi path byte-identical. `TTFParser`
+also parses `glyf`/`loca` outlines + COLR/CPAL color tables for color emoji (see the ✅ Color emoji entry).
 
 ### State threading — explicit, no singleton (since roadmap Phase 2)
 
@@ -178,7 +179,7 @@ rendering. This is the standing visual check; prefer it over one-off `scripts/ru
 - `pnpm test` — Vitest (watch). `pnpm exec vitest run` for a one-shot CI-style run.
   `pnpm run test:coverage` for coverage. Unit tests live in **`tests/unit/`**, mirroring the `src/lib/`
   structure (`tests/unit/{common,elements,renderer,utils}/…`). `src/` is pure production code — the
-  build (`tsconfig.json` includes only `src/**`) therefore keeps `dist/` test-free. **~357 tests, green**
+  build (`tsconfig.json` includes only `src/**`) therefore keeps `dist/` test-free. **~415 tests, green**
   in the core (plus the `@jasy/zugferd` suite).
 - `pnpm run build` — `tsc` → `dist/`.
 - `pnpm run lint` (oxlint) + `pnpm run fmt:check` (oxfmt `--check`); `pnpm run fmt` formats. **Run `pnpm run fmt`
@@ -241,6 +242,25 @@ lineHeight, align, bold, italic }, …)` sets doc-wide text defaults; `DefaultTe
   choke-point (`streamPayload`) + a finalize pass (`finalizeEncryption`) writes `/Encrypt` + forces `/ID`;
   `EncryptMetadata false` keeps XMP plaintext. Mutually exclusive with PDF/A (ZUGFeRD throws). `recoverFileKey`
   (validates the password vs `/U`) is the groundwork for a future decrypt/edit path. Proven against poppler.
+- ✅ **Color emoji — COLR/CPAL v0 + v1** (2026-07, branch `feat/emoji`, not yet merged) — real color emoji
+  rendered as **vector layers in pure TS, no browser, no CDN** (react-pdf only does CDN-fetched Twemoji PNGs).
+  `TTFParser` grew a `glyf`+`loca` outline parser (`getGlyphPath` → M/L/Q, quads), COLR **v0** (flat solid
+  layers) **and v1** (`getColorGlyph` walks the paint graph: PaintColrLayers/PaintGlyph/PaintColrGlyph, Solid,
+  Linear/Radial gradients, and the transform paints 12/14/16/18/20/22 threaded as an affine, PaintComposite as
+  source-over) + CPAL palette. A new IR `Path` primitive (filled, `fill: Color | Gradient`) → `PdfBackend`
+  emits fills / clips + `sh` shadings (`registerShading`: axial/radial + a Type-2/Type-3 color-stop function).
+  `TextRenderer._expandColorGlyphs` splits a run into normal text sub-runs + one `Path` per color layer
+  (transform + em-scale applied to outline AND gradient coords). Also **E0: astral-safe measuring** (code-point
+  iteration in `getStringWidth`/ellipsis) + a **cmap fix** (read BOTH the BMP format-4 and astral format-12
+  subtables) — a correctness win for all astral text, not just emoji. Verified: Twemoji (v0), BungeeSpice (v1
+  gradients), full Noto Color Emoji (v1 transforms/composite) all render; a normal custom font stays
+  **byte-identical to pre-emoji main** (subset/embed/compress untouched) + a ZUGFeRD invoice is still
+  **veraPDF PDF/A-3b compliant**. A color font drawn as vectors is not embedded (no wasted `/FontFile2`).
+  **Inline fallback** (`Document({ emoji })`): emoji work in one string/font — a code point the text font can't
+  color-render comes from a doc-level source, either a fallback FONT (color glyphs, native vector) or an IMAGE/CDN
+  source (`{ url, format }`, react-pdf-style Twemoji PNGs; `renderer/emoji-image.ts` + `text/emoji-codepoints.ts`
+  classifier). Measuring + rendering share the source (rendering is now async for image fetches); single code
+  points only (multi-cp flags/ZWJ/skin-tones deferred - single-cp covers ~95%+).
 - ✅ **Accessibility / tagged PDF (PDF/UA-1)** (2026-07-01) — `renderToBytes(doc, { accessible, lang, title })`
   emits a full structure tree, **verified `isCompliant` by veraPDF** (local at `~/.jasy/verapdf/verapdf -f ua1`).
   Engine owns it; components only declare a role: `Text({ role: "h1".."h6"|"p" })`, `Image({ alt })` → Figure,
@@ -252,7 +272,7 @@ lineHeight, align, bold, italic }, …)` sets doc-wide text defaults; `DefaultTe
   does (`canFragment` veto → rows move whole, never clipped). Backend wraps each node `/Role <</MCID>> BDC…EMC`
   (untagged → `/Artifact **BMC**`); catalog gets `/MarkInfo`, `/StructTreeRoot`, `/Lang`, `/ViewerPreferences
 /DisplayDocTitle`, pages `/Tabs /S`, TH `/Scope /Column`, XMP `pdfuaid:part 1` (`utils/ua-xmp.ts`). Off =
-  byte-identical. Full conformance needs embedded fonts + a title (same as PDF/A). **~377 tests.**
+  byte-identical. Full conformance needs embedded fonts + a title (same as PDF/A). **~415 tests.**
 
 Genuine remaining gaps / deferred:
 
@@ -277,6 +297,10 @@ Genuine remaining gaps / deferred:
 4. `manual-test` has hard-coded machine-specific paths.
 5. Font gaps: no TrueType kerning; only TTF / TrueType-flavoured OTF parsed (OTF/CFF, WOFF2 not yet).
    Bold/italic resolve via registered family variants with a clean fallback to `normal` (no faux styles).
+   Color-emoji deferred (all on `feat/emoji`, none blocking): COLR v1 **rotate/skew** transforms (24-31 —
+   Noto doesn't use them; not built without a test font), variable-font paint variants, **sweep** gradient,
+   gradient `repeat`/`reflect` extend (drawn as `pad`), and **CFF** / **sbix**+**CBDT** bitmap color fonts
+   (so Apple Color Emoji and the bitmap Noto build are unsupported — only glyf-outline COLR fonts render).
 
 ## Roadmap
 
@@ -287,7 +311,7 @@ unprompted, comments English + sensible, don't break the font math.**
 Status: **LAUNCHED 2026-06-27** — all five packages live on npm (`@jasy/pdf`@alpha.3, `@jasy/zugferd`@alpha.1,
 `@jasy/cli`@alpha.3, `@jasy/vue`@alpha.3, `@jasy/nuxt`@alpha.2), repo public + locked, full CI + changelog +
 bots in place (see Repo facts). The engine is **feature-complete for the alpha** — inheritance, `onOverflow`,
-custom formats, the line-breaker fixes; **~357 tests green**. The **landing**
+custom formats, the line-breaker fixes; **~415 tests green**. The **landing**
 (`~/projects/jasy-landing` → **jasy.dev**) is built: showroom (9 cards), validator, docs, a home-page
 roadmap section, and a full **SEO + AI-discoverability layer** (OG image, JSON-LD, `robots.txt`,
 `llms.txt`, `sitemap.xml`).

@@ -98,9 +98,18 @@ export function Page(a: PageOptions | PDFElement[], b?: PDFElement[]): PageEleme
 
 /** Document options: PDF metadata plus the inheritable text defaults (font, size, color, lineHeight,
  *  align, bold/italic) every `Text` inherits unless it sets its own - Flutter's `DefaultTextStyle`. */
+/** Where color emoji come from when a code point isn't in the current text font, so `Text("Hi 😅")`
+ *  works in one string. Either a **font** (native vector, offline - recommended; register it in
+ *  `fonts`) as a string name or `{ font }`, or an **image/CDN source** `{ url, format }` (react-pdf
+ *  style: fetches `${url}${hexCodePoint}.${format}`, e.g. a Twemoji CDN). The font source is better
+ *  (vector, no network); the image source exists for parity + as an escape hatch. */
+export type EmojiSource = string | { font: string } | { url: string; format?: "png" };
+
 export interface DocumentOptions extends TextDefaults {
   /** PDF metadata. */
   meta?: { title?: string; author?: string };
+  /** Color-emoji fallback: emoji code points not in the text font render from this source. */
+  emoji?: EmojiSource;
 }
 
 /** A single font file for `addFont`: a `.ttf` path (read on Node) or its raw bytes (e.g. a browser
@@ -139,6 +148,9 @@ const docMeta = new WeakMap<PDFDocumentElement, DocumentOptions["meta"]>();
 // object manager at render time. Path sources are read to bytes in addFont, so the map holds bytes.
 const docFonts = new WeakMap<PDFDocumentElement, Map<string, FontBytes | FontFamily>>();
 
+// The document's color-emoji fallback source, kept beside the element and applied at render time.
+const docEmoji = new WeakMap<PDFDocumentElement, EmojiSource>();
+
 /** Reads any path sources to bytes, leaving bytes / families as-is. */
 function resolveFontSource(source: FontSource): FontBytes | FontFamily {
   const read = (s: FontFileSource): FontBytes => (typeof s === "string" ? readFileBytes(s) : s);
@@ -165,6 +177,7 @@ export function Document(a: DocumentOptions | PageElement[], b?: PageElement[]):
     defaultTextStyle: toTextStyleOverride(opts),
   }) as JasyDocument;
   if (opts.meta) docMeta.set(doc, opts.meta);
+  if (opts.emoji) docEmoji.set(doc, opts.emoji);
 
   // Managed font registry: addFont registers, getFonts/hasFont query, render reads it (below).
   const registry = new Map<string, FontBytes | FontFamily>();
@@ -298,6 +311,11 @@ export async function renderPdf(doc: PDFDocumentElement, options?: RenderOptions
           description: a.description,
         });
       }
+      // Color-emoji fallback (Document({ emoji })): a font (native vector) or a CDN/image source.
+      const emoji = docEmoji.get(doc);
+      if (typeof emoji === "string") om.setEmojiFont(emoji);
+      else if (emoji && "font" in emoji) om.setEmojiFont(emoji.font);
+      else if (emoji && "url" in emoji) om.setEmojiImageSource(emoji.url, emoji.format ?? "png");
       if (options?.xmp) om.setXmpMetadata(options.xmp);
       if (options?.outputIntent) om.setOutputIntent(options.outputIntent);
       if (options?.pdfVersion) om.setPdfVersion(options.pdfVersion);
