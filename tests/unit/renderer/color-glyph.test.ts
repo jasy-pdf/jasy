@@ -123,4 +123,64 @@ describe("TextRenderer - COLR color glyph expansion", () => {
     // The emoji renders as its red vector layer, not as embedded-font glyphs.
     expect(pdf).toContain("1.000 0.000 0.000 rg");
   });
+
+  // Emoji font-fallback: an emoji inline in a normal-font string renders in color from the
+  // configured emoji font, while the surrounding text stays in the normal font - one string, one
+  // font, no spans. This is the `Text("Hallo 😅")` DX.
+  it("Document({ emoji }) renders an inline emoji from the fallback font, text keeps flowing", async () => {
+    const om = new PDFObjectManager();
+    om.registerCustomFont("Normal", buildTestTtf()); // has A, B - no color, no 😀
+    om.registerCustomFont("Emoji", buildColorTtf(0x1f600)); // colors 😀
+    om.setEmojiFont("Emoji");
+
+    const el = {
+      getProps: () => ({
+        x: 10,
+        y: 20,
+        width: undefined,
+        fontSize: 100,
+        color: new Color(0, 0, 0),
+        content: "A😀B",
+        fontFamily: "Normal",
+        fontStyle: FontStyle.Normal,
+        textAlignment: HorizontalAlignment.left,
+        lineHeight: 1,
+      }),
+    } as unknown as TextElement;
+
+    const nodes = await TextRenderer.render(el, om);
+    expect(nodes.map((n) => n.type)).toEqual(["text", "path", "path", "text"]);
+    const before = nodes[0] as TextRun;
+    const after = nodes[3] as TextRun;
+    expect(before.text).toBe("A"); // "A" from the normal font
+    expect(after.text).toBe("B"); // "B" from the normal font, after the emoji
+    // "B" sits past "A" (Normal advance) + 😀 (Emoji advance) - the fallback drives measuring too.
+    expect(after.x).toBeGreaterThan(before.x + 100); // > 10 + emoji em (100) alone
+    expect((nodes[1] as Path).fill).toBeInstanceOf(Color); // the emoji's color layer
+  });
+
+  it("no emoji fallback configured: a normal-font run passes straight through", async () => {
+    const om = new PDFObjectManager();
+    om.registerCustomFont("Normal", buildTestTtf());
+    om.registerCustomFont("Emoji", buildColorTtf()); // registered but NOT set as the emoji font
+
+    const el = {
+      getProps: () => ({
+        x: 0,
+        y: 0,
+        width: undefined,
+        fontSize: 12,
+        color: new Color(0, 0, 0),
+        content: "AB",
+        fontFamily: "Normal",
+        fontStyle: FontStyle.Normal,
+        textAlignment: HorizontalAlignment.left,
+        lineHeight: 1,
+      }),
+    } as unknown as TextElement;
+
+    const nodes = await TextRenderer.render(el, om);
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0].type).toBe("text");
+  });
 });

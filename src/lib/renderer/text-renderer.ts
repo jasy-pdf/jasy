@@ -3,8 +3,16 @@ import { HorizontalAlignment } from "../elements/pdf-element.ts";
 import { TextElement, TextSegment } from "../elements/text-element.ts";
 import { FontStyle, PDFObjectManager } from "../utils/pdf-object-manager.ts";
 import type { FontMetrics } from "../utils/font-metrics.ts";
-import type { GlyphPathCommand, Paint, Affine } from "../utils/ttf-parser.ts";
+import type {
+  GlyphPathCommand,
+  Paint,
+  Affine,
+  TTFParser,
+  ColorGlyphLayer,
+} from "../utils/ttf-parser.ts";
 import { IRNode, TextRun, PathCommand, Gradient } from "../ir/display-list.ts";
+import { isEmojiCodePoint } from "../text/emoji-codepoints.ts";
+import { emojiImageNode } from "./emoji-image.ts";
 import {
   wrapStringIntoLines,
   breakSegmentsIntoLines,
@@ -95,19 +103,30 @@ export class TextRenderer {
       lineHeight,
     );
 
-    // Color fonts (COLR/CPAL): expand each run's emoji into filled vector layers; plain runs and
-    // monochrome fonts pass straight through unchanged.
-    return runs.flatMap((run) => TextRenderer._expandColorGlyphs(run, objectManager));
+    // Color fonts (COLR/CPAL): expand each run's emoji into filled vector layers (or fetched images
+    // for an image emoji source); plain runs and monochrome fonts pass straight through unchanged.
+    return (
+      await Promise.all(runs.map((run) => TextRenderer._expandColorGlyphs(run, objectManager)))
+    ).flat();
   }
 
   // Splits a text run into normal text sub-runs + filled `Path` layers for any COLR color glyphs,
   // walking code point by code point and advancing the pen by each glyph's width. Returns `[run]`
   // untouched when the font has no color glyphs (the common case).
-  private static _expandColorGlyphs(run: TextRun, om: PDFObjectManager): IRNode[] {
-    const ttf = om.getColorFont(run.fontFamily, run.fontStyle);
-    if (!ttf) return [run];
+  private static async _expandColorGlyphs(run: TextRun, om: PDFObjectManager): Promise<IRNode[]> {
+    // The run's own font (if it's a color font) draws emoji directly; otherwise a document-level
+    // emoji source (`Document({ emoji })`) supplies them - a fallback FONT (color glyphs, native
+    // vector) or an IMAGE source (fetched emoji images) - for code points the run's font lacks, so
+    // `Text("Hallo 😅")` works in one string. No emoji source at all -> pass the run through.
+    const own = om.getColorFont(run.fontFamily, run.fontStyle);
+    const emojiName = om.getEmojiFont();
+    const fallback =
+      emojiName && emojiName !== run.fontFamily
+        ? om.getColorFont(emojiName, run.fontStyle)
+        : undefined;
+    const imageSource = om.getEmojiImageSource();
+    if (!own && !fallback && !imageSource) return [run];
 
-    const scale = run.fontSize / ttf.unitsPerEm;
     const nodes: IRNode[] = [];
     let cursorX = run.x; // absolute x of the next glyph
     let pending = ""; // run of consecutive non-color characters
@@ -121,15 +140,27 @@ export class TextRenderer {
     };
 
     for (const ch of run.text) {
-      const gid = ttf.getGlyphIndex(ch.codePointAt(0)!);
-      const layers = gid ? ttf.getColorGlyph(gid) : null;
+      const cp = ch.codePointAt(0)!;
+      // Which color font renders this code point: the run's own font first, then the emoji fallback.
+      let source: TTFParser | undefined;
+      let layers: ColorGlyphLayer[] | null = null;
+      if (own) {
+        const l = own.getColorGlyph(own.getGlyphIndex(cp));
+        if (l) [source, layers] = [own, l];
+      }
+      if (!layers && fallback) {
+        const l = fallback.getColorGlyph(fallback.getGlyphIndex(cp));
+        if (l) [source, layers] = [fallback, l];
+      }
+      // The advance matches measuring (getCharWidth applies the same emoji fallback).
       const advance = om.getCharWidth(ch, run.fontSize, undefined, run.fontFamily, run.fontStyle);
 
-      if (layers) {
+      if (source && layers) {
         flushPending();
+        const scale = run.fontSize / source.unitsPerEm;
         for (const layer of layers) {
           const commands = TextRenderer._glyphToPath(
-            ttf.getGlyphPath(layer.glyphId),
+            source.getGlyphPath(layer.glyphId),
             cursorX,
             run.y,
             scale,
@@ -153,6 +184,13 @@ export class TextRenderer {
           }
           nodes.push({ type: "path", commands, fill });
         }
+      } else if (imageSource && isEmojiCodePoint(cp)) {
+        // Image emoji source: fetch + embed a 1em square. The emoji breaks the text run either way;
+        // a failed fetch (offline/404) leaves a blank em gap (advance already applied) rather than
+        // drawing a broken glyph.
+        flushPending();
+        const node = await emojiImageNode(cp, imageSource, cursorX, run.y, run.fontSize);
+        if (node) nodes.push(node);
       } else {
         if (!pending) pendingX = cursorX;
         pending += ch;

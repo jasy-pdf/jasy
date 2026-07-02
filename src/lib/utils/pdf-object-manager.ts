@@ -10,6 +10,7 @@ import { subsetTTF } from "./ttf-subsetter.ts";
 import { getArrayBuffer } from "./utf8-to-windows1252-encoder.ts";
 import type { SecurityHandler } from "../crypto/security-handler.ts";
 import type { Gradient, GradientStop } from "../ir/display-list.ts";
+import { isEmojiCodePoint } from "../text/emoji-codepoints.ts";
 // Enums come from the leaf config module (never in a cycle); the config type is
 // erased at runtime so it can come from the cyclic module safely.
 import { ColorMode, Orientation } from "../renderer/pdf-config.ts";
@@ -166,6 +167,8 @@ export class PDFObjectManager implements FontMetrics {
   private images: ImageManager = new ImageManager(); // Stores the images (object numbers and names)
   private extGStates: ExtGStateManager = new ExtGStateManager(); // Transparency states
   private shadings = new Map<string, number>(); // gradient resource name -> object number
+  private emojiFontName?: string; // doc-level color-emoji fallback font (Document({ emoji }))
+  private emojiImage?: { url: string; format: string }; // ... or a CDN/image emoji source instead
   private pdfConfig!: PDFConfig;
   public pageFormat = pageFormats[PageSize.A4];
 
@@ -697,6 +700,33 @@ endstream`;
     return ttf?.hasColorGlyphs() ? ttf : undefined;
   }
 
+  // The document's color-emoji fallback font: a code point the current text font can't color-render
+  // is drawn from this font's color glyphs instead (so `Text("Hallo 😅")` works in one string). Set
+  // via `Document({ emoji })`; must name a registered color font.
+  setEmojiFont(name: string): void {
+    this.emojiFontName = name;
+  }
+
+  getEmojiFont(): string | undefined {
+    return this.emojiFontName;
+  }
+
+  // Alternative color-emoji source: raster images (a CDN like Twemoji, react-pdf style). The renderer
+  // fetches `${url}${hexCodePoint}.${format}` per emoji and embeds it. The font source is preferred
+  // (native vector); this exists for parity + as an escape hatch.
+  setEmojiImageSource(url: string, format: string): void {
+    this.emojiImage = { url, format };
+  }
+
+  getEmojiImageSource(): { url: string; format: string } | undefined {
+    return this.emojiImage;
+  }
+
+  // Whether `ttf` has a COLOR glyph for a code point (i.e. it would render it as color emoji).
+  private colorRenders(ttf: TTFParser, codePoint: number): boolean {
+    return ttf.getColorGlyph(ttf.getGlyphIndex(codePoint)) !== null;
+  }
+
   // The page font resource for the resolved variant - same resolution as getCustomFont, so the
   // selected Type0 object and the emitted glyph ids always come from the SAME font file.
   getCustomFontResource(
@@ -866,7 +896,28 @@ endstream`;
     fontName?: string,
     fontStyle?: FontStyle,
   ): number {
-    const ttf = this.getCustomFont(fullFontName ?? fontName, fontStyle);
+    const name = fullFontName ?? fontName;
+    const ttf = this.getCustomFont(name, fontStyle);
+
+    // Color-emoji fallback: a code point the current font can't color-render is measured with the
+    // emoji font's advance (matching the renderer, which draws it from that font). Guarded on
+    // emojiFontName so a normal document's measuring stays byte-identical.
+    if (this.emojiFontName && this.emojiFontName !== name) {
+      const cp = char.codePointAt(0);
+      if (cp !== undefined && !(ttf && this.colorRenders(ttf, cp))) {
+        const emoji = this.getColorFont(this.emojiFontName, fontStyle);
+        if (emoji && this.colorRenders(emoji, cp)) return emoji.getCharWidth(char, fontSize);
+      }
+    }
+
+    // Image emoji source: an emoji code point is drawn as a 1em-square image, so it advances one em.
+    if (this.emojiImage) {
+      const cp = char.codePointAt(0);
+      if (cp !== undefined && isEmojiCodePoint(cp) && !(ttf && this.colorRenders(ttf, cp))) {
+        return fontSize;
+      }
+    }
+
     if (ttf) return ttf.getCharWidth(char, fontSize);
 
     const currentParser = this.getAVMParserByFont(fullFontName, fontName, fontStyle);
