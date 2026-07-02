@@ -1,6 +1,6 @@
 {
   "name": "@jasy/cli",
-  "version": "1.0.0-alpha.3",
+  "version": "1.0.0-alpha.4",
   "description": "Interactive terminal to validate, read and export ZUGFeRD / XRechnung e-invoices.",
   "keywords": [
     "cli",
