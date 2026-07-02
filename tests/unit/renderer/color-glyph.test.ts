@@ -39,8 +39,9 @@ describe("TextRenderer - COLR color glyph expansion", () => {
     const paths = nodes.filter((n): n is Path => n.type === "path");
     expect(nodes).toHaveLength(2); // only the two layers, no text run
     expect(paths).toHaveLength(2);
-    expect(paths[0].fill.toPDFColorString()).toBe("1.000 0.000 0.000"); // layer 0 = red
-    expect(paths[1].fill.toPDFColorString()).toBe("0.000 0.000 1.000"); // layer 1 = blue
+    // v0 layers are solid Colors (not gradients).
+    expect((paths[0].fill as Color).toPDFColorString()).toBe("1.000 0.000 0.000"); // layer 0 = red
+    expect((paths[1].fill as Color).toPDFColorString()).toBe("0.000 0.000 1.000"); // layer 1 = blue
     expect(paths[0].commands[0].op).toBe("m"); // real outline, starts with a moveTo
   });
 

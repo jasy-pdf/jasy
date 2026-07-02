@@ -1,0 +1,16 @@
+{
+  // Editor-only config so the TS language service resolves test files (Node globals like `Buffer`,
+  // vitest-style extensionless imports). The build uses ../tsconfig.json (src only); `manual-test`
+  // uses ../tsconfig.test.json. This one never emits - it exists purely so VS Code stops flagging
+  // `Buffer`/imports in tests as errors.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "..",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "rewriteRelativeImportExtensions": false,
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": ["**/*", "../src/**/*"]
+}

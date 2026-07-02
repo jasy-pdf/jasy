@@ -19,7 +19,7 @@ const ctx = { metrics } as LayoutContext;
 
 // A fixed-size box with no border, easy to read coordinates off via getSize().
 const fixed = (width: number, height: number) =>
-  new RectangleElement({ x: 0, y: 0, width, height, borderWidth: 0 });
+  new RectangleElement({ x: 0, y: 0, width, height, borderWidth: 0, children: [] });
 
 const frame = (opts: { width: number; height: number }, children: PositionedElement[]) =>
   new RectangleElement({
@@ -148,6 +148,7 @@ describe("RectangleElement - overflow clips the children", () => {
       height: 30,
       borderWidth: 0,
       overflow,
+      children: [],
     });
     rect.calculateLayout(BoxConstraints.loose(50, 30), { x: 0, y: 0 }, ctx);
     return rect;
