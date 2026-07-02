@@ -1,6 +1,7 @@
 import { IRNode } from "../ir/display-list.ts";
 import { Color } from "../common/color.ts";
 import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
+import type { PageStructContext } from "../utils/struct-tree.ts";
 
 /**
  * PDF backend - turns display-list primitives into content-stream operators.
@@ -73,9 +74,20 @@ export class PdfBackend {
     });
   }
 
-  /** Serialize a whole display list into one content stream (page-level entry point). */
-  static serialize(nodes: IRNode[], om: PDFObjectManager): string {
-    return nodes.map((node) => PdfBackend.serializeNode(node, om)).join("");
+  /** Serialize a whole display list into one content stream (page-level entry point). When a
+   *  `PageStructContext` is given (accessible tagging on), each drawable node is wrapped in a marked-content
+   *  sequence (`/Role <</MCID n>> BDC … EMC`, or `/Artifact` when untagged); graphics-state and empty nodes
+   *  pass through untouched, so untagged output stays byte-identical. */
+  static serialize(nodes: IRNode[], om: PDFObjectManager, struct?: PageStructContext): string {
+    return nodes
+      .map((node) => {
+        const ops = PdfBackend.serializeNode(node, om);
+        if (!struct || node.type === "clip-push" || node.type === "clip-pop" || ops === "")
+          return ops;
+        const { open, close } = struct.mark(node.tag);
+        return open + ops + close;
+      })
+      .join("");
   }
 
   /**

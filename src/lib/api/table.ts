@@ -2,6 +2,7 @@ import { PDFElement, LayoutContext } from "../elements/pdf-element.ts";
 import { BoxConstraints } from "../layout/box-constraints.ts";
 import { RepeatingHeaderElement } from "../elements/layout/repeating-header-element.ts";
 import { DeferredElement } from "../elements/layout/deferred-element.ts";
+import { StructGroup } from "../elements/layout/struct-group.ts";
 import { Column, Row, Box, Expanded, Padding } from "./layout.ts";
 import { Text } from "./text.ts";
 import { Insets } from "./insets.ts";
@@ -96,9 +97,13 @@ function composeTable(opts: TableOptions, rows: Cell[][], columns: ColumnWidth[]
     firstRow: boolean,
     firstCol: boolean,
     ruled: boolean,
+    isHeader: boolean,
   ): PDFElement => {
-    const inner =
+    const content =
       cellPadding !== undefined ? Padding(cellPadding, asElement(cell)) : asElement(cell);
+    // Tag the cell (TH for a header cell, else TD). StructGroup is layout-transparent - visually nothing
+    // changes; it only nests the cell's content under a table-cell element in the accessible structure tree.
+    const inner = new StructGroup({ role: isHeader ? "TH" : "TD", child: content });
     // The border lives on the wrapper, which stretches to the row height (crisp lines).
     const border = {
       ...borderFor(firstRow, firstCol),
@@ -112,11 +117,14 @@ function composeTable(opts: TableOptions, rows: Cell[][], columns: ColumnWidth[]
   };
 
   // align:stretch → equal-height cells, so a wrapping cell keeps the row's bottom rule straight.
-  const buildRow = (cells: Cell[], firstRow: boolean, ruled = false) =>
-    Row(
-      { gap: colGap, align: "stretch" },
-      cells.map((cell, i) => wrap(cell, columns[i] ?? "1fr", firstRow, i === 0, ruled)),
-    );
+  const buildRow = (cells: Cell[], firstRow: boolean, ruled = false, isHeader = false) =>
+    new StructGroup({
+      role: "TR",
+      child: Row(
+        { gap: colGap, align: "stretch" },
+        cells.map((cell, i) => wrap(cell, columns[i] ?? "1fr", firstRow, i === 0, ruled, isHeader)),
+      ),
+    });
 
   // The first row (which gets the top border) is the header if present, else body row 0.
   // `rule` underlines the header and the last body row (the table foot).
@@ -128,9 +136,14 @@ function composeTable(opts: TableOptions, rows: Cell[][], columns: ColumnWidth[]
     ),
   );
 
-  return opts.header
-    ? new RepeatingHeaderElement(buildRow(opts.header, true, rule !== undefined), body, rowGap)
+  const table = opts.header
+    ? new RepeatingHeaderElement(
+        buildRow(opts.header, true, rule !== undefined, true),
+        body,
+        rowGap,
+      )
     : body;
+  return new StructGroup({ role: "Table", child: table });
 }
 
 /**

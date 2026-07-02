@@ -11,6 +11,7 @@ describe("TextRenderer - calculateTextHeight", () => {
     const mockObjectManager = {
       getStringWidth: vi.fn().mockReturnValue(10), // String width is used for each word = 20
       getCharWidth: vi.fn().mockReturnValue(5), // Used for empty spaces = 5
+      struct: { enabled: false },
     } as unknown as PDFObjectManager;
 
     const textHeight = TextRenderer.calculateTextHeight(
@@ -29,6 +30,7 @@ describe("TextRenderer - calculateTextHeight", () => {
     const mockObjectManager = {
       getStringWidth: vi.fn().mockReturnValue(10), // String width is used for each word = 60
       getCharWidth: vi.fn().mockReturnValue(5), // Used for empty spaces = 25
+      struct: { enabled: false },
     } as unknown as PDFObjectManager;
 
     const textHeight = TextRenderer.calculateTextHeight(
@@ -47,6 +49,7 @@ describe("TextRenderer - calculateTextHeight", () => {
     const mockObjectManager = {
       getStringWidth: vi.fn().mockReturnValue(10),
       getCharWidth: vi.fn().mockReturnValue(5),
+      struct: { enabled: false },
     } as unknown as PDFObjectManager;
 
     const segments = [
@@ -89,6 +92,7 @@ describe("TextRenderer - calculateTextHeight", () => {
       getEmojiImageSource: vi.fn().mockReturnValue(undefined),
       getStringWidth: vi.fn().mockReturnValue(10),
       getCharWidth: vi.fn().mockReturnValue(5),
+      struct: { enabled: false },
     } as unknown as PDFObjectManager;
 
     const result = PdfBackend.serialize(
@@ -128,6 +132,7 @@ describe("TextRenderer - calculateTextHeight", () => {
       getEmojiImageSource: vi.fn().mockReturnValue(undefined),
       getStringWidth: vi.fn().mockReturnValue(10),
       getCharWidth: vi.fn().mockReturnValue(5),
+      struct: { enabled: false },
     } as unknown as PDFObjectManager;
 
     const result = PdfBackend.serialize(
@@ -164,6 +169,7 @@ describe("TextRenderer - calculateTextHeight", () => {
       getEmojiImageSource: vi.fn().mockReturnValue(undefined),
       getStringWidth: vi.fn().mockReturnValue(25), // Here we get the widht of the "complete" string, because the renderer renders each "line", not only the words/segments: 25
       getCharWidth: vi.fn().mockReturnValue(0), // For empty spaces: 0
+      struct: { enabled: false },
     } as unknown as PDFObjectManager;
 
     const result = PdfBackend.serialize(
@@ -201,6 +207,7 @@ describe("TextRenderer - calculateTextHeight", () => {
       getEmojiImageSource: vi.fn().mockReturnValue(undefined),
       getStringWidth: vi.fn().mockReturnValue(25), // Here we get the widht of the "complete" string, because the renderer renders each "line", not only the words/segments: 25
       getCharWidth: vi.fn().mockReturnValue(0),
+      struct: { enabled: false },
     } as unknown as PDFObjectManager;
 
     const result = PdfBackend.serialize(
@@ -237,6 +244,7 @@ describe("TextRenderer - calculateTextHeight", () => {
       getEmojiImageSource: vi.fn().mockReturnValue(undefined),
       getStringWidth: vi.fn().mockReturnValue(0),
       getCharWidth: vi.fn().mockReturnValue(0),
+      struct: { enabled: false },
     } as unknown as PDFObjectManager;
 
     const result = PdfBackend.serialize(
@@ -292,6 +300,7 @@ describe("TextRenderer - calculateTextHeight", () => {
         return content.length * fontSize; // Einfacher Algorithmus zur Rückgabe der Breite
       }),
       getCharWidth: vi.fn().mockReturnValue(10),
+      struct: { enabled: false },
     } as unknown as PDFObjectManager;
 
     const result = PdfBackend.serialize(
@@ -346,6 +355,7 @@ describe("TextRenderer - calculateTextHeight", () => {
       getEmojiImageSource: vi.fn().mockReturnValue(undefined),
       getStringWidth: vi.fn().mockReturnValue(25), // Here we get the widht of each segment: 50
       getCharWidth: vi.fn().mockReturnValue(0), // For empty spaces: 0
+      struct: { enabled: false },
     } as unknown as PDFObjectManager;
 
     const result = PdfBackend.serialize(

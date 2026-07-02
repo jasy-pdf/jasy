@@ -82,6 +82,7 @@ export class TextRenderer {
       maxLines,
       overflow,
       lineHeight,
+      role,
     } = textElement.getProps();
 
     // Component -> display list. Wrapping and positioning stay here; the backend
@@ -102,6 +103,15 @@ export class TextRenderer {
       overflow,
       lineHeight,
     );
+
+    // Accessible tagging: this whole text block is one structure element (a paragraph P, or a heading
+    // from `role`); each run's text lands under it. Emoji sub-nodes produced below stay untagged (drawn
+    // as artifacts). Keyed by structId so a block split across pages stays one element.
+    if (objectManager.struct.enabled) {
+      const pdfRole = role ? role.toUpperCase() : "P"; // "h1" -> "H1"; default paragraph
+      const key = objectManager.struct.openElement(textElement.structId, pdfRole);
+      for (const run of runs) run.tag = { role: pdfRole, key };
+    }
 
     // Color fonts (COLR/CPAL): expand each run's emoji into filled vector layers (or fetched images
     // for an image emoji source); plain runs and monochrome fonts pass straight through unchanged.

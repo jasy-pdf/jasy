@@ -11,6 +11,7 @@ import { getArrayBuffer } from "./utf8-to-windows1252-encoder.ts";
 import type { SecurityHandler } from "../crypto/security-handler.ts";
 import type { Gradient, GradientStop } from "../ir/display-list.ts";
 import { isEmojiCodePoint } from "../text/emoji-codepoints.ts";
+import { StructTree } from "./struct-tree.ts";
 // Enums come from the leaf config module (never in a cycle); the config type is
 // erased at runtime so it can come from the cyclic module safely.
 import { ColorMode, Orientation } from "../renderer/pdf-config.ts";
@@ -221,6 +222,12 @@ export class PDFObjectManager implements FontMetrics {
   private security?: SecurityHandler;
   private encJobs: Uint8Array[] = [];
   private encryptObjNum?: number;
+
+  // Accessible (PDF/UA) tagging, off by default (byte-identical output); the API turns it on.
+  private _struct = new StructTree();
+  get struct(): StructTree {
+    return this._struct;
+  }
 
   constructor();
   constructor(pageSize?: PageSize) {

@@ -179,7 +179,7 @@ rendering. This is the standing visual check; prefer it over one-off `scripts/ru
 - `pnpm test` — Vitest (watch). `pnpm exec vitest run` for a one-shot CI-style run.
   `pnpm run test:coverage` for coverage. Unit tests live in **`tests/unit/`**, mirroring the `src/lib/`
   structure (`tests/unit/{common,elements,renderer,utils}/…`). `src/` is pure production code — the
-  build (`tsconfig.json` includes only `src/**`) therefore keeps `dist/` test-free. **~391 tests, green**
+  build (`tsconfig.json` includes only `src/**`) therefore keeps `dist/` test-free. **~415 tests, green**
   in the core (plus the `@jasy/zugferd` suite).
 - `pnpm run build` — `tsc` → `dist/`.
 - `pnpm run lint` (oxlint) + `pnpm run fmt:check` (oxfmt `--check`); `pnpm run fmt` formats. **Run `pnpm run fmt`
@@ -256,6 +256,23 @@ lineHeight, align, bold, italic }, …)` sets doc-wide text defaults; `DefaultTe
   gradients), full Noto Color Emoji (v1 transforms/composite) all render; a normal custom font stays
   **byte-identical to pre-emoji main** (subset/embed/compress untouched) + a ZUGFeRD invoice is still
   **veraPDF PDF/A-3b compliant**. A color font drawn as vectors is not embedded (no wasted `/FontFile2`).
+  **Inline fallback** (`Document({ emoji })`): emoji work in one string/font — a code point the text font can't
+  color-render comes from a doc-level source, either a fallback FONT (color glyphs, native vector) or an IMAGE/CDN
+  source (`{ url, format }`, react-pdf-style Twemoji PNGs; `renderer/emoji-image.ts` + `text/emoji-codepoints.ts`
+  classifier). Measuring + rendering share the source (rendering is now async for image fetches); single code
+  points only (multi-cp flags/ZWJ/skin-tones deferred - single-cp covers ~95%+).
+- ✅ **Accessibility / tagged PDF (PDF/UA-1)** (2026-07-01) — `renderToBytes(doc, { accessible, lang, title })`
+  emits a full structure tree, **verified `isCompliant` by veraPDF** (local at `~/.jasy/verapdf/verapdf -f ua1`).
+  Engine owns it; components only declare a role: `Text({ role: "h1".."h6"|"p" })`, `Image({ alt })` → Figure,
+  `Table` → Table/TR/TH/TD (auto), decoration → Artifact. The **`StructTree`** (`utils/struct-tree.ts`) builds
+  StructTreeRoot → nested StructElem + ParentTree; a leaf/container both `openElement(structId, role)`, containers
+  `push`/`pop`. **Keyed by a stable `structId`** (base `PDFElement`, carried through fragmentation clones) so a
+  paragraph or table split across pages stays ONE logical element (Acrobat-level). A layout-**transparent**
+  **`StructGroup`** (`elements/layout/struct-group.ts`) wraps table rows/cells; it fragments only if its child
+  does (`canFragment` veto → rows move whole, never clipped). Backend wraps each node `/Role <</MCID>> BDC…EMC`
+  (untagged → `/Artifact **BMC**`); catalog gets `/MarkInfo`, `/StructTreeRoot`, `/Lang`, `/ViewerPreferences
+/DisplayDocTitle`, pages `/Tabs /S`, TH `/Scope /Column`, XMP `pdfuaid:part 1` (`utils/ua-xmp.ts`). Off =
+  byte-identical. Full conformance needs embedded fonts + a title (same as PDF/A). **~415 tests.**
 
 Genuine remaining gaps / deferred:
 
@@ -294,7 +311,7 @@ unprompted, comments English + sensible, don't break the font math.**
 Status: **LAUNCHED 2026-06-27** — all five packages live on npm (`@jasy/pdf`@alpha.3, `@jasy/zugferd`@alpha.1,
 `@jasy/cli`@alpha.3, `@jasy/vue`@alpha.3, `@jasy/nuxt`@alpha.2), repo public + locked, full CI + changelog +
 bots in place (see Repo facts). The engine is **feature-complete for the alpha** — inheritance, `onOverflow`,
-custom formats, the line-breaker fixes; **~391 tests green**. The **landing**
+custom formats, the line-breaker fixes; **~415 tests green**. The **landing**
 (`~/projects/jasy-landing` → **jasy.dev**) is built: showroom (9 cards), validator, docs, a home-page
 roadmap section, and a full **SEO + AI-discoverability layer** (OG image, JSON-LD, `robots.txt`,
 `llms.txt`, `sitemap.xml`).

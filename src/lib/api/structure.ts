@@ -12,6 +12,7 @@ import { getArrayBuffer } from "../utils/utf8-to-windows1252-encoder.ts";
 import { createSecurityHandler, type EncryptOptions } from "../crypto/security-handler.ts";
 // Public types so users can name the encryption options.
 export type { EncryptOptions, Permissions } from "../crypto/security-handler.ts";
+import { uaXmp } from "../utils/ua-xmp.ts";
 import { Column, StackOptions } from "./layout.ts";
 import { Insets, toEdges } from "./insets.ts";
 import { TextDefaults, toTextStyleOverride } from "./text.ts";
@@ -252,6 +253,12 @@ export interface RenderOptions {
   /** Encrypt the PDF with a password (AES-256, the newest standard). NOT compatible with PDF/A
    *  (ZUGFeRD invoices) - encrypting one throws, since PDF/A forbids encryption. */
   encrypt?: EncryptOptions;
+  /** Emit an accessible, tagged PDF (structure tree for screen readers). */
+  accessible?: boolean;
+  /** Document language for accessibility, e.g. `"en-US"` / `"de-DE"` (default `"en-US"`). */
+  lang?: string;
+  /** Document title (used by accessible readers; also good metadata). */
+  title?: string;
 }
 
 function isFontBytes(v: FontBytes | FontFamily): v is FontBytes {
@@ -314,6 +321,15 @@ export async function renderPdf(doc: PDFDocumentElement, options?: RenderOptions
       if (options?.pdfVersion) om.setPdfVersion(options.pdfVersion);
       if (options?.documentId) om.enableDocumentId();
       if (securityHandler) om.setSecurityHandler(securityHandler);
+      if (options?.accessible) {
+        om.struct.enabled = true;
+        if (options.lang) om.struct.lang = options.lang;
+        // Fall back to the document's own title (Document({ meta })) when no explicit title is given.
+        const title = options.title ?? meta?.title;
+        if (title) om.struct.title = title;
+        // Declare PDF/UA-1 in the XMP metadata, unless the caller supplied their own packet.
+        if (!options.xmp) om.setXmpMetadata(uaXmp({ title }));
+      }
     }
     build(): PDFDocumentElement {
       return doc;

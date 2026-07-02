@@ -30,6 +30,7 @@ describe("ImageRenderer", () => {
     // Mock PDFObjectManager
     const mockObjectManager = {
       registerImage: vi.fn().mockReturnValue(1),
+      struct: { enabled: false },
     } as unknown as PDFObjectManager;
 
     // Mock applyCoverFit using vi.mock or by mocking the module directly
@@ -85,6 +86,7 @@ describe("ImageRenderer", () => {
     // Mock PDFObjectManager
     const mockObjectManager = {
       registerImage: vi.fn().mockReturnValue(2),
+      struct: { enabled: false },
     } as unknown as PDFObjectManager;
 
     // Mock applyContainFit using vi.spyOn for the whole module
@@ -169,6 +171,7 @@ describe("ImageRenderer", () => {
     // Mock PDFObjectManager
     const mockObjectManager = {
       registerImage: vi.fn().mockReturnValue(3),
+      struct: { enabled: false },
     } as unknown as PDFObjectManager;
 
     // Mock applyFillFit using vi.spyOn for the whole module
@@ -224,6 +227,7 @@ describe("ImageRenderer", () => {
     // Mock PDFObjectManager
     const mockObjectManager = {
       registerImage: vi.fn().mockReturnValue(4),
+      struct: { enabled: false },
     } as unknown as PDFObjectManager;
 
     // Mock applyFitNone using vi.spyOn for the whole module
@@ -253,5 +257,35 @@ describe("ImageRenderer", () => {
 
     expect(result).toContain("q");
     expect(result).toContain("/IM4 Do");
+  });
+  it("tags an image with alt text as a Figure (accessible)", async () => {
+    const mockImageElement = {
+      getProps: vi.fn().mockReturnValue({
+        x: 0,
+        y: 0,
+        width: 100,
+        height: 100,
+        image: {
+          init: vi.fn().mockResolvedValue(undefined),
+          getImageType: vi.fn().mockResolvedValue("jpeg"),
+          getFileData: vi.fn().mockResolvedValue("mockImageData"),
+          getImageDimensions: vi.fn().mockResolvedValue({ width: 200, height: 200 }),
+        },
+        fit: BoxFit.none,
+        alt: "a sample photo",
+      }),
+    } as unknown as ImageElement;
+    const mockObjectManager = {
+      registerImage: vi.fn().mockReturnValue(1),
+      struct: { enabled: true, openElement: () => 7 },
+    } as unknown as PDFObjectManager;
+    vi.spyOn(imageHelper, "applyFitNone").mockReturnValue({
+      width: 100,
+      height: 100,
+      offsetX: 0,
+      offsetY: 0,
+    });
+    const [node] = await ImageRenderer.render(mockImageElement, mockObjectManager);
+    expect((node as { tag?: unknown }).tag).toEqual({ role: "Figure", key: 7 });
   });
 });
