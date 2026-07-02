@@ -80,7 +80,15 @@ const PATHSPEC = {
   vue: ["packages/vue"],
   nuxt: ["packages/nuxt"],
 };
-const pathspec = PATHSPEC[prefix] ? ["--", ...PATHSPEC[prefix]] : [];
+// An unknown prefix must fail loudly: an empty pathspec would make `git log` unscoped and pull EVERY
+// commit into this package's changelog.
+if (!PATHSPEC[prefix]) {
+  console.error(
+    `gh-release: unknown package prefix "${prefix}". Known: ${Object.keys(PATHSPEC).join(", ")}.`,
+  );
+  process.exit(1);
+}
+const pathspec = ["--", ...PATHSPEC[prefix]];
 const inScope = new Set(
   sh("git", ["log", `${from}..${tag}`, "--format=%H", ...pathspec])
     .split("\n")

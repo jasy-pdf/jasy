@@ -250,7 +250,9 @@ export class PdfBackend {
         }
         if (!(node.fill instanceof Color)) {
           // Gradient: clip to the path (W n keeps it as the clip without painting it), then paint
-          // the registered shading across that clip. The q/Q isolates the clip.
+          // the registered shading across that clip. The q/Q isolates the clip. Note: per-stop alpha
+          // is not represented (a DeviceRGB shading has no alpha channel - that would need a soft-mask
+          // group); COLR gradient stops are opaque in real fonts, so they render correctly.
           const shading = om.registerShading(node.fill);
           return `q\n${path}W n\n/${shading} sh\nQ\n`;
         }

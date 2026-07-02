@@ -5,16 +5,30 @@ import { Image } from "../ir/display-list.ts";
 
 // Per-URL fetch cache (process-wide): an emoji image is fetched once, however many times it appears.
 const cache = new Map<string, Promise<Uint8Array | null>>();
+const FETCH_TIMEOUT_MS = 5000; // a slow CDN must not stall the whole render
 
 async function fetchBytes(url: string): Promise<Uint8Array | null> {
-  let pending = cache.get(url);
-  if (!pending) {
-    pending = fetch(url)
-      .then((r) => (r.ok ? r.arrayBuffer() : null))
-      .then((b) => (b ? new Uint8Array(b) : null))
-      .catch(() => null); // offline / 404 -> null, the caller leaves a blank gap (graceful)
-    cache.set(url, pending);
-  }
+  const cached = cache.get(url);
+  if (cached) return cached;
+
+  const pending = (async (): Promise<Uint8Array | null> => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    try {
+      const r = await fetch(url, { signal: controller.signal });
+      return r.ok ? new Uint8Array(await r.arrayBuffer()) : null;
+    } catch {
+      return null; // offline / 404 / timeout -> null; the caller leaves a blank gap (graceful)
+    } finally {
+      clearTimeout(timer);
+    }
+  })();
+
+  cache.set(url, pending);
+  // Cache only SUCCESSFUL results: drop a failure so a transient error (offline) can be retried later.
+  void pending.then((bytes) => {
+    if (!bytes && cache.get(url) === pending) cache.delete(url);
+  });
   return pending;
 }
 

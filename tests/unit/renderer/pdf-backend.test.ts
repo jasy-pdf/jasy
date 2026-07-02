@@ -137,6 +137,17 @@ describe("PdfBackend path serialization", () => {
     expect((objects.match(/\/FunctionType 2/g) ?? []).length).toBe(2); // two linear pieces
   });
 
+  it("does not throw on an empty color line (malformed gradient) - falls back to opaque black", () => {
+    const gradOm = new PDFObjectManager();
+    const node: Path = {
+      type: "path",
+      fill: { type: "linear", x0: 0, y0: 0, x1: 0, y1: 10, stops: [], extend: "pad" },
+      commands: [{ op: "m", x: 0, y: 0 }],
+    };
+    expect(() => PdfBackend.serializeNode(node, gradOm)).not.toThrow();
+    expect(gradOm.getRenderedObjects()).toContain("/C0 [0 0 0] /C1 [0 0 0]"); // black fallback
+  });
+
   it("flipY flips a gradient fill's anchor points too", () => {
     const node: Path = {
       type: "path",

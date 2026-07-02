@@ -542,6 +542,10 @@ endstream`;
   // exponential (linear) function; more stops stitch one linear piece per interval (FunctionType 3).
   private buildShadingFunction(stops: GradientStop[]): number {
     const c = (i: number): string => stops[i].color.toPDFColorString(); // "r g b" in 0..1
+    // Malformed / empty color line: fall back to opaque black instead of indexing an empty array.
+    if (stops.length === 0) {
+      return this.addObject("<< /FunctionType 2 /Domain [0 1] /C0 [0 0 0] /C1 [0 0 0] /N 1 >>");
+    }
     if (stops.length <= 2) {
       const c0 = c(0);
       const c1 = c(stops.length - 1);
