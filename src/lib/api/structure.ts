@@ -306,9 +306,11 @@ export async function renderPdf(doc: PDFDocumentElement, options?: RenderOptions
       if (options?.accessible) {
         om.struct.enabled = true;
         if (options.lang) om.struct.lang = options.lang;
-        if (options.title) om.struct.title = options.title;
+        // Fall back to the document's own title (Document({ meta })) when no explicit title is given.
+        const title = options.title ?? meta?.title;
+        if (title) om.struct.title = title;
         // Declare PDF/UA-1 in the XMP metadata, unless the caller supplied their own packet.
-        if (!options.xmp) om.setXmpMetadata(uaXmp({ title: options.title, lang: options.lang }));
+        if (!options.xmp) om.setXmpMetadata(uaXmp({ title }));
       }
     }
     build(): PDFDocumentElement {

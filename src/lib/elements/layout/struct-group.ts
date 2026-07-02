@@ -11,11 +11,13 @@ import { Fragmentable, FragmentResult, isFragmentable } from "../../layout/fragm
  * logical structure element (a table broken over pages is a single <Table>, exactly as Acrobat produces).
  */
 export class StructGroup extends PDFElement implements Fragmentable {
-  constructor(
-    readonly role: string,
-    private child: PDFElement,
-  ) {
+  private role: string;
+  private child: PDFElement;
+
+  constructor({ role, child }: { role: string; child: PDFElement }) {
     super();
+    this.role = role;
+    this.child = child;
   }
 
   calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
@@ -33,8 +35,12 @@ export class StructGroup extends PDFElement implements Fragmentable {
     const { fitted, remainder } = this.child.fragment(maxHeight, width, ctx);
     // Re-wrap each half with the SAME role + identity, so both pages point at one structure element.
     return {
-      fitted: fitted ? new StructGroup(this.role, fitted).adoptStructId(this) : null,
-      remainder: remainder ? new StructGroup(this.role, remainder).adoptStructId(this) : null,
+      fitted: fitted
+        ? new StructGroup({ role: this.role, child: fitted }).adoptStructId(this)
+        : null,
+      remainder: remainder
+        ? new StructGroup({ role: this.role, child: remainder }).adoptStructId(this)
+        : null,
     };
   }
 

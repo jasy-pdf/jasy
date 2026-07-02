@@ -19,6 +19,11 @@ interface StructElem {
 // Escapes a PDF literal string ( ... ) - the language tag is safe ASCII, but /Alt can carry arbitrary text.
 const esc = (s: string) => s.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
 
+// A structure role reaches the PDF as a raw name (/H1, /S /Table). Roles come from a controlled set,
+// but restrict them to a safe PDF-name token anyway (defence-in-depth) so a stray "/", whitespace, or
+// operator can never corrupt the content stream / object dictionary. Empty after stripping -> /Span.
+const roleName = (role: string): string => role.replace(/[^A-Za-z0-9]/g, "") || "Span";
+
 /** Per-page tagging context: hands out page-local MCIDs and links them to their StructElem. */
 export class PageStructContext {
   private mcid = 0;
@@ -34,7 +39,7 @@ export class PageStructContext {
     if (!tag) return { open: "/Artifact BMC\n", close: "EMC\n" };
     const mcid = this.mcid++;
     this.tree.linkMarkedContent(tag.key, this.structParents, mcid);
-    return { open: `/${tag.role} <</MCID ${mcid}>> BDC\n`, close: "EMC\n" };
+    return { open: `/${roleName(tag.role)} <</MCID ${mcid}>> BDC\n`, close: "EMC\n" };
   }
 }
 
@@ -119,7 +124,7 @@ export class StructTree {
       const parentRef = e.parent !== undefined ? objNum.get(e.parent)! : docNum;
       om.replaceObject(
         objNum.get(e.key)!,
-        `<< /Type /StructElem /S /${e.role} /P ${parentRef} 0 R${alt}${attr} /K [ ${kids} ] >>`,
+        `<< /Type /StructElem /S /${roleName(e.role)} /P ${parentRef} 0 R${alt}${attr} /K [ ${kids} ] >>`,
       );
     }
 
