@@ -10,6 +10,7 @@ import {
 import { PDFElement } from "../elements/pdf-element.ts";
 import { ColorInput, toColor } from "./color.ts";
 import { Insets, toEdges } from "./insets.ts";
+import { SizeInput, toDimension } from "./dimension.ts";
 
 /** A horizontal rule (locked §4). */
 export interface DividerOptions {
@@ -58,9 +59,11 @@ const FIT: Record<ImageFit, BoxFit> = {
 };
 
 export interface ImageOptions {
-  width?: number;
-  height?: number;
-  /** Fit within the box (default `none`). */
+  /** Size on each axis: points (fixed) or a percentage string like `"50%"` (a fraction of the offered
+   *  space). Pin exactly ONE axis and the other follows the image's aspect ratio (CSS `height: auto`). */
+  width?: SizeInput;
+  height?: SizeInput;
+  /** Fit within the box (default `none`; `fill` when exactly one axis is pinned so it scales to fit). */
   fit?: ImageFit;
   /** Corner radius in points (rounds the image box). */
   radius?: number;
@@ -74,6 +77,13 @@ export interface ImageOptions {
  * `CustomImage` for non-filesystem sources. Maps to an `ImageElement`.
  */
 export function Image(src: ImageSource, opts: ImageOptions = {}): ImageElement {
+  const w = opts.width !== undefined ? toDimension(opts.width) : undefined;
+  const h = opts.height !== undefined ? toDimension(opts.height) : undefined;
+  // Exactly one axis pinned -> the other is derived from the aspect ratio, so scale the image to the
+  // resulting box (fit: fill). Both or neither pinned keeps the default fit (none).
+  const autoScale = (opts.width !== undefined) !== (opts.height !== undefined);
+  const fit = opts.fit ? FIT[opts.fit] : autoScale ? BoxFit.fill : undefined;
+
   return new ImageElement({
     image:
       typeof src === "string"
@@ -81,9 +91,11 @@ export function Image(src: ImageSource, opts: ImageOptions = {}): ImageElement {
         : src instanceof Uint8Array
           ? new CustomBytesImage(src)
           : src,
-    width: opts.width,
-    height: opts.height,
-    fit: opts.fit ? FIT[opts.fit] : undefined,
+    width: w?.points,
+    height: h?.points,
+    widthFactor: w?.factor,
+    heightFactor: h?.factor,
+    fit,
     radius: opts.radius,
     alt: opts.alt,
   });

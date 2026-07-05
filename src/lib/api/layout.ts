@@ -8,6 +8,7 @@ import { PDFElement } from "../elements/pdf-element.ts";
 import { MainAlign, CrossAlign } from "../utils/flex-layout.ts";
 import { ColorInput, toColor } from "./color.ts";
 import { Insets, toEdges } from "./insets.ts";
+import { SizeInput, toDimension } from "./dimension.ts";
 import { splitArgs } from "./args.ts";
 
 /** Options shared by the `Column` and `Row` stacks (locked §4). */
@@ -70,9 +71,11 @@ export interface BoxOptions {
   bg?: ColorInput;
   /** Inner padding between the border and the children. */
   padding?: Insets;
-  /** Fixed size; omit to fill the offered width and shrink-wrap the height. */
-  width?: number;
-  height?: number;
+  /** Size on each axis: a number of points (fixed) or a percentage string like `"50%"` (a fraction
+   *  of the space the parent offers on that axis). Omit `width` to fill the offered width, omit
+   *  `height` to shrink-wrap the content. A percentage only resolves in a bounded region. */
+  width?: SizeInput;
+  height?: SizeInput;
   /** Corner radius in points. */
   radius?: number;
   /** Make this box a positioning frame: `Positioned` children placed inside it resolve their
@@ -114,6 +117,10 @@ export function Box(a: BoxOptions | PDFElement[], b?: PDFElement[]): RectangleEl
 
   const hasBorder = opts.border !== undefined || opts.borderWidth !== undefined || hasPerSide;
 
+  // A point size fills `width`/`height`; a percentage fills `widthFactor`/`heightFactor`.
+  const w = opts.width !== undefined ? toDimension(opts.width) : undefined;
+  const h = opts.height !== undefined ? toDimension(opts.height) : undefined;
+
   return new RectangleElement({
     x: 0,
     y: 0,
@@ -121,8 +128,10 @@ export function Box(a: BoxOptions | PDFElement[], b?: PDFElement[]): RectangleEl
     color: opts.border !== undefined ? toColor(opts.border) : undefined,
     backgroundColor: opts.bg !== undefined ? toColor(opts.bg) : undefined,
     borderWidth: hasBorder ? (opts.borderWidth ?? 1) : 0,
-    width: opts.width,
-    height: opts.height,
+    width: w?.points,
+    height: h?.points,
+    widthFactor: w?.factor,
+    heightFactor: h?.factor,
     radius: opts.radius,
     sideBorders: hasPerSide
       ? {

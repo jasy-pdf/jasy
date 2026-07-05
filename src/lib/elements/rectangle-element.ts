@@ -1,5 +1,5 @@
 import { Color } from "../common/color.ts";
-import { BoxConstraints, Offset, Size } from "../layout/box-constraints.ts";
+import { BoxConstraints, Offset, Size, resolveExtent } from "../layout/box-constraints.ts";
 import { Fragmentable, FragmentResult, packChildren } from "../layout/fragmentation.ts";
 import {
   LayoutContext,
@@ -32,6 +32,11 @@ interface RectangleElementParams extends SizedElement, WithChildren {
   /** `"hidden"` crops children to the box (CSS `overflow: hidden`); `"visible"` (default) lets a
    *  `Positioned` child spill over the edge. */
   overflow?: "hidden" | "visible";
+  /** Width as a fraction (0..1) of the offered width, instead of a fixed `width` (CSS `50%`). Only
+   *  resolves in a bounded region; an explicit `width` wins over it. */
+  widthFactor?: number;
+  /** Height as a fraction (0..1) of the offered height; see `widthFactor`. */
+  heightFactor?: number;
 }
 
 export class RectangleElement extends SizedPDFElement implements Fragmentable {
@@ -49,6 +54,8 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
     y: number;
     width?: number;
     height?: number;
+    widthFactor?: number;
+    heightFactor?: number;
   };
 
   constructor({
@@ -62,6 +69,8 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
     sideBorders,
     relative,
     overflow,
+    widthFactor,
+    heightFactor,
   }: RectangleElementParams) {
     super({ x: 0, y: 0, width, height });
 
@@ -74,7 +83,7 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
     this.sideBorders = sideBorders;
     this.relative = relative ?? false;
     this.overflow = overflow ?? "visible";
-    this.sizeMemory = { x: 0, y: 0, width, height };
+    this.sizeMemory = { x: 0, y: 0, width, height, widthFactor, heightFactor };
   }
 
   /**
@@ -86,7 +95,11 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
    * box is sized by what it actually holds on each page.
    */
   fragment(maxHeight: number, width: number, ctx: LayoutContext): FragmentResult {
-    const boxWidth = this.sizeMemory.width ?? width;
+    // A percentage width resolves against the region width the page driver hands us, so a
+    // paginating %-box keeps its fraction on every page.
+    const boxWidth =
+      this.sizeMemory.width ??
+      (this.sizeMemory.widthFactor !== undefined ? width * this.sizeMemory.widthFactor : width);
     const innerWidth = Math.max(0, boxWidth - 2 * this.borderWidth);
     // Border-box: the content is inset by the border on top and bottom, so a fragment
     // holding `c` of content is `c + 2*border` tall. (Derived, not a fudge factor.)
@@ -115,6 +128,9 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
       x: 0,
       y: 0,
       width: this.sizeMemory.width,
+      widthFactor: this.sizeMemory.widthFactor,
+      // A split box is sized by its per-page content (height passed in), so the height factor
+      // is intentionally dropped here - box-decoration-break, same as an explicit height.
       height,
       children,
       color: this.color,
@@ -128,24 +144,39 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
   }
 
   calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
+    // An explicit extent is a fixed point size or a fraction of the offered box (relative sizing);
+    // the fraction only resolves in a bounded region. `undefined` = fill / shrink-wrap below.
+    const explicitWidth = resolveExtent(
+      this.sizeMemory.width,
+      this.sizeMemory.widthFactor,
+      constraints.maxWidth,
+      constraints.hasBoundedWidth,
+    );
+    const explicitHeight = resolveExtent(
+      this.sizeMemory.height,
+      this.sizeMemory.heightFactor,
+      constraints.maxHeight,
+      constraints.hasBoundedHeight,
+    );
+
     // Width: an explicit size wins (clamped), else fill the offered box. (Without this a
     // fixed box would balloon to the parent's size.)
     this.width =
-      this.sizeMemory.width !== undefined
-        ? constraints.constrainWidth(this.sizeMemory.width)
+      explicitWidth !== undefined
+        ? constraints.constrainWidth(explicitWidth)
         : constraints.hasBoundedWidth
           ? constraints.maxWidth
           : this.width;
     // Width shrink-wrap: no explicit width AND an unbounded region (e.g. a `Box` badge inside a
     // `Positioned`). Resolved after the children are measured, just below.
-    const shrinkWrapWidth = this.sizeMemory.width === undefined && !constraints.hasBoundedWidth;
+    const shrinkWrapWidth = explicitWidth === undefined && !constraints.hasBoundedWidth;
     // Height: explicit wins; otherwise FILL a bounded region (e.g. inside an Expanded) but
     // SHRINK-WRAP the content in an unbounded one (a note box in a stack). Shrink-wrap is
     // resolved after the children are measured, just below.
-    const shrinkWrapHeight = this.sizeMemory.height === undefined && !constraints.hasBoundedHeight;
+    const shrinkWrapHeight = explicitHeight === undefined && !constraints.hasBoundedHeight;
     this.height =
-      this.sizeMemory.height !== undefined
-        ? constraints.constrainHeight(this.sizeMemory.height)
+      explicitHeight !== undefined
+        ? constraints.constrainHeight(explicitHeight)
         : constraints.hasBoundedHeight
           ? constraints.maxHeight
           : this.height;

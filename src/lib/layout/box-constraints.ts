@@ -89,6 +89,24 @@ export class BoxConstraints {
   }
 }
 
+/**
+ * Resolves a sized element's extent on one axis (relative sizing). An explicit point size (`fixed`)
+ * always wins; otherwise a `factor` (0..1) of the offered extent, but ONLY when that axis is bounded -
+ * a fraction of an unbounded axis has no meaning (Flutter's FractionallySizedBox under unbounded
+ * constraints). Returns `undefined` to mean "no explicit extent", i.e. fill the box or shrink-wrap.
+ * Shared by every sized element so `width: "50%"` behaves identically across Box / Column / Row / Image.
+ */
+export function resolveExtent(
+  fixed: number | undefined,
+  factor: number | undefined,
+  boundedMax: number,
+  hasBounded: boolean,
+): number | undefined {
+  if (fixed !== undefined) return fixed;
+  if (factor !== undefined && hasBounded) return boundedMax * factor;
+  return undefined;
+}
+
 /** The size an element resolves to and returns UP the tree. */
 export interface Size {
   width: number;
