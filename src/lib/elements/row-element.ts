@@ -34,9 +34,23 @@ export class RowElement extends SizedPDFElement {
   private main: MainAlign;
   private cross: CrossAlign;
   // The requested size (fixed points or a fraction), kept separate from the laid-out this.width/height.
-  private requested: { width?: number; height?: number; widthFactor?: number; heightFactor?: number };
+  private requested: {
+    width?: number;
+    height?: number;
+    widthFactor?: number;
+    heightFactor?: number;
+  };
 
-  constructor({ children, gap, main, cross, width, height, widthFactor, heightFactor }: RowElementParams) {
+  constructor({
+    children,
+    gap,
+    main,
+    cross,
+    width,
+    height,
+    widthFactor,
+    heightFactor,
+  }: RowElementParams) {
     super({ x: 0, y: 0 });
     this.children = children;
     this.gap = gap ?? 0;

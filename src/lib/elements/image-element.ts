@@ -189,8 +189,18 @@ export class ImageElement extends SizedPDFElement {
     this.y = offset.y;
 
     // Relative sizing: a fixed size or a fraction of the offered box (fraction only in a bounded axis).
-    let w = resolveExtent(this.width, this.widthFactor, constraints.maxWidth, constraints.hasBoundedWidth);
-    let h = resolveExtent(this.height, this.heightFactor, constraints.maxHeight, constraints.hasBoundedHeight);
+    let w = resolveExtent(
+      this.width,
+      this.widthFactor,
+      constraints.maxWidth,
+      constraints.hasBoundedWidth,
+    );
+    let h = resolveExtent(
+      this.height,
+      this.heightFactor,
+      constraints.maxHeight,
+      constraints.hasBoundedHeight,
+    );
 
     // Aspect auto-size: when the user pinned exactly ONE axis, derive the other from the intrinsic
     // ratio (CSS `width: 50%; height: auto`). Only fires once the pre-pass resolved the pixel size.

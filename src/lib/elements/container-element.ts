@@ -28,7 +28,12 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
   private cross: CrossAlign;
   // The requested size, snapshot at construction so re-layouts (fragmentation measuring, which
   // mutate this.width/height) still see what the user asked for. `undefined` = fill / shrink-wrap.
-  private requested: { width?: number; height?: number; widthFactor?: number; heightFactor?: number };
+  private requested: {
+    width?: number;
+    height?: number;
+    widthFactor?: number;
+    heightFactor?: number;
+  };
 
   constructor({
     x,

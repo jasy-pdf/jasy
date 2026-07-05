@@ -88,7 +88,11 @@ describe("relative sizing on flex stacks (Column / Row)", () => {
   });
 
   it("without a size a Column still fills a bounded width (unchanged behavior)", () => {
-    const size = Column([]).calculateLayout(BoxConstraints.loose(400, Infinity), { x: 0, y: 0 }, ctx);
+    const size = Column([]).calculateLayout(
+      BoxConstraints.loose(400, Infinity),
+      { x: 0, y: 0 },
+      ctx,
+    );
     expect(size.width).toBe(400);
   });
 });
@@ -99,7 +103,11 @@ describe("percentage children inside a Row (resolve against the line minus the g
   it("two 50% children tile the Row exactly, with the gap between them", () => {
     const b1 = box("50%");
     const b2 = box("50%");
-    Row({ gap: 20 }, [b1, b2]).calculateLayout(BoxConstraints.loose(400, Infinity), { x: 0, y: 0 }, ctx);
+    Row({ gap: 20 }, [b1, b2]).calculateLayout(
+      BoxConstraints.loose(400, Infinity),
+      { x: 0, y: 0 },
+      ctx,
+    );
     // percent base = 400 - 20 gap = 380 -> each 190; they meet the gap, last edge = row width.
     expect(b1.getProps().width).toBe(190);
     expect(b2.getProps().width).toBe(190);
@@ -109,7 +117,11 @@ describe("percentage children inside a Row (resolve against the line minus the g
 
   it("three 33% children fit inside the Row instead of overflowing the gaps", () => {
     const boxes = [box("33%"), box("33%"), box("33%")];
-    Row({ gap: 10 }, boxes).calculateLayout(BoxConstraints.loose(310, Infinity), { x: 0, y: 0 }, ctx);
+    Row({ gap: 10 }, boxes).calculateLayout(
+      BoxConstraints.loose(310, Infinity),
+      { x: 0, y: 0 },
+      ctx,
+    );
     // base = 310 - 20 gaps = 290; each 0.33*290 = 95.7; last right edge stays within 310.
     for (const b of boxes) expect(b.getProps().width).toBeCloseTo(95.7, 3);
     const last = boxes[2].getProps();
