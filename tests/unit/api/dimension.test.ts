@@ -21,4 +21,10 @@ describe("toDimension", () => {
     expect(() => toDimension("50px" as `${number}%`)).toThrow(/Invalid size/);
     expect(() => toDimension("wide" as `${number}%`)).toThrow(/Invalid size/);
   });
+
+  it("rejects a negative size (points or percentage)", () => {
+    expect(() => toDimension(-10)).toThrow(/negative/);
+    expect(() => toDimension("-50%" as `${number}%`)).toThrow(/Invalid size/);
+    expect(toDimension(0)).toEqual({ points: 0 }); // zero is still valid
+  });
 });

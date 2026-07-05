@@ -30,6 +30,7 @@ export class CustomLocalImage extends CustomImage {
   private imagePath: string;
   private fileBuffer!: Uint8Array;
   private fileRawData!: string;
+  private dims?: { width: number; height: number }; // memoized so the decode happens once
 
   constructor(imagePath: string) {
     super();
@@ -78,14 +79,12 @@ export class CustomLocalImage extends CustomImage {
   }
 
   async getImageDimensions(): Promise<{ width: number; height: number }> {
+    if (this.dims) return this.dims; // reuse: the pre-layout size pass and the renderer both ask
     if (!this.fileBuffer) {
       throw new Error("You must first call the `loadAndConvertImage` method");
     }
-
-    // Since now (30.09.2024) we using "Jimp" - So we don't need our custom method to get the image dimension.
-    // But at the moment I let it still here...
-    const dimensions = await getImageDimensions(this.fileBuffer);
-    return dimensions;
+    this.dims = await getImageDimensions(this.fileBuffer);
+    return this.dims;
   }
 }
 
@@ -95,6 +94,7 @@ export class CustomLocalImage extends CustomImage {
  */
 export class CustomBytesImage extends CustomImage {
   private fileRawData: string;
+  private dims?: { width: number; height: number }; // memoized so the decode happens once
   constructor(private bytes: Uint8Array) {
     super();
     this.fileRawData = latin1FromBytes(bytes);
@@ -114,7 +114,8 @@ export class CustomBytesImage extends CustomImage {
   }
 
   async getImageDimensions(): Promise<{ width: number; height: number }> {
-    return getImageDimensions(this.bytes);
+    if (!this.dims) this.dims = await getImageDimensions(this.bytes); // reuse across pre-pass + render
+    return this.dims;
   }
 }
 
@@ -140,6 +141,10 @@ export class ImageElement extends SizedPDFElement {
   private fit: BoxFit;
   private radius: number;
   private readonly alt?: string;
+  // The requested size (fixed points), kept separate from the laid-out this.width/height so a
+  // re-layout (fragmentation measures more than once) still resolves the factor, instead of
+  // freezing to the first pass's result. Mirrors ContainerElement / RowElement.
+  private requested: { width?: number; height?: number };
   // Intrinsic pixel size, resolved asynchronously before layout (see resolveIntrinsicSize). Layout
   // reads it to derive a proportional height for a width-only image (and vice versa).
   private intrinsic?: { width: number; height: number };
@@ -154,10 +159,13 @@ export class ImageElement extends SizedPDFElement {
     radius,
     alt,
   }: ImageElementParams) {
+    // Seed this.width/height from the request so getProps() reflects it before layout; calculateLayout
+    // then reads `requested` (never the mutated fields) and overwrites these with the laid-out size.
     super({ x: 0, y: 0, width });
 
     this.image = image;
     this.height = height;
+    this.requested = { width, height };
     this.widthFactor = widthFactor;
     this.heightFactor = heightFactor;
     this.fit = fit;
@@ -189,14 +197,15 @@ export class ImageElement extends SizedPDFElement {
     this.y = offset.y;
 
     // Relative sizing: a fixed size or a fraction of the offered box (fraction only in a bounded axis).
+    // Read from `requested` (not this.width/height, which we overwrite below) so every pass re-resolves.
     let w = resolveExtent(
-      this.width,
+      this.requested.width,
       this.widthFactor,
       constraints.maxWidth,
       constraints.hasBoundedWidth,
     );
     let h = resolveExtent(
-      this.height,
+      this.requested.height,
       this.heightFactor,
       constraints.maxHeight,
       constraints.hasBoundedHeight,
@@ -210,9 +219,11 @@ export class ImageElement extends SizedPDFElement {
       else if (h !== undefined && w === undefined) w = h * ratio;
     }
 
-    // Fall back to the prior behavior for an unpinned axis: a bounded axis fills, otherwise keep our own.
-    this.width = w ?? (constraints.hasBoundedWidth ? constraints.maxWidth : this.width);
-    this.height = h ?? (constraints.hasBoundedHeight ? constraints.maxHeight : this.height);
+    // Fall back to the prior behavior for an unpinned axis: a bounded axis fills, otherwise keep the
+    // requested fixed size (or undefined). Read from `requested`, never the mutated this.width/height.
+    this.width = w ?? (constraints.hasBoundedWidth ? constraints.maxWidth : this.requested.width);
+    this.height =
+      h ?? (constraints.hasBoundedHeight ? constraints.maxHeight : this.requested.height);
 
     // Top-left coordinates; the fit logic (renderer) and the Y-flip (seam) run later.
     return { width: this.width ?? 0, height: this.height ?? 0 };

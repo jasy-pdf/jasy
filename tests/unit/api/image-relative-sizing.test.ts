@@ -69,4 +69,15 @@ describe("Image relative sizing + aspect auto-height", () => {
       BoxFit.contain,
     );
   });
+
+  it("re-resolves the factor on every layout pass instead of freezing it (fragmentation-safe)", async () => {
+    const img = Image(new FakeImage(400, 200), { width: "50%" });
+    await img.resolveIntrinsicSize();
+    const first = img.calculateLayout(BoxConstraints.loose(400, Infinity), { x: 0, y: 0 }, ctx);
+    expect(first.width).toBe(200);
+    // A second pass at a narrower width must recompute, not stay frozen at 200.
+    const second = img.calculateLayout(BoxConstraints.loose(300, Infinity), { x: 0, y: 0 }, ctx);
+    expect(second.width).toBe(150);
+    expect(second.height).toBe(75); // aspect follows the re-resolved width
+  });
 });

@@ -14,10 +14,14 @@ export function collectImageElements(root: PDFElement): ImageElement[] {
     const props = el.getProps() as object;
     if (hasChildrenProp(props)) for (const c of props.children) visit(c);
     else if (hasChildProp(props)) visit(props.child);
-    // A page carries its header / footer outside `children`.
-    const pg = props as { header?: unknown; footer?: unknown };
-    if (pg.header instanceof PDFElement) visit(pg.header);
-    if (pg.footer instanceof PDFElement) visit(pg.footer);
+    // Wrappers that hold a subtree outside `children`/`child`: a Page's header/footer and a
+    // RepeatingHeaderElement's `body` (a Table with a header wraps its rows there). A
+    // DeferredElement's `composed` is null until layout runs, so it cannot be reached from this
+    // pre-layout pass; an image inside a deferred subtree just skips aspect pre-resolution.
+    const w = props as { header?: unknown; footer?: unknown; body?: unknown };
+    if (w.header instanceof PDFElement) visit(w.header);
+    if (w.footer instanceof PDFElement) visit(w.footer);
+    if (w.body instanceof PDFElement) visit(w.body);
   };
   visit(root);
   return out;

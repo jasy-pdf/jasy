@@ -15,11 +15,17 @@ export interface Dimension {
   factor?: number;
 }
 
-const PERCENT = /^(-?\d+(?:\.\d+)?)%$/;
+const PERCENT = /^(\d+(?:\.\d+)?)%$/; // no leading "-": a size cannot be negative
 
-/** Normalizes a `SizeInput` to a `Dimension` (a point size or a fraction). */
+/**
+ * Normalizes a `SizeInput` to a `Dimension` (a point size or a fraction). Rejects negatives at this
+ * boundary so `resolveExtent` and the layout never see a negative size.
+ */
 export function toDimension(value: SizeInput): Dimension {
-  if (typeof value === "number") return { points: value };
+  if (typeof value === "number") {
+    if (value < 0) throw new Error(`Invalid size ${value}: a size cannot be negative.`);
+    return { points: value };
+  }
   const m = PERCENT.exec(value.trim());
   if (m) return { factor: parseFloat(m[1]) / 100 };
   throw new Error(`Invalid size "${value}": use a number of points or a percentage like "50%".`);
