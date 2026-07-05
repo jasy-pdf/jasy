@@ -31,6 +31,7 @@ import { PositionedRenderer } from "./positioned-renderer.ts";
 import { StructGroup } from "../elements/layout/struct-group.ts";
 import { StructGroupRenderer } from "./struct-group-renderer.ts";
 import { BoxConstraints } from "../layout/box-constraints.ts";
+import { collectImageElements } from "../layout/collect-images.ts";
 import { LayoutContext } from "../elements/pdf-element.ts";
 import { DEFAULT_TEXT_STYLE, mergeTextStyle } from "../text/text-style.ts";
 
@@ -68,6 +69,11 @@ export class PDFRenderer {
       textStyle: mergeTextStyle(DEFAULT_TEXT_STYLE, document.getDefaultTextStyle()),
       onOverflow: objectManager.getOverflowPolicy(),
     };
+    // Pre-layout: resolve every image's intrinsic pixel size (async), so the synchronous layout can
+    // give a width-only image a proportional height. init() is idempotent, so the renderer reuses it.
+    const images = collectImageElements(document);
+    if (images.length > 0) await Promise.all(images.map((img) => img.resolveIntrinsicSize()));
+
     document.calculateLayout(new BoxConstraints(), { x: 0, y: 0 }, ctx);
 
     // Render pages and contents (the driver paginates overflowing pages).

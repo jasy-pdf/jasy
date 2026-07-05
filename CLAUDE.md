@@ -308,8 +308,10 @@ The authoritative plan + ground rules live in **`todo.md`** (gitignored, repo ro
 starting work. Working agreement: **phase by phase, Flo approves each gate, Claude never commits/pushes
 unprompted, comments English + sensible, don't break the font math.**
 
-Status: **LAUNCHED 2026-06-27** — all five packages live on npm (`@jasy/pdf`@alpha.3, `@jasy/zugferd`@alpha.1,
-`@jasy/cli`@alpha.3, `@jasy/vue`@alpha.3, `@jasy/nuxt`@alpha.2), repo public + locked, full CI + changelog +
+Status: **LAUNCHED 2026-06-27**, still shipping alpha increments (no beta/rc/stable until the feature set is
+complete — see `todo.md`). All five packages live on npm; **current (2026-07-02): `@jasy/pdf`@alpha.5,
+`@jasy/zugferd`@alpha.2, `@jasy/cli`@alpha.4, `@jasy/vue`@alpha.5, `@jasy/nuxt`@alpha.4** (the alpha.5 cascade =
+color emoji + PDF/UA). Repo public + locked, full CI + changelog +
 bots in place (see Repo facts). The engine is **feature-complete for the alpha** — inheritance, `onOverflow`,
 custom formats, the line-breaker fixes; **~415 tests green**. The **landing**
 (`~/projects/jasy-landing` → **jasy.dev**) is built: showroom (9 cards), validator, docs, a home-page
@@ -326,8 +328,14 @@ prefixed components; custom fonts + images load as `Uint8Array` (`<JasyDocument 
 components; **`@jasy/vue@1.0.0-alpha.2`** — the `jasyVue` GLOBAL plugin was **REMOVED** (global registration
 never resolves in `renderToPdf`'s fresh app; plain Vue = explicit imports, prefix is Nuxt-only). The
 **`@jasy/nuxt` Nuxt module shipped** (`@1.0.0-alpha.1` — client OR server, zero-config; see Repo facts +
-`packages/nuxt`). Still open: the `style`-object CSS layer; plus the 🔮 wish-list (read/edit existing PDFs,
-forms, security + signatures, more e-invoice profiles, framework bindings). See `todo.md` "⭐ Active".
+`packages/nuxt`). A `style`-object CSS layer + `@media` are **won't-do** (props + `DefaultTextStyle` cover styling;
+media queries are meaningless for a fixed-size PDF). **✅ Relative/percentage sizing DONE (2026-07-05)**:
+`width`/`height` as `"50%"`/pt on Box/Column/Row/Image, image aspect auto-size, and `%` children in flex
+containers resolved against `line − gaps` (so N columns at (100/N)%+gaps fit exactly - better than
+react-pdf/CSS). One shared `resolveExtent` (`layout/box-constraints.ts`); the core is untouched. Still
+**wanted-additive**: **paint-only rotate** + the small relative-sizing follow-ups (`aspectRatio` on any Box,
+`min/max` w/h, `%` on padding/margin/Positioned) — all 1.x minors. Plus the 🔮 wish-list (read/edit existing PDFs, forms, security + signatures,
+more e-invoice profiles, framework bindings). See `todo.md` "⭐ Active" + "🔮 Layout & styling".
 
 ## Repo facts
 
@@ -341,8 +349,8 @@ forms, security + signatures, more e-invoice profiles, framework bindings). See 
   Content 3). It has its **own CLAUDE.md + HARD RULES: never start/stop its dev server (Flo runs it),
   only Flo commits.** Package links there use **npmx.dev** (Daniel Roe's registry browser), not npmjs.com.
 - License MIT, author Florian Heuberger. **Launched 2026-06-27** (Bluesky + npm; landed with the Vue/Nuxt core
-  crew). npm (alpha dist-tag): `@jasy/pdf`@alpha.3, `@jasy/zugferd`@alpha.1, `@jasy/cli`@alpha.3,
-  `@jasy/vue`@alpha.3, `@jasy/nuxt`@alpha.2 (released via `scripts/release.sh <pkg> <version>` → `<pkg>-v*` tag →
+  crew). npm current (alpha + latest dist-tags): `@jasy/pdf`@alpha.5, `@jasy/zugferd`@alpha.2, `@jasy/cli`@alpha.4,
+  `@jasy/vue`@alpha.5, `@jasy/nuxt`@alpha.4 (released via `scripts/release.sh <pkg> <version>` → `<pkg>-v*` tag →
   CI publish; order matters, deps `workspace:*` pin EXACT so dependents re-release when a dep does; the tag also
   builds the GitHub Release notes via `scripts/gh-release.mjs` — changelogen groups + per-commit contributors,
   idempotent upsert). `latest` dist-tag points at the newest alpha per package.

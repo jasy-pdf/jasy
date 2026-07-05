@@ -8,6 +8,7 @@ import { PDFElement } from "../elements/pdf-element.ts";
 import { MainAlign, CrossAlign } from "../utils/flex-layout.ts";
 import { ColorInput, toColor } from "./color.ts";
 import { Insets, toEdges } from "./insets.ts";
+import { SizeInput, toDimension } from "./dimension.ts";
 import { splitArgs } from "./args.ts";
 
 /** Options shared by the `Column` and `Row` stacks (locked §4). */
@@ -19,6 +20,18 @@ export interface StackOptions {
   justify?: MainAlign;
   /** Position across the axis (CSS `align-items`): start (default) · center · end · stretch. */
   align?: CrossAlign;
+  /** Size on each axis: points (fixed) or a percentage string like `"50%"` (a fraction of the offered
+   *  space). Omit to fill the offered width / shrink-wrap to the children. A percentage needs a bounded
+   *  axis (`height: "50%"` only resolves where the parent bounds the height). */
+  width?: SizeInput;
+  height?: SizeInput;
+}
+
+/** Splits `StackOptions` width/height into the fixed points + fraction the stack elements expect. */
+function stackSize(opts: StackOptions) {
+  const w = opts.width !== undefined ? toDimension(opts.width) : undefined;
+  const h = opts.height !== undefined ? toDimension(opts.height) : undefined;
+  return { width: w?.points, height: h?.points, widthFactor: w?.factor, heightFactor: h?.factor };
 }
 
 // The public default for `cross` is `start` (locked §5) - i.e. don't stretch a child unless
@@ -37,6 +50,7 @@ export function Column(a: StackOptions | PDFElement[], b?: PDFElement[]): Contai
     gap: opts.gap,
     main: opts.justify, // undefined → engine default `start` (matches §5)
     cross: opts.align ?? DEFAULT_CROSS,
+    ...stackSize(opts),
   });
 }
 
@@ -50,6 +64,7 @@ export function Row(a: StackOptions | PDFElement[], b?: PDFElement[]): RowElemen
     gap: opts.gap,
     main: opts.justify,
     cross: opts.align ?? DEFAULT_CROSS,
+    ...stackSize(opts),
   });
 }
 
@@ -70,9 +85,11 @@ export interface BoxOptions {
   bg?: ColorInput;
   /** Inner padding between the border and the children. */
   padding?: Insets;
-  /** Fixed size; omit to fill the offered width and shrink-wrap the height. */
-  width?: number;
-  height?: number;
+  /** Size on each axis: a number of points (fixed) or a percentage string like `"50%"` (a fraction
+   *  of the space the parent offers on that axis). Omit `width` to fill the offered width, omit
+   *  `height` to shrink-wrap the content. A percentage only resolves in a bounded region. */
+  width?: SizeInput;
+  height?: SizeInput;
   /** Corner radius in points. */
   radius?: number;
   /** Make this box a positioning frame: `Positioned` children placed inside it resolve their
@@ -114,6 +131,10 @@ export function Box(a: BoxOptions | PDFElement[], b?: PDFElement[]): RectangleEl
 
   const hasBorder = opts.border !== undefined || opts.borderWidth !== undefined || hasPerSide;
 
+  // A point size fills `width`/`height`; a percentage fills `widthFactor`/`heightFactor`.
+  const w = opts.width !== undefined ? toDimension(opts.width) : undefined;
+  const h = opts.height !== undefined ? toDimension(opts.height) : undefined;
+
   return new RectangleElement({
     x: 0,
     y: 0,
@@ -121,8 +142,10 @@ export function Box(a: BoxOptions | PDFElement[], b?: PDFElement[]): RectangleEl
     color: opts.border !== undefined ? toColor(opts.border) : undefined,
     backgroundColor: opts.bg !== undefined ? toColor(opts.bg) : undefined,
     borderWidth: hasBorder ? (opts.borderWidth ?? 1) : 0,
-    width: opts.width,
-    height: opts.height,
+    width: w?.points,
+    height: h?.points,
+    widthFactor: w?.factor,
+    heightFactor: h?.factor,
     radius: opts.radius,
     sideBorders: hasPerSide
       ? {

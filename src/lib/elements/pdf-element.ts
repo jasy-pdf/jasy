@@ -63,6 +63,16 @@ export abstract class PDFElement {
    * happens once at the IR -> backend seam.
    */
   abstract calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size;
+
+  /**
+   * The relative-size fraction (0..1) this element asked for on the given axis, if any (`horizontal` =
+   * width). A flex parent reads it to resolve a percentage child against its OWN main size - e.g. a
+   * `Box({ width: "50%" })` inside a Row, where the child otherwise gets an unbounded main axis and the
+   * fraction would have nothing to resolve against. Default: the element is not relatively sized.
+   */
+  relativeSizeFactor(_horizontal: boolean): number | undefined {
+    return undefined;
+  }
 }
 
 export abstract class SizedPDFElement extends PDFElement {

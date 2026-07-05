@@ -63,6 +63,7 @@ describe("PDFRenderer", () => {
     const mockDocumentElement = {
       calculateLayout: vi.fn(),
       getDefaultTextStyle: vi.fn(),
+      getProps: vi.fn().mockReturnValue({ children: [] }),
     } as unknown as PDFDocumentElement;
 
     await PDFRenderer.render(mockDocumentElement, mockObjectManager);
@@ -75,6 +76,7 @@ describe("PDFRenderer", () => {
     const mockDocumentElement = {
       calculateLayout: vi.fn(),
       getDefaultTextStyle: vi.fn(),
+      getProps: vi.fn().mockReturnValue({ children: [] }),
     } as unknown as PDFDocumentElement;
 
     const result = await PDFRenderer.render(mockDocumentElement, mockObjectManager);
@@ -90,6 +92,7 @@ describe("PDFRenderer", () => {
     const mockDocumentElement = {
       calculateLayout: vi.fn(),
       getDefaultTextStyle: vi.fn(),
+      getProps: vi.fn().mockReturnValue({ children: [] }),
     } as unknown as PDFDocumentElement;
 
     await PDFRenderer.render(mockDocumentElement, mockObjectManager);
@@ -101,6 +104,7 @@ describe("PDFRenderer", () => {
     const mockDocumentElement = {
       calculateLayout: vi.fn(),
       getDefaultTextStyle: vi.fn(),
+      getProps: vi.fn().mockReturnValue({ children: [] }),
     } as unknown as PDFDocumentElement;
 
     const result = await PDFRenderer.render(mockDocumentElement, mockObjectManager);
