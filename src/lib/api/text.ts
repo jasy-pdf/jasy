@@ -48,13 +48,31 @@ const ALIGN: Record<NonNullable<TextOptions["align"]>, HorizontalAlignment> = {
 };
 
 /**
+ * Validates a font `size` (a number of points). Rejects anything that would silently become a NaN
+ * height deep in layout - notably `Document({ size: "A4" })`, where `"A4"` is the PAGE size and belongs
+ * on `Page`, not a font size. `undefined` passes through (unset = inherit the cascade).
+ */
+function toFontSize(size: unknown): number | undefined {
+  if (size === undefined) return undefined;
+  if (typeof size !== "number" || !Number.isFinite(size) || size <= 0) {
+    // Quote a string so "A4" reads as a string; show a bare number/NaN as-is (JSON turns NaN into null).
+    const shown = typeof size === "string" ? JSON.stringify(size) : String(size);
+    throw new Error(
+      `Invalid font size ${shown} (expected a positive number of points). ` +
+        `Note: the page size goes on Page({ size: "A4" }), not on Document or Text.`,
+    );
+  }
+  return size;
+}
+
+/**
  * An inline run for mixed-style `Text` (`Text([span("a", {bold:true}), span("b")])`). Each
  * field overrides the enclosing `Text`'s defaults for just this run; omitted fields inherit.
  */
 export function span(text: string, style: TextStyle = {}): TextSegment {
   return {
     content: text,
-    fontSize: style.size,
+    fontSize: toFontSize(style.size),
     fontFamily: style.font,
     fontStyle:
       style.bold !== undefined || style.italic !== undefined
@@ -74,7 +92,7 @@ export function Text(content: string | TextSegment[], opts: TextOptions = {}): T
   // built-in). Only bold/italic that the caller actually set become an explicit FontStyle.
   return new TextElement({
     content,
-    fontSize: opts.size,
+    fontSize: toFontSize(opts.size),
     fontFamily: opts.font,
     fontStyle:
       opts.bold !== undefined || opts.italic !== undefined
@@ -110,7 +128,7 @@ export interface TextDefaults {
  *  fields), for seeding the inheritance cascade. */
 export function toTextStyleOverride(opts: TextDefaults): Partial<ResolvedTextStyle> {
   const style: Partial<ResolvedTextStyle> = {};
-  if (opts.size !== undefined) style.fontSize = opts.size;
+  if (opts.size !== undefined) style.fontSize = toFontSize(opts.size);
   if (opts.font !== undefined) style.fontFamily = opts.font;
   if (opts.bold !== undefined || opts.italic !== undefined) {
     style.fontStyle = toFontStyle(opts.bold, opts.italic);
