@@ -180,6 +180,10 @@ export class ImageElement extends SizedPDFElement {
     }
   }
 
+  override relativeSizeFactor(horizontal: boolean): number | undefined {
+    return horizontal ? this.widthFactor : this.heightFactor;
+  }
+
   calculateLayout(constraints: BoxConstraints, offset: Offset, _ctx: LayoutContext): Size {
     this.x = offset.x;
     this.y = offset.y;

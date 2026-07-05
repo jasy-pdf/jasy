@@ -20,6 +20,18 @@ export interface StackOptions {
   justify?: MainAlign;
   /** Position across the axis (CSS `align-items`): start (default) · center · end · stretch. */
   align?: CrossAlign;
+  /** Size on each axis: points (fixed) or a percentage string like `"50%"` (a fraction of the offered
+   *  space). Omit to fill the offered width / shrink-wrap to the children. A percentage needs a bounded
+   *  axis (`height: "50%"` only resolves where the parent bounds the height). */
+  width?: SizeInput;
+  height?: SizeInput;
+}
+
+/** Splits `StackOptions` width/height into the fixed points + fraction the stack elements expect. */
+function stackSize(opts: StackOptions) {
+  const w = opts.width !== undefined ? toDimension(opts.width) : undefined;
+  const h = opts.height !== undefined ? toDimension(opts.height) : undefined;
+  return { width: w?.points, height: h?.points, widthFactor: w?.factor, heightFactor: h?.factor };
 }
 
 // The public default for `cross` is `start` (locked §5) - i.e. don't stretch a child unless
@@ -38,6 +50,7 @@ export function Column(a: StackOptions | PDFElement[], b?: PDFElement[]): Contai
     gap: opts.gap,
     main: opts.justify, // undefined → engine default `start` (matches §5)
     cross: opts.align ?? DEFAULT_CROSS,
+    ...stackSize(opts),
   });
 }
 
@@ -51,6 +64,7 @@ export function Row(a: StackOptions | PDFElement[], b?: PDFElement[]): RowElemen
     gap: opts.gap,
     main: opts.justify,
     cross: opts.align ?? DEFAULT_CROSS,
+    ...stackSize(opts),
   });
 }
 

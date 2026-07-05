@@ -143,6 +143,10 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
     });
   }
 
+  override relativeSizeFactor(horizontal: boolean): number | undefined {
+    return horizontal ? this.sizeMemory.widthFactor : this.sizeMemory.heightFactor;
+  }
+
   calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
     // An explicit extent is a fixed point size or a fraction of the offered box (relative sizing);
     // the fraction only resolves in a bounded region. `undefined` = fill / shrink-wrap below.

@@ -329,8 +329,12 @@ components; **`@jasy/vue@1.0.0-alpha.2`** — the `jasyVue` GLOBAL plugin was **
 never resolves in `renderToPdf`'s fresh app; plain Vue = explicit imports, prefix is Nuxt-only). The
 **`@jasy/nuxt` Nuxt module shipped** (`@1.0.0-alpha.1` — client OR server, zero-config; see Repo facts +
 `packages/nuxt`). A `style`-object CSS layer + `@media` are **won't-do** (props + `DefaultTextStyle` cover styling;
-media queries are meaningless for a fixed-size PDF). Wanted-additive instead: **relative/percentage sizing** +
-**paint-only rotate** (1.x minors). Plus the 🔮 wish-list (read/edit existing PDFs, forms, security + signatures,
+media queries are meaningless for a fixed-size PDF). **✅ Relative/percentage sizing DONE (2026-07-05)**:
+`width`/`height` as `"50%"`/pt on Box/Column/Row/Image, image aspect auto-size, and `%` children in flex
+containers resolved against `line − gaps` (so N columns at (100/N)%+gaps fit exactly - better than
+react-pdf/CSS). One shared `resolveExtent` (`layout/box-constraints.ts`); the core is untouched. Still
+**wanted-additive**: **paint-only rotate** + the small relative-sizing follow-ups (`aspectRatio` on any Box,
+`min/max` w/h, `%` on padding/margin/Positioned) — all 1.x minors. Plus the 🔮 wish-list (read/edit existing PDFs, forms, security + signatures,
 more e-invoice profiles, framework bindings). See `todo.md` "⭐ Active" + "🔮 Layout & styling".
 
 ## Repo facts

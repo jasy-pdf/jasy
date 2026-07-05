@@ -15,18 +15,25 @@ export type CrossAlign = "start" | "center" | "end" | "stretch";
  * (main = width). "main" is the stacking direction; "cross" is perpendicular.
  */
 export interface FlexAxis {
+  /** Whether the MAIN (stacking) axis is horizontal - i.e. this is a Row. Used to ask a child for the
+   *  right relative-size factor (width vs height) when resolving a percentage child. */
+  mainHorizontal: boolean;
   mainOf(size: Size): number;
   crossOf(size: Size): number;
   /**
-   * Constraints for a fixed child: the main extent is unbounded (it takes its natural
-   * size); the cross extent is ALWAYS capped to what the line offers. The cap is a hard
+   * Constraints for a fixed child: the main extent is unbounded by default (the child takes its
+   * natural size); the cross extent is ALWAYS capped to what the line offers. The cap is a hard
    * ceiling regardless of `cross` alignment - it is what guarantees nothing ever overflows
    * (a paragraph wraps at the column width instead of running one line off the page). A
    * child smaller than the cap keeps its size and is positioned by `crossOffset`; a child
    * that wants to fill (Container, Text) fills the cap. So `stretch` vs `start/center/end`
    * differ only in where a smaller child sits, never in the ceiling.
+   *
+   * `mainMax` bounds the main axis too (default unbounded): passed only for a PERCENTAGE child, so its
+   * `width: "50%"` can resolve against the space the line offers its items. A plain child keeps the
+   * unbounded main axis and shrink-wraps as before.
    */
-  measureConstraints(crossAvail: number): BoxConstraints;
+  measureConstraints(crossAvail: number, mainMax?: number): BoxConstraints;
   /** Constraints for a flex child (fills the cross axis like a stretched child). */
   flexConstraints(mainExtent: number, crossAvail: number): BoxConstraints;
   /** Absolute offset for a child at main position `mainPos`, cross position `crossPos`. */
@@ -34,17 +41,19 @@ export interface FlexAxis {
 }
 
 export const VERTICAL_AXIS: FlexAxis = {
+  mainHorizontal: false,
   mainOf: (s) => s.height,
   crossOf: (s) => s.width,
-  measureConstraints: (crossAvail) => BoxConstraints.loose(crossAvail, Infinity),
+  measureConstraints: (crossAvail, mainMax = Infinity) => BoxConstraints.loose(crossAvail, mainMax),
   flexConstraints: (mainExtent, crossAvail) => BoxConstraints.loose(crossAvail, mainExtent),
   offsetAt: (mainPos, crossPos) => ({ x: crossPos, y: mainPos }),
 };
 
 export const HORIZONTAL_AXIS: FlexAxis = {
+  mainHorizontal: true,
   mainOf: (s) => s.width,
   crossOf: (s) => s.height,
-  measureConstraints: (crossAvail) => BoxConstraints.loose(Infinity, crossAvail),
+  measureConstraints: (crossAvail, mainMax = Infinity) => BoxConstraints.loose(mainMax, crossAvail),
   flexConstraints: (mainExtent, crossAvail) => BoxConstraints.loose(mainExtent, crossAvail),
   offsetAt: (mainPos, crossPos) => ({ x: mainPos, y: crossPos }),
 };
@@ -86,6 +95,19 @@ export class FlexLayoutHelper {
     const main = options.main ?? "start";
     const cross = options.cross ?? "stretch";
     const count = children.length;
+    const totalGap = Math.max(0, count - 1) * gap;
+
+    // The main extent a percentage child resolves against: the line's own extent minus the gaps
+    // between the items. So N children at (100/N)% + gaps fit exactly, instead of overflowing by the
+    // gaps (the flexbox `width: 33%` + gap trap). Only finite when the line's main axis is bounded -
+    // a fraction of an unbounded main axis has no meaning, so `%` children fall back to shrink-wrap.
+    const percentBase = mainAvail !== Infinity ? Math.max(0, mainAvail - totalGap) : Infinity;
+    // The main cap to hand a child: `percentBase` for a percentage child (so its fraction resolves),
+    // unbounded for everyone else (they keep their natural / fixed size and never fill the line).
+    const mainCapFor = (child: PDFElement): number =>
+      percentBase !== Infinity && child.relativeSizeFactor(axis.mainHorizontal) !== undefined
+        ? percentBase
+        : Infinity;
 
     // Pass 1: measure the fixed children (main extent + cross size) and total the flex.
     let fixedMain = 0;
@@ -97,7 +119,7 @@ export class FlexLayoutHelper {
         totalFlex += child.getFlex();
       } else {
         const size = child.calculateLayout(
-          axis.measureConstraints(crossAvail),
+          axis.measureConstraints(crossAvail, mainCapFor(child)),
           axis.offsetAt(mainStart, crossOrigin),
           ctx,
         );
@@ -107,7 +129,6 @@ export class FlexLayoutHelper {
       }
     }
 
-    const totalGap = Math.max(0, count - 1) * gap;
     const leftover = mainAvail - fixedMain - totalGap;
     const remaining = Math.max(leftover, 0); // for flex children
 
@@ -165,7 +186,7 @@ export class FlexLayoutHelper {
       } else {
         const childCross = axis.crossOf(fixedSize.get(child)!);
         const size = child.calculateLayout(
-          axis.measureConstraints(stretch ? crossExtent : crossAvail),
+          axis.measureConstraints(stretch ? crossExtent : crossAvail, mainCapFor(child)),
           axis.offsetAt(mainPos, crossOrigin + crossOffset(cross, crossExtent, childCross)),
           ctx,
         );
