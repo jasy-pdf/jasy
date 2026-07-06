@@ -57,10 +57,13 @@ function toFontSize(size: unknown): number | undefined {
   if (typeof size !== "number" || !Number.isFinite(size) || size <= 0) {
     // Quote a string so "A4" reads as a string; show a bare number/NaN as-is (JSON turns NaN into null).
     const shown = typeof size === "string" ? JSON.stringify(size) : String(size);
-    throw new Error(
-      `Invalid font size ${shown} (expected a positive number of points). ` +
-        `Note: the page size goes on Page({ size: "A4" }), not on Document or Text.`,
-    );
+    // The Page-vs-font-size mix-up only happens with a string like "A4"; for a plain bad number
+    // (NaN, negative, 0) the hint would just be noise, so keep the message generic there.
+    const hint =
+      typeof size === "string"
+        ? ` Note: the page size goes on Page({ size: "A4" }), not on Document or Text.`
+        : "";
+    throw new Error(`Invalid font size ${shown} (expected a positive number of points).${hint}`);
   }
   return size;
 }

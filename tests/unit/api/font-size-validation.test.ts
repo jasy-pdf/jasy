@@ -23,6 +23,18 @@ describe("font size validation", () => {
     expect(() => Text("hi", { size: bad(0) })).toThrow(/Invalid font size 0/);
   });
 
+  it("adds the Page-size hint only for a string, not for a plain bad number", () => {
+    expect(() => Document({ size: bad("A4") }, [Page([Text("hi")])])).toThrow(/Page\(\{ size/);
+    let msg = "";
+    try {
+      span("hi", { size: bad(-5) });
+    } catch (e) {
+      msg = (e as Error).message;
+    }
+    expect(msg).toMatch(/expected a positive number/);
+    expect(msg).not.toContain("Page("); // no page hint for a plain invalid number
+  });
+
   it("accepts a valid positive size, and leaves an unset size to inherit", () => {
     expect(() => Text("hi", { size: 11 })).not.toThrow();
     expect(() => Document({ size: 12 }, [Page([Text("hi")])])).not.toThrow();
