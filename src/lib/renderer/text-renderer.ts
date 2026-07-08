@@ -413,10 +413,10 @@ export class TextRenderer {
           fontSize: size,
           color: segment.fontColor || color,
         });
-        // An href span becomes a /Link annotation over exactly this run's glyph box. `lineY` is the
+        // An href/to span becomes a /Link annotation over exactly this run's glyph box. `lineY` is the
         // baseline; the box spans from the ascent (BASELINE_RATIO above it) down by the full size, so
         // ascent + descent are covered. A span wrapped across lines yields one rect per line.
-        if (segment.href) {
+        if (segment.href !== undefined || segment.dest !== undefined) {
           links.push({
             type: "link",
             x,
@@ -424,6 +424,7 @@ export class TextRenderer {
             width: advance,
             height: size,
             href: segment.href,
+            dest: segment.dest,
           });
         }
         x += advance;

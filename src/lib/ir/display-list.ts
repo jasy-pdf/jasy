@@ -109,9 +109,10 @@ export interface ClipPop {
 
 /**
  * A hyperlink over a rectangle. Unlike every other IR node this draws NOTHING into the content stream -
- * it becomes a PDF Link ANNOTATION on the page (`/Annots`), a side channel next to the drawing. `href`
- * is an external URL (a `/URI` action). The rect is the clickable region in top-left engine coords; the
- * Y-flip converts it to PDF page space at the seam like any other rect.
+ * it becomes a PDF Link ANNOTATION on the page (`/Annots`), a side channel next to the drawing. Exactly
+ * one target is set: `href` is an external URL (a `/URI` action); `dest` is a named destination inside
+ * this document (a `/GoTo` action, resolved via the catalog `/Names /Dests` tree - see `Anchor`). The
+ * rect is the clickable region in top-left engine coords; the Y-flip converts it to PDF page space.
  */
 export interface Link {
   type: "link";
@@ -119,7 +120,19 @@ export interface Link {
   y: number;
   width: number;
   height: number;
-  href: string;
+  href?: string;
+  dest?: string;
+}
+
+/**
+ * A named destination anchor - a jump TARGET for an internal `Link({ to })`. Like `Link` it draws
+ * NOTHING; it registers `name` -> (this page, `y`) in the catalog `/Names /Dests` name tree. `y` is the
+ * top of the target in top-left engine coords (the Y-flip turns it into the page-space scroll target).
+ */
+export interface Anchor {
+  type: "anchor";
+  y: number;
+  name: string;
 }
 
 /**
@@ -192,4 +205,14 @@ export interface Path {
 }
 
 /** The closed set of primitives the PDF backend knows how to draw. */
-export type IRNode = TextRun | Rect | Line | Image | ClipPush | ClipPop | Path | Link | Outline;
+export type IRNode =
+  | TextRun
+  | Rect
+  | Line
+  | Image
+  | ClipPush
+  | ClipPop
+  | Path
+  | Link
+  | Outline
+  | Anchor;

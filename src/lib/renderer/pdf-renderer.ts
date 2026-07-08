@@ -34,6 +34,8 @@ import { LinkElement } from "../elements/layout/link-element.ts";
 import { LinkRenderer } from "./link-renderer.ts";
 import { BookmarkElement } from "../elements/layout/bookmark-element.ts";
 import { BookmarkRenderer } from "./bookmark-renderer.ts";
+import { AnchorElement } from "../elements/layout/anchor-element.ts";
+import { AnchorRenderer } from "./anchor-renderer.ts";
 import { BoxConstraints } from "../layout/box-constraints.ts";
 import { collectImageElements } from "../layout/collect-images.ts";
 import { LayoutContext } from "../elements/pdf-element.ts";
@@ -60,6 +62,7 @@ export class PDFRenderer {
     RendererRegistry.register(StructGroup, StructGroupRenderer.render);
     RendererRegistry.register(LinkElement, LinkRenderer.render);
     RendererRegistry.register(BookmarkElement, BookmarkRenderer.render);
+    RendererRegistry.register(AnchorElement, AnchorRenderer.render);
 
     let pdfContent = "";
 
@@ -102,11 +105,16 @@ export class PDFRenderer {
       catalogParts.push(`/OutputIntents [${outputIntent} 0 R]`);
     }
 
+    // The catalog has exactly one /Names dict; embedded files and named destinations are two entries in
+    // it, so collect both and emit the /Names once (below).
+    const namesParts: string[] = [];
+
     const attachments = objectManager.getAttachments();
     if (attachments.length > 0) {
       const names = attachments.map((a) => `(${a.name}) ${a.filespec} 0 R`).join(" ");
       const af = attachments.map((a) => `${a.filespec} 0 R`).join(" ");
-      catalogParts.push(`/AF [${af}]`, `/Names << /EmbeddedFiles << /Names [${names}] >> >>`);
+      catalogParts.push(`/AF [${af}]`);
+      namesParts.push(`/EmbeddedFiles << /Names [${names}] >>`);
     }
 
     // Accessible tagging: finalize the structure tree (emits StructTreeRoot + StructElems + ParentTree) and
@@ -122,6 +130,13 @@ export class PDFRenderer {
     // "" (no-op) when no Bookmark was placed, so a plain document's catalog is unchanged.
     const outlineCatalog = objectManager.outline.finalize(objectManager);
     if (outlineCatalog) catalogParts.push(outlineCatalog);
+
+    // Named destinations (internal-link targets): a /Dests entry in the shared /Names dict.
+    const destsNames = objectManager.dests.finalize();
+    if (destsNames) namesParts.push(destsNames);
+
+    // Emit the single /Names dict if either embedded files or destinations contributed to it.
+    if (namesParts.length > 0) catalogParts.push(`/Names << ${namesParts.join(" ")} >>`);
 
     const catalogObject = `<< ${catalogParts.join(" ")} >>`;
     objectManager.addObject(catalogObject);

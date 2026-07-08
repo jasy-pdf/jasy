@@ -24,6 +24,8 @@ export interface TextSegment {
   fontSize?: number;
   /** External URL: this segment becomes an inline hyperlink (a /Link annotation over its glyphs). */
   href?: string;
+  /** Internal named destination (an `Anchor`): this segment links to it (a /GoTo /Link annotation). */
+  dest?: string;
 }
 
 /** Accessibility role for the tagged structure tree: a heading level or a paragraph (the default). */

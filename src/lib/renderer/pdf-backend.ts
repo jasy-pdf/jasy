@@ -72,6 +72,9 @@ export class PdfBackend {
         case "outline":
           // An outline anchor is a single point (the target's top); flip it like a text baseline.
           return { ...node, y: pageHeight - node.y };
+        case "anchor":
+          // A named-destination anchor is a single point (the target's top), flipped like a baseline.
+          return { ...node, y: pageHeight - node.y };
         default: {
           const unknown: never = node;
           return unknown;
@@ -96,6 +99,7 @@ export class PdfBackend {
           node.type === "clip-pop" ||
           node.type === "link" ||
           node.type === "outline" ||
+          node.type === "anchor" ||
           ops === ""
         )
           return ops;
@@ -294,6 +298,9 @@ export class PdfBackend {
         return "";
       case "outline":
         // An outline anchor draws nothing - it becomes a /Outlines entry (built in PageRenderer/PDFRenderer).
+        return "";
+      case "anchor":
+        // A named destination draws nothing - it becomes a /Names /Dests entry (built in PageRenderer/PDFRenderer).
         return "";
       default: {
         // Exhaustiveness guard: if a new IRNode variant is added, this fails to compile.

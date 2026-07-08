@@ -93,9 +93,14 @@ export class PageRenderer {
     for (const node of flipped) {
       if (node.type !== "link") continue;
       const rect = `[${num(node.x)} ${num(node.y)} ${num(node.x + node.width)} ${num(node.y + node.height)}]`;
-      const uri = PdfBackend.escapePdfString(node.href);
+      // Either an external URL (/URI) or an internal named destination (/GoTo, resolved via /Names /Dests).
+      // The Link IR guarantees exactly one is set; prefer `dest` when present.
+      const action =
+        node.dest !== undefined
+          ? `/A << /S /GoTo /D (${PdfBackend.escapePdfString(node.dest)}) >>`
+          : `/A << /S /URI /URI (${PdfBackend.escapePdfString(node.href ?? "")}) >>`;
       const annot = objectManager.addObject(
-        `<< /Type /Annot /Subtype /Link /Rect ${rect} /Border [0 0 0] /A << /S /URI /URI (${uri}) >> >>`,
+        `<< /Type /Annot /Subtype /Link /Rect ${rect} /Border [0 0 0] ${action} >>`,
       );
       annotRefs.push(`${annot} 0 R`);
     }
@@ -112,8 +117,9 @@ export class PageRenderer {
     const pageObjNum = objectManager.addObject(pageObject);
     if (structCtx) objectManager.struct.setPageObject(structCtx.structParents, pageObjNum);
 
-    // Bookmarks: an `Outline` IR node drew nothing; record it now that the page's object number is known.
-    // `node.y` is already Y-flipped to the page-space scroll target. PDFRenderer builds /Outlines at the end.
+    // Bookmarks + named destinations: an `Outline`/`Anchor` IR node drew nothing; record it now that the
+    // page's object number is known. `node.y` is already Y-flipped to the page-space scroll target.
+    // PDFRenderer builds /Outlines and /Names /Dests at the end.
     for (const node of flipped) {
       if (node.type === "outline") {
         objectManager.outline.add({
@@ -122,6 +128,8 @@ export class PageRenderer {
           pageObjNum,
           top: node.y,
         });
+      } else if (node.type === "anchor") {
+        objectManager.dests.add(node.name, { pageObjNum, top: node.y });
       }
     }
     return pageObjNum;
