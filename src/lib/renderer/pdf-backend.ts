@@ -66,6 +66,26 @@ export class PdfBackend {
               : { ...node.fill, y0: pageHeight - node.fill.y0, y1: pageHeight - node.fill.y1 };
           return { ...node, commands, fill };
         }
+        case "transform-push": {
+          // The child nodes are flipped from top-left to bottom-left by F = [1,0,0,-1,0,H] (F is its
+          // own inverse). For a matrix authored in top-left space to act correctly on them, conjugate
+          // it by that flip: M_pdf = F · M · F. Worked out for [a,b,c,d,e,f] with H = pageHeight:
+          const [a, b, c, d, e, f] = node.matrix;
+          const H = pageHeight;
+          return {
+            ...node,
+            matrix: [a, -b, -c, d, H * c + e, H - H * d - f] as [
+              number,
+              number,
+              number,
+              number,
+              number,
+              number,
+            ],
+          };
+        }
+        case "transform-pop":
+          return node; // no coordinates to flip
         default: {
           const unknown: never = node;
           return unknown;
@@ -82,7 +102,16 @@ export class PdfBackend {
     return nodes
       .map((node) => {
         const ops = PdfBackend.serializeNode(node, om);
-        if (!struct || node.type === "clip-push" || node.type === "clip-pop" || ops === "")
+        // Graphics-state nodes (clip / transform push+pop) carry no tag and must not be wrapped in a
+        // marked-content sequence - they only save/restore state around the drawables they enclose.
+        if (
+          !struct ||
+          node.type === "clip-push" ||
+          node.type === "clip-pop" ||
+          node.type === "transform-push" ||
+          node.type === "transform-pop" ||
+          ops === ""
+        )
           return ops;
         const { open, close } = struct.mark(node.tag);
         return open + ops + close;
@@ -273,6 +302,13 @@ export class PdfBackend {
         return gs ? `q\n${gs}${body}Q\n` : body;
       }
       case "clip-pop":
+        return `Q\n`;
+      case "transform-push": {
+        // Save the graphics state, then apply the affine; everything until transform-pop paints through it.
+        const f = (n: number) => n.toFixed(3);
+        return `q\n${node.matrix.map(f).join(" ")} cm\n`;
+      }
+      case "transform-pop":
         return `Q\n`;
       default: {
         // Exhaustiveness guard: if a new IRNode variant is added, this fails to compile.

@@ -30,6 +30,9 @@ import { PositionedElement } from "../elements/layout/positioned-element.ts";
 import { PositionedRenderer } from "./positioned-renderer.ts";
 import { StructGroup } from "../elements/layout/struct-group.ts";
 import { StructGroupRenderer } from "./struct-group-renderer.ts";
+import { RotatedElement } from "../elements/layout/rotated-element.ts";
+import { RotatedBoxElement } from "../elements/layout/rotated-box-element.ts";
+import { RotatedRenderer } from "./rotated-renderer.ts";
 import { BoxConstraints } from "../layout/box-constraints.ts";
 import { collectImageElements } from "../layout/collect-images.ts";
 import { LayoutContext } from "../elements/pdf-element.ts";
@@ -54,6 +57,8 @@ export class PDFRenderer {
     RendererRegistry.register(DeferredElement, DeferredRenderer.render);
     RendererRegistry.register(PositionedElement, PositionedRenderer.render);
     RendererRegistry.register(StructGroup, StructGroupRenderer.render);
+    RendererRegistry.register(RotatedElement, RotatedRenderer.render);
+    RendererRegistry.register(RotatedBoxElement, RotatedRenderer.render);
 
     let pdfContent = "";
 

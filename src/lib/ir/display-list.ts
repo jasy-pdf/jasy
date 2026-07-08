@@ -108,6 +108,25 @@ export interface ClipPop {
 }
 
 /**
+ * Pushes an affine transform (a `q` + `cm` in the content stream): everything between this and the
+ * matching `TransformPop` is painted through `matrix`. This is what `Rotated` wraps its child's nodes
+ * in, so a subtree draws rotated (or scaled/translated) around a pivot without touching its layout.
+ *
+ * `matrix` is `[a, b, c, d, e, f]` in the engine's TOP-LEFT coordinates - the same space every other IR
+ * node uses. The Y-flip at the IR -> backend seam converts it to PDF's bottom-left once per page, so
+ * producers stay coordinate-system-blind (they never see a flipped matrix).
+ */
+export interface TransformPush {
+  type: "transform-push";
+  matrix: [number, number, number, number, number, number];
+}
+
+/** Closes the most recent `TransformPush` (restores the graphics state). */
+export interface TransformPop {
+  type: "transform-pop";
+}
+
+/**
  * One drawing command of a `Path`, in absolute page coordinates. Curves are CUBIC because PDF
  * content streams have no quadratic operator - a producer converts TrueType quads to cubics before
  * emitting. `z` closes the current subpath (a glyph contour).
@@ -164,4 +183,13 @@ export interface Path {
 }
 
 /** The closed set of primitives the PDF backend knows how to draw. */
-export type IRNode = TextRun | Rect | Line | Image | ClipPush | ClipPop | Path;
+export type IRNode =
+  | TextRun
+  | Rect
+  | Line
+  | Image
+  | ClipPush
+  | ClipPop
+  | Path
+  | TransformPush
+  | TransformPop;
