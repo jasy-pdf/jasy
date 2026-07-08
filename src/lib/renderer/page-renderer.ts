@@ -35,11 +35,8 @@ export class PageRenderer {
     // Accessible tagging: one struct context per page (allocates its StructParents index), threaded into
     // serialize so each drawable node is wrapped in marked content. Undefined = tagging off (byte-identical).
     const structCtx = objectManager.struct.enabled ? objectManager.struct.beginPage() : undefined;
-    const pageContent = PdfBackend.serialize(
-      PdfBackend.flipY(nodes, height),
-      objectManager,
-      structCtx,
-    );
+    const flipped = PdfBackend.flipY(nodes, height);
+    const pageContent = PdfBackend.serialize(flipped, objectManager, structCtx);
 
     // Add the page content as a new object (FlateDecode-compressed when enabled). The /Length is
     // computed inside, with an explicit EOL before `endstream` (PDF/A clause 6.1.7.1).
@@ -88,16 +85,45 @@ export class PageRenderer {
     const shadingCode =
       shadingReferences.length > 0 ? "/Shading <<\n" + shadingReferences.join("\n") + "\n>>\n" : "";
 
+    // Hyperlinks: a `Link` IR node drew nothing into the content stream - here its (already Y-flipped)
+    // rect + href become a /Link annotation object. `/Border [0 0 0]` hides the default visible frame;
+    // the URL is escaped like any PDF literal string. Refs are collected into the page's /Annots below.
+    const num = (n: number) => Number(n.toFixed(2));
+    const annotRefs: string[] = [];
+    for (const node of flipped) {
+      if (node.type !== "link") continue;
+      const rect = `[${num(node.x)} ${num(node.y)} ${num(node.x + node.width)} ${num(node.y + node.height)}]`;
+      const uri = PdfBackend.escapePdfString(node.href);
+      const annot = objectManager.addObject(
+        `<< /Type /Annot /Subtype /Link /Rect ${rect} /Border [0 0 0] /A << /S /URI /URI (${uri}) >> >>`,
+      );
+      annotRefs.push(`${annot} 0 R`);
+    }
+    const annotsCode = annotRefs.length > 0 ? ` /Annots [${annotRefs.join(" ")}]` : "";
+
     // Tagging only: /StructParents links this page's marked content to the ParentTree, /Tabs /S makes the
     // logical structure order the tab/reading order (a PDF/UA requirement).
     const structAttrs = structCtx ? ` /StructParents ${structCtx.structParents} /Tabs /S` : "";
     const pageObject = `<< /Type /Page /Parent ${parentObjectNumber} 0 R /Contents ${contentObjectNumber} 0 R /Resources <<\n/Font <<\n${fontReferences.join(
       "\n",
-    )}\n>>\n${imageCode}${extGStateCode}${shadingCode}>>\n/MediaBox [0 0 ${width} ${height}]${structAttrs} >>`;
+    )}\n>>\n${imageCode}${extGStateCode}${shadingCode}>>\n/MediaBox [0 0 ${width} ${height}]${structAttrs}${annotsCode} >>`;
 
     // Add page as new object; register its object number with the struct tree (for /Pg refs), then return it.
     const pageObjNum = objectManager.addObject(pageObject);
     if (structCtx) objectManager.struct.setPageObject(structCtx.structParents, pageObjNum);
+
+    // Bookmarks: an `Outline` IR node drew nothing; record it now that the page's object number is known.
+    // `node.y` is already Y-flipped to the page-space scroll target. PDFRenderer builds /Outlines at the end.
+    for (const node of flipped) {
+      if (node.type === "outline") {
+        objectManager.outline.add({
+          title: node.title,
+          level: node.level,
+          pageObjNum,
+          top: node.y,
+        });
+      }
+    }
     return pageObjNum;
   }
 }

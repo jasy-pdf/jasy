@@ -30,6 +30,10 @@ import { PositionedElement } from "../elements/layout/positioned-element.ts";
 import { PositionedRenderer } from "./positioned-renderer.ts";
 import { StructGroup } from "../elements/layout/struct-group.ts";
 import { StructGroupRenderer } from "./struct-group-renderer.ts";
+import { LinkElement } from "../elements/layout/link-element.ts";
+import { LinkRenderer } from "./link-renderer.ts";
+import { BookmarkElement } from "../elements/layout/bookmark-element.ts";
+import { BookmarkRenderer } from "./bookmark-renderer.ts";
 import { BoxConstraints } from "../layout/box-constraints.ts";
 import { collectImageElements } from "../layout/collect-images.ts";
 import { LayoutContext } from "../elements/pdf-element.ts";
@@ -54,6 +58,8 @@ export class PDFRenderer {
     RendererRegistry.register(DeferredElement, DeferredRenderer.render);
     RendererRegistry.register(PositionedElement, PositionedRenderer.render);
     RendererRegistry.register(StructGroup, StructGroupRenderer.render);
+    RendererRegistry.register(LinkElement, LinkRenderer.render);
+    RendererRegistry.register(BookmarkElement, BookmarkRenderer.render);
 
     let pdfContent = "";
 
@@ -111,6 +117,11 @@ export class PDFRenderer {
       // PDF/UA requires the viewer to show the document title (not the file name).
       catalogParts.push("/ViewerPreferences << /DisplayDocTitle true >>");
     }
+
+    // Document outline (bookmarks): emit the /Outlines tree collected during page rendering. Returns
+    // "" (no-op) when no Bookmark was placed, so a plain document's catalog is unchanged.
+    const outlineCatalog = objectManager.outline.finalize(objectManager);
+    if (outlineCatalog) catalogParts.push(outlineCatalog);
 
     const catalogObject = `<< ${catalogParts.join(" ")} >>`;
     objectManager.addObject(catalogObject);

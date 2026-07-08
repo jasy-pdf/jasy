@@ -66,6 +66,12 @@ export class PdfBackend {
               : { ...node.fill, y0: pageHeight - node.fill.y0, y1: pageHeight - node.fill.y1 };
           return { ...node, commands, fill };
         }
+        case "link":
+          // A link's clickable rect flips around its bottom edge, exactly like a rect.
+          return { ...node, y: pageHeight - node.y - node.height };
+        case "outline":
+          // An outline anchor is a single point (the target's top); flip it like a text baseline.
+          return { ...node, y: pageHeight - node.y };
         default: {
           const unknown: never = node;
           return unknown;
@@ -82,7 +88,16 @@ export class PdfBackend {
     return nodes
       .map((node) => {
         const ops = PdfBackend.serializeNode(node, om);
-        if (!struct || node.type === "clip-push" || node.type === "clip-pop" || ops === "")
+        // Graphics-state and side-channel nodes (clip push/pop, a link) carry no tag and never draw,
+        // so they pass through without a marked-content wrapper.
+        if (
+          !struct ||
+          node.type === "clip-push" ||
+          node.type === "clip-pop" ||
+          node.type === "link" ||
+          node.type === "outline" ||
+          ops === ""
+        )
           return ops;
         const { open, close } = struct.mark(node.tag);
         return open + ops + close;
@@ -274,6 +289,12 @@ export class PdfBackend {
       }
       case "clip-pop":
         return `Q\n`;
+      case "link":
+        // A link draws nothing in the content stream - it becomes a page /Annot (built in PageRenderer).
+        return "";
+      case "outline":
+        // An outline anchor draws nothing - it becomes a /Outlines entry (built in PageRenderer/PDFRenderer).
+        return "";
       default: {
         // Exhaustiveness guard: if a new IRNode variant is added, this fails to compile.
         const unknown: never = node;

@@ -4,6 +4,8 @@ import { RectangleElement } from "../elements/rectangle-element.ts";
 import { ExpandedElement } from "../elements/layout/expanded-element.ts";
 import { PaddingElement } from "../elements/layout/padding-element.ts";
 import { PositionedElement, PositionedInsets } from "../elements/layout/positioned-element.ts";
+import { LinkElement } from "../elements/layout/link-element.ts";
+import { BookmarkElement } from "../elements/layout/bookmark-element.ts";
 import { PDFElement } from "../elements/pdf-element.ts";
 import { MainAlign, CrossAlign } from "../utils/flex-layout.ts";
 import { ColorInput, toColor } from "./color.ts";
@@ -174,6 +176,30 @@ export function Padding(padding: Insets, child: PDFElement): PaddingElement {
  */
 export function Positioned(opts: PositionedInsets, child: PDFElement): PositionedElement {
   return new PositionedElement({ child, ...opts });
+}
+
+/**
+ * Makes any `child` a clickable hyperlink to `href` (an external URL) - the child's whole box is the
+ * clickable region (an image, a box, a row). The link draws nothing itself, so style the child if you
+ * want it to look like one - e.g. `Link({ href }, Text("jasy.dev", { color: "#1450aa" }))`. It becomes
+ * a /Link annotation on the page. For a link on part of a line, put `href` on a `Text`/`span` instead
+ * (`Text([span("Visit "), span("jasy.dev", { href, color: "#1450aa" })])`), which links just that run.
+ */
+export function Link(opts: { href: string }, child: PDFElement): LinkElement {
+  return new LinkElement({ href: opts.href, child });
+}
+
+/**
+ * Adds a bookmark to the document outline (the viewer's sidebar) that jumps to `child`. `title` is the
+ * label; `level` (1-based, default 1) nests it - a `level: 2` bookmark hangs under the nearest preceding
+ * `level: 1`, so you get a collapsible tree (chapters -> sections). It is layout-transparent: `child`
+ * renders exactly as it would on its own. `Bookmark({ title: "Chapter 2", level: 1 }, Text("Chapter 2"))`.
+ */
+export function Bookmark(
+  opts: { title: string; level?: number },
+  child: PDFElement,
+): BookmarkElement {
+  return new BookmarkElement({ title: opts.title, level: opts.level, child });
 }
 
 /**

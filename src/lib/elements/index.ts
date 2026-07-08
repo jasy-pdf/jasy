@@ -8,5 +8,7 @@ export * from "./layout/expanded-element.ts";
 export * from "./layout/padding-element.ts";
 export * from "./layout/default-text-style-element.ts";
 export * from "./layout/positioned-element.ts";
+export * from "./layout/link-element.ts";
+export * from "./layout/bookmark-element.ts";
 export * from "./line-element.ts";
 export * from "./row-element.ts";

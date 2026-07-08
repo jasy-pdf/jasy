@@ -22,6 +22,8 @@ export interface TextSegment {
   fontColor?: Color;
   fontFamily?: string;
   fontSize?: number;
+  /** External URL: this segment becomes an inline hyperlink (a /Link annotation over its glyphs). */
+  href?: string;
 }
 
 /** Accessibility role for the tagged structure tree: a heading level or a paragraph (the default). */

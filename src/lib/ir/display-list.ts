@@ -108,6 +108,34 @@ export interface ClipPop {
 }
 
 /**
+ * A hyperlink over a rectangle. Unlike every other IR node this draws NOTHING into the content stream -
+ * it becomes a PDF Link ANNOTATION on the page (`/Annots`), a side channel next to the drawing. `href`
+ * is an external URL (a `/URI` action). The rect is the clickable region in top-left engine coords; the
+ * Y-flip converts it to PDF page space at the seam like any other rect.
+ */
+export interface Link {
+  type: "link";
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  href: string;
+}
+
+/**
+ * A document-outline (bookmark) anchor. Like `Link` it draws NOTHING - it becomes an entry in the PDF
+ * outline tree (`/Outlines`), a side channel the viewer shows in its bookmark panel. `y` is the top of
+ * the target in top-left engine coords (the Y-flip turns it into the page-space scroll target); `level`
+ * (1-based) nests the entry under the nearest preceding entry of a smaller level.
+ */
+export interface Outline {
+  type: "outline";
+  y: number;
+  title: string;
+  level: number;
+}
+
+/**
  * One drawing command of a `Path`, in absolute page coordinates. Curves are CUBIC because PDF
  * content streams have no quadratic operator - a producer converts TrueType quads to cubics before
  * emitting. `z` closes the current subpath (a glyph contour).
@@ -164,4 +192,4 @@ export interface Path {
 }
 
 /** The closed set of primitives the PDF backend knows how to draw. */
-export type IRNode = TextRun | Rect | Line | Image | ClipPush | ClipPop | Path;
+export type IRNode = TextRun | Rect | Line | Image | ClipPush | ClipPop | Path | Link | Outline;
