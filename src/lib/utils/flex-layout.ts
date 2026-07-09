@@ -102,12 +102,16 @@ export class FlexLayoutHelper {
     // gaps (the flexbox `width: 33%` + gap trap). Only finite when the line's main axis is bounded -
     // a fraction of an unbounded main axis has no meaning, so `%` children fall back to shrink-wrap.
     const percentBase = mainAvail !== Infinity ? Math.max(0, mainAvail - totalGap) : Infinity;
-    // The main cap to hand a child: `percentBase` for a percentage child (so its fraction resolves),
-    // unbounded for everyone else (they keep their natural / fixed size and never fill the line).
-    const mainCapFor = (child: PDFElement): number =>
-      percentBase !== Infinity && child.relativeSizeFactor(axis.mainHorizontal) !== undefined
-        ? percentBase
-        : Infinity;
+    // The main cap to hand a child: `percentBase` for a percentage child (so its fraction resolves) and
+    // for a child that cannot lay itself out without a bound (a nested stack holding an `Expanded`/
+    // `Spacer`); unbounded for everyone else, who keep their natural size and never fill the line.
+    const mainCapFor = (child: PDFElement): number => {
+      if (percentBase === Infinity) return Infinity;
+      const needsBound =
+        child.relativeSizeFactor(axis.mainHorizontal) !== undefined ||
+        child.needsBoundedMain(axis.mainHorizontal);
+      return needsBound ? percentBase : Infinity;
+    };
 
     // Pass 1: measure the fixed children (main extent + cross size) and total the flex.
     let fixedMain = 0;
@@ -130,7 +134,10 @@ export class FlexLayoutHelper {
     }
 
     const leftover = mainAvail - fixedMain - totalGap;
-    const remaining = Math.max(leftover, 0); // for flex children
+    // A flex child on an UNBOUNDED main axis has no leftover space to claim. It must collapse to zero,
+    // never to `Infinity`: an infinite extent would become the offset of every following sibling and get
+    // written into the content stream verbatim, silently corrupting the page from that point on.
+    const remaining = Number.isFinite(leftover) ? Math.max(leftover, 0) : 0;
 
     // Main-axis distribution only kicks in with no flex child and bounded, positive space.
     let leadingSpace = 0;
