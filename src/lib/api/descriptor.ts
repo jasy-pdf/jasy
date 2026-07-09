@@ -3,9 +3,23 @@ import { PDFDocumentElement } from "../elements/pdf-document-element.ts";
 import { PageElement } from "../elements/page-element.ts";
 import { TextSegment } from "../elements/text-element.ts";
 import { Text, Paragraph, span } from "./text.ts";
-import { Column, Row, Box, Padding, Spacer, Expanded, Positioned } from "./layout.ts";
+import {
+  Column,
+  Row,
+  Box,
+  Padding,
+  Spacer,
+  Expanded,
+  Positioned,
+  Link,
+  Anchor,
+  Bookmark,
+  Rotated,
+  RotatedBox,
+} from "./layout.ts";
 import { Divider, Image } from "./content.ts";
 import { Page, Document, DefaultTextStyle } from "./structure.ts";
+import { PageNumber, PageCount } from "./page-builder.ts";
 import { Table, Cell } from "./table.ts";
 
 /**
@@ -70,6 +84,14 @@ function slotElement(node: Descriptor): PDFElement {
   return els.length === 1 ? els[0] : Column(els);
 }
 
+// The single child a wrapper takes (`Link`, `Anchor`, `Bookmark`, `Rotated`, ...). Several children are
+// stacked in a Column, so `<JasyLink><Text/><Text/></JasyLink>` behaves like the factory would.
+function wrappedChild(children: DescriptorChild[]): PDFElement {
+  const els = children.map((c) => (typeof c === "string" ? Text(c) : build(c)));
+  if (els.length === 0) throw new Error("A wrapper element needs exactly one child");
+  return els.length === 1 ? els[0] : Column(els);
+}
+
 const REGISTRY: Record<string, ElementFactory> = {
   document: (props, children) => {
     const doc = Document(props, elementChildren(children) as PageElement[]);
@@ -115,6 +137,21 @@ const REGISTRY: Record<string, ElementFactory> = {
   },
   positioned: (props, children) => Positioned(props, elementChildren(children)[0]),
   "default-text-style": (props, children) => DefaultTextStyle(props, elementChildren(children)),
+
+  // Navigation. `Link` takes exactly one of `href` (a URL) or `to` (an `Anchor` name) - the factory
+  // enforces that, so a template typo surfaces as an error instead of a dead link.
+  link: (props, children) => Link(props, wrappedChild(children)),
+  anchor: (props, children) => Anchor(props, wrappedChild(children)),
+  bookmark: (props, children) => Bookmark(props, wrappedChild(children)),
+
+  // Transforms.
+  rotated: (props, children) => Rotated(props, wrappedChild(children)),
+  "rotated-box": (props, children) => RotatedBox(props, wrappedChild(children)),
+
+  // Page numbers. `PageBuilder` itself is deliberately NOT exposed: it takes a closure, which a template
+  // cannot express. These two cover what the closure exists for.
+  "page-number": (props) => PageNumber(props),
+  "page-count": (props) => PageCount(props),
 };
 
 /**

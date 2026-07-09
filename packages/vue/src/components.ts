@@ -20,8 +20,18 @@ const textStyleProps = {
   italic: { type: Boolean, default: undefined },
   color: colorProp,
 };
+// A link target. Shared by `<Text>`/`<Paragraph>` (links the whole run) and `<Span>` (links just that
+// run). NOT part of `textStyleProps`: `<Document>` and `<DefaultTextStyle>` set defaults, they cannot link.
+// Exactly one of the two, mirroring the `Link` factory.
+const linkTargetProps = {
+  /** An external URL. */
+  href: String,
+  /** The `name` of an `<Anchor>` elsewhere in the document. */
+  to: String,
+};
 const textProps = {
   ...textStyleProps,
+  ...linkTargetProps,
   align: String as PropType<"left" | "center" | "right">,
   lineHeight: Number,
   maxLines: Number,
@@ -188,7 +198,7 @@ export const Paragraph = defineComponent({
 export const Span = defineComponent({
   name: "JasySpan",
   inheritAttrs: false,
-  props: textStyleProps,
+  props: { ...textStyleProps, ...linkTargetProps },
   setup: fwd("span"),
 });
 // `<Table :columns>` holds `<TableRow>`s (mark one `header` to repeat it per page) of `<TableCell>`s.
@@ -222,4 +232,64 @@ export const DefaultTextStyle = defineComponent({
   inheritAttrs: false,
   props: defaultTextStyleProps,
   setup: fwd("default-text-style"),
+});
+
+// --- Navigation -------------------------------------------------------------------------------------
+// Makes its child clickable. `href` opens a URL, `to` jumps to an `<Anchor>` in the same document.
+// For a link on part of a line put `href`/`to` on a `<Span>` instead.
+export const Link = defineComponent({
+  name: "JasyLink",
+  inheritAttrs: false,
+  props: linkTargetProps,
+  setup: fwd("link"),
+});
+// A named jump target for `<Link to="...">`. Layout-transparent: the child renders as it would alone.
+export const Anchor = defineComponent({
+  name: "JasyAnchor",
+  inheritAttrs: false,
+  props: { name: { type: String, required: true } },
+  setup: fwd("anchor"),
+});
+// An entry in the viewer's outline sidebar. `level` nests it under the nearest preceding smaller level.
+export const Bookmark = defineComponent({
+  name: "JasyBookmark",
+  inheritAttrs: false,
+  props: { title: { type: String, required: true }, level: Number },
+  setup: fwd("bookmark"),
+});
+
+// --- Transforms -------------------------------------------------------------------------------------
+// Spins its child at any angle around its center, at PAINT time: the layout box stays unrotated, so
+// siblings do not reflow. For a stamp or a watermark.
+export const Rotated = defineComponent({
+  name: "JasyRotated",
+  inheritAttrs: false,
+  props: { angle: { type: Number, required: true } },
+  setup: fwd("rotated"),
+});
+// Layout-aware quarter-turns: a 90/270 turn swaps width and height, so siblings reflow around a vertical
+// label. `turns` counts clockwise 90-degree steps.
+export const RotatedBox = defineComponent({
+  name: "JasyRotatedBox",
+  inheritAttrs: false,
+  props: { turns: { type: Number, required: true } },
+  setup: fwd("rotated-box"),
+});
+
+// --- Page numbers -----------------------------------------------------------------------------------
+// The current page / the document total, as text. Usable anywhere, not just in a `#footer`. `offset` is
+// added to the number - use `-1` when a cover page should not count.
+// (`PageBuilder` from the core is not exposed: it takes a closure, which a template cannot express.)
+const pageNumberProps = { ...textStyleProps, align: String, lineHeight: Number, offset: Number };
+export const PageNumber = defineComponent({
+  name: "JasyPageNumber",
+  inheritAttrs: false,
+  props: pageNumberProps,
+  setup: fwd("page-number"),
+});
+export const PageCount = defineComponent({
+  name: "JasyPageCount",
+  inheritAttrs: false,
+  props: pageNumberProps,
+  setup: fwd("page-count"),
 });
