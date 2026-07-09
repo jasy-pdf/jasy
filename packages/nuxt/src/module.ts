@@ -38,6 +38,14 @@ const COMPONENTS = [
   "TableCell",
   "Positioned",
   "DefaultTextStyle",
+  // Navigation, transforms and page numbers.
+  "Link",
+  "Anchor",
+  "Bookmark",
+  "Rotated",
+  "RotatedBox",
+  "PageNumber",
+  "PageCount",
 ];
 
 // @jasy/pdf tree factories for server/, prefixed like the components so `prefix` is consistent both sides.
@@ -58,6 +66,15 @@ const SERVER_FACTORIES = [
   "Table",
   "Positioned",
   "DefaultTextStyle",
+  "Link",
+  "Anchor",
+  "Bookmark",
+  "Rotated",
+  "RotatedBox",
+  "PageNumber",
+  "PageCount",
+  // Server code is plain JS, so the closure primitive is usable here (unlike in a client template).
+  "PageBuilder",
 ];
 
 // Render + unit helpers for server/ - not prefixed.
