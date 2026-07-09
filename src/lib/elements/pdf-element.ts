@@ -22,9 +22,23 @@ export interface PositioningFrame {
   place: Array<(frame: { origin: Offset; size: Size }, ctx: LayoutContext) => void>;
 }
 
+/**
+ * What a `PageBuilder` learns about the page it landed on. `pageNumber` is 1-based and counts PHYSICAL
+ * pages across the whole document (a logical `Page` that overflows contributes several); `pageCount` is
+ * the document's final physical page total. `pageSize` is the media box in points, orientation applied.
+ */
+export interface PageInfo {
+  pageNumber: number;
+  pageCount: number;
+  pageSize: { width: number; height: number };
+}
+
 export interface LayoutContext {
   metrics: FontMetrics;
   pageConfig: PDFPageConfig;
+  /** The page a `PageBuilder` is being laid out on. Only the render pass knows the real numbers, so
+   *  during pagination this is absent and a `PageBuilder` builds against a provisional "1 of 1". */
+  pageInfo?: PageInfo;
   /** The nearest enclosing positioning frame, if any (set by a `relative` Box). */
   frame?: PositioningFrame;
   /** The cascaded text style descendants inherit (CSS/Flutter-style). Seeded at the document root

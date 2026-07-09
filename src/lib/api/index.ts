@@ -7,6 +7,7 @@ export * from "./dimension.ts";
 export * from "./text.ts";
 export * from "./layout.ts";
 export * from "./content.ts";
+export * from "./page-builder.ts";
 export * from "./structure.ts";
 export * from "./table.ts";
 export * from "./descriptor.ts";

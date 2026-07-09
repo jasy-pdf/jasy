@@ -10,8 +10,13 @@ vi.spyOn(PageRenderer, "render").mockImplementation(async () => 1);
 
 const ctx = {} as LayoutContext; // not used on the unchanged (non-fragmenting) path
 
-// A page that takes the unchanged path: not the single-fragmentable-child shape.
-const plainPage = () => ({ getProps: () => ({ children: [], config: {} }) });
+// A page that takes the unchanged path: not the single-fragmentable-child shape. The render pass lays
+// every physical page out again (that is what gives a PageBuilder its final page number), so the fake
+// needs calculateLayout too.
+const plainPage = () => ({
+  getProps: () => ({ children: [], config: {} }),
+  calculateLayout: vi.fn(),
+});
 
 describe("PDFDocumentRenderer", () => {
   beforeEach(() => {
