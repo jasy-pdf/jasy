@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { PdfBackend } from "../../../src/lib/renderer/pdf-backend";
 import { PDFObjectManager, FontStyle } from "../../../src/lib/utils/pdf-object-manager";
-import { TextRun, Path } from "../../../src/lib/ir/display-list";
+import { TextRun, Path, TransformPush, TransformPop } from "../../../src/lib/ir/display-list";
 import { Color } from "../../../src/lib/common/color";
 
 describe("PdfBackend.escapePdfString", () => {
@@ -39,6 +39,39 @@ describe("PdfBackend text serialization", () => {
     expect(out).toContain("(can't split \\(yet\\)) Tj");
     // No bare ")" that would terminate the string early before " Tj".
     expect(out).not.toContain("(yet)) Tj");
+  });
+});
+
+describe("PdfBackend transform serialization + flipY", () => {
+  const om = new PDFObjectManager();
+
+  it("transform-push saves state and emits the matrix as a cm; transform-pop restores it", () => {
+    const push: TransformPush = { type: "transform-push", matrix: [1, 0, 0, 1, 10, 20] };
+    const pop: TransformPop = { type: "transform-pop" };
+    expect(PdfBackend.serializeNode(push, om)).toBe(
+      "q\n1.000 0.000 0.000 1.000 10.000 20.000 cm\n",
+    );
+    expect(PdfBackend.serializeNode(pop, om)).toBe("Q\n");
+  });
+
+  it("flipY leaves identity as identity", () => {
+    const push: TransformPush = { type: "transform-push", matrix: [1, 0, 0, 1, 0, 0] };
+    const [flipped] = PdfBackend.flipY([push], 1000) as [TransformPush];
+    // `+ 0` normalizes -0 to 0 (a negated 0); harmless in the stream ((-0).toFixed(3) === "0.000").
+    expect(flipped.matrix.map((n) => n + 0)).toEqual([1, 0, 0, 1, 0, 0]);
+  });
+
+  it("flipY turns a top-left translation into its bottom-left equivalent (y negates)", () => {
+    const push: TransformPush = { type: "transform-push", matrix: [1, 0, 0, 1, 5, 7] };
+    const [flipped] = PdfBackend.flipY([push], 1000) as [TransformPush];
+    expect(flipped.matrix.map((n) => n + 0)).toEqual([1, 0, 0, 1, 5, -7]);
+  });
+
+  it("flipY conjugates a rotation by the page flip (90deg around the origin)", () => {
+    // [cos,sin,-sin,cos] at 90deg = [0,1,-1,0]; F·M·F with H=1000 -> [0,-1,1,0,-1000,1000].
+    const push: TransformPush = { type: "transform-push", matrix: [0, 1, -1, 0, 0, 0] };
+    const [flipped] = PdfBackend.flipY([push], 1000) as [TransformPush];
+    expect(flipped.matrix).toEqual([0, -1, 1, 0, -1000, 1000]);
   });
 });
 

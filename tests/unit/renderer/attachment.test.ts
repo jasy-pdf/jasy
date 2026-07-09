@@ -26,4 +26,15 @@ describe("PDF embedded-file attachments (/AF)", () => {
     expect(pdf).toContain("/AF [");
     expect(pdf).toContain("/EmbeddedFiles << /Names [(factur-x.xml)");
   });
+
+  it("escapes a file name in BOTH the /Filespec and the /EmbeddedFiles name tree", async () => {
+    // An unescaped ")" would close the PDF literal string early and leak the rest as raw operators.
+    const pdf = await renderPdf(doc, {
+      attachments: [{ name: "re(port)\\1.xml", data: Buffer.from("<x/>"), relationship: "Data" }],
+    });
+    const escaped = "re\\(port\\)\\\\1.xml";
+    expect(pdf).toContain(`/F (${escaped})`);
+    expect(pdf).toContain(`/EmbeddedFiles << /Names [(${escaped})`);
+    expect(pdf).not.toContain("(re(port)"); // never the raw name
+  });
 });

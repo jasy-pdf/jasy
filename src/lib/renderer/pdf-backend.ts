@@ -75,6 +75,26 @@ export class PdfBackend {
         case "anchor":
           // A named-destination anchor is a single point (the target's top), flipped like a baseline.
           return { ...node, y: pageHeight - node.y };
+        case "transform-push": {
+          // The child nodes are flipped from top-left to bottom-left by F = [1,0,0,-1,0,H] (F is its
+          // own inverse). For a matrix authored in top-left space to act correctly on them, conjugate
+          // it by that flip: M_pdf = F · M · F. Worked out for [a,b,c,d,e,f] with H = pageHeight:
+          const [a, b, c, d, e, f] = node.matrix;
+          const H = pageHeight;
+          return {
+            ...node,
+            matrix: [a, -b, -c, d, H * c + e, H - H * d - f] as [
+              number,
+              number,
+              number,
+              number,
+              number,
+              number,
+            ],
+          };
+        }
+        case "transform-pop":
+          return node; // no coordinates to flip
         default: {
           const unknown: never = node;
           return unknown;
@@ -91,12 +111,16 @@ export class PdfBackend {
     return nodes
       .map((node) => {
         const ops = PdfBackend.serializeNode(node, om);
-        // Graphics-state and side-channel nodes (clip push/pop, a link) carry no tag and never draw,
-        // so they pass through without a marked-content wrapper.
+        // Two kinds of node skip the marked-content wrapper, both because they carry no tag and never
+        // draw: GRAPHICS-STATE nodes (clip / transform push+pop) only save/restore state around the
+        // drawables they enclose, and SIDE-CHANNEL nodes (link, outline, anchor) become annotations /
+        // catalog entries instead of content-stream operators.
         if (
           !struct ||
           node.type === "clip-push" ||
           node.type === "clip-pop" ||
+          node.type === "transform-push" ||
+          node.type === "transform-pop" ||
           node.type === "link" ||
           node.type === "outline" ||
           node.type === "anchor" ||
@@ -292,6 +316,13 @@ export class PdfBackend {
         return gs ? `q\n${gs}${body}Q\n` : body;
       }
       case "clip-pop":
+        return `Q\n`;
+      case "transform-push": {
+        // Save the graphics state, then apply the affine; everything until transform-pop paints through it.
+        const f = (n: number) => n.toFixed(3);
+        return `q\n${node.matrix.map(f).join(" ")} cm\n`;
+      }
+      case "transform-pop":
         return `Q\n`;
       case "link":
         // A link draws nothing in the content stream - it becomes a page /Annot (built in PageRenderer).

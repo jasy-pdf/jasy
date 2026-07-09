@@ -113,6 +113,9 @@ export interface ClipPop {
  * one target is set: `href` is an external URL (a `/URI` action); `dest` is a named destination inside
  * this document (a `/GoTo` action, resolved via the catalog `/Names /Dests` tree - see `Anchor`). The
  * rect is the clickable region in top-left engine coords; the Y-flip converts it to PDF page space.
+ *
+ * NOTE: a Link inside a `TransformPush` is NOT yet rotated with it - the annotation rect lives in page
+ * space and ignores the content-stream matrix. Completing that is a planned follow-up (see todo.md).
  */
 export interface Link {
   type: "link";
@@ -146,6 +149,25 @@ export interface Outline {
   y: number;
   title: string;
   level: number;
+}
+
+/**
+ * Pushes an affine transform (a `q` + `cm` in the content stream): everything between this and the
+ * matching `TransformPop` is painted through `matrix`. This is what `Rotated` wraps its child's nodes
+ * in, so a subtree draws rotated (or scaled/translated) around a pivot without touching its layout.
+ *
+ * `matrix` is `[a, b, c, d, e, f]` in the engine's TOP-LEFT coordinates - the same space every other IR
+ * node uses. The Y-flip at the IR -> backend seam converts it to PDF's bottom-left once per page, so
+ * producers stay coordinate-system-blind (they never see a flipped matrix).
+ */
+export interface TransformPush {
+  type: "transform-push";
+  matrix: [number, number, number, number, number, number];
+}
+
+/** Closes the most recent `TransformPush` (restores the graphics state). */
+export interface TransformPop {
+  type: "transform-pop";
 }
 
 /**
@@ -215,4 +237,6 @@ export type IRNode =
   | Path
   | Link
   | Outline
-  | Anchor;
+  | Anchor
+  | TransformPush
+  | TransformPop;

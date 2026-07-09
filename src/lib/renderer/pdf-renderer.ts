@@ -36,6 +36,10 @@ import { BookmarkElement } from "../elements/layout/bookmark-element.ts";
 import { BookmarkRenderer } from "./bookmark-renderer.ts";
 import { AnchorElement } from "../elements/layout/anchor-element.ts";
 import { AnchorRenderer } from "./anchor-renderer.ts";
+import { RotatedElement } from "../elements/layout/rotated-element.ts";
+import { RotatedBoxElement } from "../elements/layout/rotated-box-element.ts";
+import { RotatedRenderer } from "./rotated-renderer.ts";
+import { PdfBackend } from "./pdf-backend.ts";
 import { BoxConstraints } from "../layout/box-constraints.ts";
 import { collectImageElements } from "../layout/collect-images.ts";
 import { LayoutContext } from "../elements/pdf-element.ts";
@@ -63,6 +67,8 @@ export class PDFRenderer {
     RendererRegistry.register(LinkElement, LinkRenderer.render);
     RendererRegistry.register(BookmarkElement, BookmarkRenderer.render);
     RendererRegistry.register(AnchorElement, AnchorRenderer.render);
+    RendererRegistry.register(RotatedElement, RotatedRenderer.render);
+    RendererRegistry.register(RotatedBoxElement, RotatedRenderer.render);
 
     let pdfContent = "";
 
@@ -111,7 +117,12 @@ export class PDFRenderer {
 
     const attachments = objectManager.getAttachments();
     if (attachments.length > 0) {
-      const names = attachments.map((a) => `(${a.name}) ${a.filespec} 0 R`).join(" ");
+      // The name-tree key is a PDF literal string, so it needs the same escaping the /Filespec's /F and
+      // /UF get in attachFile(). Unescaped, a ")" or "\" in a file name closes the string early and the
+      // rest of it leaks out as raw operators.
+      const names = attachments
+        .map((a) => `(${PdfBackend.escapePdfString(a.name)}) ${a.filespec} 0 R`)
+        .join(" ");
       const af = attachments.map((a) => `${a.filespec} 0 R`).join(" ");
       catalogParts.push(`/AF [${af}]`);
       namesParts.push(`/EmbeddedFiles << /Names [${names}] >>`);
