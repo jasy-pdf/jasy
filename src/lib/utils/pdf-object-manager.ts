@@ -12,6 +12,8 @@ import type { SecurityHandler } from "../crypto/security-handler.ts";
 import type { Gradient, GradientStop } from "../ir/display-list.ts";
 import { isEmojiCodePoint } from "../text/emoji-codepoints.ts";
 import { StructTree } from "./struct-tree.ts";
+import { OutlineBuilder } from "./outline.ts";
+import { DestRegistry } from "./dest-registry.ts";
 // Enums come from the leaf config module (never in a cycle); the config type is
 // erased at runtime so it can come from the cyclic module safely.
 import { ColorMode, Orientation } from "../renderer/pdf-config.ts";
@@ -227,6 +229,19 @@ export class PDFObjectManager implements FontMetrics {
   private _struct = new StructTree();
   get struct(): StructTree {
     return this._struct;
+  }
+
+  // Document outline (bookmarks). Empty unless a `Bookmark` was placed; then finalize() emits /Outlines.
+  private _outline = new OutlineBuilder();
+  get outline(): OutlineBuilder {
+    return this._outline;
+  }
+
+  // Named destinations (internal-link jump targets). Empty unless an `Anchor` was placed; then it emits
+  // a /Names /Dests tree.
+  private _dests = new DestRegistry();
+  get dests(): DestRegistry {
+    return this._dests;
   }
 
   constructor();

@@ -4,6 +4,9 @@ import { RectangleElement } from "../elements/rectangle-element.ts";
 import { ExpandedElement } from "../elements/layout/expanded-element.ts";
 import { PaddingElement } from "../elements/layout/padding-element.ts";
 import { PositionedElement, PositionedInsets } from "../elements/layout/positioned-element.ts";
+import { LinkElement } from "../elements/layout/link-element.ts";
+import { BookmarkElement } from "../elements/layout/bookmark-element.ts";
+import { AnchorElement } from "../elements/layout/anchor-element.ts";
 import { RotatedElement } from "../elements/layout/rotated-element.ts";
 import { RotatedBoxElement } from "../elements/layout/rotated-box-element.ts";
 import { PDFElement } from "../elements/pdf-element.ts";
@@ -176,6 +179,46 @@ export function Padding(padding: Insets, child: PDFElement): PaddingElement {
  */
 export function Positioned(opts: PositionedInsets, child: PDFElement): PositionedElement {
   return new PositionedElement({ child, ...opts });
+}
+
+/**
+ * Makes any `child` a clickable hyperlink - the child's whole box is the clickable region (an image, a
+ * box, a row). Pass `href` for an external URL, or `to` for an internal jump to an `Anchor({ name })`
+ * elsewhere in the document (e.g. a clickable table-of-contents row). Exactly one of the two. The link
+ * draws nothing itself, so style the child - e.g. `Link({ href }, Text("jasy.dev", { color: "#1450aa" }))`
+ * or `Link({ to: "chapter-2" }, Text("Chapter 2 ....... 5"))`. For a link on part of a line, put `href`/
+ * `to` on a `span` instead (`Text([span("Visit "), span("jasy.dev", { href })])`), linking just that run.
+ */
+export function Link(opts: { href?: string; to?: string }, child: PDFElement): LinkElement {
+  if ((opts.href === undefined) === (opts.to === undefined)) {
+    throw new Error(
+      "Link needs exactly one of `href` (external URL) or `to` (internal Anchor name).",
+    );
+  }
+  return new LinkElement({ href: opts.href, dest: opts.to, child });
+}
+
+/**
+ * Marks `child` as a named jump target that an internal `Link({ to: name })` can point at (a table of
+ * contents linking to sections, cross-references). Layout-transparent: `child` renders exactly as it
+ * would on its own, on whatever page it lands on. `name` must match the link's `to`.
+ * `Anchor({ name: "chapter-2" }, Text("Chapter 2", { size: 24 }))`.
+ */
+export function Anchor(opts: { name: string }, child: PDFElement): AnchorElement {
+  return new AnchorElement({ name: opts.name, child });
+}
+
+/**
+ * Adds a bookmark to the document outline (the viewer's sidebar) that jumps to `child`. `title` is the
+ * label; `level` (1-based, default 1) nests it - a `level: 2` bookmark hangs under the nearest preceding
+ * `level: 1`, so you get a collapsible tree (chapters -> sections). It is layout-transparent: `child`
+ * renders exactly as it would on its own. `Bookmark({ title: "Chapter 2", level: 1 }, Text("Chapter 2"))`.
+ */
+export function Bookmark(
+  opts: { title: string; level?: number },
+  child: PDFElement,
+): BookmarkElement {
+  return new BookmarkElement({ title: opts.title, level: opts.level, child });
 }
 
 /**

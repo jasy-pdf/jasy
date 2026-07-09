@@ -15,6 +15,12 @@ export interface TextStyle {
   bold?: boolean;
   italic?: boolean;
   color?: ColorInput;
+  /** External URL - makes this run an inline hyperlink (a /Link annotation over its glyphs). On a
+   *  `span` it links just that run; on a whole `Text` (plain string) it links the whole text. */
+  href?: string;
+  /** Internal jump target - the `name` of an `Anchor` elsewhere in the document (like `href`, but a
+   *  same-document /GoTo instead of a URL). Use for a clickable table of contents / cross-reference. */
+  to?: string;
 }
 
 export interface TextOptions extends TextStyle {
@@ -82,6 +88,8 @@ export function span(text: string, style: TextStyle = {}): TextSegment {
         ? toFontStyle(style.bold, style.italic)
         : undefined,
     fontColor: style.color !== undefined ? toColor(style.color) : undefined,
+    href: style.href,
+    dest: style.to,
   };
 }
 
@@ -91,10 +99,15 @@ export function span(text: string, style: TextStyle = {}): TextSegment {
  * text-internal `align`.
  */
 export function Text(content: string | TextSegment[], opts: TextOptions = {}): TextElement {
+  // A plain string given an `href`/`to` becomes a single link span, so `Text("jasy.dev", { href })` (or
+  // `{ to }`) is a whole-text link (inline links use `span(...)`). This routes through the styled-segment
+  // path, which lays a single default-font segment out identically - only the /Link annotation is added.
+  const isLink = opts.href !== undefined || opts.to !== undefined;
+  const body = typeof content === "string" && isLink ? [span(content, opts)] : content;
   // Unset properties are left undefined so they inherit the cascaded TextStyle (Document default /
   // built-in). Only bold/italic that the caller actually set become an explicit FontStyle.
   return new TextElement({
-    content,
+    content: body,
     fontSize: toFontSize(opts.size),
     fontFamily: opts.font,
     fontStyle:

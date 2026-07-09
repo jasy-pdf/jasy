@@ -66,6 +66,15 @@ export class PdfBackend {
               : { ...node.fill, y0: pageHeight - node.fill.y0, y1: pageHeight - node.fill.y1 };
           return { ...node, commands, fill };
         }
+        case "link":
+          // A link's clickable rect flips around its bottom edge, exactly like a rect.
+          return { ...node, y: pageHeight - node.y - node.height };
+        case "outline":
+          // An outline anchor is a single point (the target's top); flip it like a text baseline.
+          return { ...node, y: pageHeight - node.y };
+        case "anchor":
+          // A named-destination anchor is a single point (the target's top), flipped like a baseline.
+          return { ...node, y: pageHeight - node.y };
         case "transform-push": {
           // The child nodes are flipped from top-left to bottom-left by F = [1,0,0,-1,0,H] (F is its
           // own inverse). For a matrix authored in top-left space to act correctly on them, conjugate
@@ -102,14 +111,19 @@ export class PdfBackend {
     return nodes
       .map((node) => {
         const ops = PdfBackend.serializeNode(node, om);
-        // Graphics-state nodes (clip / transform push+pop) carry no tag and must not be wrapped in a
-        // marked-content sequence - they only save/restore state around the drawables they enclose.
+        // Two kinds of node skip the marked-content wrapper, both because they carry no tag and never
+        // draw: GRAPHICS-STATE nodes (clip / transform push+pop) only save/restore state around the
+        // drawables they enclose, and SIDE-CHANNEL nodes (link, outline, anchor) become annotations /
+        // catalog entries instead of content-stream operators.
         if (
           !struct ||
           node.type === "clip-push" ||
           node.type === "clip-pop" ||
           node.type === "transform-push" ||
           node.type === "transform-pop" ||
+          node.type === "link" ||
+          node.type === "outline" ||
+          node.type === "anchor" ||
           ops === ""
         )
           return ops;
@@ -310,6 +324,15 @@ export class PdfBackend {
       }
       case "transform-pop":
         return `Q\n`;
+      case "link":
+        // A link draws nothing in the content stream - it becomes a page /Annot (built in PageRenderer).
+        return "";
+      case "outline":
+        // An outline anchor draws nothing - it becomes a /Outlines entry (built in PageRenderer/PDFRenderer).
+        return "";
+      case "anchor":
+        // A named destination draws nothing - it becomes a /Names /Dests entry (built in PageRenderer/PDFRenderer).
+        return "";
       default: {
         // Exhaustiveness guard: if a new IRNode variant is added, this fails to compile.
         const unknown: never = node;

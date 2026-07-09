@@ -108,6 +108,50 @@ export interface ClipPop {
 }
 
 /**
+ * A hyperlink over a rectangle. Unlike every other IR node this draws NOTHING into the content stream -
+ * it becomes a PDF Link ANNOTATION on the page (`/Annots`), a side channel next to the drawing. Exactly
+ * one target is set: `href` is an external URL (a `/URI` action); `dest` is a named destination inside
+ * this document (a `/GoTo` action, resolved via the catalog `/Names /Dests` tree - see `Anchor`). The
+ * rect is the clickable region in top-left engine coords; the Y-flip converts it to PDF page space.
+ *
+ * NOTE: a Link inside a `TransformPush` is NOT yet rotated with it - the annotation rect lives in page
+ * space and ignores the content-stream matrix. Completing that is a planned follow-up (see todo.md).
+ */
+export interface Link {
+  type: "link";
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  href?: string;
+  dest?: string;
+}
+
+/**
+ * A named destination anchor - a jump TARGET for an internal `Link({ to })`. Like `Link` it draws
+ * NOTHING; it registers `name` -> (this page, `y`) in the catalog `/Names /Dests` name tree. `y` is the
+ * top of the target in top-left engine coords (the Y-flip turns it into the page-space scroll target).
+ */
+export interface Anchor {
+  type: "anchor";
+  y: number;
+  name: string;
+}
+
+/**
+ * A document-outline (bookmark) anchor. Like `Link` it draws NOTHING - it becomes an entry in the PDF
+ * outline tree (`/Outlines`), a side channel the viewer shows in its bookmark panel. `y` is the top of
+ * the target in top-left engine coords (the Y-flip turns it into the page-space scroll target); `level`
+ * (1-based) nests the entry under the nearest preceding entry of a smaller level.
+ */
+export interface Outline {
+  type: "outline";
+  y: number;
+  title: string;
+  level: number;
+}
+
+/**
  * Pushes an affine transform (a `q` + `cm` in the content stream): everything between this and the
  * matching `TransformPop` is painted through `matrix`. This is what `Rotated` wraps its child's nodes
  * in, so a subtree draws rotated (or scaled/translated) around a pivot without touching its layout.
@@ -191,5 +235,8 @@ export type IRNode =
   | ClipPush
   | ClipPop
   | Path
+  | Link
+  | Outline
+  | Anchor
   | TransformPush
   | TransformPop;

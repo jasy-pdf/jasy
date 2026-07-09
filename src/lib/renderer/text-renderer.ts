@@ -10,7 +10,7 @@ import type {
   TTFParser,
   ColorGlyphLayer,
 } from "../utils/ttf-parser.ts";
-import { IRNode, TextRun, PathCommand, Gradient } from "../ir/display-list.ts";
+import { IRNode, TextRun, PathCommand, Gradient, Link } from "../ir/display-list.ts";
 import { isEmojiCodePoint } from "../text/emoji-codepoints.ts";
 import { emojiImageNode } from "./emoji-image.ts";
 import {
@@ -88,7 +88,7 @@ export class TextRenderer {
     // Component -> display list. Wrapping and positioning stay here; the backend
     // turns each run into BT/Tf/Td/Tj/ET. The wrapping algorithm is unchanged from
     // the original renderer - unifying it into the engine is Phase 3.
-    const runs = TextRenderer._buildRuns(
+    const { runs, links } = TextRenderer._buildRuns(
       content,
       fontSize,
       fontFamily,
@@ -115,9 +115,12 @@ export class TextRenderer {
 
     // Color fonts (COLR/CPAL): expand each run's emoji into filled vector layers (or fetched images
     // for an image emoji source); plain runs and monochrome fonts pass straight through unchanged.
-    return (
+    const drawn = (
       await Promise.all(runs.map((run) => TextRenderer._expandColorGlyphs(run, objectManager)))
     ).flat();
+    // Inline hyperlinks (href spans) ride along as /Link annotations - they draw nothing, so order
+    // vs the drawn runs does not matter; the page renderer peels them off into /Annots.
+    return links.length > 0 ? [...drawn, ...links] : drawn;
   }
 
   // Splits a text run into normal text sub-runs + filled `Path` layers for any COLR color glyphs,
@@ -325,8 +328,11 @@ export class TextRenderer {
     maxLines?: number,
     overflow?: TextOverflow,
     lineHeight = 1,
-  ): TextRun[] {
+  ): { runs: TextRun[]; links: Link[] } {
     const runs: TextRun[] = [];
+    // /Link annotation rects for any `href` spans, collected as we place segments. Empty for the
+    // common (no-href) case, so plain text keeps producing exactly the runs it did before.
+    const links: Link[] = [];
 
     // Horizontal offset of a line of the given width under the current alignment.
     const alignmentOffset = (lineWidth: number): number => {
@@ -382,7 +388,7 @@ export class TextRenderer {
           color,
         });
       });
-      return runs;
+      return { runs, links };
     }
 
     // --- Segments: break into lines (shared breaker), then emit one run per segment.
@@ -396,6 +402,7 @@ export class TextRenderer {
         const family = segment.fontFamily || fontFamily;
         const size = segment.fontSize || fontSize;
         const style = segment.fontStyle || fontStyle;
+        const advance = advanceNoKerning(segment.content, family, size, style);
         runs.push({
           type: "text",
           x,
@@ -406,7 +413,21 @@ export class TextRenderer {
           fontSize: size,
           color: segment.fontColor || color,
         });
-        x += advanceNoKerning(segment.content, family, size, style);
+        // An href/to span becomes a /Link annotation over exactly this run's glyph box. `lineY` is the
+        // baseline; the box spans from the ascent (BASELINE_RATIO above it) down by the full size, so
+        // ascent + descent are covered. A span wrapped across lines yields one rect per line.
+        if (segment.href !== undefined || segment.dest !== undefined) {
+          links.push({
+            type: "link",
+            x,
+            y: lineY - size * BASELINE_RATIO,
+            width: advance,
+            height: size,
+            href: segment.href,
+            dest: segment.dest,
+          });
+        }
+        x += advance;
       });
     };
 
@@ -435,6 +456,6 @@ export class TextRenderer {
       lineY += line.maxFontSize * lineHeight;
     }
 
-    return runs;
+    return { runs, links };
   }
 }
