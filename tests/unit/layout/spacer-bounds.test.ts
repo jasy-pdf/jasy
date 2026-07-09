@@ -62,6 +62,51 @@ describe("Spacer / Expanded on an unbounded main axis (issue #10)", () => {
     expect(Number(x![1])).toBeGreaterThan(400); // pushed to the right edge
   });
 
+  // The need for a bounded axis propagates: a Spacer two levels down cannot resolve against Infinity
+  // either, so every stack in between has to ask its own parent for a bound.
+  it("reaches a Spacer nested one Column deeper", async () => {
+    const pdf = await render(
+      Document([
+        Page({ size: "A4", margin: 56 }, [Column([Column([Text("top"), Spacer(), Text("tail")])])]),
+      ]),
+    );
+    expect(yOf(pdf, "tail")).toBeLessThan(70);
+  });
+
+  it("reaches a Spacer through a Box that has no size of its own", async () => {
+    const pdf = await render(
+      Document([
+        Page({ size: "A4", margin: 56 }, [
+          Column([Box({}, [Column([Text("top"), Spacer(), Text("tail")])])]),
+        ]),
+      ]),
+    );
+    expect(yOf(pdf, "tail")).toBeLessThan(70);
+  });
+
+  it("carries a horizontal need through a Column (a Column in a Row has no bounded width)", async () => {
+    const pdf = await render(
+      Document([
+        Page({ size: "A4", margin: 56 }, [Row([Column([Row([Text("L"), Spacer(), Text("R")])])])]),
+      ]),
+    );
+    const m = /([\d.]+) [\d.]+ Td \(R\)/.exec(pdf);
+    expect(Number(m![1])).toBeGreaterThan(400);
+  });
+
+  it("resolves a percentage height inside a sized Box", async () => {
+    const pdf = await render(
+      Document([
+        Page({ size: "A4", margin: 56 }, [
+          Box({ height: 300, bg: "#dddddd" }, [Box({ height: "50%", bg: "#ff0000" }, [Text("x")])]),
+        ]),
+      ]),
+    );
+    const heights = [...pdf.matchAll(/[\d.]+ [\d.]+ [\d.]+ ([\d.]+) re/g)].map((m) => Number(m[1]));
+    expect(heights).toContain(300); // the outer box
+    expect(heights).toContain(150); // 50% of it, not a shrink-wrapped 12pt line
+  });
+
   it("a Column without a flex child still shrink-wraps (old layouts untouched)", async () => {
     const pdf = await render(
       Document([Page({ size: "A4", margin: 56 }, [Column([Text("top"), Text("tail")])])]),

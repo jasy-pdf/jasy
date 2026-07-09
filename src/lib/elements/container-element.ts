@@ -99,14 +99,23 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
     return horizontal ? this.requested.widthFactor : this.requested.heightFactor;
   }
 
-  /** A Column stacks vertically, so it only needs a bounded HEIGHT, and only to hand leftover space to a
-   *  flex child. With an explicit height it already knows its extent; with no flex child there is nothing
-   *  to distribute and it keeps shrink-wrapping (which is what leaves old layouts untouched). */
+  /**
+   * A Column stacks vertically, so a flex child of its OWN only ever needs a bounded height. But the need
+   * also propagates: a `Spacer` two levels down is just as unable to resolve against an infinite axis, so
+   * we ask the children too - on both axes, since a nested Row's `Spacer` needs a bounded WIDTH and a
+   * Column nested in a Row is exactly where that width goes missing.
+   *
+   * An explicit extent on an axis short-circuits it: the element already knows how big it is there, and
+   * with no flex descendant nothing needs distributing, so it keeps shrink-wrapping. That is what leaves
+   * every existing layout untouched.
+   */
   override needsBoundedMain(horizontal: boolean): boolean {
-    if (horizontal) return false;
-    if (this.requested.height !== undefined || this.requested.heightFactor !== undefined)
-      return false;
-    return this.children.some((c) => c instanceof FlexiblePDFElement);
+    const requested = horizontal
+      ? [this.requested.width, this.requested.widthFactor]
+      : [this.requested.height, this.requested.heightFactor];
+    if (requested.some((v) => v !== undefined)) return false;
+    const ownFlexChild = !horizontal && this.children.some((c) => c instanceof FlexiblePDFElement);
+    return ownFlexChild || this.children.some((c) => c.needsBoundedMain(horizontal));
   }
 
   calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {

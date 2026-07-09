@@ -69,13 +69,15 @@ export class RowElement extends SizedPDFElement {
     return horizontal ? this.requested.widthFactor : this.requested.heightFactor;
   }
 
-  /** A Row stacks horizontally, so the mirror of `ContainerElement`: it only needs a bounded WIDTH, and
-   *  only when a flex child is waiting for leftover space. */
+  /** The mirror of `ContainerElement`: a Row's OWN flex child needs a bounded width, and the need of any
+   *  descendant propagates on both axes (see the Column for the reasoning). */
   override needsBoundedMain(horizontal: boolean): boolean {
-    if (!horizontal) return false;
-    if (this.requested.width !== undefined || this.requested.widthFactor !== undefined)
-      return false;
-    return this.children.some((c) => c instanceof FlexiblePDFElement);
+    const requested = horizontal
+      ? [this.requested.width, this.requested.widthFactor]
+      : [this.requested.height, this.requested.heightFactor];
+    if (requested.some((v) => v !== undefined)) return false;
+    const ownFlexChild = horizontal && this.children.some((c) => c instanceof FlexiblePDFElement);
+    return ownFlexChild || this.children.some((c) => c.needsBoundedMain(horizontal));
   }
 
   calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {

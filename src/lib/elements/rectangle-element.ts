@@ -147,6 +147,17 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
     return horizontal ? this.sizeMemory.widthFactor : this.sizeMemory.heightFactor;
   }
 
+  /** A box has no flex children of its own, but it must not swallow the need of the stack inside it: a
+   *  `Spacer` in a box can only resolve if the box itself was given a bounded extent to pass down. With an
+   *  explicit size on an axis the box already knows its extent there and asks for nothing. */
+  override needsBoundedMain(horizontal: boolean): boolean {
+    const requested = horizontal
+      ? [this.sizeMemory.width, this.sizeMemory.widthFactor]
+      : [this.sizeMemory.height, this.sizeMemory.heightFactor];
+    if (requested.some((v) => v !== undefined)) return false;
+    return this.children.some((c) => c.needsBoundedMain(horizontal));
+  }
+
   calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
     // An explicit extent is a fixed point size or a fraction of the offered box (relative sizing);
     // the fraction only resolves in a bounded region. `undefined` = fill / shrink-wrap below.
@@ -210,7 +221,11 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
     let yCursor = this.y + this.borderWidth;
     for (const child of this.children) {
       const consumed = yCursor - (this.y + this.borderWidth);
-      const childHeight = child.needsBoundedMain(false)
+      // Same rule the flex helper applies: a child gets a finite main extent when it cannot lay itself
+      // out without one - a stack holding an `Expanded`/`Spacer`, or a child sized as a percentage of us.
+      const needsBound =
+        child.needsBoundedMain(false) || child.relativeSizeFactor(false) !== undefined;
+      const childHeight = needsBound
         ? Math.max(0, innerHeight - consumed) // Infinity - consumed stays Infinity, as it should
         : Infinity;
       const childSize = child.calculateLayout(
