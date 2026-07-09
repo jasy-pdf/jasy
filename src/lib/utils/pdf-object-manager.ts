@@ -184,13 +184,18 @@ export class PDFObjectManager implements FontMetrics {
 
   // Embedded TrueType fonts, keyed by the name the user registers them under. When a font
   // name is in here the metric/emission paths take the TTF branch instead of the AFM one.
-  private customFonts = new Map<string, TTFParser>();
+  // Nested by family, then by style. The flat `${name}-${style}` key it replaced had to be BUILT on
+  // every lookup, and the lookups happen once per character - the string allocation alone was a third
+  // of a custom-font render. `customFontEmit` below keeps the flat key: it is touched once per face.
+  private customFonts = new Map<string, Map<FontStyle, TTFParser>>();
   // Per-registered face: the reserved font-object numbers + the glyph ids actually used. The font
   // program is subsetted and the objects filled in by finalizeCustomFonts(), after the render pass.
   private customFontEmit = new Map<
     string,
     {
       pdfName: string;
+      /** The parsed face, kept here so the cold emit/finalize paths never look it up by key again. */
+      ttf: TTFParser;
       fontFile: number;
       descriptor: number;
       cidFont: number;
@@ -634,9 +639,13 @@ endstream`;
   // metrics and emits its PDF font objects. All variants share the family `name`; bold/italic are
   // separate .ttf files registered under the same name with a different style.
   registerCustomFont(name: string, data: Uint8Array, style: FontStyle = FontStyle.Normal): void {
-    const key = this.customKey(name, style);
-    if (this.customFonts.has(key)) return;
-    this.customFonts.set(key, new TTFParser(data));
+    let byStyle = this.customFonts.get(name);
+    if (!byStyle) {
+      byStyle = new Map();
+      this.customFonts.set(name, byStyle);
+    }
+    if (byStyle.has(style)) return;
+    byStyle.set(style, new TTFParser(data));
     // Emission (the PDF font objects + page resource) is DEFERRED to first use via ensureEmitted(),
     // so a registered-but-never-rendered face - e.g. a bundled family the document doesn't touch -
     // costs nothing in the output. The metrics above are still available for layout immediately.
@@ -661,6 +670,7 @@ endstream`;
     this.fonts.addFont(name, this.fonts.getLastFontIndex() + 1, type0, style, name, true);
     this.customFontEmit.set(key, {
       pdfName: name + STYLE_SUFFIX[style],
+      ttf: this.customFonts.get(name)!.get(style)!, // `style` is already resolved, so this exists
       fontFile,
       descriptor,
       cidFont,
@@ -673,8 +683,8 @@ endstream`;
   // Fills the reserved font objects with a SUBSET of each font (only the glyphs the document used),
   // tagged "ABCDEF+" as PDF/A requires for subsets. Call once, after the render pass, before output.
   finalizeCustomFonts(): void {
-    for (const [key, e] of this.customFontEmit) {
-      const ttf = this.customFonts.get(key)!;
+    for (const e of this.customFontEmit.values()) {
+      const ttf = e.ttf;
       const base = `${this.subsetTag(e.pdfName, e.used)}+${e.pdfName}`;
       this.replaceObject(e.fontFile, this.buildFontFile2(ttf, e.used));
       this.replaceObject(e.descriptor, this.buildFontDescriptor(base, ttf, e.fontFile));
@@ -699,19 +709,29 @@ endstream`;
   // The variant to actually use for (name, style): the requested style if registered, else the
   // family's Normal as a clean fallback (e.g. bold chosen but no bold file), else undefined when
   // `name` is not a custom family at all.
+  //
+  // This runs once per CHARACTER (getCharWidth -> getCustomFont), and every paragraph is measured
+  // several times (layout, pagination, drawing), so it is the hottest function in the whole renderer.
+  // The size check is what keeps a standard-14 document from paying for a feature it never uses: with
+  // no custom font registered, neither lookup could ever hit, so there is nothing to look up.
   private resolveCustomStyle(
     name?: string,
     style: FontStyle = FontStyle.Normal,
   ): FontStyle | undefined {
-    if (!name) return undefined;
-    if (this.customFonts.has(this.customKey(name, style))) return style;
-    if (this.customFonts.has(this.customKey(name, FontStyle.Normal))) return FontStyle.Normal;
-    return undefined;
+    if (this.customFonts.size === 0 || !name) return undefined;
+    const byStyle = this.customFonts.get(name);
+    if (!byStyle) return undefined;
+    if (byStyle.has(style)) return style;
+    return byStyle.has(FontStyle.Normal) ? FontStyle.Normal : undefined;
   }
 
+  // The same lookup as above, but returning the font itself in ONE map walk instead of resolving the
+  // style and then looking the font up again under a freshly built key.
   private getCustomFont(name?: string, style: FontStyle = FontStyle.Normal): TTFParser | undefined {
-    const resolved = this.resolveCustomStyle(name, style);
-    return resolved ? this.customFonts.get(this.customKey(name!, resolved)) : undefined;
+    if (this.customFonts.size === 0 || !name) return undefined;
+    const byStyle = this.customFonts.get(name);
+    if (!byStyle) return undefined;
+    return byStyle.get(style) ?? byStyle.get(FontStyle.Normal);
   }
 
   isCustomFont(name?: string, style: FontStyle = FontStyle.Normal): boolean {
@@ -771,9 +791,9 @@ endstream`;
     const resolved = this.resolveCustomStyle(name, style);
     if (!resolved) return "";
     this.ensureEmitted(name, resolved);
-    const key = this.customKey(name, resolved);
-    const ttf = this.customFonts.get(key)!;
-    const used = this.customFontEmit.get(key)!.used;
+    // Once per text run, not per character: the flat key is fine here.
+    const emit = this.customFontEmit.get(this.customKey(name, resolved))!;
+    const { ttf, used } = emit;
     let hex = "";
     for (const ch of text) {
       const gid = ttf.getGlyphIndex(ch.codePointAt(0)!);

@@ -2,7 +2,7 @@ import { AGL } from "../assets/font-data.ts";
 
 export class AFMParser {
   private advanceWidths: Record<string, number> = {};
-  private kerningPairs: Record<string, number> = {};
+  private kerningPairs: Record<string, Record<string, number>> = {};
   private glyphMap: Record<string, string> = {};
 
   constructor(afmData: string) {
@@ -62,8 +62,10 @@ export class AFMParser {
         const firstChar = parts[1];
         const secondChar = parts[2];
         const kerning = parseFloat(parts[3]);
-        const pair = `${firstChar}-${secondChar}`;
-        this.kerningPairs[pair] = kerning;
+        // Nested by first glyph, then second. A flat `${a}-${b}` key would have to be BUILT on every
+        // lookup, and getKerning runs once per adjacent character pair - that string allocation was a
+        // quarter of a standard-font render.
+        (this.kerningPairs[firstChar] ??= {})[secondChar] = kerning;
       }
     }
   }
@@ -96,7 +98,6 @@ export class AFMParser {
   }
 
   getKerning(firstChar: string, secondChar: string): number {
-    const pair = `${firstChar}-${secondChar}`;
-    return this.kerningPairs[pair] || 0;
+    return this.kerningPairs[firstChar]?.[secondChar] ?? 0;
   }
 }
