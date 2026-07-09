@@ -4,6 +4,8 @@ import { RectangleElement } from "../elements/rectangle-element.ts";
 import { ExpandedElement } from "../elements/layout/expanded-element.ts";
 import { PaddingElement } from "../elements/layout/padding-element.ts";
 import { PositionedElement, PositionedInsets } from "../elements/layout/positioned-element.ts";
+import { RotatedElement } from "../elements/layout/rotated-element.ts";
+import { RotatedBoxElement } from "../elements/layout/rotated-box-element.ts";
 import { PDFElement } from "../elements/pdf-element.ts";
 import { MainAlign, CrossAlign } from "../utils/flex-layout.ts";
 import { ColorInput, toColor } from "./color.ts";
@@ -174,6 +176,26 @@ export function Padding(padding: Insets, child: PDFElement): PaddingElement {
  */
 export function Positioned(opts: PositionedInsets, child: PDFElement): PositionedElement {
   return new PositionedElement({ child, ...opts });
+}
+
+/**
+ * Rotates `child` at PAINT time by `angle` degrees (clockwise), around its center - like CSS
+ * `transform: rotate()` / Flutter `Transform.rotate`. The child keeps its normal, unrotated layout box,
+ * so siblings do NOT reflow around the spun shape and the drawing may overflow its slot. Pair it with a
+ * `relative` Box + `Positioned` for a diagonal watermark or a "PAID" stamp laid over a document.
+ */
+export function Rotated(opts: { angle: number }, child: PDFElement): RotatedElement {
+  return new RotatedElement({ angle: opts.angle, child });
+}
+
+/**
+ * Rotates `child` by whole quarter-turns and, unlike `Rotated`, is LAYOUT-AWARE: a 90 / 270 turn swaps
+ * the box's width and height so siblings reflow around it (a tall label becomes a narrow, tall strip
+ * that reserves exactly that footprint). `turns` = clockwise 90-degree steps (1 = 90, 2 = 180, 3 = 270).
+ * Use it for a vertical label beside a table; use `Rotated` for a free-angle stamp / watermark.
+ */
+export function RotatedBox(opts: { turns: number }, child: PDFElement): RotatedBoxElement {
+  return new RotatedBoxElement({ turns: opts.turns, child });
 }
 
 /**
