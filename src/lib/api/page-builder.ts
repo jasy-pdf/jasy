@@ -24,7 +24,7 @@ export type { PageInfo };
  * SHRINK on later pages but must not GROW, because the body band was measured against the first build.
  */
 export function PageBuilder(build: (info: PageInfo) => PDFElement): PageBuilderElement {
-  return new PageBuilderElement(build);
+  return new PageBuilderElement({ build });
 }
 
 /** `Text` options plus an `offset` added to the number (e.g. `-1` to not count a cover page). */

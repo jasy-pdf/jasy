@@ -86,6 +86,22 @@ describe("PageBuilder / PageNumber / PageCount", () => {
     expect(pdf).toContain("(2)"); // second page shows the total, which is 2
   });
 
+  it("sees THIS page's geometry while it is being measured, not the document default", async () => {
+    // The page is A5 (419.53 wide); the document default is A4 (595.28). Every build - including the
+    // provisional one during pagination - must be handed the page's own size, never the document's.
+    const seen = new Set<number>();
+    const probe = () =>
+      PageBuilder(({ pageSize }) => {
+        seen.add(Math.round(pageSize.width));
+        return Text("probe");
+      });
+    const doc = Document([
+      Page({ size: "A5" }, [Column([probe(), ...filler()])]), // long enough to fragment
+    ]);
+    await drawn(doc);
+    expect([...seen]).toEqual([420]); // A5 portrait, never 595 (A4)
+  });
+
   it("adds nothing when no PageBuilder is used (unchanged output path)", async () => {
     const pdf = await drawn(Document([Page([Text("plain")])]));
     expect(pdf).toContain("/Count 1");

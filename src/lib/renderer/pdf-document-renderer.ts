@@ -124,7 +124,9 @@ export class PDFDocumentRenderer {
         break;
       }
 
-      const { fitted, remainder } = region.fragment(height, width, ctx);
+      // pageCtx, not the document ctx: a descendant that reads `pageConfig` while being measured (a
+      // `PageBuilder` sizing its provisional build) must see THIS page's geometry, not the document default.
+      const { fitted, remainder } = region.fragment(height, width, pageCtx);
 
       // Everything fits on one page: keep the ORIGINAL page so output is unchanged. Measuring inside
       // fragment() left its children at the measuring origin; pass B lays the page out again, which

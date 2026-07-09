@@ -21,9 +21,11 @@ import { resolvePageSize } from "../page-element.ts";
  */
 export class PageBuilderElement extends PDFElement {
   private composed?: PDFElement;
+  private readonly build: (info: PageInfo) => PDFElement;
 
-  constructor(private build: (info: PageInfo) => PDFElement) {
+  constructor({ build }: { build: (info: PageInfo) => PDFElement }) {
     super();
+    this.build = build;
   }
 
   /** The real page info during the render pass; a provisional "1 of 1" while paginating. */
