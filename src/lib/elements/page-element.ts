@@ -24,6 +24,18 @@ interface PDFPageParams extends WithChildren {
 }
 
 /**
+ * The full page (media box) size in points, orientation applied. This is what a `PageBuilder` sees as
+ * `pageSize`; `resolvePageContentBox` below then subtracts the margins.
+ */
+export function resolvePageSize(config: PDFPageConfig): { width: number; height: number } {
+  // Defaults to A4 when the config is not fully resolved, matching what PageRenderer does for the MediaBox.
+  const [pageW, pageH] = config.customSize ?? pageFormats[config.pageSize ?? PageSize.A4];
+  return config.orientation === Orientation.landscape
+    ? { width: pageH, height: pageW }
+    : { width: pageW, height: pageH };
+}
+
+/**
  * The content box of a page (inside the margins, orientation applied) for a fully
  * resolved config. Single source of truth, shared by `PageElement` layout and the page
  * driver so they can never drift.
@@ -125,6 +137,7 @@ export class PageElement extends PDFElement {
       pageConfig: this.config,
       textStyle: ctx.textStyle,
       onOverflow: ctx.onOverflow,
+      pageInfo: ctx.pageInfo, // the render pass supplies it; absent during pagination
     };
 
     // Place the header/footer bands; the body gets the region left in between (the whole

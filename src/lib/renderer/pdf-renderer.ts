@@ -36,6 +36,8 @@ import { BookmarkElement } from "../elements/layout/bookmark-element.ts";
 import { BookmarkRenderer } from "./bookmark-renderer.ts";
 import { AnchorElement } from "../elements/layout/anchor-element.ts";
 import { AnchorRenderer } from "./anchor-renderer.ts";
+import { PageBuilderElement } from "../elements/layout/page-builder-element.ts";
+import { PageBuilderRenderer } from "./page-builder-renderer.ts";
 import { RotatedElement } from "../elements/layout/rotated-element.ts";
 import { RotatedBoxElement } from "../elements/layout/rotated-box-element.ts";
 import { RotatedRenderer } from "./rotated-renderer.ts";
@@ -67,6 +69,7 @@ export class PDFRenderer {
     RendererRegistry.register(LinkElement, LinkRenderer.render);
     RendererRegistry.register(BookmarkElement, BookmarkRenderer.render);
     RendererRegistry.register(AnchorElement, AnchorRenderer.render);
+    RendererRegistry.register(PageBuilderElement, PageBuilderRenderer.render);
     RendererRegistry.register(RotatedElement, RotatedRenderer.render);
     RendererRegistry.register(RotatedBoxElement, RotatedRenderer.render);
 

@@ -11,6 +11,7 @@ export * from "./layout/positioned-element.ts";
 export * from "./layout/link-element.ts";
 export * from "./layout/bookmark-element.ts";
 export * from "./layout/anchor-element.ts";
+export * from "./layout/page-builder-element.ts";
 export * from "./layout/rotated-element.ts";
 export * from "./layout/rotated-box-element.ts";
 export * from "./line-element.ts";
