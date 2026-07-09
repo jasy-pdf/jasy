@@ -77,11 +77,17 @@ export class PDFDocumentRenderer {
     return pagesObjectNumber;
   }
 
-  /** The page geometry a physical page will use. Pass 1 already merged the document defaults into every
-   *  `PageElement.config`; a page that never carried its own config falls back to the document's. */
+  /**
+   * The page geometry a physical page will use. `PageElement.calculateLayout` has already folded the
+   * document defaults into every page's config by the time we get here (`PDFRenderer` lays the document
+   * out before it calls us, and it is our only caller). Merging again is therefore a no-op today - it is
+   * here so this stays correct BY CONSTRUCTION rather than by call order: were that order ever changed,
+   * an unmerged config would otherwise make `resolvePageSize` fall back to A4 and quietly report the
+   * wrong page size.
+   */
   private static configOf(physical: PhysicalPage, ctx: LayoutContext): PDFPageConfig {
     const config = physical.kind === "whole" ? physical.page.getProps().config : physical.config;
-    return config ?? ctx.pageConfig;
+    return { ...ctx.pageConfig, ...config };
   }
 
   /**
