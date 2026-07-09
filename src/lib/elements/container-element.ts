@@ -2,6 +2,7 @@ import { FlexLayoutHelper, VERTICAL_AXIS, MainAlign, CrossAlign } from "../utils
 import { BoxConstraints, Offset, Size, resolveExtent } from "../layout/box-constraints.ts";
 import { Fragmentable, FragmentResult, packChildren } from "../layout/fragmentation.ts";
 import {
+  FlexiblePDFElement,
   LayoutContext,
   PDFElement,
   SizedElement,
@@ -96,6 +97,16 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
 
   override relativeSizeFactor(horizontal: boolean): number | undefined {
     return horizontal ? this.requested.widthFactor : this.requested.heightFactor;
+  }
+
+  /** A Column stacks vertically, so it only needs a bounded HEIGHT, and only to hand leftover space to a
+   *  flex child. With an explicit height it already knows its extent; with no flex child there is nothing
+   *  to distribute and it keeps shrink-wrapping (which is what leaves old layouts untouched). */
+  override needsBoundedMain(horizontal: boolean): boolean {
+    if (horizontal) return false;
+    if (this.requested.height !== undefined || this.requested.heightFactor !== undefined)
+      return false;
+    return this.children.some((c) => c instanceof FlexiblePDFElement);
   }
 
   calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {

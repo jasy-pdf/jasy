@@ -1,6 +1,12 @@
 import { BoxConstraints, Offset, Size, resolveExtent } from "../layout/box-constraints.ts";
 import { FlexLayoutHelper, HORIZONTAL_AXIS, MainAlign, CrossAlign } from "../utils/flex-layout.ts";
-import { LayoutContext, PDFElement, SizedPDFElement, WithChildren } from "./pdf-element.ts";
+import {
+  FlexiblePDFElement,
+  LayoutContext,
+  PDFElement,
+  SizedPDFElement,
+  WithChildren,
+} from "./pdf-element.ts";
 
 interface RowElementParams extends WithChildren {
   /** Space inserted between children, in points. */
@@ -61,6 +67,15 @@ export class RowElement extends SizedPDFElement {
 
   override relativeSizeFactor(horizontal: boolean): number | undefined {
     return horizontal ? this.requested.widthFactor : this.requested.heightFactor;
+  }
+
+  /** A Row stacks horizontally, so the mirror of `ContainerElement`: it only needs a bounded WIDTH, and
+   *  only when a flex child is waiting for leftover space. */
+  override needsBoundedMain(horizontal: boolean): boolean {
+    if (!horizontal) return false;
+    if (this.requested.width !== undefined || this.requested.widthFactor !== undefined)
+      return false;
+    return this.children.some((c) => c instanceof FlexiblePDFElement);
   }
 
   calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {

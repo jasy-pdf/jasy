@@ -107,9 +107,35 @@ export class PdfBackend {
    *  `PageStructContext` is given (accessible tagging on), each drawable node is wrapped in a marked-content
    *  sequence (`/Role <</MCID n>> BDC … EMC`, or `/Artifact` when untagged); graphics-state and empty nodes
    *  pass through untouched, so untagged output stays byte-identical. */
+  /**
+   * Every number reaching the backend must be finite. A non-finite coordinate is a layout bug, but
+   * silence turns it into a corrupt PDF: `Infinity` is written into the operator stream verbatim, and a
+   * viewer then discards everything from that point on - including the footer, which is drawn last. That
+   * failure is invisible until somebody opens the file, so we refuse instead.
+   *
+   * Checks the node's numbers, not the serialized text: a document containing the WORD "Infinity" is
+   * perfectly legal and must not trip this.
+   */
+  private static assertFinite(node: IRNode): void {
+    const finite = (value: unknown): boolean => {
+      if (typeof value === "number") return Number.isFinite(value);
+      if (Array.isArray(value)) return value.every(finite);
+      if (value !== null && typeof value === "object") return Object.values(value).every(finite);
+      return true;
+    };
+    if (!finite(node)) {
+      throw new Error(
+        `Layout produced a non-finite number on a "${node.type}" node, refusing to emit a corrupt ` +
+          `content stream. This is a bug in an element's calculateLayout (a size resolved to Infinity ` +
+          `or NaN), not in your document.`,
+      );
+    }
+  }
+
   static serialize(nodes: IRNode[], om: PDFObjectManager, struct?: PageStructContext): string {
     return nodes
       .map((node) => {
+        PdfBackend.assertFinite(node);
         const ops = PdfBackend.serializeNode(node, om);
         // Two kinds of node skip the marked-content wrapper, both because they carry no tag and never
         // draw: GRAPHICS-STATE nodes (clip / transform push+pop) only save/restore state around the

@@ -195,17 +195,26 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
       : undefined;
     const childCtx: LayoutContext = frame ? { ...ctx, frame } : ctx;
 
-    // Lay out children stacked inside the border (inset by the border width). Width is
-    // finalized here; height is left unbounded so each child sizes to its own content.
+    // Lay out children stacked inside the border (inset by the border width). Width is finalized here;
+    // height is left unbounded so each child sizes to its own content - EXCEPT for a child that cannot
+    // lay itself out without a bound (a stack holding an `Expanded`/`Spacer`). That one gets the height
+    // still free inside the box, so its flex child has real leftover space instead of an infinite one.
     const innerWidth = shrinkWrapWidth
       ? Infinity
       : Math.max(0, (this.width ?? 0) - 2 * this.borderWidth);
+    const innerHeight = shrinkWrapHeight
+      ? Infinity
+      : Math.max(0, (this.height ?? 0) - 2 * this.borderWidth);
     let contentWidth = 0;
     let contentHeight = 0;
     let yCursor = this.y + this.borderWidth;
     for (const child of this.children) {
+      const consumed = yCursor - (this.y + this.borderWidth);
+      const childHeight = child.needsBoundedMain(false)
+        ? Math.max(0, innerHeight - consumed) // Infinity - consumed stays Infinity, as it should
+        : Infinity;
       const childSize = child.calculateLayout(
-        BoxConstraints.loose(innerWidth, Infinity),
+        BoxConstraints.loose(innerWidth, childHeight),
         { x: this.x + this.borderWidth, y: yCursor },
         childCtx,
       );

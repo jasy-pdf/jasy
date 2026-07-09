@@ -87,6 +87,17 @@ export abstract class PDFElement {
   relativeSizeFactor(_horizontal: boolean): number | undefined {
     return undefined;
   }
+
+  /**
+   * Whether this element needs a BOUNDED extent on the given axis to lay itself out (`true` for a
+   * horizontal axis = width). A flex parent measures its fixed children with an unbounded main axis, so
+   * they keep their natural size; but a stack holding an `Expanded`/`Spacer` has no leftover space to
+   * distribute unless it is told how much main axis it may occupy. Such a stack answers `true` here and
+   * the parent hands it the line's bounded main extent instead of `Infinity`. Default: no.
+   */
+  needsBoundedMain(_horizontal: boolean): boolean {
+    return false;
+  }
 }
 
 export abstract class SizedPDFElement extends PDFElement {
