@@ -492,6 +492,10 @@ export class TextRenderer {
           fontSize,
           color,
         });
+        // `lineWidth` IS the advance the viewer will use: `getStringWidth` sums the plain glyph
+        // widths, and a `Tj` is advanced by exactly those. (It used to fold in AFM kerning that we
+        // never emitted, so the stroke came out short - 19pt on "AVATAR Wave" at 40pt. Fixed at the
+        // root; see the note on getStringWidth.)
         decorate(
           line,
           x,

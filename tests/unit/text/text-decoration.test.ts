@@ -90,6 +90,35 @@ describe("skipInkSegments", () => {
   });
 });
 
+describe("the stroke spans exactly the glyphs the viewer draws", () => {
+  it("underlines the full Tj advance of a kern-heavy string", async () => {
+    // Regression guard for the day someone re-introduces kerning into the MEASUREMENT without also
+    // emitting it. Back when `getStringWidth` kerned, "AVATAR Wave" measured 19pt narrower at 40pt
+    // than the `Tj` that draws it - so the stroke stopped 19pt short of the last glyph.
+    const { Document, Page, Text, renderToBytes } = await import("../../../src/lib/api");
+    const om = helvetica();
+    const advance = [..."AVATAR Wave"].reduce(
+      (w, c) => w + om.getCharWidth(c, 40, undefined, "Helvetica", FontStyle.Normal),
+      0,
+    );
+    expect(om.getStringWidth("AVATAR Wave", "Helvetica", 40, FontStyle.Normal)).toBeCloseTo(
+      advance,
+      9,
+    );
+
+    const pdf = new TextDecoder("latin1").decode(
+      await renderToBytes(
+        Document([Page({ margin: 30 }, [Text("AVATAR Wave", { size: 40, underline: true })])]),
+        { compress: false },
+      ),
+    );
+    // The stroke is a `x1 y m \n x2 y l \n S` path; grab its two x coordinates.
+    const stroke = /([\d.]+) ([\d.]+) m\s+([\d.]+) [\d.]+ l/.exec(pdf);
+    expect(stroke).not.toBeNull();
+    expect(Number(stroke![3]) - Number(stroke![1])).toBeCloseTo(advance, 2);
+  });
+});
+
 describe("skipInk without glyph outlines", () => {
   it("refuses on a standard-14 font instead of silently drawing a solid line", async () => {
     const { Document, Page, Text, renderToBytes } = await import("../../../src/lib/api");

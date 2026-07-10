@@ -978,20 +978,15 @@ endstream`;
     // Iterate code points, not UTF-16 units: an astral char (emoji, CJK-ext) is a surrogate pair,
     // and indexing by unit would measure each half as its own (zero-width) "char". The spread splits
     // on code points; for BMP text this is one unit each, so the result is unchanged.
-    const chars = [...text];
-    for (let i = 0; i < chars.length; i++) {
-      const char = chars[i];
-      const nextChar = chars[i + 1] || null;
-
-      // Get signs width
-      const charWidth = this.getCharWidth(char, fontSize, undefined, fontFamily, fontStyle);
-      width += charWidth;
-
-      // If a next sign available calculate the kerning
-      if (nextChar) {
-        const kerning = this.getKerning(char, nextChar, undefined, fontFamily, fontStyle);
-        width += kerning * fontSize; // Kerning must be scaled with the font size
-      }
+    //
+    // NO KERNING. We write a run as a single `Tj`, and a viewer advances that by the font's plain
+    // widths - PDF never kerns on its own; a producer has to say so with a `TJ` array. Folding the
+    // AFM's kerning into the MEASUREMENT while the OUTPUT ignores it made every kerned string draw
+    // wider than its box: "AVATAR Wave" at 40pt by 19pt, "Total" at 11pt by 5.7%. Measured must equal
+    // drawn. The AFM kerning pairs stay parsed (`getKerning`) for the day we emit `TJ` - see the
+    // "real kerning" item in todo.md, which must cover embedded fonts too (`kern`/`GPOS`).
+    for (const char of text) {
+      width += this.getCharWidth(char, fontSize, undefined, fontFamily, fontStyle);
     }
 
     return width;
@@ -1075,20 +1070,6 @@ endstream`;
   }
 
   // Method to get the kerning, if available, between two signs
-  private getKerning(
-    char: string,
-    nextChar: string,
-    fullFontName?: string,
-    fontName?: string,
-    fontStyle?: FontStyle,
-  ): number {
-    // TrueType kerning (the kern/GPOS tables) is not wired up yet - no kerning for custom fonts.
-    if (this.getCustomFont(fullFontName ?? fontName, fontStyle)) return 0;
-
-    const currentParser = this.getAVMParserByFont(fullFontName, fontName, fontStyle);
-
-    return currentParser.parser.getKerning(char, nextChar) / 1000;
-  }
 
   // Returns all fonts
   getAllFontsRaw() {
