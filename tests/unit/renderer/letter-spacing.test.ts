@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { Document, Page, Text, span, renderToBytes } from "../../../src/lib/api";
+import { Document, Page, Box, Text, span, renderToBytes } from "../../../src/lib/api";
+import type { TextSegment } from "../../../src/lib/elements/text-element";
 
 // letterSpacing -> the PDF `Tc` operator. It is graphics state and must be isolated so it cannot
 // leak into the next run; at 0 it must not appear at all (byte-identity for every existing document).
@@ -53,11 +54,12 @@ describe("letterSpacing emits Tc", () => {
     // the element letterSpacing (the bug), the segment version would wrap without spacing -> fewer
     // lines than the string version -> and fewer than the layout reserved (overflow).
     const CONTENT = "alpha bravo charlie delta echo foxtrot golf hotel india juliet";
-    const linesDrawn = async (content: string | ReturnType<typeof span>[]) => {
+    const linesDrawn = async (content: string | TextSegment[]) => {
       const bytes = await renderToBytes(
         Document([
           Page({ margin: 40 }, [
-            Text(content as never, { size: 16, letterSpacing: 3, width: 200 }),
+            // The Box bounds the width (Text has no width of its own); the spacing decides the break.
+            Box({ width: 200 }, [Text(content, { size: 16, letterSpacing: 3 })]),
           ]),
         ]),
         { compress: false },
