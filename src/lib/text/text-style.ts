@@ -17,6 +17,13 @@ export interface ResolvedTextStyle {
   /** Multiplier of the font size. `undefined` means the font's natural line height
    *  (`ascent + descent + lineGap`), i.e. CSS `line-height: normal`. */
   lineHeight?: number;
+  /** Draw a line under the text, at the position and thickness the font declares. */
+  underline: boolean;
+  /** Draw a line through the text, at half its x-height. */
+  strikethrough: boolean;
+  /** Let the underline step around descenders (CSS `text-decoration-skip-ink`). Needs an EMBEDDED
+   *  font: the standard-14 outlines live in the viewer, not in the AFM. */
+  skipInk: boolean;
 }
 
 /**
@@ -30,6 +37,9 @@ export const DEFAULT_TEXT_STYLE: ResolvedTextStyle = {
   color: new Color(0, 0, 0),
   textAlignment: HorizontalAlignment.left,
   lineHeight: undefined,
+  underline: false,
+  strikethrough: false,
+  skipInk: false,
 };
 
 /** Layers a partial override onto a complete style; an unset (undefined) field keeps the base. */
@@ -45,5 +55,8 @@ export function mergeTextStyle(
     color: override.color ?? base.color,
     textAlignment: override.textAlignment ?? base.textAlignment,
     lineHeight: override.lineHeight ?? base.lineHeight,
+    underline: override.underline ?? base.underline,
+    strikethrough: override.strikethrough ?? base.strikethrough,
+    skipInk: override.skipInk ?? base.skipInk,
   };
 }

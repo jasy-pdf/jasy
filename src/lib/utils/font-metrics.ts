@@ -1,5 +1,6 @@
 import type { FontStyle } from "./pdf-object-manager.ts";
 import type { FontVerticals } from "../text/line-metrics.ts";
+import type { FontDecoration } from "../text/text-decoration.ts";
 
 /**
  * Read-only font measurement - the slice of the object manager that the layout pass
@@ -22,4 +23,8 @@ export interface FontMetrics {
   /** Ascent / descent / lineGap of a face, in em fractions - the vertical counterpart of the widths
    *  above. Drives the line box and the baseline (see `text/line-metrics.ts`). */
   getFontVerticals(fontFamily: string, fontStyle: FontStyle): FontVerticals;
+
+  /** Underline / strikethrough geometry of a face, in em fractions. GLYPH metrics, deliberately kept
+   *  apart from the LINE metrics above (see `text/text-decoration.ts`). */
+  getFontDecoration(fontFamily: string, fontStyle: FontStyle): FontDecoration;
 }

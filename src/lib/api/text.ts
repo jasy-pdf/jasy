@@ -15,6 +15,15 @@ export interface TextStyle {
   bold?: boolean;
   italic?: boolean;
   color?: ColorInput;
+  /** Draw a line under the text. Its position and thickness come from the font, not from a guess.
+   *  A `Link` is NOT underlined automatically - say so if you want it. */
+  underline?: boolean;
+  /** Draw a line through the text, at half its x-height (where a browser puts it). */
+  strikethrough?: boolean;
+  /** Let the underline step around descenders, like a browser (`text-decoration-skip-ink`). Needs an
+   *  EMBEDDED font - the standard-14 outlines live in the viewer, so we cannot see where their ink
+   *  is. Asking for it with a standard font is an error, not a silent no-op. */
+  skipInk?: boolean;
   /** External URL - makes this run an inline hyperlink (a /Link annotation over its glyphs). On a
    *  `span` it links just that run; on a whole `Text` (plain string) it links the whole text. */
   href?: string;
@@ -89,6 +98,8 @@ export function span(text: string, style: TextStyle = {}): TextSegment {
         ? toFontStyle(style.bold, style.italic)
         : undefined,
     fontColor: style.color !== undefined ? toColor(style.color) : undefined,
+    underline: style.underline,
+    strikethrough: style.strikethrough,
     href: style.href,
     dest: style.to,
   };
@@ -120,6 +131,9 @@ export function Text(content: string | TextSegment[], opts: TextOptions = {}): T
     maxLines: opts.maxLines,
     overflow: opts.overflow,
     lineHeight: opts.lineHeight,
+    underline: opts.underline,
+    strikethrough: opts.strikethrough,
+    skipInk: opts.skipInk,
     role: opts.role,
   });
 }
@@ -139,6 +153,9 @@ export interface TextDefaults {
   color?: ColorInput;
   align?: "left" | "center" | "right";
   lineHeight?: number;
+  underline?: boolean;
+  strikethrough?: boolean;
+  skipInk?: boolean;
 }
 
 /** Maps the `Text`-style option names onto a partial engine `ResolvedTextStyle` (only the set
@@ -153,5 +170,8 @@ export function toTextStyleOverride(opts: TextDefaults): Partial<ResolvedTextSty
   if (opts.color !== undefined) style.color = toColor(opts.color);
   if (opts.align !== undefined) style.textAlignment = ALIGN[opts.align];
   if (opts.lineHeight !== undefined) style.lineHeight = opts.lineHeight;
+  if (opts.underline !== undefined) style.underline = opts.underline;
+  if (opts.strikethrough !== undefined) style.strikethrough = opts.strikethrough;
+  if (opts.skipInk !== undefined) style.skipInk = opts.skipInk;
   return style;
 }

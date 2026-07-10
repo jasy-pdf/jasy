@@ -35,18 +35,25 @@ describe("font metrics - Adobe AFM oracle (points)", () => {
     expect(stringWidth("A", "Times-Roman", 1000)).toBeCloseTo(722, 6);
   });
 
-  // Kerning must be looked up per ordered pair, with the right sign and scaled by
-  // font size. assets/Helvetica.afm: KPX A V -70, KPX V A -80.
-  it("applies kerning with the correct pair, sign and scale", () => {
-    // "AV" @12pt = adv(A) + adv(V) + kern(A,V) = 8.004 + 8.004 - 0.84 = 15.168
-    expect(stringWidth("AV", "Helvetica", 12)).toBeCloseTo(15.168, 6);
-    // "VA" @12pt uses the other pair: kern(V,A) = -80 -> 16.008 - 0.96 = 15.048
-    expect(stringWidth("VA", "Helvetica", 12)).toBeCloseTo(15.048, 6);
+  // A string's width is the PLAIN sum of its advances - NO kerning.
+  //
+  // This is not an oversight, it is the contract: we write a run as one `Tj`, and a viewer advances
+  // that by the font's widths. PDF never kerns on its own; a producer has to say so with a `TJ`
+  // array, and we do not. Folding the AFM's kern pairs into the measurement while the output ignored
+  // them made every kerned string DRAW wider than the box it was measured into ("AVATAR Wave" at
+  // 40pt: 19pt too wide; "Total" at 11pt: 5.7%). Measured must equal drawn.
+  //
+  // The kern pairs are still parsed (`AFMParser.getKerning`) for the day we emit `TJ`. When that
+  // lands, these expectations change - and so must the backend, in the same commit.
+  it("sums advances without kerning, because a Tj is advanced without kerning", () => {
+    // assets/Helvetica.afm: adv(A) = adv(V) = 667. It also declares KPX A V -70, KPX V A -80,
+    // and neither may show up here.
+    expect(stringWidth("AV", "Helvetica", 12)).toBeCloseTo(16.008, 6); // NOT 15.168
+    expect(stringWidth("VA", "Helvetica", 12)).toBeCloseTo(16.008, 6); // NOT 15.048
+    expect(stringWidth("AVA", "Helvetica", 12)).toBeCloseTo(24.012, 6); // NOT 22.212
   });
 
-  // Multi-char width is the sum of advances plus every interior kern pair.
-  it("sums advances and kernings across a word", () => {
-    // "AVA" @12pt = 3*8.004 + kern(A,V) + kern(V,A) = 24.012 - 0.84 - 0.96 = 22.212
-    expect(stringWidth("AVA", "Helvetica", 12)).toBeCloseTo(22.212, 6);
+  it("is order-independent, which a kerned measure could never be", () => {
+    expect(stringWidth("AV", "Helvetica", 12)).toBeCloseTo(stringWidth("VA", "Helvetica", 12), 9);
   });
 });

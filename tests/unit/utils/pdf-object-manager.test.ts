@@ -39,24 +39,16 @@ describe("PDFObjectManager - Fonts", () => {
     expect(font.resourceIndex).toBe(1);
   });
 
-  it("should return the correct string width with mocked char width and kerning", () => {
+  it("is the plain sum of the char widths - no kerning is folded in", () => {
     const manager = new PDFObjectManager();
     manager.registerFont("Helvetica", FontStyle.Normal);
 
-    // Mock the getCharWidth method for predictable results
     vitest.spyOn(manager, "getCharWidth").mockReturnValue(600);
 
-    // Mock the getKerning method to simulate kerning between 'A' and 'V'
-    vitest.spyOn(manager as any, "getKerning").mockImplementation((char, nextChar) => {
-      if (char === "A" && nextChar === "V") {
-        return 0.1; // Simulated kerning value for 'A' and 'V'
-      }
-      return 0;
-    });
-
+    // "AV" is Helvetica's most famous kern pair (KPX A V -70). It must not appear here: we emit a
+    // single `Tj`, which the viewer advances by the plain widths.
     const width = manager.getStringWidth("AV", "Helvetica", 12, FontStyle.Normal);
-    // char width: 600 for each + kerning: 0.1 * 12 (font size)
-    expect(width).toBe(600 + 600 + 0.1 * 12); // 1200 + 1.2 = 1201.2
+    expect(width).toBe(1200);
   });
 
   it("rejects a non-string font family with a clear hint (font bytes passed as a name)", () => {
@@ -151,16 +143,20 @@ describe("PDFObjectManager - AFM Parsing", () => {
   });
 });
 
-describe("PDFObjectManager - Kerning Calculation", () => {
-  it("should apply kerning when calculating string width", () => {
+describe("PDFObjectManager - measured width equals drawn width", () => {
+  it("does not kern, so a string is exactly as wide as the glyphs the viewer advances by", () => {
     const manager = new PDFObjectManager();
     manager.registerFont("Helvetica", FontStyle.Normal);
 
-    const kerningSpy = vitest.spyOn(manager as any, "getKerning").mockReturnValue(0.1);
-
-    const width = manager.getStringWidth("AV", "Helvetica", 12, FontStyle.Normal);
-    expect(kerningSpy).toHaveBeenCalledWith("A", "V", undefined, "Helvetica", "normal");
-    expect(width).toBeGreaterThan(12); // Kerning adds to width
+    const chars = [...("AVATAR Wave" as string)];
+    const summed = chars.reduce(
+      (w, c) => w + manager.getCharWidth(c, 40, undefined, "Helvetica", FontStyle.Normal),
+      0,
+    );
+    const measured = manager.getStringWidth("AVATAR Wave", "Helvetica", 40, FontStyle.Normal);
+    // With kerning folded in this was 19pt narrower than what a `Tj` actually draws, so the text
+    // overflowed its box. The AFM pairs live on in `AFMParser.getKerning` for a future `TJ` path.
+    expect(measured).toBeCloseTo(summed, 9);
   });
 });
 

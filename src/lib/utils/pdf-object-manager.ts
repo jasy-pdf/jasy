@@ -5,13 +5,14 @@ import { md5, md5Hex } from "./md5.ts";
 import { zlibSync } from "fflate";
 import { bytesFromLatin1, latin1FromBytes } from "./bytes.ts";
 import { AFMParser } from "./afm-parser.ts";
-import { TTFParser } from "./ttf-parser.ts";
+import { mergeSpans, TTFParser } from "./ttf-parser.ts";
 import { subsetTTF } from "./ttf-subsetter.ts";
 import { getArrayBuffer } from "./utf8-to-windows1252-encoder.ts";
 import type { SecurityHandler } from "../crypto/security-handler.ts";
 import type { Gradient, GradientStop } from "../ir/display-list.ts";
 import { isEmojiCodePoint } from "../text/emoji-codepoints.ts";
 import type { FontVerticals } from "../text/line-metrics.ts";
+import type { FontDecoration } from "../text/text-decoration.ts";
 import { StructTree } from "./struct-tree.ts";
 import { OutlineBuilder } from "./outline.ts";
 import { DestRegistry } from "./dest-registry.ts";
@@ -191,6 +192,8 @@ export class PDFObjectManager implements FontMetrics {
   private customFonts = new Map<string, Map<FontStyle, TTFParser>>();
   // Memoised getFontVerticals answers, family -> style -> metrics. Cleared when a font registers.
   private verticalsCache = new Map<string, Map<FontStyle, FontVerticals>>();
+  // Same, for getFontDecoration.
+  private decorationCache = new Map<string, Map<FontStyle, FontDecoration>>();
   // Per-registered face: the reserved font-object numbers + the glyph ids actually used. The font
   // program is subsetted and the objects filled in by finalizeCustomFonts(), after the render pass.
   private customFontEmit = new Map<
@@ -613,6 +616,7 @@ endstream`;
       return this.fonts.getFont(fontName, fontStyle)!; // Already exists? Return it!
     }
     this.verticalsCache.delete(fontName);
+    this.decorationCache.delete(fontName);
 
     const data = STANDARD_AFM[fullName];
     if (data !== undefined) {
@@ -651,6 +655,7 @@ endstream`;
     if (byStyle.has(style)) return;
     byStyle.set(style, new TTFParser(data));
     this.verticalsCache.delete(name); // this family now answers from the .ttf, not from an AFM
+    this.decorationCache.delete(name);
     // Emission (the PDF font objects + page resource) is DEFERRED to first use via ensureEmitted(),
     // so a registered-but-never-rendered face - e.g. a bundled family the document doesn't touch -
     // costs nothing in the output. The metrics above are still available for layout immediately.
@@ -907,6 +912,60 @@ endstream`;
     return verticals;
   }
 
+  // Underline / strikethrough geometry of a face, in em fractions. Same shape as getFontVerticals:
+  // an embedded font answers from its `post`/`OS/2` tables, a standard-14 one from its AFM header,
+  // and the answer is memoised per face because it is asked once per decorated run.
+  getFontDecoration(fontFamily: string, fontStyle: FontStyle): FontDecoration {
+    let byStyle = this.decorationCache.get(fontFamily);
+    const hit = byStyle?.get(fontStyle);
+    if (hit) return hit;
+
+    const ttf = this.getCustomFont(fontFamily, fontStyle);
+    const decoration = ttf
+      ? ttf.decoration()
+      : this.getAVMParserByFont(undefined, fontFamily, fontStyle).parser.decoration();
+
+    if (!byStyle) {
+      byStyle = new Map();
+      this.decorationCache.set(fontFamily, byStyle);
+    }
+    byStyle.set(fontStyle, decoration);
+    return decoration;
+  }
+
+  /**
+   * Where the glyphs of `text` put ink inside a horizontal band, as x-intervals in POINTS measured
+   * from the start of the run. This is what an underline steps around ("skip-ink").
+   *
+   * `bandTop` / `bandBottom` are in points relative to the baseline, y UP (so both negative under
+   * it). Only an EMBEDDED font can answer: the standard-14 outlines live in the viewer, not here.
+   * Callers must check `isCustomFont` first rather than treat an empty result as "no descenders".
+   */
+  getInkSpansInBand(
+    text: string,
+    fontSize: number,
+    fontFamily: string,
+    fontStyle: FontStyle,
+    bandTop: number,
+    bandBottom: number,
+  ): Array<[number, number]> {
+    const ttf = this.getCustomFont(fontFamily, fontStyle);
+    if (!ttf) return [];
+    const scale = fontSize / ttf.unitsPerEm;
+    const spans: Array<[number, number]> = [];
+    let pen = 0;
+    for (const ch of text) {
+      const codePoint = ch.codePointAt(0);
+      if (codePoint !== undefined) {
+        for (const [x0, x1] of ttf.inkSpansInBand(codePoint, bandTop / scale, bandBottom / scale)) {
+          spans.push([pen + x0 * scale, pen + x1 * scale]);
+        }
+      }
+      pen += this.getCharWidth(ch, fontSize, undefined, fontFamily, fontStyle);
+    }
+    return mergeSpans(spans);
+  }
+
   // Returns the current width of a text, included kernings
   public getStringWidth(
     text: string,
@@ -919,20 +978,15 @@ endstream`;
     // Iterate code points, not UTF-16 units: an astral char (emoji, CJK-ext) is a surrogate pair,
     // and indexing by unit would measure each half as its own (zero-width) "char". The spread splits
     // on code points; for BMP text this is one unit each, so the result is unchanged.
-    const chars = [...text];
-    for (let i = 0; i < chars.length; i++) {
-      const char = chars[i];
-      const nextChar = chars[i + 1] || null;
-
-      // Get signs width
-      const charWidth = this.getCharWidth(char, fontSize, undefined, fontFamily, fontStyle);
-      width += charWidth;
-
-      // If a next sign available calculate the kerning
-      if (nextChar) {
-        const kerning = this.getKerning(char, nextChar, undefined, fontFamily, fontStyle);
-        width += kerning * fontSize; // Kerning must be scaled with the font size
-      }
+    //
+    // NO KERNING. We write a run as a single `Tj`, and a viewer advances that by the font's plain
+    // widths - PDF never kerns on its own; a producer has to say so with a `TJ` array. Folding the
+    // AFM's kerning into the MEASUREMENT while the OUTPUT ignores it made every kerned string draw
+    // wider than its box: "AVATAR Wave" at 40pt by 19pt, "Total" at 11pt by 5.7%. Measured must equal
+    // drawn. The AFM kerning pairs stay parsed (`getKerning`) for the day we emit `TJ` - see the
+    // "real kerning" item in todo.md, which must cover embedded fonts too (`kern`/`GPOS`).
+    for (const char of text) {
+      width += this.getCharWidth(char, fontSize, undefined, fontFamily, fontStyle);
     }
 
     return width;
@@ -1016,20 +1070,6 @@ endstream`;
   }
 
   // Method to get the kerning, if available, between two signs
-  private getKerning(
-    char: string,
-    nextChar: string,
-    fullFontName?: string,
-    fontName?: string,
-    fontStyle?: FontStyle,
-  ): number {
-    // TrueType kerning (the kern/GPOS tables) is not wired up yet - no kerning for custom fonts.
-    if (this.getCustomFont(fullFontName ?? fontName, fontStyle)) return 0;
-
-    const currentParser = this.getAVMParserByFont(fullFontName, fontName, fontStyle);
-
-    return currentParser.parser.getKerning(char, nextChar) / 1000;
-  }
 
   // Returns all fonts
   getAllFontsRaw() {

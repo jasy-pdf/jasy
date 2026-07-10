@@ -130,10 +130,12 @@ reasoning from our own code.
 react-pdf hard-codes `ascent = 900` for every standard font, commented "based on empirical observation".
 That is a **rounded `FontBBox`**, not a guess. For embedded fonts it reads real `hhea` values, like we do.
 
-**Available and deliberately not parsed yet:** AFM gives `UnderlinePosition -100`, `UnderlineThickness 50`,
-`CapHeight`, `XHeight`. TrueType has the same in `post` and `OS/2` (`sxHeight`, `sCapHeight`) — `OS/2` is not
-parsed at all today. The planned `underline` / `strikethrough` / `letterSpacing` work needs these. Take them
-from the font. **Do not invent a constant** — that is exactly how `BASELINE_RATIO = 683/1000` happened.
+**Glyph metrics, for decoration** (parsed since 2026-07-10): AFM gives `UnderlinePosition -100`,
+`UnderlineThickness 50`, `CapHeight`, `XHeight`; TrueType the same in `post` + `OS/2` (`sxHeight`,
+`sCapHeight`, version ≥ 2, else measured off the `x`/`H` outline). Surfaced by
+`FontMetrics.getFontDecoration` and consumed by `text/text-decoration.ts` — kept in a SEPARATE module from
+`line-metrics.ts` precisely so a glyph metric can never again be used as a line metric. **Do not invent a
+constant** — that is exactly how `BASELINE_RATIO = 683/1000` happened. `letterSpacing` is still to come.
 
 ### State threading — explicit, no singleton (since roadmap Phase 2)
 
@@ -324,6 +326,17 @@ lineHeight, align, bold, italic }, …)` sets doc-wide text defaults; `DefaultTe
   (a 90/270 turn swaps w/h, so a vertical label reserves its strip). One IR pair `TransformPush{matrix}` /
   `TransformPop` → `q … cm … Q`; `flipY` conjugates the matrix (`M_pdf = F·M·F`) so producers stay
   coordinate-blind. Known gap: an annotation inside a transform does NOT rotate (see gap 6 below).
+- ✅ **Text decoration** (2026-07-10) — `Text({ underline, strikethrough })`, also per `span` and inheritable
+  from `Document`/`DefaultTextStyle`. The stroke sits at the font's `UnderlinePosition` and is
+  `UnderlineThickness` thick; a strikethrough crosses at half the `XHeight` (which is where Chrome puts it,
+  measured). One `Line` IR node per drawn run, so a wrapped paragraph gets one stroke per LINE and a
+  decorated span only spans its own glyphs. A `Link` is NOT underlined by default.
+  **`skipInk`** steps the underline around descenders (CSS `text-decoration-skip-ink`) by scanline-filling
+  the real glyph outlines (`TTFParser.inkSpansInBand`). Gap widths match Chrome to 1-2 px at 200 dpi
+  (`[25, 85, 192, 59, 120]` vs `[24, 85, 190, 58, 120]`). **react-pdf cannot do this at all** (verified: its
+  underline runs straight through `g` and `p`). It needs an EMBEDDED font — the standard-14 outlines live in
+  the viewer, not in the AFM — and asking for it with a standard font **throws** rather than silently drawing
+  a solid line. Gallery `19-text-decoration`; the skipInk specimen is `claude-data/out/decoration/`.
 - ✅ **Navigation** (2026-07-09, `@jasy/pdf@alpha.6`) — `Link({ href })` (external URL) or `Link({ to })`
   (internal jump); `href`/`to` on a `span` links just that run (one /Rect per wrapped line); `Anchor({ name })`
   is the jump target, resolved through the catalog `/Names /Dests` name tree, so a link may point at a page
