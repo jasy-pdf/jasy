@@ -576,8 +576,10 @@ export class TextRenderer {
 
     // yPosition is the top of the text box (top-left). Each line seats its own baseline inside its
     // own box (tallest ascent / deepest descent ON THAT LINE), then the next line starts below it.
-    // The seam flips the whole thing to PDF space.
-    const defaults = { fontFamily, fontSize, fontStyle };
+    // The seam flips the whole thing to PDF space. `letterSpacing` MUST be in the defaults so a span
+    // that does not override it wraps and aligns with the element's spacing - the same defaults the
+    // measure path (calculateTextHeight) uses, or segmented spaced text mis-wraps (measured != drawn).
+    const defaults = { fontFamily, fontSize, fontStyle, letterSpacing };
     let top = yPosition;
     for (const line of breakSegmentsIntoLines(
       content,
