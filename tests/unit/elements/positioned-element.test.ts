@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { PositionedElement } from "../../../src/lib/elements/layout/positioned-element";
 import { RectangleElement } from "../../../src/lib/elements/rectangle-element";
 import { ContainerElement } from "../../../src/lib/elements/container-element";
-import { PageElement } from "../../../src/lib/elements/page-element";
+import { layoutPageBands, PageElement, pageFrame } from "../../../src/lib/elements/page-element";
 import { RectangleRenderer } from "../../../src/lib/renderer/rectangle-renderer";
 import { LayoutContext } from "../../../src/lib/elements/pdf-element";
 import { BoxConstraints } from "../../../src/lib/layout/box-constraints";
@@ -22,6 +22,7 @@ const ctx = { metrics } as LayoutContext;
 // never drained: they assert what the element does NOT do to the flow, not where the child lands.
 const ctxWithFrame = {
   metrics,
+  pageConfig: {},
   frame: { origin: { x: 0, y: 0 }, size: { width: 100, height: 100 }, place: [] },
 } as LayoutContext;
 
@@ -190,6 +191,57 @@ describe("PositionedElement - the page is the default frame", () => {
     pageWith({ footer: new PositionedElement({ child, bottom: 0, right: 0 }) });
     expect(child.getSize().x).toBe(A4_CONTENT.right - 20);
     expect(child.getSize().y).toBe(A4_CONTENT.bottom - 10);
+  });
+
+  it("registers a band's placement ONCE, though the footer subtree is laid out twice", () => {
+    // `layoutPageBands` measures the footer to learn its height, then lays it out again at the
+    // bottom edge. Without a throwaway frame for the measuring pass, its `Positioned` registers on
+    // both and the child is placed twice.
+    const config = {
+      pageSize: PageSize.A4,
+      orientation: Orientation.portrait,
+      margin: { top: 50, right: 50, bottom: 50, left: 50 },
+    };
+    for (const band of ["header", "footer"] as const) {
+      const frame = pageFrame(config);
+      const positioned = new PositionedElement({ child: fixed(20, 10), top: 5, left: 5 });
+      layoutPageBands(
+        config,
+        band === "header" ? positioned : undefined,
+        band === "footer" ? positioned : undefined,
+        { metrics, pageConfig: {}, frame } as LayoutContext,
+      );
+      expect(frame.place, `${band} registered more than once`).toHaveLength(1);
+    }
+  });
+
+  it("resolves a Positioned nested inside another one, against the page", () => {
+    // The drain loop must hand the callback a context that still carries the frame, and must pick up
+    // the placements appended while it walks. Otherwise the inner one throws (or, before the throw
+    // existed, silently drew in the page corner).
+    const inner = fixed(10, 10);
+    const outer = new RectangleElement({
+      x: 0,
+      y: 0,
+      width: 40,
+      height: 40,
+      borderWidth: 0,
+      children: [new PositionedElement({ child: inner, top: 10, left: 10 })],
+    });
+    new PageElement({
+      children: [new PositionedElement({ child: outer, top: 100, left: 100 })],
+      config: {
+        pageSize: PageSize.A4,
+        orientation: Orientation.portrait,
+        margin: { top: 50, right: 50, bottom: 50, left: 50 },
+      },
+    }).calculateLayout(new BoxConstraints(), { x: 0, y: 0 }, {
+      metrics,
+      pageConfig: {},
+    } as LayoutContext);
+    // The page is the nearest frame (the outer Positioned is not one), so 50 + 10 on both axes.
+    expect(inner.getSize().x).toBe(60);
+    expect(inner.getSize().y).toBe(60);
   });
 
   it("keeps a body Positioned put when a header is added (the frame is the page, not the body band)", () => {

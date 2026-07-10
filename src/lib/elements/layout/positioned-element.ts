@@ -78,7 +78,12 @@ export class PositionedElement extends PDFElement {
     const constraints = BoxConstraints.loose(width, height);
 
     // Measure first (so end/center anchors and right/bottom edges resolve against the child's size).
-    const measured = this.child.calculateLayout(constraints, { x: 0, y: 0 }, ctx);
+    // The measuring pass gets a throwaway `place` list: this subtree is laid out twice, and a nested
+    // out-of-flow child would otherwise register its placement on both passes.
+    const measureCtx: LayoutContext = ctx.frame
+      ? { ...ctx, frame: { ...ctx.frame, place: [] } }
+      : ctx;
+    const measured = this.child.calculateLayout(constraints, { x: 0, y: 0 }, measureCtx);
 
     // Resolve one axis: a near-edge pins to origin, a far-edge pins to the far side; otherwise the
     // anchor (default `start`) positions the child and the nudge shifts it from there.

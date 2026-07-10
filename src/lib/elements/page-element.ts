@@ -105,11 +105,16 @@ export function layoutPageBands(
 
   let footerHeight = 0;
   if (footer) {
-    // Measure first to learn its height, then place it flush against the bottom edge.
+    // Measure first to learn its height, then place it flush against the bottom edge. The MEASURING
+    // pass gets a throwaway `place` list: an out-of-flow child registers a placement every time it is
+    // laid out, and this subtree is laid out twice. Only the second, real pass may register.
+    const measureCtx: LayoutContext = ctx.frame
+      ? { ...ctx, frame: { ...ctx.frame, place: [] } }
+      : ctx;
     footerHeight = footer.calculateLayout(
       BoxConstraints.loose(width, Infinity),
       origin,
-      ctx,
+      measureCtx,
     ).height;
     footer.calculateLayout(
       BoxConstraints.loose(width, Infinity),
@@ -177,7 +182,11 @@ export class PageElement extends PDFElement {
 
     // Drained last, once every band and the body have registered: an out-of-flow child is placed
     // against the final frame box and paints on top of the flow content.
-    for (const place of frame.place) place(frame, pageCtx);
+    //
+    // The callback gets `frameCtx`, not `pageCtx`: a `Positioned` NESTED inside an out-of-flow child
+    // must still see a frame. It appends to `frame.place` while we walk it, and a `for..of` over an
+    // array visits what was appended, so nested placements drain in the same loop.
+    for (const place of frame.place) place(frame, frameCtx);
 
     return { width: frame.size.width, height: frame.size.height };
   }
