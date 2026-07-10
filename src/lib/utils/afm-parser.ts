@@ -1,5 +1,6 @@
 import { AGL } from "../assets/font-data.ts";
 import type { FontVerticals } from "../text/line-metrics.ts";
+import type { FontDecoration } from "../text/text-decoration.ts";
 
 export class AFMParser {
   private advanceWidths: Record<string, number> = {};
@@ -10,6 +11,14 @@ export class AFMParser {
   // `Ascender` line - is what a line box is built from; see `verticals()`.
   private bbox: [number, number, number, number] = [0, 0, 0, 0];
   private cachedVerticals?: FontVerticals; // never changes for a face; asked once per line
+
+  // Glyph metrics from the AFM header, for underline / strikethrough. All 14 standard fonts carry
+  // the underline pair; Symbol and ZapfDingbats have no CapHeight/XHeight (they have no lowercase).
+  private underlinePosition = 0; // negative, as the AFM writes it: below the baseline
+  private underlineThickness = 0;
+  private capHeight = 0;
+  private xHeight = 0;
+  private cachedDecoration?: FontDecoration;
 
   constructor(afmData: string) {
     this.parseAFMData(afmData);
@@ -61,6 +70,22 @@ export class AFMParser {
           const { charName, wx } = charData;
           this.advanceWidths[charName] = wx;
         }
+      }
+
+      if (line.startsWith("UnderlinePosition ")) {
+        this.underlinePosition = parseFloat(line.slice(18));
+      }
+
+      if (line.startsWith("UnderlineThickness ")) {
+        this.underlineThickness = parseFloat(line.slice(19));
+      }
+
+      if (line.startsWith("CapHeight ")) {
+        this.capHeight = parseFloat(line.slice(10));
+      }
+
+      if (line.startsWith("XHeight ")) {
+        this.xHeight = parseFloat(line.slice(8));
       }
 
       if (line.startsWith("FontBBox ")) {
@@ -125,6 +150,25 @@ export class AFMParser {
     const [, yMin, , yMax] = this.bbox;
     this.cachedVerticals = { ascent: yMax / 1000, descent: -yMin / 1000, lineGap: 0 };
     return this.cachedVerticals;
+  }
+
+  /**
+   * The font's decoration metrics (underline / strikethrough), as fractions of the em.
+   *
+   * Symbol and ZapfDingbats declare no `CapHeight`/`XHeight` - they have no lowercase letters. For
+   * those the bbox top is the only height the font gives us, so the capitals reach it and a
+   * strikethrough crosses at half of that. Still read from the font, not guessed.
+   */
+  decoration(): FontDecoration {
+    if (this.cachedDecoration) return this.cachedDecoration;
+    const capHeight = this.capHeight || this.bbox[3];
+    this.cachedDecoration = {
+      underlinePosition: -this.underlinePosition / 1000, // AFM writes it negative (below the baseline)
+      underlineThickness: this.underlineThickness / 1000,
+      capHeight: capHeight / 1000,
+      xHeight: (this.xHeight || capHeight / 2) / 1000,
+    };
+    return this.cachedDecoration;
   }
 
   getAdvanceWidth(charName: string): number {

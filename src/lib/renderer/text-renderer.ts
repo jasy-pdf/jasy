@@ -10,7 +10,7 @@ import type {
   TTFParser,
   ColorGlyphLayer,
 } from "../utils/ttf-parser.ts";
-import { IRNode, TextRun, PathCommand, Gradient, Link } from "../ir/display-list.ts";
+import { IRNode, TextRun, PathCommand, Gradient, Line, Link } from "../ir/display-list.ts";
 import { isEmojiCodePoint } from "../text/emoji-codepoints.ts";
 import { emojiImageNode } from "./emoji-image.ts";
 import {
@@ -20,6 +20,12 @@ import {
   TextOverflow,
 } from "../text/line-breaker.ts";
 import { lineBoxForSegmentLine, lineBoxForString } from "../text/line-metrics.ts";
+import {
+  DecorationStroke,
+  skipInkSegments,
+  strikethroughStroke,
+  underlineStroke,
+} from "../text/text-decoration.ts";
 
 export class TextRenderer {
   // Measuring only needs metrics, not the full object manager. (The render pass below
@@ -85,13 +91,16 @@ export class TextRenderer {
       maxLines,
       overflow,
       lineHeight,
+      underline,
+      strikethrough,
+      skipInk,
       role,
     } = textElement.getProps();
 
     // Component -> display list. Wrapping and positioning stay here; the backend
     // turns each run into BT/Tf/Td/Tj/ET. The wrapping algorithm is unchanged from
     // the original renderer - unifying it into the engine is Phase 3.
-    const { runs, links } = TextRenderer._buildRuns(
+    const { runs, links, decorations } = TextRenderer._buildRuns(
       content,
       fontSize,
       fontFamily,
@@ -105,6 +114,9 @@ export class TextRenderer {
       maxLines,
       overflow,
       lineHeight,
+      underline,
+      strikethrough,
+      skipInk,
     );
 
     // Accessible tagging: this whole text block is one structure element (a paragraph P, or a heading
@@ -121,9 +133,11 @@ export class TextRenderer {
     const drawn = (
       await Promise.all(runs.map((run) => TextRenderer._expandColorGlyphs(run, objectManager)))
     ).flat();
+    // Underline / strikethrough go on TOP of the glyphs (a strikethrough must), and stay untagged,
+    // so the structure tree treats them as artifacts rather than as text.
     // Inline hyperlinks (href spans) ride along as /Link annotations - they draw nothing, so order
     // vs the drawn runs does not matter; the page renderer peels them off into /Annots.
-    return links.length > 0 ? [...drawn, ...links] : drawn;
+    return [...drawn, ...decorations, ...links];
   }
 
   // Splits a text run into normal text sub-runs + filled `Path` layers for any COLR color glyphs,
@@ -331,17 +345,106 @@ export class TextRenderer {
     maxLines?: number,
     overflow?: TextOverflow,
     lineHeight?: number,
-  ): { runs: TextRun[]; links: Link[] } {
+    underline = false,
+    strikethrough = false,
+    skipInk = false,
+  ): { runs: TextRun[]; links: Link[]; decorations: Line[] } {
     const runs: TextRun[] = [];
     // /Link annotation rects for any `href` spans, collected as we place segments. Empty for the
     // common (no-href) case, so plain text keeps producing exactly the runs it did before.
     const links: Link[] = [];
+    // Underline / strikethrough strokes, one per decorated run (so a wrapped paragraph gets one
+    // per line, and a decorated span only spans its own glyphs).
+    const decorations: Line[] = [];
 
     // Horizontal offset of a line of the given width under the current alignment.
     const alignmentOffset = (lineWidth: number): number => {
       if (textAlignment === HorizontalAlignment.center) return (maxWidth - lineWidth) / 2;
       if (textAlignment === HorizontalAlignment.right) return maxWidth - lineWidth;
       return 0;
+    };
+
+    // The decoration strokes for one drawn run, at the geometry ITS OWN font declares. A mixed-size
+    // line therefore gets a thicker line under the bigger span, which is what a browser does too.
+    const decorate = (
+      text: string,
+      runX: number,
+      runWidth: number,
+      baselineY: number,
+      family: string,
+      style: FontStyle,
+      size: number,
+      runColor: Color,
+      wantsUnderline: boolean,
+      wantsStrikethrough: boolean,
+    ): void => {
+      if ((!wantsUnderline && !wantsStrikethrough) || runWidth <= 0) return;
+      const metrics = objectManager.getFontDecoration(family, style);
+
+      const push = (from: number, to: number, stroke: DecorationStroke): void => {
+        decorations.push({
+          type: "line",
+          x1: runX + from,
+          y1: stroke.y,
+          x2: runX + to,
+          y2: stroke.y,
+          stroke: runColor,
+          strokeWidth: stroke.thickness,
+        });
+      };
+
+      if (wantsUnderline) {
+        const stroke = underlineStroke(metrics, size, baselineY);
+        for (const [from, to] of underlineSegments(
+          text,
+          runWidth,
+          baselineY,
+          size,
+          family,
+          style,
+          stroke,
+        )) {
+          push(from, to, stroke);
+        }
+      }
+      // A strikethrough crosses the letters by definition, so it is never interrupted.
+      if (wantsStrikethrough) {
+        const stroke = strikethroughStroke(metrics, size, baselineY);
+        push(0, runWidth, stroke);
+      }
+    };
+
+    // The x-ranges the underline actually draws. Without `skipInk` that is the whole run; with it,
+    // the descenders are cut out of it (which needs the real outlines, i.e. an embedded font).
+    const underlineSegments = (
+      text: string,
+      runWidth: number,
+      baselineY: number,
+      size: number,
+      family: string,
+      style: FontStyle,
+      stroke: DecorationStroke,
+    ): Array<[number, number]> => {
+      if (!skipInk) return [[0, runWidth]];
+      if (!objectManager.isCustomFont(family, style)) {
+        throw new Error(
+          `skipInk needs an embedded font, but "${family}" is a standard-14 font whose glyph outlines ` +
+            `live in the PDF viewer, not in the document - we cannot see where its ink is. Register a ` +
+            `font (the document's \`fonts\` option) or drop \`skipInk\`.`,
+        );
+      }
+      // The band the stroke covers, in points from the baseline, y UP (so both values are negative).
+      const below = stroke.y - baselineY;
+      const half = stroke.thickness / 2;
+      const inkSpans = objectManager.getInkSpansInBand(
+        text,
+        size,
+        family,
+        style,
+        -below + half,
+        -below - half,
+      );
+      return skipInkSegments(runWidth, inkSpans, stroke.thickness);
     };
 
     // Advance width WITHOUT kerning. This is how Tj moves the text cursor, so
@@ -377,18 +480,32 @@ export class TextRenderer {
       const box = lineBoxForString(objectManager, fontFamily, fontStyle, fontSize, lineHeight);
       lines.forEach((line, index) => {
         const lineWidth = objectManager.getStringWidth(line, fontFamily, fontSize, fontStyle);
+        const x = initialX + alignmentOffset(lineWidth);
+        const baseline = yPosition + box.baseline + box.height * index;
         runs.push({
           type: "text",
-          x: initialX + alignmentOffset(lineWidth),
-          y: yPosition + box.baseline + box.height * index,
+          x,
+          y: baseline,
           text: line,
           fontFamily,
           fontStyle,
           fontSize,
           color,
         });
+        decorate(
+          line,
+          x,
+          lineWidth,
+          baseline,
+          fontFamily,
+          fontStyle,
+          fontSize,
+          color,
+          underline,
+          strikethrough,
+        );
       });
-      return { runs, links };
+      return { runs, links, decorations };
     }
 
     // --- Segments: break into lines (shared breaker), then emit one run per segment.
@@ -403,6 +520,7 @@ export class TextRenderer {
         const size = segment.fontSize || fontSize;
         const style = segment.fontStyle || fontStyle;
         const advance = advanceNoKerning(segment.content, family, size, style);
+        const runColor = segment.fontColor || color;
         runs.push({
           type: "text",
           x,
@@ -411,8 +529,20 @@ export class TextRenderer {
           fontFamily: family,
           fontStyle: style,
           fontSize: size,
-          color: segment.fontColor || color,
+          color: runColor,
         });
+        decorate(
+          segment.content,
+          x,
+          advance,
+          lineY,
+          family,
+          style,
+          size,
+          runColor,
+          segment.underline ?? underline,
+          segment.strikethrough ?? strikethrough,
+        );
         // An href/to span becomes a /Link annotation over exactly this run's glyph box: from its own
         // ascent above the baseline down to its own descender. A span wrapped across lines yields
         // one rect per line.
@@ -450,6 +580,6 @@ export class TextRenderer {
       top += box.height;
     }
 
-    return { runs, links };
+    return { runs, links, decorations };
   }
 }

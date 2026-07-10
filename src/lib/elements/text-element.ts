@@ -27,6 +27,9 @@ export interface TextSegment {
   href?: string;
   /** Internal named destination (an `Anchor`): this segment links to it (a /GoTo /Link annotation). */
   dest?: string;
+  /** Unset inherits the Text's own setting; `true`/`false` overrides it for this run only. */
+  underline?: boolean;
+  strikethrough?: boolean;
 }
 
 /** Accessibility role for the tagged structure tree: a heading level or a paragraph (the default). */
@@ -48,6 +51,12 @@ interface TextElementParams {
   /** Line-height multiplier: each line is `fontSize * lineHeight` tall. Unset means the font's
    *  natural line height (`ascent + descent + lineGap`), like CSS `line-height: normal`. */
   lineHeight?: number;
+  /** Draw a line under the text, at the position and thickness the font declares. */
+  underline?: boolean;
+  /** Draw a line through the text, at half its x-height. */
+  strikethrough?: boolean;
+  /** Let the underline step around descenders. Needs an embedded font. */
+  skipInk?: boolean;
   /** Accessibility role for the tagged structure tree (heading level or paragraph; default `"p"`). */
   role?: TextRole;
 }
@@ -61,6 +70,9 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
   private readonly rawColor?: Color;
   private readonly rawTextAlignment?: HorizontalAlignment;
   private readonly rawLineHeight?: number;
+  private readonly rawUnderline?: boolean;
+  private readonly rawStrikethrough?: boolean;
+  private readonly rawSkipInk?: boolean;
 
   // Resolved style (raw -> inherited -> built-in default). Seeded to the built-in default in the
   // constructor so the element is self-sufficient, then refined against the cascade at layout time.
@@ -70,6 +82,9 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
   private color!: Color;
   private textAlignment!: HorizontalAlignment;
   private lineHeight?: number; // undefined = the font's natural line height
+  private underline!: boolean;
+  private strikethrough!: boolean;
+  private skipInk!: boolean;
 
   private content: string | TextSegment[];
   private maxLines?: number;
@@ -86,6 +101,9 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     maxLines,
     overflow = "clip",
     lineHeight,
+    underline,
+    strikethrough,
+    skipInk,
     role,
   }: TextElementParams) {
     super({ x: 0, y: 0 });
@@ -97,6 +115,9 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     this.rawColor = color;
     this.rawTextAlignment = textAlignment;
     this.rawLineHeight = lineHeight;
+    this.rawUnderline = underline;
+    this.rawStrikethrough = strikethrough;
+    this.rawSkipInk = skipInk;
     this.content = content;
     this.maxLines = maxLines;
     this.overflow = overflow;
@@ -115,6 +136,9 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     this.color = this.rawColor ?? ts.color;
     this.textAlignment = this.rawTextAlignment ?? ts.textAlignment;
     this.lineHeight = this.rawLineHeight ?? ts.lineHeight;
+    this.underline = this.rawUnderline ?? ts.underline;
+    this.strikethrough = this.rawStrikethrough ?? ts.strikethrough;
+    this.skipInk = this.rawSkipInk ?? ts.skipInk;
   }
 
   /**
@@ -219,6 +243,9 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       maxLines: this.maxLines,
       overflow: this.overflow,
       lineHeight: this.lineHeight,
+      underline: this.underline,
+      strikethrough: this.strikethrough,
+      skipInk: this.skipInk,
       role: this.role,
     }).adoptStructId(this); // a wrapped remainder is the SAME logical paragraph (one P across pages)
   }
@@ -304,6 +331,9 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       maxLines: this.maxLines,
       overflow: this.overflow,
       lineHeight: this.lineHeight,
+      underline: this.underline,
+      strikethrough: this.strikethrough,
+      skipInk: this.skipInk,
       role: this.role,
     };
   }

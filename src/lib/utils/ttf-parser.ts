@@ -3,6 +3,7 @@
 // text width the same way AFMParser does for the standard-14. Embedding/subsetting come later.
 
 import { i16, latin1FromBytes, u8, u16, u32 } from "./bytes.ts";
+import type { FontDecoration } from "../text/text-decoration.ts";
 
 interface TableRecord {
   offset: number;
@@ -82,6 +83,19 @@ export interface ColorGlyphLayer {
 
 const IDENTITY: Affine = [1, 0, 0, 1, 0, 0];
 
+/** Sorts x-intervals and unions the overlapping ones. */
+export function mergeSpans(spans: Array<[number, number]>): Array<[number, number]> {
+  if (spans.length === 0) return spans;
+  const sorted = [...spans].sort((a, b) => a[0] - b[0]);
+  const out: Array<[number, number]> = [sorted[0]];
+  for (const [start, end] of sorted.slice(1)) {
+    const last = out[out.length - 1];
+    if (start <= last[1]) last[1] = Math.max(last[1], end);
+    else out.push([start, end]);
+  }
+  return out;
+}
+
 function isIdentity(m: Affine): boolean {
   return m[0] === 1 && m[1] === 0 && m[2] === 0 && m[3] === 1 && m[4] === 0 && m[5] === 0;
 }
@@ -121,6 +135,14 @@ export class TTFParser {
   descent = 0;
   // Extra leading the font asks for between two lines (hhea), same glyph space. Often 0.
   lineGap = 0;
+  // Decoration metrics in RAW font units (divide by unitsPerEm). `post` always carries the underline
+  // pair; `OS/2` only carries sxHeight/sCapHeight from version 2 on, so those may stay 0 and are
+  // then measured off the glyph outlines instead (see `decoration()`).
+  private underlinePositionRaw = 0; // negative = below the baseline
+  private underlineThicknessRaw = 0;
+  private xHeightRaw = 0;
+  private capHeightRaw = 0;
+  private cachedDecoration?: FontDecoration;
   bbox: [number, number, number, number] = [0, 0, 0, 0];
   private numGlyphs = 0;
   private numHMetrics = 0;
@@ -154,6 +176,7 @@ export class TTFParser {
     this.ascent = this.toGlyphSpace(i16(this.data, hhea + 4));
     this.descent = this.toGlyphSpace(i16(this.data, hhea + 6));
     this.lineGap = this.toGlyphSpace(i16(this.data, hhea + 8));
+    this.readDecorationMetrics();
     this.indexToLocFormat = i16(this.data, head + 50);
     this.readHmtx();
     this.readCmap();
@@ -223,6 +246,122 @@ export class TTFParser {
     let width = 0;
     for (const ch of text) width += this.getCharWidth(ch, fontSize);
     return width;
+  }
+
+  // `post` carries the underline pair (always, from its header); `OS/2` carries the x- and cap-height
+  // but only from version 2 on. Both tables are optional in principle, so nothing here may throw.
+  private readDecorationMetrics(): void {
+    const post = this.tables["post"];
+    if (post) {
+      this.underlinePositionRaw = i16(this.data, post.offset + 8);
+      this.underlineThicknessRaw = i16(this.data, post.offset + 10);
+    }
+    const os2 = this.tables["OS/2"];
+    if (os2 && u16(this.data, os2.offset) >= 2) {
+      this.xHeightRaw = i16(this.data, os2.offset + 86);
+      this.capHeightRaw = i16(this.data, os2.offset + 88);
+    }
+  }
+
+  /**
+   * Underline / strikethrough geometry, as fractions of the em.
+   *
+   * A font without `post` (rare) gets the classic 10% below the baseline at 5% thickness - the same
+   * numbers all 14 standard AFMs happen to declare, so it is a measured convention rather than an
+   * invention. A font whose `OS/2` predates version 2 has no x- or cap-height, so we MEASURE them off
+   * the outlines of `x` and `H` instead of guessing.
+   */
+  decoration(): FontDecoration {
+    if (this.cachedDecoration) return this.cachedDecoration;
+    const em = this.unitsPerEm;
+    const xHeight = this.xHeightRaw || this.outlineTop(0x78); // "x"
+    const capHeight = this.capHeightRaw || this.outlineTop(0x48); // "H"
+    this.cachedDecoration = {
+      underlinePosition: this.underlinePositionRaw ? -this.underlinePositionRaw / em : 0.1,
+      underlineThickness: this.underlineThicknessRaw ? this.underlineThicknessRaw / em : 0.05,
+      xHeight: xHeight / em,
+      capHeight: capHeight / em,
+    };
+    return this.cachedDecoration;
+  }
+
+  /** The highest ON-CURVE point of a code point's outline, in font units; 0 for a missing glyph.
+   *  A quadratic's control point may sit above the curve, so it is not a bound - and `x`/`H` have
+   *  flat tops in any face where this fallback matters. */
+  private outlineTop(codePoint: number): number {
+    let top = 0;
+    for (const cmd of this.getGlyphPath(this.getGlyphIndex(codePoint))) {
+      if (cmd.type !== "Z" && cmd.y > top) top = cmd.y;
+    }
+    return top;
+  }
+
+  /**
+   * Where a glyph's INK crosses a horizontal band, as x-intervals in font units (pen origin at 0).
+   * This is what lets an underline step around a descender ("skip-ink"), the way a browser does.
+   *
+   * Scanline fill: sample a few horizontal lines across the band, find every place the outline
+   * crosses them, and pair the crossings up into filled spans. A handful of scanlines is plenty -
+   * the band is a few percent of the em tall, and a descender stem does not wander inside it.
+   *
+   * `yTop` / `yBottom` are in font units, y UP from the baseline (so both are negative under it).
+   * Returns [] for a glyph with no outline (a space, an unmapped code point, a composite we cannot
+   * decompose) - the caller then leaves the line unbroken there, which is the safe direction.
+   */
+  inkSpansInBand(codePoint: number, yTop: number, yBottom: number): Array<[number, number]> {
+    const path = this.getGlyphPath(this.getGlyphIndex(codePoint));
+    if (path.length === 0) return [];
+
+    // Flatten to straight edges; a quadratic becomes a short polyline (the band is thin, so a
+    // coarse subdivision is already below the printing resolution).
+    const edges: Array<[number, number, number, number]> = [];
+    let startX = 0;
+    let startY = 0;
+    let curX = 0;
+    let curY = 0;
+    const edge = (x: number, y: number): void => {
+      edges.push([curX, curY, x, y]);
+      curX = x;
+      curY = y;
+    };
+    for (const cmd of path) {
+      if (cmd.type === "M") {
+        [curX, curY] = [cmd.x, cmd.y];
+        [startX, startY] = [cmd.x, cmd.y];
+      } else if (cmd.type === "L") {
+        edge(cmd.x, cmd.y);
+      } else if (cmd.type === "Q") {
+        const [x0, y0] = [curX, curY];
+        const STEPS = 8;
+        for (let i = 1; i <= STEPS; i++) {
+          const t = i / STEPS;
+          const u = 1 - t;
+          edge(
+            u * u * x0 + 2 * u * t * cmd.cx + t * t * cmd.x,
+            u * u * y0 + 2 * u * t * cmd.cy + t * t * cmd.y,
+          );
+        }
+      } else {
+        edge(startX, startY); // Z: close the contour
+      }
+    }
+
+    const SCANLINES = 5;
+    const spans: Array<[number, number]> = [];
+    for (let i = 0; i < SCANLINES; i++) {
+      const y = yTop + ((yBottom - yTop) * i) / (SCANLINES - 1);
+      const xs: number[] = [];
+      for (const [x0, y0, x1, y1] of edges) {
+        if (y0 === y1) continue;
+        // Half-open test so a vertex on the scanline is counted exactly once.
+        if (y >= Math.min(y0, y1) && y < Math.max(y0, y1)) {
+          xs.push(x0 + ((y - y0) / (y1 - y0)) * (x1 - x0));
+        }
+      }
+      xs.sort((a, b) => a - b);
+      for (let k = 0; k + 1 < xs.length; k += 2) spans.push([xs[k], xs[k + 1]]);
+    }
+    return mergeSpans(spans);
   }
 
   private table(tag: string): TableRecord {
