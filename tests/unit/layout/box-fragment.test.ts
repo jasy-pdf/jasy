@@ -7,11 +7,13 @@ import { LayoutContext, PDFElement } from "../../../src/lib/elements/pdf-element
 import { BoxConstraints, Offset, Size } from "../../../src/lib/layout/box-constraints";
 import { packChildren } from "../../../src/lib/layout/fragmentation";
 import type { FontMetrics } from "../../../src/lib/utils/font-metrics";
+import { unitVerticals } from "../support/metrics";
 
 // Each glyph 10 wide, spaces 0: "aa bb cc dd ee ff" wraps to 3 lines of 10pt at width 50.
 const metrics: FontMetrics = {
   getStringWidth: (text) => text.length * 10,
   getCharWidth: () => 0,
+  getFontVerticals: unitVerticals,
 };
 const ctx = { metrics } as LayoutContext;
 

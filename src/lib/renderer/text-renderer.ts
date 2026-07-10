@@ -19,10 +19,7 @@ import {
   SegmentLine,
   TextOverflow,
 } from "../text/line-breaker.ts";
-
-// Distance from the top of a line down to its baseline, as a fraction of the font
-// size. ~0.683 is the standard-14 ascent ratio used to seat the first baseline.
-const BASELINE_RATIO = 683 / 1000;
+import { lineBoxForSegmentLine, lineBoxForString } from "../text/line-metrics.ts";
 
 export class TextRenderer {
   // Measuring only needs metrics, not the full object manager. (The render pass below
@@ -36,9 +33,9 @@ export class TextRenderer {
     maxWidth: number,
     maxLines?: number,
     overflow?: TextOverflow,
-    lineHeight = 1,
+    lineHeight?: number,
   ): number {
-    // Plain string: one line box (fontSize * lineHeight) per wrapped line.
+    // Plain string: every wrapped line gets the same box.
     if (typeof content === "string") {
       const lines = wrapStringIntoLines(
         content,
@@ -50,19 +47,25 @@ export class TextRenderer {
         maxLines,
         overflow,
       );
-      return lines.length * fontSize * lineHeight;
+      const box = lineBoxForString(objectManager, fontFamily, fontStyle, fontSize, lineHeight);
+      return lines.length * box.height;
     }
 
-    // Segments: each line contributes its own (tallest-on-line) leading, scaled by lineHeight.
+    // Segments: each line's box comes from the fonts actually on it.
+    const defaults = { fontFamily, fontSize, fontStyle };
     const lines = breakSegmentsIntoLines(
       content,
-      { fontFamily, fontSize, fontStyle },
+      defaults,
       maxWidth,
       objectManager,
       maxLines,
       overflow,
     );
-    return lines.reduce((total, line) => total + line.maxFontSize * lineHeight, 0);
+    return lines.reduce(
+      (total, line) =>
+        total + lineBoxForSegmentLine(line, defaults, objectManager, lineHeight).height,
+      0,
+    );
   }
 
   static async render(
@@ -327,7 +330,7 @@ export class TextRenderer {
     yPosition: number,
     maxLines?: number,
     overflow?: TextOverflow,
-    lineHeight = 1,
+    lineHeight?: number,
   ): { runs: TextRun[]; links: Link[] } {
     const runs: TextRun[] = [];
     // /Link annotation rects for any `href` spans, collected as we place segments. Empty for the
@@ -369,18 +372,15 @@ export class TextRenderer {
         maxLines,
         overflow,
       );
-      // yPosition is the top of the text box (top-left); seat line 0's baseline below it, then step
-      // DOWN by one line box (fontSize * lineHeight) per line. The lineHeight EXTRA leading is split
-      // half above / half below (CSS/Flutter "half-leading"), so the text sits centered in its line
-      // box instead of clinging to the top. At lineHeight 1 the half-leading is 0 -> byte-identical.
-      const halfLeading = (fontSize * (lineHeight - 1)) / 2;
-      const baseline = yPosition + halfLeading + fontSize * BASELINE_RATIO;
+      // yPosition is the top of the text box (top-left). The line box seats its own baseline; lines
+      // then stack by that box's height. Same numbers as calculateTextHeight, by construction.
+      const box = lineBoxForString(objectManager, fontFamily, fontStyle, fontSize, lineHeight);
       lines.forEach((line, index) => {
         const lineWidth = objectManager.getStringWidth(line, fontFamily, fontSize, fontStyle);
         runs.push({
           type: "text",
           x: initialX + alignmentOffset(lineWidth),
-          y: baseline + fontSize * lineHeight * index,
+          y: yPosition + box.baseline + box.height * index,
           text: line,
           fontFamily,
           fontStyle,
@@ -413,16 +413,17 @@ export class TextRenderer {
           fontSize: size,
           color: segment.fontColor || color,
         });
-        // An href/to span becomes a /Link annotation over exactly this run's glyph box. `lineY` is the
-        // baseline; the box spans from the ascent (BASELINE_RATIO above it) down by the full size, so
-        // ascent + descent are covered. A span wrapped across lines yields one rect per line.
+        // An href/to span becomes a /Link annotation over exactly this run's glyph box: from its own
+        // ascent above the baseline down to its own descender. A span wrapped across lines yields
+        // one rect per line.
         if (segment.href !== undefined || segment.dest !== undefined) {
+          const v = objectManager.getFontVerticals(family, style);
           links.push({
             type: "link",
             x,
-            y: lineY - size * BASELINE_RATIO,
+            y: lineY - v.ascent * size,
             width: advance,
-            height: size,
+            height: (v.ascent + v.descent) * size,
             href: segment.href,
             dest: segment.dest,
           });
@@ -431,29 +432,22 @@ export class TextRenderer {
       });
     };
 
-    // The overall tallest font seats the first baseline; each line then steps DOWN by
-    // its own leading. yPosition is the top of the text box (top-left); the seam flips
-    // the whole thing to PDF space.
-    let overallMaxFont = fontSize;
-    for (const segment of content) {
-      const size = segment.fontSize || fontSize;
-      if (size > overallMaxFont) overallMaxFont = size;
-    }
-
-    let lineY = yPosition + overallMaxFont * BASELINE_RATIO;
+    // yPosition is the top of the text box (top-left). Each line seats its own baseline inside its
+    // own box (tallest ascent / deepest descent ON THAT LINE), then the next line starts below it.
+    // The seam flips the whole thing to PDF space.
+    const defaults = { fontFamily, fontSize, fontStyle };
+    let top = yPosition;
     for (const line of breakSegmentsIntoLines(
       content,
-      { fontFamily, fontSize, fontStyle },
+      defaults,
       maxWidth,
       objectManager,
       maxLines,
       overflow,
     )) {
-      // Half-leading: shift this line's baseline down by half its own extra leading, so the line
-      // sits centered in its box (CSS/Flutter). At lineHeight 1 the shift is 0 -> byte-identical.
-      const halfLeading = (line.maxFontSize * (lineHeight - 1)) / 2;
-      pushLine(line, lineY + halfLeading);
-      lineY += line.maxFontSize * lineHeight;
+      const box = lineBoxForSegmentLine(line, defaults, objectManager, lineHeight);
+      pushLine(line, top + box.baseline);
+      top += box.height;
     }
 
     return { runs, links };

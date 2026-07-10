@@ -119,6 +119,8 @@ export class TTFParser {
   // FontDescriptor metrics, in PDF glyph space (1000 units / em).
   ascent = 0;
   descent = 0;
+  // Extra leading the font asks for between two lines (hhea), same glyph space. Often 0.
+  lineGap = 0;
   bbox: [number, number, number, number] = [0, 0, 0, 0];
   private numGlyphs = 0;
   private numHMetrics = 0;
@@ -151,6 +153,7 @@ export class TTFParser {
     const hhea = this.table("hhea").offset;
     this.ascent = this.toGlyphSpace(i16(this.data, hhea + 4));
     this.descent = this.toGlyphSpace(i16(this.data, hhea + 6));
+    this.lineGap = this.toGlyphSpace(i16(this.data, hhea + 8));
     this.indexToLocFormat = i16(this.data, head + 50);
     this.readHmtx();
     this.readCmap();

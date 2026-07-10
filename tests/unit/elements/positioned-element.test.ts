@@ -10,10 +10,12 @@ import { Orientation } from "../../../src/lib/renderer/pdf-config";
 import { PageSize } from "../../../src/lib/constants/page-sizes";
 import type { FontMetrics } from "../../../src/lib/utils/font-metrics";
 import type { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager";
+import { unitVerticals } from "../support/metrics";
 
 const metrics: FontMetrics = {
   getStringWidth: (text) => text.length * 10,
   getCharWidth: () => 0,
+  getFontVerticals: unitVerticals,
 };
 const ctx = { metrics } as LayoutContext;
 

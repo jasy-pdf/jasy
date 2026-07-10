@@ -15,6 +15,7 @@ import {
   segmentLinesToSegments,
   TextOverflow,
 } from "../text/line-breaker.ts";
+import { lineBoxForSegmentLine, lineBoxForString } from "../text/line-metrics.ts";
 import { HorizontalAlignment, LayoutContext, SizedPDFElement } from "./pdf-element.ts";
 export interface TextSegment {
   content: string;
@@ -44,7 +45,8 @@ interface TextElementParams {
   maxLines?: number;
   /** What to do past `maxLines`: `"clip"` (default) drops them, `"ellipsis"` ends with "…". */
   overflow?: TextOverflow;
-  /** Line-height multiplier: each line is `fontSize * lineHeight` tall (default `1`). */
+  /** Line-height multiplier: each line is `fontSize * lineHeight` tall. Unset means the font's
+   *  natural line height (`ascent + descent + lineGap`), like CSS `line-height: normal`. */
   lineHeight?: number;
   /** Accessibility role for the tagged structure tree (heading level or paragraph; default `"p"`). */
   role?: TextRole;
@@ -67,7 +69,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
   private fontStyle!: FontStyle;
   private color!: Color;
   private textAlignment!: HorizontalAlignment;
-  private lineHeight!: number;
+  private lineHeight?: number; // undefined = the font's natural line height
 
   private content: string | TextSegment[];
   private maxLines?: number;
@@ -128,8 +130,8 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       : this.fragmentSegments(this.content, maxHeight, width, ctx);
   }
 
-  // Plain string: every wrapped line is `fontSize` tall (matches calculateTextHeight),
-  // so `floor(maxHeight / fontSize)` lines fit.
+  // Plain string: every wrapped line gets the same box (the same one calculateTextHeight uses),
+  // so `floor(maxHeight / lineBox)` lines fit.
   private fragmentString(
     content: string,
     maxHeight: number,
@@ -147,7 +149,14 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       this.overflow,
     );
 
-    const fittedLineCount = Math.floor(maxHeight / (this.fontSize * this.lineHeight));
+    const box = lineBoxForString(
+      ctx.metrics,
+      this.fontFamily,
+      this.fontStyle,
+      this.fontSize,
+      this.lineHeight,
+    );
+    const fittedLineCount = Math.floor(maxHeight / box.height);
     if (fittedLineCount <= 0) return { fitted: null, remainder: this };
     if (fittedLineCount >= lines.length) return { fitted: this, remainder: null };
 
@@ -157,21 +166,22 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     };
   }
 
-  // Styled segments: each line's height is its tallest font (maxFontSize), so pack lines
-  // by cumulative leading. Rebuild the fitted/remainder halves back into TextSegment[].
+  // Styled segments: each line's height comes from the fonts on it, so pack lines by cumulative
+  // box height. Rebuild the fitted/remainder halves back into TextSegment[].
   private fragmentSegments(
     content: TextSegment[],
     maxHeight: number,
     width: number,
     ctx: LayoutContext,
   ): FragmentResult {
+    const defaults = {
+      fontFamily: this.fontFamily,
+      fontSize: this.fontSize,
+      fontStyle: this.fontStyle,
+    };
     const lines = breakSegmentsIntoLines(
       content,
-      {
-        fontFamily: this.fontFamily,
-        fontSize: this.fontSize,
-        fontStyle: this.fontStyle,
-      },
+      defaults,
       width,
       ctx.metrics,
       this.maxLines,
@@ -181,7 +191,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     let used = 0;
     let fittedLineCount = 0;
     for (const line of lines) {
-      const lineBox = line.maxFontSize * this.lineHeight;
+      const lineBox = lineBoxForSegmentLine(line, defaults, ctx.metrics, this.lineHeight).height;
       if (used + lineBox > maxHeight) break;
       used += lineBox;
       fittedLineCount++;

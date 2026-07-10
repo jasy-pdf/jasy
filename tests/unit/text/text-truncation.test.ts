@@ -6,11 +6,13 @@ import { LayoutContext } from "../../../src/lib/elements/pdf-element";
 import { FontStyle } from "../../../src/lib/utils/pdf-object-manager";
 import { FontMetrics } from "../../../src/lib/utils/font-metrics";
 import { Text } from "../../../src/lib/api";
+import { unitVerticals } from "../support/metrics";
 
 // Every glyph (and the space) is 10pt wide, no kerning -> "alfa" = 40pt. Deterministic wrapping.
 const metrics = {
   getStringWidth: (t: string) => t.length * 10,
   getCharWidth: () => 10,
+  getFontVerticals: unitVerticals,
 } as unknown as FontMetrics;
 
 const wrap = (text: string, maxWidth: number, maxLines?: number, overflow?: "clip" | "ellipsis") =>

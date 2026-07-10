@@ -17,12 +17,11 @@ export type TextOverflow = "clip" | "ellipsis";
  *  (WinAnsi) and any embedded TTF - whereas U+2026 needs a glyph the font may not carry. */
 const ELLIPSIS = "...";
 
-/** One laid-out line of segments. `maxFontSize` is the tallest font ON THIS LINE - its
- *  leading - matching how real engines (and this lib's plain-string path) space lines. */
+/** One laid-out line of segments. How TALL it is does not live here: the breaker owns the horizontal
+ *  half, `text/line-metrics.ts` owns the vertical one and derives the box from the fonts on the line. */
 export interface SegmentLine {
   segments: TextSegment[];
   width: number; // sum of word widths incl. spaces, used for alignment
-  maxFontSize: number;
 }
 
 /**
@@ -78,10 +77,10 @@ export function wrapStringIntoLines(
 }
 
 /**
- * Break styled segments into lines that fit within `maxWidth`. Same greedy
- * word-splitting as the string breaker, but each line records the tallest font on
- * THAT line as its leading (per-line, not a paragraph-global maximum). Single source
- * of truth: both height measurement and rendering call this.
+ * Break styled segments into lines that fit within `maxWidth`. Same greedy word-splitting as the
+ * string breaker; each line keeps the segments that landed on it, which is what `line-metrics.ts`
+ * later derives the line's height from. Single source of truth: both height measurement and
+ * rendering call this.
  */
 export function breakSegmentsIntoLines(
   segments: TextSegment[],
@@ -93,7 +92,6 @@ export function breakSegmentsIntoLines(
 ): SegmentLine[] {
   const lines: SegmentLine[] = [];
   let width = 0;
-  let maxFontSize = 0; // per line: starts at 0, grows to the tallest font on the line
   let lineSegments: TextSegment[] = [];
   let combined = "";
 
@@ -109,7 +107,6 @@ export function breakSegmentsIntoLines(
     // its whole text into the line that just closed.)
     lineSegments.push({ ...segment, fontFamily: family, content: "" });
     combined = "";
-    if (maxFontSize < size) maxFontSize = size;
 
     words.forEach((word, wordIndex) => {
       const wordWidth = metrics.getStringWidth(word, family, size, style);
@@ -117,10 +114,8 @@ export function breakSegmentsIntoLines(
       // Same guard as the string path: don't open a phantom empty line for an over-wide first word -
       // place it (overflowing) on the current empty line instead.
       if (width + wordWidth > maxWidth && width > 0) {
-        lines.push({ segments: lineSegments, width, maxFontSize });
-        // Start the next line; its leading resets to the wrapping segment's size.
+        lines.push({ segments: lineSegments, width });
         width = 0;
-        maxFontSize = size;
         lineSegments = [];
         combined = word;
         width += wordWidth + spaceWidth;
@@ -137,7 +132,7 @@ export function breakSegmentsIntoLines(
   });
 
   if (lineSegments.length > 0) {
-    lines.push({ segments: lineSegments, width, maxFontSize });
+    lines.push({ segments: lineSegments, width });
   }
 
   // Open-end by default; cap only when maxLines is set.
