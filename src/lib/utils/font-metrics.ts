@@ -27,4 +27,12 @@ export interface FontMetrics {
   /** Underline / strikethrough geometry of a face, in em fractions. GLYPH metrics, deliberately kept
    *  apart from the LINE metrics above (see `text/text-decoration.ts`). */
   getFontDecoration(fontFamily: string, fontStyle: FontStyle): FontDecoration;
+
+  /** Whether kerning is on for this document. `runAdvance` reads it so a measured advance matches the
+   *  drawn one (the backend emits a `TJ` under the same flag). */
+  readonly kerningEnabled: boolean;
+
+  /** Per-adjacent-pair kerning of `text`, in em/1000 (negative tightens); length `codePoints - 1`,
+   *  zero next to a space. Only meaningful when `kerningEnabled`. */
+  getKernPairs(text: string, fontFamily: string, fontStyle: FontStyle): number[];
 }
