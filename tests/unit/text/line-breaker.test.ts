@@ -2,12 +2,15 @@ import { describe, it, expect } from "vitest";
 import { breakSegmentsIntoLines, wrapStringIntoLines } from "../../../src/lib/text/line-breaker";
 import { FontStyle } from "../../../src/lib/utils/pdf-object-manager";
 import type { FontMetrics } from "../../../src/lib/utils/font-metrics";
+import { unitVerticals } from "../support/metrics";
+import { lineBoxForSegmentLine } from "../../../src/lib/text/line-metrics";
 
 // Deterministic metrics: every glyph is 10 wide, spaces are 0. Expected line breaks
 // are computed by hand from these, so the test is an oracle, not a snapshot.
 const metrics: FontMetrics = {
   getStringWidth: (text) => text.length * 10,
   getCharWidth: () => 0,
+  getFontVerticals: unitVerticals,
 };
 
 const defaults = {
@@ -42,13 +45,19 @@ describe("line-breaker", () => {
       metrics,
     );
 
-    // Line 0 carries the 24pt word, so its leading is 24; the wrapped 11pt lines are 11.
-    expect(lines[0].maxFontSize).toBe(24);
-    expect(lines.slice(1).every((line) => line.maxFontSize === 11)).toBe(true);
+    // The breaker only decides WHICH segments land on which line; the height comes from those
+    // segments (line-metrics.ts). Line 0 carries the 24pt word, the wrapped lines carry only 11pt.
+    const sizeOf = (line: (typeof lines)[number]): number =>
+      Math.max(...line.segments.map((s) => s.fontSize ?? defaults.fontSize));
+    expect(sizeOf(lines[0])).toBe(24);
+    expect(lines.slice(1).every((line) => sizeOf(line) === 11)).toBe(true);
 
-    // Measured height = sum of per-line leadings (NOT lineCount * globalMax).
-    const height = lines.reduce((h, l) => h + l.maxFontSize, 0);
-    expect(height).toBe(24 + 11 * (lines.length - 1));
+    // Each line is sized on its own, NOT on a paragraph-global maximum.
+    const box = (line: (typeof lines)[number]): number =>
+      lineBoxForSegmentLine(line, defaults, metrics).height;
+    expect(box(lines[0])).toBeGreaterThan(box(lines[1]));
+    const height = lines.reduce((h, l) => h + box(l), 0);
+    expect(height).toBeCloseTo(24 + 11 * (lines.length - 1)); // unitVerticals: 1 em per line
   });
 
   it("keeps a single over-wide word on one line (no phantom empty leading line)", () => {

@@ -4,12 +4,14 @@ import { TextSegment } from "../../../src/lib/elements/text-element";
 import { LayoutContext } from "../../../src/lib/elements/pdf-element";
 import { BoxConstraints } from "../../../src/lib/layout/box-constraints";
 import type { FontMetrics } from "../../../src/lib/utils/font-metrics";
+import { unitVerticals } from "../support/metrics";
 
 // Deterministic metrics: each glyph is 10 wide, spaces are 0. With six 2-char words and
 // maxWidth 50 the greedy breaker yields three lines of two words each.
 const metrics: FontMetrics = {
   getStringWidth: (text) => text.length * 10,
   getCharWidth: () => 0,
+  getFontVerticals: unitVerticals,
 };
 const ctx = { metrics } as LayoutContext;
 

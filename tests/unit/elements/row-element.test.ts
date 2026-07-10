@@ -6,6 +6,7 @@ import { TextElement } from "../../../src/lib/elements/text-element";
 import { BoxConstraints } from "../../../src/lib/layout/box-constraints";
 import { LayoutContext } from "../../../src/lib/elements/pdf-element";
 import { FontMetrics } from "../../../src/lib/utils/font-metrics";
+import { unitVerticals } from "../support/metrics";
 
 const box = (width: number, height: number) =>
   new RectangleElement({ x: 0, y: 0, children: [], width, height, borderWidth: 0 });
@@ -33,6 +34,7 @@ describe("RowElement", () => {
     const metrics = {
       getStringWidth: (t: string) => t.length * 6,
       getCharWidth: () => 6,
+      getFontVerticals: unitVerticals,
     } as unknown as FontMetrics;
     const ctx = { metrics, pageConfig: {} } as LayoutContext;
 
@@ -55,6 +57,7 @@ describe("RowElement", () => {
     const metrics = {
       getStringWidth: (t: string) => t.length * 6 - 10, // per word; kerning pulls it IN
       getCharWidth: () => 6, // the space advance
+      getFontVerticals: unitVerticals,
     } as unknown as FontMetrics;
     const ctx = { metrics, pageConfig: {} } as LayoutContext;
 
