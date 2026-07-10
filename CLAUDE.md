@@ -356,6 +356,12 @@ Genuine remaining gaps / deferred:
    positioning frame (the page is one too); `Positioned({ top,left,right,bottom }, child)` is out-of-flow
    and anchors to the nearest frame (negative offsets poke out); `Box({ overflow: "hidden" })` crops its
    children to the rounded box (an image in one is round-cropped for free). Tests + gallery `10-positioning`.
+   The page's frame is its **content box** — built in `PageElement.calculateLayout` BEFORE `layoutPageBands`
+   and threaded into header, footer and body alike (`pageFrame(config)`), so `Positioned` means the same
+   thing in all three and `bottom: 0` is the foot of the page, not the top of the footer. That is what makes
+   **watermarks / draft stamps** work: a `Positioned` in a band repeats on every page and takes no space in
+   it (gallery `18-watermark`; this is react-pdf's `fixed`). With no frame at all a `Positioned` now THROWS
+   — it used to leave its child at (0,0) and silently draw it in the page corner (ISSUE-4).
    Remaining: **`z-index`** (Stage 3, paint order within a frame) and a public `measure()` helper. See
    `todo.md` "Absolute-positioning layer".
 2. **`slice` border mode** (a split box left open at the break) — `clone` is the default; needs per-side
