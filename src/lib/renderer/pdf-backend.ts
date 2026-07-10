@@ -275,6 +275,9 @@ export class PdfBackend {
         const textOp = isCustom
           ? `<${om.encodeCustomText(node.fontFamily, node.text, node.fontStyle)}>`
           : `(${PdfBackend.escapePdfString(node.text)})`;
+        // letterSpacing is the `Tc` operator: extra advance after EVERY glyph (an embedded
+        // Identity-H font too - that is `Tw`, word spacing, which only touches single-byte code 32).
+        const spacing = node.letterSpacing ? `${node.letterSpacing.toFixed(3)} Tc\n` : "";
         const block =
           `BT\n` +
           `${node.color.toPDFColorString()} rg ` +
@@ -282,9 +285,10 @@ export class PdfBackend {
           `${node.x.toFixed(3)} ${node.y.toFixed(3)} Td ` +
           `${textOp} Tj\n` +
           `ET\n`;
-        // Transparent text gets an isolating q/Q + gs; opaque text is byte-identical.
         const gs = PdfBackend.alphaPrefix(om, node.color.getAlpha(), 1);
-        return gs ? `q\n${gs}${block}Q\n` : block;
+        // `Tc` is graphics state and would leak into the next run, so isolate it in q/Q - the same
+        // reason transparent text is isolated. A run with neither stays byte-identical.
+        return gs || spacing ? `q\n${gs}${spacing}${block}Q\n` : block;
       }
       case "image": {
         // The backend owns PDF resource creation: register the XObject (using the

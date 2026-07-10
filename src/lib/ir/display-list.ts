@@ -38,6 +38,7 @@ export interface TextRun {
   fontStyle: FontStyle;
   fontSize: number;
   color: Color;
+  letterSpacing?: number; // extra advance after every glyph, in points (Tc); absent/0 = none
   tag?: StructTag; // accessible tagging; absent = Artifact
 }
 

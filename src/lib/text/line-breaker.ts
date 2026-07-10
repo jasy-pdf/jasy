@@ -1,12 +1,15 @@
 import type { FontStyle } from "../utils/pdf-object-manager.ts";
 import type { FontMetrics } from "../utils/font-metrics.ts";
 import type { TextSegment } from "../elements/text-element.ts";
+import { runAdvance } from "./advance.ts";
 
 /** Default font for segments that don't override it. */
 export interface SegmentDefaults {
   fontFamily: string;
   fontSize: number;
   fontStyle: FontStyle;
+  /** Extra space after every glyph, in points; a segment may override it. Default 0. */
+  letterSpacing?: number;
 }
 
 /** What happens to text beyond `maxLines`: `"clip"` drops it, `"ellipsis"` ends the last kept line
@@ -41,15 +44,19 @@ export function wrapStringIntoLines(
   metrics: FontMetrics,
   maxLines?: number,
   overflow?: TextOverflow,
+  letterSpacing = 0,
 ): string[] {
   let currentLine = "";
   let currentWidth = 0;
   const lines: string[] = [];
 
+  const font = { fontFamily, fontSize, fontStyle };
   const words = text.split(" ");
   words.forEach((word, index) => {
-    const wordWidth = metrics.getStringWidth(word, fontFamily, fontSize, fontStyle);
-    const spaceWidth = metrics.getCharWidth(" ", fontSize, undefined, fontFamily, fontStyle);
+    // Word and space advances come from the one shared primitive (`advance.ts`), the same one
+    // `naturalWidth` uses - so a bounded and an unbounded layout of the same text agree bit for bit.
+    const wordWidth = runAdvance(metrics, word, font, letterSpacing);
+    const spaceWidth = runAdvance(metrics, " ", font, letterSpacing);
 
     // Break before a word that won't fit - but only once the line has content. A single word wider
     // than maxWidth must sit on its (empty) line and overflow, not push a phantom empty line before
@@ -71,7 +78,15 @@ export function wrapStringIntoLines(
   const kept = lines.slice(0, maxLines);
   if (overflow === "ellipsis") {
     const last = kept.length - 1;
-    kept[last] = ellipsize(kept[last], fontFamily, fontSize, fontStyle, maxWidth, metrics);
+    kept[last] = ellipsize(
+      kept[last],
+      fontFamily,
+      fontSize,
+      fontStyle,
+      maxWidth,
+      metrics,
+      letterSpacing,
+    );
   }
   return kept;
 }
@@ -99,7 +114,9 @@ export function breakSegmentsIntoLines(
     const family = segment.fontFamily || defaults.fontFamily;
     const size = segment.fontSize || defaults.fontSize;
     const style = segment.fontStyle || defaults.fontStyle;
-    const spaceWidth = metrics.getCharWidth(" ", size, undefined, family, style);
+    const letterSpacing = segment.letterSpacing ?? defaults.letterSpacing ?? 0;
+    const font = { fontFamily: family, fontSize: size, fontStyle: style };
+    const spaceWidth = runAdvance(metrics, " ", font, letterSpacing);
     const words = segment.content.split(" ");
 
     // Start this segment's piece empty; its content is filled word-by-word below. (Not
@@ -109,7 +126,7 @@ export function breakSegmentsIntoLines(
     combined = "";
 
     words.forEach((word, wordIndex) => {
-      const wordWidth = metrics.getStringWidth(word, family, size, style);
+      const wordWidth = runAdvance(metrics, word, font, letterSpacing);
 
       // Same guard as the string path: don't open a phantom empty line for an over-wide first word -
       // place it (overflowing) on the current empty line instead.
@@ -171,9 +188,11 @@ function ellipsize(
   fontStyle: FontStyle,
   maxWidth: number,
   metrics: FontMetrics,
+  letterSpacing = 0,
 ): string {
+  const font = { fontFamily, fontSize, fontStyle };
   const fits = (s: string): boolean =>
-    metrics.getStringWidth(s + ELLIPSIS, fontFamily, fontSize, fontStyle) <= maxWidth;
+    runAdvance(metrics, s + ELLIPSIS, font, letterSpacing) <= maxWidth;
   if (fits(line)) return line + ELLIPSIS;
 
   const words = line.split(" ");
@@ -202,12 +221,17 @@ function ellipsizeSegmentLine(
 ): void {
   const segs = line.segments;
   if (segs.length === 0) return;
+  const lsOf = (seg: TextSegment): number => seg.letterSpacing ?? defaults.letterSpacing ?? 0;
   const widthOf = (seg: TextSegment): number =>
-    metrics.getStringWidth(
+    runAdvance(
+      metrics,
       seg.content,
-      seg.fontFamily || defaults.fontFamily,
-      seg.fontSize || defaults.fontSize,
-      seg.fontStyle || defaults.fontStyle,
+      {
+        fontFamily: seg.fontFamily || defaults.fontFamily,
+        fontSize: seg.fontSize || defaults.fontSize,
+        fontStyle: seg.fontStyle || defaults.fontStyle,
+      },
+      lsOf(seg),
     );
   let prefix = 0;
   for (let i = 0; i < segs.length - 1; i++) prefix += widthOf(segs[i]);
@@ -219,6 +243,7 @@ function ellipsizeSegmentLine(
     last.fontStyle || defaults.fontStyle,
     maxWidth - prefix,
     metrics,
+    lsOf(last),
   );
   line.width = prefix + widthOf(last);
 }

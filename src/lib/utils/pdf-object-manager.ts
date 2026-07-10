@@ -948,6 +948,7 @@ endstream`;
     fontStyle: FontStyle,
     bandTop: number,
     bandBottom: number,
+    letterSpacing = 0,
   ): Array<[number, number]> {
     const ttf = this.getCustomFont(fontFamily, fontStyle);
     if (!ttf) return [];
@@ -961,7 +962,9 @@ endstream`;
           spans.push([pen + x0 * scale, pen + x1 * scale]);
         }
       }
-      pen += this.getCharWidth(ch, fontSize, undefined, fontFamily, fontStyle);
+      // The pen advances by the glyph AND its letter-spacing, so the ink of the next glyph lands
+      // where `Tc` actually draws it - otherwise the skipped gaps drift under the wrong letters.
+      pen += this.getCharWidth(ch, fontSize, undefined, fontFamily, fontStyle) + letterSpacing;
     }
     return mergeSpans(spans);
   }

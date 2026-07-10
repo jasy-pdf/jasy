@@ -24,6 +24,8 @@ export interface TextStyle {
    *  EMBEDDED font - the standard-14 outlines live in the viewer, so we cannot see where their ink
    *  is. Asking for it with a standard font is an error, not a silent no-op. */
   skipInk?: boolean;
+  /** Extra space after every glyph, in points (CSS `letter-spacing`). Negative tightens. Default 0. */
+  letterSpacing?: number;
   /** External URL - makes this run an inline hyperlink (a /Link annotation over its glyphs). On a
    *  `span` it links just that run; on a whole `Text` (plain string) it links the whole text. */
   href?: string;
@@ -100,6 +102,7 @@ export function span(text: string, style: TextStyle = {}): TextSegment {
     fontColor: style.color !== undefined ? toColor(style.color) : undefined,
     underline: style.underline,
     strikethrough: style.strikethrough,
+    letterSpacing: style.letterSpacing,
     href: style.href,
     dest: style.to,
   };
@@ -134,6 +137,7 @@ export function Text(content: string | TextSegment[], opts: TextOptions = {}): T
     underline: opts.underline,
     strikethrough: opts.strikethrough,
     skipInk: opts.skipInk,
+    letterSpacing: opts.letterSpacing,
     role: opts.role,
   });
 }
@@ -156,6 +160,7 @@ export interface TextDefaults {
   underline?: boolean;
   strikethrough?: boolean;
   skipInk?: boolean;
+  letterSpacing?: number;
 }
 
 /** Maps the `Text`-style option names onto a partial engine `ResolvedTextStyle` (only the set
@@ -173,5 +178,6 @@ export function toTextStyleOverride(opts: TextDefaults): Partial<ResolvedTextSty
   if (opts.underline !== undefined) style.underline = opts.underline;
   if (opts.strikethrough !== undefined) style.strikethrough = opts.strikethrough;
   if (opts.skipInk !== undefined) style.skipInk = opts.skipInk;
+  if (opts.letterSpacing !== undefined) style.letterSpacing = opts.letterSpacing;
   return style;
 }

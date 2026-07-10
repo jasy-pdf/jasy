@@ -9,8 +9,10 @@ import { unitVerticals } from "../support/metrics";
 // Deterministic metrics: each glyph is 10 wide, spaces are 0. With six 2-char words and
 // maxWidth 50 the greedy breaker yields three lines of two words each.
 const metrics: FontMetrics = {
-  getStringWidth: (text) => text.length * 10,
-  getCharWidth: () => 0,
+  // Consistent font: getStringWidth is the sum of getCharWidth (as it is in reality). Each glyph is
+  // 10 wide, a space is 0, so word widths are len*10 and spaces cost nothing - the arithmetic below.
+  getStringWidth: (text: string) => [...text].reduce((w, c) => w + (c === " " ? 0 : 10), 0),
+  getCharWidth: (c: string) => (c === " " ? 0 : 10),
   getFontVerticals: unitVerticals,
 };
 const ctx = { metrics } as LayoutContext;
