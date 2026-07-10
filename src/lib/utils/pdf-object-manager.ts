@@ -956,6 +956,7 @@ endstream`;
     const chars = [...text];
     if (chars.length < 2) return [];
     const out: number[] = [];
+    // An embedded font kerns by GLYPH id (kern table / GPOS); a standard-14 one by character (AFM).
     const ttf = this.getCustomFont(fontFamily, fontStyle);
     const parser = ttf
       ? undefined
@@ -963,7 +964,18 @@ endstream`;
     for (let i = 0; i < chars.length - 1; i++) {
       const a = chars[i];
       const b = chars[i + 1];
-      out.push(a === " " || b === " " || !parser ? 0 : parser.getKerning(a, b));
+      if (a === " " || b === " ") {
+        out.push(0);
+      } else if (ttf) {
+        out.push(
+          ttf.getKerning(
+            ttf.getGlyphIndex(a.codePointAt(0)!),
+            ttf.getGlyphIndex(b.codePointAt(0)!),
+          ),
+        );
+      } else {
+        out.push(parser!.getKerning(a, b));
+      }
     }
     return out;
   }

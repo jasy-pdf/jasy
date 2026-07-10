@@ -159,6 +159,12 @@ export class TTFParser {
   // COLR v1: base glyph id → the absolute offset of its Paint table (a recursive paint graph).
   private colrBaseV1 = new Map<number, number>();
   private colrLayerListOffset = 0; // absolute offset of the v1 LayerList (paint-offset array)
+  // Kerning: (leftGid << 16 | rightGid) -> value in FONT UNITS (from the `kern` table and/or GPOS).
+  private kernPairs = new Map<number, number>();
+  private hasKerning = false;
+  // GPOS Type 2 (pair positioning) subtables, in absolute byte offsets. Queried per pair (format 2
+  // is class-based, so it cannot be enumerated into `kernPairs` up front). Preferred over `kern`.
+  private gposPairPos: number[] = [];
 
   constructor(private data: Uint8Array) {
     this.readTableDirectory();
@@ -183,6 +189,16 @@ export class TTFParser {
     if (this.tables["COLR"] && this.tables["CPAL"]) {
       this.readColr();
       this.readCpal();
+    }
+    // Kerning tables are optional and only ever make text prettier; a malformed one must degrade to
+    // "no kerning", never break font loading. Guard both.
+    try {
+      if (this.tables["kern"]) this.readKern();
+      if (this.tables["GPOS"]) this.readGpos();
+    } catch {
+      this.kernPairs.clear();
+      this.gposPairPos = [];
+      this.hasKerning = false;
     }
   }
 
@@ -362,6 +378,201 @@ export class TTFParser {
       for (let k = 0; k + 1 < xs.length; k += 2) spans.push([xs[k], xs[k + 1]]);
     }
     return mergeSpans(spans);
+  }
+
+  /** True if the font declares any horizontal kerning (kern table or GPOS). */
+  kerns(): boolean {
+    return this.hasKerning;
+  }
+
+  /** Kerning between two glyphs, in em/1000 (the standard-14 unit); 0 if the pair is not kerned.
+   *  Negative tightens, matching the AFM sign. GPOS wins over the legacy `kern` table when both
+   *  exist (it is what a modern shaper uses, and can carry more pairs). */
+  getKerning(leftGid: number, rightGid: number): number {
+    let units: number | undefined;
+    if (this.gposPairPos.length > 0) units = this.gposKern(leftGid, rightGid);
+    if (units === undefined) units = this.kernPairs.get((leftGid << 16) | rightGid);
+    return units === undefined ? 0 : Math.round((units * 1000) / this.unitsPerEm);
+  }
+
+  // The legacy `kern` table, format 0 (an explicit list of glyph-pair adjustments). Only horizontal
+  // format-0 subtables are read; GPOS (parsed separately) supersedes this in modern fonts, but old
+  // TrueType (DejaVu, FreeSans) carries its kerning here.
+  private readKern(): void {
+    const base = this.tables["kern"].offset;
+    // The OpenType (Microsoft) header is version:u16 = 0, nTables:u16. (Apple's is a u32 version; the
+    // fonts we target use the OpenType form.)
+    if (u16(this.data, base) !== 0) return;
+    const nTables = u16(this.data, base + 2);
+    let p = base + 4;
+    for (let t = 0; t < nTables; t++) {
+      const length = u16(this.data, p + 2);
+      const coverage = u16(this.data, p + 4);
+      const format = coverage >> 8;
+      const horizontal = (coverage & 0x1) === 1;
+      if (format === 0 && horizontal) {
+        const nPairs = u16(this.data, p + 6);
+        let q = p + 14; // past nPairs, searchRange, entrySelector, rangeShift
+        for (let i = 0; i < nPairs; i++) {
+          const left = u16(this.data, q);
+          const right = u16(this.data, q + 2);
+          const value = i16(this.data, q + 4);
+          this.kernPairs.set((left << 16) | right, value);
+          q += 6;
+        }
+      }
+      p += length;
+    }
+    if (this.kernPairs.size > 0) this.hasKerning = true;
+  }
+
+  // GPOS pair-adjustment kerning. We collect the PairPos (lookup type 2) subtables of the `kern`
+  // FEATURE only - not every pair-positioning lookup - so this is kerning, not arbitrary shaping.
+  // Script/language selection is skipped: the `kern` feature is the same across the Latin scripts we
+  // target, so a flat scan of the feature list for tag "kern" is correct here. Only pair positioning
+  // (type 2) is read; the rest of GPOS (mark attachment, cursive, contextual) is not kerning.
+  private readGpos(): void {
+    const base = this.tables["GPOS"].offset;
+    const featureListOffset = base + u16(this.data, base + 6);
+    const lookupListOffset = base + u16(this.data, base + 8);
+
+    // Every lookup index referenced by a "kern" feature.
+    const kernLookups = new Set<number>();
+    const featureCount = u16(this.data, featureListOffset);
+    for (let i = 0; i < featureCount; i++) {
+      const rec = featureListOffset + 2 + i * 6;
+      const tag = String.fromCharCode(
+        this.data[rec],
+        this.data[rec + 1],
+        this.data[rec + 2],
+        this.data[rec + 3],
+      );
+      if (tag !== "kern") continue;
+      const feature = featureListOffset + u16(this.data, rec + 4);
+      const lookupIndexCount = u16(this.data, feature + 2);
+      for (let j = 0; j < lookupIndexCount; j++) {
+        kernLookups.add(u16(this.data, feature + 4 + j * 2));
+      }
+    }
+    if (kernLookups.size === 0) return;
+
+    // The PairPos subtables of those lookups (a lookup of another type in the set is ignored).
+    const lookupCount = u16(this.data, lookupListOffset);
+    for (const idx of kernLookups) {
+      if (idx >= lookupCount) continue;
+      const lookup = lookupListOffset + u16(this.data, lookupListOffset + 2 + idx * 2);
+      if (u16(this.data, lookup) !== 2) continue; // lookupType 2 = pair adjustment
+      const subTableCount = u16(this.data, lookup + 4);
+      for (let s = 0; s < subTableCount; s++) {
+        this.gposPairPos.push(lookup + u16(this.data, lookup + 6 + s * 2));
+      }
+    }
+    if (this.gposPairPos.length > 0) this.hasKerning = true;
+  }
+
+  // The XAdvance adjustment on the LEFT glyph for a pair, in font units, from the first PairPos
+  // subtable that covers it; undefined if none does. (Kerning only ever uses value1's XAdvance.)
+  private gposKern(leftGid: number, rightGid: number): number | undefined {
+    for (const sub of this.gposPairPos) {
+      const posFormat = u16(this.data, sub);
+      const coverage = sub + u16(this.data, sub + 2);
+      const covIndex = this.coverageIndex(coverage, leftGid);
+      if (covIndex < 0) continue;
+      const valueFormat1 = u16(this.data, sub + 4);
+      const valueFormat2 = u16(this.data, sub + 6);
+      const v1size = TTFParser.valueRecordSize(valueFormat1);
+      const v2size = TTFParser.valueRecordSize(valueFormat2);
+
+      if (posFormat === 1) {
+        const pairSet = sub + u16(this.data, sub + 10 + covIndex * 2);
+        const pairValueCount = u16(this.data, pairSet);
+        const recSize = 2 + v1size + v2size;
+        for (let i = 0; i < pairValueCount; i++) {
+          const rec = pairSet + 2 + i * recSize;
+          if (u16(this.data, rec) === rightGid) {
+            return this.xAdvance(rec + 2, valueFormat1);
+          }
+        }
+      } else if (posFormat === 2) {
+        const classDef1 = sub + u16(this.data, sub + 8);
+        const classDef2 = sub + u16(this.data, sub + 10);
+        const class2Count = u16(this.data, sub + 14);
+        const c1 = this.classOf(classDef1, leftGid);
+        const c2 = this.classOf(classDef2, rightGid);
+        const recSize = v1size + v2size;
+        const record = sub + 16 + (c1 * class2Count + c2) * recSize;
+        return this.xAdvance(record, valueFormat1);
+      }
+    }
+    return undefined;
+  }
+
+  private static valueRecordSize(valueFormat: number): number {
+    let bits = 0;
+    for (let m = valueFormat; m; m >>= 1) bits += m & 1;
+    return bits * 2;
+  }
+
+  // The XAdvance field of a GPOS value record, or 0 if the format has none. XAdvance (bit 0x0004) is
+  // preceded by XPlacement (0x0001) and YPlacement (0x0002), each an i16 when present.
+  private xAdvance(recordOffset: number, valueFormat: number): number {
+    if ((valueFormat & 0x0004) === 0) return 0;
+    let off = recordOffset;
+    if (valueFormat & 0x0001) off += 2;
+    if (valueFormat & 0x0002) off += 2;
+    return i16(this.data, off);
+  }
+
+  // Coverage index of a glyph, or -1. Format 1: sorted glyph list. Format 2: sorted ranges.
+  private coverageIndex(offset: number, gid: number): number {
+    const format = u16(this.data, offset);
+    if (format === 1) {
+      const count = u16(this.data, offset + 2);
+      let lo = 0;
+      let hi = count - 1;
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        const g = u16(this.data, offset + 4 + mid * 2);
+        if (gid < g) hi = mid - 1;
+        else if (gid > g) lo = mid + 1;
+        else return mid;
+      }
+      return -1;
+    }
+    if (format === 2) {
+      const rangeCount = u16(this.data, offset + 2);
+      for (let i = 0; i < rangeCount; i++) {
+        const rec = offset + 4 + i * 6;
+        const start = u16(this.data, rec);
+        const end = u16(this.data, rec + 2);
+        if (gid >= start && gid <= end) return u16(this.data, rec + 4) + (gid - start);
+      }
+    }
+    return -1;
+  }
+
+  // Class of a glyph in a ClassDef, or 0 (the default class). Format 1: run from a start glyph.
+  // Format 2: ranges. Glyphs not listed are class 0.
+  private classOf(offset: number, gid: number): number {
+    const format = u16(this.data, offset);
+    if (format === 1) {
+      const startGlyph = u16(this.data, offset + 2);
+      const glyphCount = u16(this.data, offset + 4);
+      if (gid >= startGlyph && gid < startGlyph + glyphCount) {
+        return u16(this.data, offset + 6 + (gid - startGlyph) * 2);
+      }
+      return 0;
+    }
+    if (format === 2) {
+      const rangeCount = u16(this.data, offset + 2);
+      for (let i = 0; i < rangeCount; i++) {
+        const rec = offset + 4 + i * 6;
+        const start = u16(this.data, rec);
+        const end = u16(this.data, rec + 2);
+        if (gid >= start && gid <= end) return u16(this.data, rec + 4);
+      }
+    }
+    return 0;
   }
 
   private table(tag: string): TableRecord {

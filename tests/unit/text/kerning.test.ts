@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { PDFObjectManager, FontStyle } from "../../../src/lib/utils/pdf-object-manager";
 import { runAdvance } from "../../../src/lib/text/advance";
 import { Document, Page, Text, renderToBytes } from "../../../src/lib/api";
+import { buildKernTtf, buildGposKernTtf } from "../utils/ttf-fixture";
 
 // Standard-14 kerning: measuring (runAdvance) and drawing (a TJ array) both read the SAME AFM pairs,
 // so a kerned run is exactly as wide as it is drawn. OFF by default (embedded fonts are not kerned
@@ -75,5 +76,51 @@ describe("the backend emits a TJ that matches the measurement", () => {
     // measured = plain glyph widths + kerning (em/1000 * size). The TJ moves the pen by exactly the
     // same kern sum, so the drawn advance is identical.
     expect(measured).toBeCloseTo(plain + (kernUnits / 1000) * 40, 6);
+  });
+});
+
+describe("embedded fonts: kern table and GPOS", () => {
+  // The fixtures map 'A' -> gid 1, 'B' -> gid 2 (em 1000), and kern the pair A-B by a known amount.
+  const custom = (bytes: Uint8Array) => {
+    const m = new PDFObjectManager();
+    m.registerCustomFont("F", bytes, FontStyle.Normal);
+    m.setKerning(true);
+    return m;
+  };
+  const kern = (m: PDFObjectManager, text: string) => m.getKernPairs(text, "F", FontStyle.Normal);
+
+  it("reads kerning from a legacy `kern` table (format 0)", () => {
+    // The fixture kerns A-B by -100 font units at em 1000 -> -100 em/1000.
+    expect(kern(custom(buildKernTtf(-100)), "AB")).toEqual([-100]);
+    expect(kern(custom(buildKernTtf(40)), "AB")).toEqual([40]); // positive spreads
+  });
+
+  it("reads kerning from GPOS Type 2 on a font with NO kern table", () => {
+    // Only the GPOS PairPos parser (feature scan -> lookup -> coverage -> value record) can find this.
+    expect(kern(custom(buildGposKernTtf(-150)), "AB")).toEqual([-150]);
+  });
+
+  it("returns 0 for a pair the font does not kern, and next to a space", () => {
+    const m = custom(buildGposKernTtf(-150));
+    expect(kern(m, "BA")).toEqual([0]); // only A-B is kerned, not B-A
+    expect(kern(m, "A B")).toEqual([0, 0]); // never against a space
+  });
+
+  it("a run with no kern pairs measures the same with kerning on or off", () => {
+    const on = custom(buildKernTtf(-100));
+    const off = new PDFObjectManager();
+    off.registerCustomFont("F", buildKernTtf(-100), FontStyle.Normal);
+    const font = { fontFamily: "F", fontSize: 20, fontStyle: FontStyle.Normal };
+    // "BA" is unkerned by this fixture (only A-B is); on and off must be identical.
+    expect(runAdvance(on, "BA", font)).toBeCloseTo(runAdvance(off, "BA", font), 9);
+  });
+
+  it("kerning changes the advance of a kerned run by exactly the fixture amount", () => {
+    const on = custom(buildGposKernTtf(-150));
+    const font = { fontFamily: "F", fontSize: 1000, fontStyle: FontStyle.Normal };
+    const off = new PDFObjectManager();
+    off.registerCustomFont("F", buildGposKernTtf(-150), FontStyle.Normal);
+    // A-B kerned by -150 units at 1000pt em -> -150pt narrower.
+    expect(runAdvance(on, "AB", font)).toBeCloseTo(runAdvance(off, "AB", font) - 150, 6);
   });
 });
