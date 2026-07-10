@@ -103,6 +103,38 @@ WinAnsiEncoding (`utils/utf8-to-windows1252-encoder.ts`). **Custom TrueType font
 paths branch on the font name (`isCustomFont`), leaving the AFM/WinAnsi path byte-identical. `TTFParser`
 also parses `glyf`/`loca` outlines + COLR/CPAL color tables for color emoji (see the ✅ Color emoji entry).
 
+#### Font VERTICAL metrics — read this before touching a baseline
+
+Two different kinds of number live in a font, and mixing them up cost us ISSUE-5. **Read the right one.**
+
+- A **glyph metric** says how tall one letter is: AFM `Ascender 718` is the height of `b`/`d`/`h`;
+  `CapHeight 718`, `XHeight 523`. Useful for drawing (an underline, a strikethrough), useless for stacking
+  lines.
+- A **line metric** says how far a line must reach from its baseline so nothing collides: TrueType's
+  `hhea.ascent` / `hhea.descent` / `hhea.lineGap`. It is much taller than the letters, because it has to
+  clear an accented capital — Arial declares `ascent 0.905` where its capitals only reach `0.716`.
+
+**The standard-14 line metric is the `FontBBox`, not `Ascender`.** Helvetica: `-166 -225 1000 931` → ascent
+`0.931`, descent `0.225`, and no lineGap left to speak of. That is within a hair of a real Helvetica clone's
+`hhea`. `AFMParser.verticals()` returns exactly this; `PDFObjectManager.getFontVerticals(family, style)`
+answers from `hhea` for an embedded face and from the bbox for a standard-14 one (memoised per face).
+
+**Why a line box built this way looks right:** the surplus above the capitals (`0.931 − 0.718 = 0.213`) is
+about the same as the descent below the baseline (`0.225`). So an all-caps word lands optically centred in a
+box with equal padding. Seat the baseline at `Ascender` instead and every capital sits ~0.2 em too high —
+invisible on `Hxg` (the `g` hides it), glaring on `PAID` in a bordered box. **Always test with an all-caps
+word in a box with equal padding.** The reference is `google-chrome --headless --print-to-pdf` on the
+equivalent HTML (installed; scripts in `claude-data/out/lineheight/`), not react-pdf and certainly not
+reasoning from our own code.
+
+react-pdf hard-codes `ascent = 900` for every standard font, commented "based on empirical observation".
+That is a **rounded `FontBBox`**, not a guess. For embedded fonts it reads real `hhea` values, like we do.
+
+**Available and deliberately not parsed yet:** AFM gives `UnderlinePosition -100`, `UnderlineThickness 50`,
+`CapHeight`, `XHeight`. TrueType has the same in `post` and `OS/2` (`sxHeight`, `sCapHeight`) — `OS/2` is not
+parsed at all today. The planned `underline` / `strikethrough` / `letterSpacing` work needs these. Take them
+from the font. **Do not invent a constant** — that is exactly how `BASELINE_RATIO = 683/1000` happened.
+
 ### State threading — explicit, no singleton (since roadmap Phase 2)
 
 There is **no global object manager** (the old `@InjectObjectManager` / `reflect-metadata` decorator is
@@ -136,6 +168,12 @@ shared state.
 | `LineElement`           | `elements/line-element.ts`                   | `LineRenderer`        | stroke                                                                  |
 | `RectangleElement`      | `elements/rectangle-element.ts`              | `RectangleRenderer`   | fill + stroke                                                           |
 | `Color`                 | `common/color.ts`                            | —                     | RGB → PDF color string                                                  |
+| `LinkElement`           | `elements/layout/link-element.ts`            | `LinkRenderer`        | `href` (URL) or `dest` (an `Anchor`) → a /Link annotation               |
+| `AnchorElement`         | `elements/layout/anchor-element.ts`          | `AnchorRenderer`      | named jump target → catalog /Names /Dests                               |
+| `BookmarkElement`       | `elements/layout/bookmark-element.ts`        | `BookmarkRenderer`    | outline entry, nested by `level` → /Outlines                            |
+| `RotatedElement`        | `elements/layout/rotated-element.ts`         | `RotatedRenderer`     | paint-only spin at any angle (stamps)                                   |
+| `RotatedBoxElement`     | `elements/layout/rotated-box-element.ts`     | `RotatedRenderer`     | layout-aware quarter-turns (vertical labels)                            |
+| `PageBuilderElement`    | `elements/layout/page-builder-element.ts`    | `PageBuilderRenderer` | builds from `PageInfo` (pageNumber/pageCount/pageSize)                  |
 
 Every renderer's `render()` returns `Promise<IRNode[]>` (since roadmap Phase 1). Adding an element =
 new element + renderer that returns IR + (if it draws something new) a primitive in `ir/display-list.ts`
@@ -179,7 +217,7 @@ rendering. This is the standing visual check; prefer it over one-off `scripts/ru
 - `pnpm test` — Vitest (watch). `pnpm exec vitest run` for a one-shot CI-style run.
   `pnpm run test:coverage` for coverage. Unit tests live in **`tests/unit/`**, mirroring the `src/lib/`
   structure (`tests/unit/{common,elements,renderer,utils}/…`). `src/` is pure production code — the
-  build (`tsconfig.json` includes only `src/**`) therefore keeps `dist/` test-free. **~415 tests, green**
+  build (`tsconfig.json` includes only `src/**`) therefore keeps `dist/` test-free. **512 tests, green**
   in the core (plus the `@jasy/zugferd` suite).
 - `pnpm run build` — `tsc` → `dist/`.
 - `pnpm run lint` (oxlint) + `pnpm run fmt:check` (oxfmt `--check`); `pnpm run fmt` formats. **Run `pnpm run fmt`
@@ -221,6 +259,14 @@ The big refactors the roadmap set out are **done** (Phases 0-6, shipped as `@jas
   DURING fragmentation, not mutated onto shared instances — constraints down once, sizes up once.
 - ✅ **One shared line-breaker** (`text/line-breaker.ts`) feeds measure, draw AND fragmentation; the old
   duplicated-wrapping divergence is gone.
+- ✅ **One shared line-metrics module** (`text/line-metrics.ts`, 2026-07-10) — the VERTICAL counterpart:
+  `lineBoxFor(parts, lineHeight?) → { height, baseline }`. Measure/fragment/draw all call it, so a line's
+  height and its baseline are decided in exactly one place. Ascent/descent/lineGap come from the font via
+  `FontMetrics.getFontVerticals`: an embedded face answers from its `hhea`, a standard-14 face from its
+  **`FontBBox`** — NOT from the AFM's `Ascender`, which is a glyph metric (the height of `b`/`d`/`h`), not a
+  line metric. This is what makes an all-caps word sit optically centred, matching Chrome to a third of a
+  point. `lineHeight` unset = the font's natural line height (CSS `line-height: normal`); a number = a
+  multiplier of the font size. Half-leading splits the slack evenly, Flutter/CSS style.
 - ✅ **Singleton killed** → explicit `LayoutContext` threading (Phase 2); mixed-page-size bug fixed.
 - ✅ **Typed seams** — `BoxConstraints`/`Size`/`Offset` (Phase 4); `grep ': any' src/lib` empty.
 - ✅ **Custom fonts** — TTF parse → Type0/Identity-H + `/FontFile2`, full Unicode, subsetted
@@ -242,7 +288,7 @@ lineHeight, align, bold, italic }, …)` sets doc-wide text defaults; `DefaultTe
   choke-point (`streamPayload`) + a finalize pass (`finalizeEncryption`) writes `/Encrypt` + forces `/ID`;
   `EncryptMetadata false` keeps XMP plaintext. Mutually exclusive with PDF/A (ZUGFeRD throws). `recoverFileKey`
   (validates the password vs `/U`) is the groundwork for a future decrypt/edit path. Proven against poppler.
-- ✅ **Color emoji — COLR/CPAL v0 + v1** (2026-07, branch `feat/emoji`, not yet merged) — real color emoji
+- ✅ **Color emoji — COLR/CPAL v0 + v1** (2026-07, merged + shipped) — real color emoji
   rendered as **vector layers in pure TS, no browser, no CDN** (react-pdf only does CDN-fetched Twemoji PNGs).
   `TTFParser` grew a `glyf`+`loca` outline parser (`getGlyphPath` → M/L/Q, quads), COLR **v0** (flat solid
   layers) **and v1** (`getColorGlyph` walks the paint graph: PaintColrLayers/PaintGlyph/PaintColrGlyph, Solid,
@@ -272,7 +318,37 @@ lineHeight, align, bold, italic }, …)` sets doc-wide text defaults; `DefaultTe
   does (`canFragment` veto → rows move whole, never clipped). Backend wraps each node `/Role <</MCID>> BDC…EMC`
   (untagged → `/Artifact **BMC**`); catalog gets `/MarkInfo`, `/StructTreeRoot`, `/Lang`, `/ViewerPreferences
 /DisplayDocTitle`, pages `/Tabs /S`, TH `/Scope /Column`, XMP `pdfuaid:part 1` (`utils/ua-xmp.ts`). Off =
-  byte-identical. Full conformance needs embedded fonts + a title (same as PDF/A). **~415 tests.**
+  byte-identical. Full conformance needs embedded fonts + a title (same as PDF/A).
+- ✅ **Rotate** (2026-07-08) — `Rotated({ angle })` spins a subtree at any angle at PAINT time (stamps,
+  watermarks; layout-neutral, siblings do not reflow); `RotatedBox({ turns })` does layout-aware quarter-turns
+  (a 90/270 turn swaps w/h, so a vertical label reserves its strip). One IR pair `TransformPush{matrix}` /
+  `TransformPop` → `q … cm … Q`; `flipY` conjugates the matrix (`M_pdf = F·M·F`) so producers stay
+  coordinate-blind. Known gap: an annotation inside a transform does NOT rotate (see gap 6 below).
+- ✅ **Navigation** (2026-07-09, `@jasy/pdf@alpha.6`) — `Link({ href })` (external URL) or `Link({ to })`
+  (internal jump); `href`/`to` on a `span` links just that run (one /Rect per wrapped line); `Anchor({ name })`
+  is the jump target, resolved through the catalog `/Names /Dests` name tree, so a link may point at a page
+  that has not been rendered yet. `Bookmark({ title, level })` builds the nested `/Outlines` sidebar tree.
+  All three are layout-transparent wrappers emitting side-channel IR nodes that draw NOTHING (`serializeNode`
+  returns `""`); `PageRenderer` peels them into `/Annots`, `PDFRenderer` into the catalog. `/EmbeddedFiles`
+  (ZUGFeRD) and `/Dests` share ONE `/Names` dict. Off = byte-identical.
+- ✅ **Page numbers** (2026-07-09) — the page driver now PAGINATES the whole document, THEN draws, so the
+  total exists before page 1 is painted. `PageBuilder(({ pageNumber, pageCount, pageSize }) => element)` is the
+  primitive and works ANYWHERE (header, footer, body, a table cell); `PageNumber({ offset })` / `PageCount()`
+  are one-line sugar. Caveats, both from the same chicken-and-egg: dynamic BODY content reserves its box from a
+  provisional "1 of 1" build, and a conditional header may SHRINK on later pages but never GROW.
+- ✅ **The `Spacer` bug** (2026-07-09, GitHub #10) — a flex child on an UNBOUNDED main axis resolved to
+  `Infinity`, which became the offset of every following sibling and was written into the content stream
+  verbatim (`56.000 -Infinity Td`). Viewers discard the stream from there, so siblings AND the footer silently
+  vanished. Now: flex collapses to `0` on an unbounded axis; `PdfBackend.assertFinite` REFUSES to serialize a
+  non-finite number (it checks numbers, not text, so `Text("Infinity")` still renders); and a stack holding a
+  flex child ASKS its parent for a bounded main axis (`PDFElement.needsBoundedMain`, propagated recursively
+  through `Column`/`Row`/`Box`). So `Spacer()` finally pushes to the bottom in a nested `Column` and in a sized
+  `Box` — it never worked there before.
+- ✅ **Performance, ~4.8x** (2026-07-09, GitHub #12) — the hot path built STRING KEYS inside per-character
+  lookups. `resolveCustomStyle` early-outs when no custom font is registered; `customFonts` became
+  `Map<family, Map<style, TTFParser>>` (one map walk, not three key builds); `AFMParser.kerningPairs` is nested
+  too. Standard-14: 590 → 124 ms. Custom TTF: 778 → 119 ms (react-pdf 4.5.1: 181 ms on the same document).
+  Output byte-identical throughout, veraPDF still PDF/A-3b compliant. Harness: `node claude-data/bench.mjs`.
 
 Genuine remaining gaps / deferred:
 
@@ -297,10 +373,19 @@ Genuine remaining gaps / deferred:
 4. `manual-test` has hard-coded machine-specific paths.
 5. Font gaps: no TrueType kerning; only TTF / TrueType-flavoured OTF parsed (OTF/CFF, WOFF2 not yet).
    Bold/italic resolve via registered family variants with a clean fallback to `normal` (no faux styles).
-   Color-emoji deferred (all on `feat/emoji`, none blocking): COLR v1 **rotate/skew** transforms (24-31 —
+   Color-emoji deferred (none blocking): COLR v1 **rotate/skew** transforms (24-31 —
    Noto doesn't use them; not built without a test font), variable-font paint variants, **sweep** gradient,
    gradient `repeat`/`reflect` extend (drawn as `pad`), and **CFF** / **sbix**+**CBDT** bitmap color fonts
    (so Apple Color Emoji and the bitmap Noto build are unsupported — only glyf-outline COLR fonts render).
+6. **A transform does not carry its side channels** (`todo.md` ISSUE-2, priority LOW). Everything a `Rotated`
+   subtree DRAWS rotates — text, custom fonts, colour-emoji `Path`s, images, rects, borders, the
+   `overflow: hidden` clip, a whole `Table` (all measured). What does NOT rotate is `Link`, `Anchor` and
+   `Outline`: they are page `/Annots` and catalog entries, and never see the content-stream `cm` matrix. A
+   rotated _clickable_ link therefore keeps an axis-aligned hit area at its un-rotated position. **react-pdf is
+   not better here** — it transforms only the rect's two diagonal corners, so its hit area lands in the WRONG
+   place (measured: 152.3 × 96.8 pt where the true AABB is 155.56 × 155.56), and it emits no `/QuadPoints` at
+   all. The fix (a matrix stack at the `flipY` seam → `/QuadPoints` + a correct AABB `/Rect`) would make us the
+   only one who gets it right; it is a corner case, hence LOW.
 
 ## Roadmap
 
@@ -309,12 +394,12 @@ starting work. Working agreement: **phase by phase, Flo approves each gate, Clau
 unprompted, comments English + sensible, don't break the font math.**
 
 Status: **LAUNCHED 2026-06-27**, still shipping alpha increments (no beta/rc/stable until the feature set is
-complete — see `todo.md`). All five packages live on npm; **current (2026-07-02): `@jasy/pdf`@alpha.5,
-`@jasy/zugferd`@alpha.2, `@jasy/cli`@alpha.4, `@jasy/vue`@alpha.5, `@jasy/nuxt`@alpha.4** (the alpha.5 cascade =
-color emoji + PDF/UA). Repo public + locked, full CI + changelog +
+complete — see `todo.md`). All five packages live on npm; **current (2026-07-09): `@jasy/pdf`@alpha.6,
+`@jasy/zugferd`@alpha.3, `@jasy/cli`@alpha.5, `@jasy/vue`@alpha.6, `@jasy/nuxt`@alpha.5** (the alpha.6 cascade =
+rotate + navigation + page numbers + the Spacer fix + a 4.8x speed-up). Repo public + locked, full CI + changelog +
 bots in place (see Repo facts). The engine is **feature-complete for the alpha** — inheritance, `onOverflow`,
-custom formats, the line-breaker fixes; **~415 tests green**. The **landing**
-(`~/projects/jasy-landing` → **jasy.dev**) is built: showroom (9 cards), validator, docs, a home-page
+custom formats, the line-breaker fixes; **512 tests green**. The **landing**
+(`~/projects/jasy-landing` → **jasy.dev**) is built: showroom (12 cards), validator, docs, a home-page
 roadmap section, and a full **SEO + AI-discoverability layer** (OG image, JSON-LD, `robots.txt`,
 `llms.txt`, `sitemap.xml`).
 
@@ -333,8 +418,8 @@ media queries are meaningless for a fixed-size PDF). **✅ Relative/percentage s
 `width`/`height` as `"50%"`/pt on Box/Column/Row/Image, image aspect auto-size, and `%` children in flex
 containers resolved against `line − gaps` (so N columns at (100/N)%+gaps fit exactly - better than
 react-pdf/CSS). One shared `resolveExtent` (`layout/box-constraints.ts`); the core is untouched. Still
-**wanted-additive**: **paint-only rotate** + the small relative-sizing follow-ups (`aspectRatio` on any Box,
-`min/max` w/h, `%` on padding/margin/Positioned) — all 1.x minors. Plus the 🔮 wish-list (read/edit existing PDFs, forms, security + signatures,
+**wanted-additive**: the small relative-sizing follow-ups (`aspectRatio` on any Box, `min/max` w/h, `%` on
+padding/margin/Positioned) + page-break control (keep-together, orphans/widows) — all 1.x minors. Plus the 🔮 wish-list (read/edit existing PDFs, forms, security + signatures,
 more e-invoice profiles, framework bindings). See `todo.md` "⭐ Active" + "🔮 Layout & styling".
 
 ## Repo facts

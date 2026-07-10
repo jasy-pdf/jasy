@@ -1,4 +1,5 @@
 import type { FontStyle } from "./pdf-object-manager.ts";
+import type { FontVerticals } from "../text/line-metrics.ts";
 
 /**
  * Read-only font measurement - the slice of the object manager that the layout pass
@@ -17,4 +18,8 @@ export interface FontMetrics {
     fontName?: string,
     fontStyle?: FontStyle,
   ): number;
+
+  /** Ascent / descent / lineGap of a face, in em fractions - the vertical counterpart of the widths
+   *  above. Drives the line box and the baseline (see `text/line-metrics.ts`). */
+  getFontVerticals(fontFamily: string, fontStyle: FontStyle): FontVerticals;
 }

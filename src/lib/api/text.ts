@@ -31,8 +31,9 @@ export interface TextOptions extends TextStyle {
   maxLines?: number;
   /** What happens past `maxLines`: `"clip"` (default) cuts hard, `"ellipsis"` ends with "…". */
   overflow?: TextOverflow;
-  /** Line-height multiplier (default `1`). `1.4` gives roomier body copy; each line is
-   *  `size * lineHeight` tall. */
+  /** Line-height multiplier: each line is `size * lineHeight` tall. Unset means the font's own
+   *  natural line height (`ascent + descent + lineGap`), like CSS `line-height: normal` - which is
+   *  what you want for body copy. `1` gives exactly one em, which most faces overflow slightly. */
   lineHeight?: number;
   /** Accessibility role for the tagged structure tree (only when rendered with `accessible`): a heading
    *  level `"h1"`..`"h6"` or `"p"` (default). Purely semantic - it does not change the visual style. */

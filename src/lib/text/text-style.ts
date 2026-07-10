@@ -14,13 +14,14 @@ export interface ResolvedTextStyle {
   fontStyle: FontStyle;
   color: Color;
   textAlignment: HorizontalAlignment;
-  lineHeight: number;
+  /** Multiplier of the font size. `undefined` means the font's natural line height
+   *  (`ascent + descent + lineGap`), i.e. CSS `line-height: normal`. */
+  lineHeight?: number;
 }
 
 /**
  * The root of the cascade: what a `Text` falls back to when neither it nor any ancestor sets a
- * property. These MUST match the historical `Text` defaults so a document that sets nothing renders
- * byte-for-byte as before.
+ * property.
  */
 export const DEFAULT_TEXT_STYLE: ResolvedTextStyle = {
   fontSize: 12,
@@ -28,7 +29,7 @@ export const DEFAULT_TEXT_STYLE: ResolvedTextStyle = {
   fontStyle: FontStyle.Normal,
   color: new Color(0, 0, 0),
   textAlignment: HorizontalAlignment.left,
-  lineHeight: 1,
+  lineHeight: undefined,
 };
 
 /** Layers a partial override onto a complete style; an unset (undefined) field keeps the base. */

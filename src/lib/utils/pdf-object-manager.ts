@@ -11,6 +11,7 @@ import { getArrayBuffer } from "./utf8-to-windows1252-encoder.ts";
 import type { SecurityHandler } from "../crypto/security-handler.ts";
 import type { Gradient, GradientStop } from "../ir/display-list.ts";
 import { isEmojiCodePoint } from "../text/emoji-codepoints.ts";
+import type { FontVerticals } from "../text/line-metrics.ts";
 import { StructTree } from "./struct-tree.ts";
 import { OutlineBuilder } from "./outline.ts";
 import { DestRegistry } from "./dest-registry.ts";
@@ -188,6 +189,8 @@ export class PDFObjectManager implements FontMetrics {
   // every lookup, and the lookups happen once per character - the string allocation alone was a third
   // of a custom-font render. `customFontEmit` below keeps the flat key: it is touched once per face.
   private customFonts = new Map<string, Map<FontStyle, TTFParser>>();
+  // Memoised getFontVerticals answers, family -> style -> metrics. Cleared when a font registers.
+  private verticalsCache = new Map<string, Map<FontStyle, FontVerticals>>();
   // Per-registered face: the reserved font-object numbers + the glyph ids actually used. The font
   // program is subsetted and the objects filled in by finalizeCustomFonts(), after the render pass.
   private customFontEmit = new Map<
@@ -609,6 +612,7 @@ endstream`;
     if (this.fonts.hasFont(fontName, fontStyle)) {
       return this.fonts.getFont(fontName, fontStyle)!; // Already exists? Return it!
     }
+    this.verticalsCache.delete(fontName);
 
     const data = STANDARD_AFM[fullName];
     if (data !== undefined) {
@@ -646,6 +650,7 @@ endstream`;
     }
     if (byStyle.has(style)) return;
     byStyle.set(style, new TTFParser(data));
+    this.verticalsCache.delete(name); // this family now answers from the .ttf, not from an AFM
     // Emission (the PDF font objects + page resource) is DEFERRED to first use via ensureEmitted(),
     // so a registered-but-never-rendered face - e.g. a bundled family the document doesn't touch -
     // costs nothing in the output. The metrics above are still available for layout immediately.
@@ -871,6 +876,35 @@ endstream`;
       `<< /Type /Font /Subtype /Type0 /BaseFont /${pdfName(name)} /Encoding /Identity-H ` +
       `/DescendantFonts [${cidFont} 0 R] /ToUnicode ${toUnicode} 0 R >>`
     );
+  }
+
+  // The vertical metrics of a face, in em fractions - what seats the baseline and sizes the line
+  // box (see text/line-metrics.ts). An embedded font answers from its own `hhea`; a standard-14
+  // font from its AFM header. Nothing here is guessed: both numbers come out of the font data.
+  //
+  // Asked once per LINE (not per character), but a long document has a lot of lines and the
+  // standard-14 lookup below is a linear scan, so the answer is memoised per face. Registering a
+  // font clears the cache - a name can go from standard-14 to embedded.
+  getFontVerticals(fontFamily: string, fontStyle: FontStyle): FontVerticals {
+    let byStyle = this.verticalsCache.get(fontFamily);
+    const hit = byStyle?.get(fontStyle);
+    if (hit) return hit;
+
+    const ttf = this.getCustomFont(fontFamily, fontStyle);
+    const verticals = ttf
+      ? {
+          ascent: ttf.ascent / 1000,
+          descent: -ttf.descent / 1000, // hhea writes the descent negative
+          lineGap: ttf.lineGap / 1000,
+        }
+      : this.getAVMParserByFont(undefined, fontFamily, fontStyle).parser.verticals();
+
+    if (!byStyle) {
+      byStyle = new Map();
+      this.verticalsCache.set(fontFamily, byStyle);
+    }
+    byStyle.set(fontStyle, verticals);
+    return verticals;
   }
 
   // Returns the current width of a text, included kernings
