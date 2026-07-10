@@ -23,6 +23,7 @@ const textStyleProps = {
   strikethrough: { type: Boolean, default: undefined },
   /** Step the underline around descenders. Needs an embedded font. */
   skipInk: { type: Boolean, default: undefined },
+  letterSpacing: Number,
 };
 // A link target. Shared by `<Text>`/`<Paragraph>` (links the whole run) and `<Span>` (links just that
 // run). NOT part of `textStyleProps`: `<Document>` and `<DefaultTextStyle>` set defaults, they cannot link.

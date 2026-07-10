@@ -20,6 +20,7 @@ import {
   TextOverflow,
 } from "../text/line-breaker.ts";
 import { lineBoxForSegmentLine, lineBoxForString } from "../text/line-metrics.ts";
+import { runAdvance } from "../text/advance.ts";
 import {
   DecorationStroke,
   skipInkSegments,
@@ -40,6 +41,7 @@ export class TextRenderer {
     maxLines?: number,
     overflow?: TextOverflow,
     lineHeight?: number,
+    letterSpacing = 0,
   ): number {
     // Plain string: every wrapped line gets the same box.
     if (typeof content === "string") {
@@ -52,13 +54,14 @@ export class TextRenderer {
         objectManager,
         maxLines,
         overflow,
+        letterSpacing,
       );
       const box = lineBoxForString(objectManager, fontFamily, fontStyle, fontSize, lineHeight);
       return lines.length * box.height;
     }
 
     // Segments: each line's box comes from the fonts actually on it.
-    const defaults = { fontFamily, fontSize, fontStyle };
+    const defaults = { fontFamily, fontSize, fontStyle, letterSpacing };
     const lines = breakSegmentsIntoLines(
       content,
       defaults,
@@ -94,6 +97,7 @@ export class TextRenderer {
       underline,
       strikethrough,
       skipInk,
+      letterSpacing,
       role,
     } = textElement.getProps();
 
@@ -117,6 +121,7 @@ export class TextRenderer {
       underline,
       strikethrough,
       skipInk,
+      letterSpacing,
     );
 
     // Accessible tagging: this whole text block is one structure element (a paragraph P, or a heading
@@ -182,8 +187,11 @@ export class TextRenderer {
         const l = fallback.getColorGlyph(fallback.getGlyphIndex(cp));
         if (l) [source, layers] = [fallback, l];
       }
-      // The advance matches measuring (getCharWidth applies the same emoji fallback).
-      const advance = om.getCharWidth(ch, run.fontSize, undefined, run.fontFamily, run.fontStyle);
+      // The advance matches measuring (getCharWidth applies the same emoji fallback), plus the run's
+      // letter-spacing so a spaced run's emoji sit where `Tc` advances them.
+      const advance =
+        om.getCharWidth(ch, run.fontSize, undefined, run.fontFamily, run.fontStyle) +
+        (run.letterSpacing ?? 0);
 
       if (source && layers) {
         flushPending();
@@ -348,6 +356,7 @@ export class TextRenderer {
     underline = false,
     strikethrough = false,
     skipInk = false,
+    letterSpacing = 0,
   ): { runs: TextRun[]; links: Link[]; decorations: Line[] } {
     const runs: TextRun[] = [];
     // /Link annotation rects for any `href` spans, collected as we place segments. Empty for the
@@ -377,6 +386,7 @@ export class TextRenderer {
       runColor: Color,
       wantsUnderline: boolean,
       wantsStrikethrough: boolean,
+      runLetterSpacing: number,
     ): void => {
       if ((!wantsUnderline && !wantsStrikethrough) || runWidth <= 0) return;
       const metrics = objectManager.getFontDecoration(family, style);
@@ -403,6 +413,7 @@ export class TextRenderer {
           family,
           style,
           stroke,
+          runLetterSpacing,
         )) {
           push(from, to, stroke);
         }
@@ -424,6 +435,7 @@ export class TextRenderer {
       family: string,
       style: FontStyle,
       stroke: DecorationStroke,
+      runLetterSpacing: number,
     ): Array<[number, number]> => {
       if (!skipInk) return [[0, runWidth]];
       if (!objectManager.isCustomFont(family, style)) {
@@ -443,25 +455,14 @@ export class TextRenderer {
         style,
         -below + half,
         -below - half,
+        runLetterSpacing,
       );
       return skipInkSegments(runWidth, inkSpans, stroke.thickness);
     };
 
-    // Advance width WITHOUT kerning. This is how Tj moves the text cursor, so
-    // segments flowing after each other land here. (Standard-14 fonts carry no
-    // /Widths array; the viewer advances by the AFM widths - same source as below.)
-    const advanceNoKerning = (
-      text: string,
-      family: string,
-      size: number,
-      style: FontStyle,
-    ): number => {
-      let width = 0;
-      for (const ch of text) {
-        width += objectManager.getCharWidth(ch, size, undefined, family, style);
-      }
-      return width;
-    };
+    // The advance the viewer will use: plain glyph widths (a `Tj` never kerns) plus one
+    // `letterSpacing` per code point (the `Tc` operator), from the one shared `advance.ts` primitive.
+    const font = { fontFamily, fontSize, fontStyle };
 
     // --- Plain string: one run per wrapped line. ---
     if (typeof content === "string") {
@@ -474,12 +475,13 @@ export class TextRenderer {
         objectManager,
         maxLines,
         overflow,
+        letterSpacing,
       );
       // yPosition is the top of the text box (top-left). The line box seats its own baseline; lines
       // then stack by that box's height. Same numbers as calculateTextHeight, by construction.
       const box = lineBoxForString(objectManager, fontFamily, fontStyle, fontSize, lineHeight);
       lines.forEach((line, index) => {
-        const lineWidth = objectManager.getStringWidth(line, fontFamily, fontSize, fontStyle);
+        const lineWidth = runAdvance(objectManager, line, font, letterSpacing);
         const x = initialX + alignmentOffset(lineWidth);
         const baseline = yPosition + box.baseline + box.height * index;
         runs.push({
@@ -491,11 +493,8 @@ export class TextRenderer {
           fontStyle,
           fontSize,
           color,
+          ...(letterSpacing ? { letterSpacing } : {}),
         });
-        // `lineWidth` IS the advance the viewer will use: `getStringWidth` sums the plain glyph
-        // widths, and a `Tj` is advanced by exactly those. (It used to fold in AFM kerning that we
-        // never emitted, so the stroke came out short - 19pt on "AVATAR Wave" at 40pt. Fixed at the
-        // root; see the note on getStringWidth.)
         decorate(
           line,
           x,
@@ -507,6 +506,7 @@ export class TextRenderer {
           color,
           underline,
           strikethrough,
+          letterSpacing,
         );
       });
       return { runs, links, decorations };
@@ -523,7 +523,13 @@ export class TextRenderer {
         const family = segment.fontFamily || fontFamily;
         const size = segment.fontSize || fontSize;
         const style = segment.fontStyle || fontStyle;
-        const advance = advanceNoKerning(segment.content, family, size, style);
+        const segLetterSpacing = segment.letterSpacing ?? letterSpacing;
+        const advance = runAdvance(
+          objectManager,
+          segment.content,
+          { fontFamily: family, fontSize: size, fontStyle: style },
+          segLetterSpacing,
+        );
         const runColor = segment.fontColor || color;
         runs.push({
           type: "text",
@@ -534,6 +540,7 @@ export class TextRenderer {
           fontStyle: style,
           fontSize: size,
           color: runColor,
+          ...(segLetterSpacing ? { letterSpacing: segLetterSpacing } : {}),
         });
         decorate(
           segment.content,
@@ -546,6 +553,7 @@ export class TextRenderer {
           runColor,
           segment.underline ?? underline,
           segment.strikethrough ?? strikethrough,
+          segLetterSpacing,
         );
         // An href/to span becomes a /Link annotation over exactly this run's glyph box: from its own
         // ascent above the baseline down to its own descender. A span wrapped across lines yields
@@ -568,8 +576,10 @@ export class TextRenderer {
 
     // yPosition is the top of the text box (top-left). Each line seats its own baseline inside its
     // own box (tallest ascent / deepest descent ON THAT LINE), then the next line starts below it.
-    // The seam flips the whole thing to PDF space.
-    const defaults = { fontFamily, fontSize, fontStyle };
+    // The seam flips the whole thing to PDF space. `letterSpacing` MUST be in the defaults so a span
+    // that does not override it wraps and aligns with the element's spacing - the same defaults the
+    // measure path (calculateTextHeight) uses, or segmented spaced text mis-wraps (measured != drawn).
+    const defaults = { fontFamily, fontSize, fontStyle, letterSpacing };
     let top = yPosition;
     for (const line of breakSegmentsIntoLines(
       content,

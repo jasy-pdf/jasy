@@ -169,6 +169,27 @@ export class PdfBackend {
   }
 
   /**
+   * Builds the `[ ... ]` operand of a `TJ` from a run and its per-gap kern adjustments (em/1000, the
+   * sign the font declares - negative tightens). A `TJ` number moves the pen LEFT, so it is the
+   * NEGATED kern. Consecutive un-kerned glyphs stay in one encoded chunk, so `[(T) 40 (otal)]` rather
+   * than one chunk per glyph. `kerns[i]` is the adjustment AFTER code point `i`.
+   */
+  static kernedArray(text: string, kerns: number[], encode: (chunk: string) => string): string {
+    const chars = [...text];
+    let out = "";
+    let chunk = chars[0] ?? "";
+    for (let i = 0; i < kerns.length; i++) {
+      if (kerns[i] === 0) {
+        chunk += chars[i + 1];
+      } else {
+        out += encode(chunk) + ` ${-kerns[i]} `;
+        chunk = chars[i + 1];
+      }
+    }
+    return `[${out}${encode(chunk)}]`;
+  }
+
+  /**
    * Returns the `/GSx gs` operator that selects a transparency state, or `""` when both
    * alphas are fully opaque. Opaque draws emit nothing here, so output stays
    * byte-identical until transparency is actually used.
@@ -272,19 +293,33 @@ export class PdfBackend {
         const font = isCustom
           ? om.getCustomFontResource(node.fontFamily, node.fontStyle)!
           : om.registerFont(node.fontFamily, node.fontStyle);
-        const textOp = isCustom
-          ? `<${om.encodeCustomText(node.fontFamily, node.text, node.fontStyle)}>`
-          : `(${PdfBackend.escapePdfString(node.text)})`;
+        const encode = (t: string): string =>
+          isCustom
+            ? `<${om.encodeCustomText(node.fontFamily, t, node.fontStyle)}>`
+            : `(${PdfBackend.escapePdfString(t)})`;
+        // Kerning (if the document has it on): a `TJ` array with the font's per-pair adjustments
+        // between glyph chunks, measured into the layout by the SAME numbers (runAdvance). A plain
+        // `Tj` when the run has no kerning, byte-identical.
+        const kerns = om.kerningEnabled
+          ? om.getKernPairs(node.text, node.fontFamily, node.fontStyle)
+          : [];
+        const showOp = kerns.some((k) => k !== 0)
+          ? `${PdfBackend.kernedArray(node.text, kerns, encode)} TJ`
+          : `${encode(node.text)} Tj`;
+        // letterSpacing is the `Tc` operator: extra advance after EVERY glyph (an embedded
+        // Identity-H font too - that is `Tw`, word spacing, which only touches single-byte code 32).
+        const spacing = node.letterSpacing ? `${node.letterSpacing.toFixed(3)} Tc\n` : "";
         const block =
           `BT\n` +
           `${node.color.toPDFColorString()} rg ` +
           `/F${font.fontIndex} ${node.fontSize} Tf ` +
           `${node.x.toFixed(3)} ${node.y.toFixed(3)} Td ` +
-          `${textOp} Tj\n` +
+          `${showOp}\n` +
           `ET\n`;
-        // Transparent text gets an isolating q/Q + gs; opaque text is byte-identical.
         const gs = PdfBackend.alphaPrefix(om, node.color.getAlpha(), 1);
-        return gs ? `q\n${gs}${block}Q\n` : block;
+        // `Tc` is graphics state and would leak into the next run, so isolate it in q/Q - the same
+        // reason transparent text is isolated. A run with neither stays byte-identical.
+        return gs || spacing ? `q\n${gs}${spacing}${block}Q\n` : block;
       }
       case "image": {
         // The backend owns PDF resource creation: register the XObject (using the

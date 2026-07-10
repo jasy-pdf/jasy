@@ -10,19 +10,21 @@ import { unitVerticals } from "../support/metrics";
 describe("TextRenderer - calculateTextHeight", () => {
   it("should calculate the correct text height for a simple string", () => {
     const mockObjectManager = {
-      getStringWidth: vi.fn().mockReturnValue(10), // String width is used for each word = 20
-      getCharWidth: vi.fn().mockReturnValue(5), // Used for empty spaces = 5
+      // Consistent font (getStringWidth is the sum of getCharWidth): every glyph, space included, 5 wide.
+      getStringWidth: vi.fn((t: string) => t.length * 5),
+      getCharWidth: vi.fn().mockReturnValue(5),
       getFontVerticals: unitVerticals,
       struct: { enabled: false },
     } as unknown as PDFObjectManager;
 
+    // "Hello World" is 11 glyphs * 5 = 55 wide; width 100 leaves it on one line.
     const textHeight = TextRenderer.calculateTextHeight(
       "Hello World",
       12,
       "Helvetica",
       FontStyle.Normal,
       mockObjectManager,
-      25,
+      100,
     );
 
     expect(textHeight).toBe(12); // No line breaks

@@ -1,7 +1,8 @@
 // A minimal but valid TTF with the 5 metric tables and 4 glyphs (.notdef, 'A', 'B', ' ')
 // and known advance widths, so tests can assert exact metrics without an MB-sized font.
 // Pass `advances` to mint a distinct variant (e.g. a wider "bold") - default is A=500, B=700.
-export function buildTestTtf(advances: number[] = [0, 500, 700, 250]): Buffer {
+// The 5 metric tables of the minimal font: .notdef(0), 'A'(1), 'B'(2), ' '(3) at em 1000.
+function baseTables(advances: number[]): [string, Buffer][] {
   const head = Buffer.alloc(54);
   head.writeUInt16BE(1000, 18); // unitsPerEm
 
@@ -33,13 +34,82 @@ export function buildTestTtf(advances: number[] = [0, 500, 700, 250]): Buffer {
   cmapHeader.writeUInt32BE(12, 8); // subtable offset
   const cmap = Buffer.concat([cmapHeader, sub]);
 
-  return assembleTtf([
+  return [
     ["head", head],
     ["maxp", maxp],
     ["hhea", hhea],
     ["hmtx", hmtx],
     ["cmap", cmap],
-  ]);
+  ];
+}
+
+export function buildTestTtf(advances: number[] = [0, 500, 700, 250]): Buffer {
+  return assembleTtf(baseTables(advances));
+}
+
+// The minimal font plus a legacy `kern` table (format 0) kerning the pair A-B by `value` font units.
+// Layout: kern header(4) + subtable header(14: version, length, coverage, nPairs, search fields) +
+// one pair(6). Our reader takes length @p+2, coverage @p+4, nPairs @p+6, pairs @p+14 (p = byte 4).
+export function buildKernTtf(value = -100): Buffer {
+  const kern = Buffer.alloc(24);
+  kern.writeUInt16BE(0, 0); // kern version (OpenType/Microsoft)
+  kern.writeUInt16BE(1, 2); // nTables
+  kern.writeUInt16BE(0, 4); // subtable version               (p+0)
+  kern.writeUInt16BE(20, 6); // subtable length (14 + 6)       (p+2)
+  kern.writeUInt16BE(0x0001, 8); // coverage: horizontal, fmt 0 (p+4)
+  kern.writeUInt16BE(1, 10); // nPairs                          (p+6)
+  kern.writeUInt16BE(1, 18); // pair left glyph  A=1            (p+14)
+  kern.writeUInt16BE(2, 20); // pair right glyph B=2
+  kern.writeInt16BE(value, 22); // pair value
+  return assembleTtf([...baseTables([0, 500, 700, 250]), ["kern", kern]]);
+}
+
+// The minimal font plus a GPOS with a `kern` feature: one PairPos (format 1) lookup kerning A-B by
+// `xAdvance` font units. Exercises the feature scan, the lookup/subtable walk, coverage and the
+// value-record parsing - the whole GPOS Type 2 path, on a font that has NO `kern` table.
+export function buildGposKernTtf(xAdvance = -150): Buffer {
+  const g = Buffer.alloc(62);
+  // header
+  g.writeUInt16BE(1, 0); // majorVersion
+  g.writeUInt16BE(0, 2); // minorVersion
+  g.writeUInt16BE(10, 4); // scriptListOffset
+  g.writeUInt16BE(12, 6); // featureListOffset
+  g.writeUInt16BE(26, 8); // lookupListOffset
+  // scriptList @10: count 0
+  g.writeUInt16BE(0, 10);
+  // featureList @12: count 1, record "kern" -> feature @ +8
+  g.writeUInt16BE(1, 12);
+  g.write("kern", 14, "latin1");
+  g.writeUInt16BE(8, 18); // featureOffset (rel to featureList=12) -> 20
+  // feature table @20: featureParams 0, lookupIndexCount 1, lookupListIndex 0
+  g.writeUInt16BE(0, 20);
+  g.writeUInt16BE(1, 22);
+  g.writeUInt16BE(0, 24);
+  // lookupList @26: count 1, offset 4 -> lookup @30
+  g.writeUInt16BE(1, 26);
+  g.writeUInt16BE(4, 28);
+  // lookup @30: type 2, flag 0, subTableCount 1, subtableOffset 8 -> subtable @38
+  g.writeUInt16BE(2, 30);
+  g.writeUInt16BE(0, 32);
+  g.writeUInt16BE(1, 34);
+  g.writeUInt16BE(8, 36);
+  // PairPos format 1 @38: posFormat 1, coverageOffset 12, valueFormat1 0x0004, valueFormat2 0,
+  //                       pairSetCount 1, pairSetOffset 18
+  g.writeUInt16BE(1, 38);
+  g.writeUInt16BE(12, 40); // coverage @50
+  g.writeUInt16BE(0x0004, 42); // valueFormat1 = XAdvance
+  g.writeUInt16BE(0, 44); // valueFormat2
+  g.writeUInt16BE(1, 46); // pairSetCount
+  g.writeUInt16BE(18, 48); // pairSetOffset @56
+  // coverage (format 1) @50: format 1, glyphCount 1, glyph A=1
+  g.writeUInt16BE(1, 50);
+  g.writeUInt16BE(1, 52);
+  g.writeUInt16BE(1, 54);
+  // pairSet @56: pairValueCount 1, {secondGlyph B=2, value1.xAdvance}
+  g.writeUInt16BE(1, 56);
+  g.writeUInt16BE(2, 58);
+  g.writeInt16BE(xAdvance, 60);
+  return assembleTtf([...baseTables([0, 500, 700, 250]), ["GPOS", g]]);
 }
 
 // A minimal TTF whose cmap is FORMAT 12, mapping a single astral code point (default U+1F600 😀)

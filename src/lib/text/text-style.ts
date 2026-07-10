@@ -24,6 +24,8 @@ export interface ResolvedTextStyle {
   /** Let the underline step around descenders (CSS `text-decoration-skip-ink`). Needs an EMBEDDED
    *  font: the standard-14 outlines live in the viewer, not in the AFM. */
   skipInk: boolean;
+  /** Extra space after every glyph, in points (CSS `letter-spacing`). Default 0. */
+  letterSpacing: number;
 }
 
 /**
@@ -40,6 +42,7 @@ export const DEFAULT_TEXT_STYLE: ResolvedTextStyle = {
   underline: false,
   strikethrough: false,
   skipInk: false,
+  letterSpacing: 0,
 };
 
 /** Layers a partial override onto a complete style; an unset (undefined) field keeps the base. */
@@ -58,5 +61,6 @@ export function mergeTextStyle(
     underline: override.underline ?? base.underline,
     strikethrough: override.strikethrough ?? base.strikethrough,
     skipInk: override.skipInk ?? base.skipInk,
+    letterSpacing: override.letterSpacing ?? base.letterSpacing,
   };
 }

@@ -50,13 +50,14 @@ describe("RowElement", () => {
     expect(right.getProps().x).toBe(170);
   });
 
-  // Regression: a fixed Text in a Row must reserve its RENDERED width (per-glyph, no kerning) - the
-  // renderer advances without kerning, so reserving the kerning-narrower getStringWidth makes the
-  // text overflow its own box and wrap, even with plenty of space. (CSS: space → never constrains.)
+  // Regression: a fixed Text in a Row reserves its natural single-line width, and that width MUST
+  // equal the line-breaker's one-line measure - else the text re-wraps inside its own box. Both now
+  // go through the same `runAdvance`, so they agree by construction. (CSS: a space → never wraps.)
   it("a fixed Text in a Row takes its one-line width, so it never wraps inside its own box", () => {
+    // Consistent font: getStringWidth is the sum of getCharWidth. Every glyph, space included, 6 wide.
     const metrics = {
-      getStringWidth: (t: string) => t.length * 6 - 10, // per word; kerning pulls it IN
-      getCharWidth: () => 6, // the space advance
+      getStringWidth: (t: string) => t.length * 6,
+      getCharWidth: () => 6,
       getFontVerticals: unitVerticals,
     } as unknown as FontMetrics;
     const ctx = { metrics, pageConfig: {} } as LayoutContext;
@@ -69,10 +70,29 @@ describe("RowElement", () => {
     );
 
     const { width, height } = text.getProps();
-    // ONE line, no wrap. The width MUST equal the line-breaker's one-line measure (getStringWidth
-    // per word + the inter-word space), or the text re-wraps inside its own box:
-    // "Total"(20) + space(6) + "due"(8) = 34.
-    expect(width).toBe(34);
+    // "Total due" is 9 glyphs (incl. the space) * 6 = 54, on one line.
+    expect(width).toBe(54);
     expect(height).toBe(10); // 1 line x fontSize
+  });
+
+  // letterSpacing widens the reserved width by one spacing per glyph, and the breaker agrees, so the
+  // text still does not re-wrap in its own box.
+  it("reserves the letter-spaced width, so a spaced fixed Text still does not wrap", () => {
+    const metrics = {
+      getStringWidth: (t: string) => t.length * 6,
+      getCharWidth: () => 6,
+      getFontVerticals: unitVerticals,
+    } as unknown as FontMetrics;
+    const ctx = { metrics, pageConfig: {} } as LayoutContext;
+
+    const text = new TextElement({ fontSize: 10, content: "Total due", letterSpacing: 2 });
+    new RowElement({ children: [text] }).calculateLayout(
+      BoxConstraints.loose(500, Infinity),
+      { x: 0, y: 0 },
+      ctx,
+    );
+    // 9 glyphs * 6 + 9 spacings * 2 = 54 + 18 = 72. One line.
+    expect(text.getProps().width).toBe(72);
+    expect(text.getProps().height).toBe(10);
   });
 });

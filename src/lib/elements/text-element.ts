@@ -16,6 +16,7 @@ import {
   TextOverflow,
 } from "../text/line-breaker.ts";
 import { lineBoxForSegmentLine, lineBoxForString } from "../text/line-metrics.ts";
+import { runAdvance } from "../text/advance.ts";
 import { HorizontalAlignment, LayoutContext, SizedPDFElement } from "./pdf-element.ts";
 export interface TextSegment {
   content: string;
@@ -30,6 +31,8 @@ export interface TextSegment {
   /** Unset inherits the Text's own setting; `true`/`false` overrides it for this run only. */
   underline?: boolean;
   strikethrough?: boolean;
+  /** Extra space after every glyph, in points; unset inherits the Text's own value. */
+  letterSpacing?: number;
 }
 
 /** Accessibility role for the tagged structure tree: a heading level or a paragraph (the default). */
@@ -57,6 +60,8 @@ interface TextElementParams {
   strikethrough?: boolean;
   /** Let the underline step around descenders. Needs an embedded font. */
   skipInk?: boolean;
+  /** Extra space after every glyph, in points (CSS `letter-spacing`). Default 0. */
+  letterSpacing?: number;
   /** Accessibility role for the tagged structure tree (heading level or paragraph; default `"p"`). */
   role?: TextRole;
 }
@@ -73,6 +78,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
   private readonly rawUnderline?: boolean;
   private readonly rawStrikethrough?: boolean;
   private readonly rawSkipInk?: boolean;
+  private readonly rawLetterSpacing?: number;
 
   // Resolved style (raw -> inherited -> built-in default). Seeded to the built-in default in the
   // constructor so the element is self-sufficient, then refined against the cascade at layout time.
@@ -85,6 +91,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
   private underline!: boolean;
   private strikethrough!: boolean;
   private skipInk!: boolean;
+  private letterSpacing!: number;
 
   private content: string | TextSegment[];
   private maxLines?: number;
@@ -104,6 +111,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     underline,
     strikethrough,
     skipInk,
+    letterSpacing,
     role,
   }: TextElementParams) {
     super({ x: 0, y: 0 });
@@ -118,6 +126,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     this.rawUnderline = underline;
     this.rawStrikethrough = strikethrough;
     this.rawSkipInk = skipInk;
+    this.rawLetterSpacing = letterSpacing;
     this.content = content;
     this.maxLines = maxLines;
     this.overflow = overflow;
@@ -139,6 +148,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     this.underline = this.rawUnderline ?? ts.underline;
     this.strikethrough = this.rawStrikethrough ?? ts.strikethrough;
     this.skipInk = this.rawSkipInk ?? ts.skipInk;
+    this.letterSpacing = this.rawLetterSpacing ?? ts.letterSpacing;
   }
 
   /**
@@ -171,6 +181,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       ctx.metrics,
       this.maxLines,
       this.overflow,
+      this.letterSpacing,
     );
 
     const box = lineBoxForString(
@@ -202,6 +213,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       fontFamily: this.fontFamily,
       fontSize: this.fontSize,
       fontStyle: this.fontStyle,
+      letterSpacing: this.letterSpacing,
     };
     const lines = breakSegmentsIntoLines(
       content,
@@ -246,6 +258,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       underline: this.underline,
       strikethrough: this.strikethrough,
       skipInk: this.skipInk,
+      letterSpacing: this.letterSpacing,
       role: this.role,
     }).adoptStructId(this); // a wrapped remainder is the SAME logical paragraph (one P across pages)
   }
@@ -272,6 +285,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       this.maxLines,
       this.overflow,
       this.lineHeight,
+      this.letterSpacing,
     );
 
     // Top-left coordinates (y = top of the text box). The baseline offset and the
@@ -289,19 +303,33 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
    *  - enough to tip a borderline string (e.g. "20 Jun 2026", wider than "04 Jul 2026" only because
    *  'n' beats 'l') one bit over its own width, dropping the last word onto a second line. */
   private naturalWidth(metrics: FontMetrics): number {
-    const oneLine = (text: string, family: string, size: number, style: FontStyle): number => {
+    const oneLine = (
+      text: string,
+      family: string,
+      size: number,
+      style: FontStyle,
+      letterSpacing: number,
+    ): number => {
+      const font = { fontFamily: family, fontSize: size, fontStyle: style };
       const words = text.split(" ");
-      const space = metrics.getCharWidth(" ", size, undefined, family, style);
+      const space = runAdvance(metrics, " ", font, letterSpacing);
       let width = 0;
       words.forEach((word, i) => {
-        const w = metrics.getStringWidth(word, family, size, style);
-        // Group (word + space) as one term, exactly like the breaker - see the note above.
+        const w = runAdvance(metrics, word, font, letterSpacing);
+        // Group (word + space) as one term, exactly like the breaker - see the note above. Both use
+        // the same `runAdvance`, so the two agree bit for bit even with letterSpacing.
         width += i < words.length - 1 ? w + space : w;
       });
       return width;
     };
     if (typeof this.content === "string") {
-      return oneLine(this.content, this.fontFamily, this.fontSize, this.fontStyle);
+      return oneLine(
+        this.content,
+        this.fontFamily,
+        this.fontSize,
+        this.fontStyle,
+        this.letterSpacing,
+      );
     }
     return this.content.reduce(
       (sum, seg) =>
@@ -311,6 +339,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
           seg.fontFamily ?? this.fontFamily,
           seg.fontSize ?? this.fontSize,
           seg.fontStyle ?? this.fontStyle,
+          seg.letterSpacing ?? this.letterSpacing,
         ),
       0,
     );
@@ -334,6 +363,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       underline: this.underline,
       strikethrough: this.strikethrough,
       skipInk: this.skipInk,
+      letterSpacing: this.letterSpacing,
       role: this.role,
     };
   }

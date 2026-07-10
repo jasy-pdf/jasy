@@ -933,6 +933,53 @@ endstream`;
     return decoration;
   }
 
+  // Whether to kern. Document-level: measuring (via `runAdvance`, which reads this off the metrics)
+  // and drawing (the backend emits a `TJ`) both consult it, so they can never disagree. OFF while the
+  // embedded-font path (kern/GPOS) is unbuilt - a standard-14-only kerning would set the 14 system
+  // fonts finer than a user's own font, which is worse than none. Flip to on when GPOS lands.
+  kerningEnabled = false;
+
+  setKerning(enabled: boolean): void {
+    this.kerningEnabled = enabled;
+  }
+
+  /**
+   * The kerning adjustment for each adjacent code-point pair of `text`, in em/1000 (the sign the
+   * font declares: negative tightens). Length is `codePointCount - 1`. Zero at any pair next to a
+   * space - letters are never kerned against a space, which also keeps a per-word measure equal to a
+   * whole-line one (the space pairs contribute nothing either way).
+   *
+   * Standard-14 answers from the AFM `KPX` pairs. An embedded font has no kerning yet (its `kern` /
+   * `GPOS` tables are unparsed), so it returns zeros - never a wrong value, just no adjustment.
+   */
+  getKernPairs(text: string, fontFamily: string, fontStyle: FontStyle): number[] {
+    const chars = [...text];
+    if (chars.length < 2) return [];
+    const out: number[] = [];
+    // An embedded font kerns by GLYPH id (kern table / GPOS); a standard-14 one by character (AFM).
+    const ttf = this.getCustomFont(fontFamily, fontStyle);
+    const parser = ttf
+      ? undefined
+      : this.getAVMParserByFont(undefined, fontFamily, fontStyle).parser;
+    for (let i = 0; i < chars.length - 1; i++) {
+      const a = chars[i];
+      const b = chars[i + 1];
+      if (a === " " || b === " ") {
+        out.push(0);
+      } else if (ttf) {
+        out.push(
+          ttf.getKerning(
+            ttf.getGlyphIndex(a.codePointAt(0)!),
+            ttf.getGlyphIndex(b.codePointAt(0)!),
+          ),
+        );
+      } else {
+        out.push(parser!.getKerning(a, b));
+      }
+    }
+    return out;
+  }
+
   /**
    * Where the glyphs of `text` put ink inside a horizontal band, as x-intervals in POINTS measured
    * from the start of the run. This is what an underline steps around ("skip-ink").
@@ -948,6 +995,7 @@ endstream`;
     fontStyle: FontStyle,
     bandTop: number,
     bandBottom: number,
+    letterSpacing = 0,
   ): Array<[number, number]> {
     const ttf = this.getCustomFont(fontFamily, fontStyle);
     if (!ttf) return [];
@@ -961,7 +1009,9 @@ endstream`;
           spans.push([pen + x0 * scale, pen + x1 * scale]);
         }
       }
-      pen += this.getCharWidth(ch, fontSize, undefined, fontFamily, fontStyle);
+      // The pen advances by the glyph AND its letter-spacing, so the ink of the next glyph lands
+      // where `Tc` actually draws it - otherwise the skipped gaps drift under the wrong letters.
+      pen += this.getCharWidth(ch, fontSize, undefined, fontFamily, fontStyle) + letterSpacing;
     }
     return mergeSpans(spans);
   }

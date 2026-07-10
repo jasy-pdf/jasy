@@ -247,6 +247,10 @@ export interface RenderOptions {
   standardFonts?: boolean;
   /** FlateDecode-compress the streams (default true). Set false for a greppable, uncompressed PDF. */
   compress?: boolean;
+  /** EXPERIMENTAL, off by default: kern the text (emit `TJ` adjustments). Standard-14 fonts only for
+   *  now - embedded fonts are not kerned yet (`kern`/`GPOS` unparsed), so leaving it off avoids setting
+   *  the 14 system fonts finer than a user's own font. Becomes a supported default once GPOS lands. */
+  kerning?: boolean;
   /** What to do when content is taller than a page and cannot break: `"error"` throws (default),
    *  `"warn"` logs and clips, `"ignore"` clips silently. It is always clipped either way. */
   onOverflow?: OverflowPolicy;
@@ -294,6 +298,8 @@ export async function renderPdf(doc: PDFDocumentElement, options?: RenderOptions
       const om = this.objectManager;
       om.setCompress(options?.compress !== false); // FlateDecode streams by default
       om.setOverflowPolicy(options?.onOverflow ?? "error");
+      om.setKerning(options?.kerning === true); // EXPERIMENTAL: standard-14 only until GPOS lands
+
       for (const [name, value] of Object.entries(fonts)) {
         if (isFontBytes(value)) {
           om.registerCustomFont(name, value);
