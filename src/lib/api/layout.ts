@@ -171,11 +171,16 @@ export function Padding(padding: Insets, child: PDFElement): PaddingElement {
 }
 
 /**
- * Places a child OUT OF FLOW, relative to the nearest enclosing `relative` Box. Two ways, pick per
- * axis: pin to EDGES - `Positioned({ top, left, right, bottom }, child)`, where a negative value
- * pokes into / out of the corner (a badge, a tab, a ribbon) and pinning both sides stretches; or
- * ANCHOR + nudge - `Positioned({ h: "center", v: "end", x: -10, y: -8 }, child)`, i.e. centered /
- * end-aligned with a pixel offset. An edge wins over an anchor on the same axis.
+ * Places a child OUT OF FLOW, relative to the nearest enclosing `relative` Box - or, with none, to
+ * the page's content box. Two ways, pick per axis: pin to EDGES - `Positioned({ top, left, right,
+ * bottom }, child)`, where a negative value pokes into / out of the corner (a badge, a tab, a
+ * ribbon) and pinning both sides stretches; or ANCHOR + nudge - `Positioned({ h: "center", v: "end",
+ * x: -10, y: -8 }, child)`, i.e. centered / end-aligned with a pixel offset. An edge wins over an
+ * anchor on the same axis.
+ *
+ * A `Positioned` in a `Page`'s `header` or `footer` repeats on EVERY page and takes no space in the
+ * band, which is how you draw a watermark, a draft stamp or a corner ribbon across a document. It
+ * anchors to the page, not to the band, so `bottom: 0` is the foot of the page.
  */
 export function Positioned(opts: PositionedInsets, child: PDFElement): PositionedElement {
   return new PositionedElement({ child, ...opts });

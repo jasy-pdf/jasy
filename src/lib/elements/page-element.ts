@@ -72,6 +72,20 @@ export interface PageBands {
  * no header/footer the bands are zero and the body equals the full content box - identical
  * to a page without them.
  */
+/**
+ * The page's positioning frame: its CONTENT box (paper minus margins). Header, footer and body all
+ * resolve a `Positioned` against this same box, so `top`/`bottom` mean the same thing in each.
+ *
+ * `layoutPageBands` lays the bands out, so its caller must hand it a context carrying this frame -
+ * otherwise a `Positioned` in a band has nothing to resolve against (ISSUE-4). A caller that only
+ * wants the band HEIGHTS may throw the frame away without draining it: an out-of-flow child
+ * contributes no height.
+ */
+export function pageFrame(config: PDFPageConfig): PositioningFrame {
+  const { origin, width, height } = resolvePageContentBox(config);
+  return { origin, size: { width, height }, place: [] };
+}
+
 export function layoutPageBands(
   config: PDFPageConfig,
   header: PDFElement | undefined,
@@ -140,27 +154,32 @@ export class PageElement extends PDFElement {
       pageInfo: ctx.pageInfo, // the render pass supplies it; absent during pagination
     };
 
+    // The PAGE is a positioning frame, and the frame is the content box - not the body region left
+    // over between the bands. So `Positioned` means the same thing in the header, in the footer and
+    // in the body, `bottom: 0` is the foot of the page rather than the top of the footer, and adding
+    // a header no longer shifts a page-level `Positioned` that nobody touched. A `relative` Box
+    // still overrides it for its own subtree.
+    //
+    // Built BEFORE the bands are laid out: they need to see it, and their heights are not known yet
+    // anyway. (That is the whole of ISSUE-4 - a `Positioned` in a band had no frame to resolve
+    // against, so it silently stayed at the page's top-left corner.)
+    const frame = pageFrame(this.config);
+    const frameCtx: LayoutContext = { ...pageCtx, frame };
+
     // Place the header/footer bands; the body gets the region left in between (the whole
     // content box when there is neither - byte-identical to a plain page).
-    const bands = layoutPageBands(this.config, this.header, this.footer, pageCtx);
+    const bands = layoutPageBands(this.config, this.header, this.footer, frameCtx);
     const childConstraints = BoxConstraints.loose(bands.bodyWidth, bands.bodyHeight);
 
-    // The page body is itself a positioning frame: a `Positioned` with no `relative` ancestor
-    // resolves against the content box (a `relative` Box overrides it for its own subtree). Drained
-    // after the body is laid out, so a page-level Positioned isn't a silent no-op.
-    const frame: PositioningFrame = {
-      origin: bands.bodyOrigin,
-      size: { width: bands.bodyWidth, height: bands.bodyHeight },
-      place: [],
-    };
-    const bodyCtx: LayoutContext = { ...pageCtx, frame };
     this.children.forEach((child) =>
-      child.calculateLayout(childConstraints, bands.bodyOrigin, bodyCtx),
+      child.calculateLayout(childConstraints, bands.bodyOrigin, frameCtx),
     );
+
+    // Drained last, once every band and the body have registered: an out-of-flow child is placed
+    // against the final frame box and paints on top of the flow content.
     for (const place of frame.place) place(frame, pageCtx);
 
-    const { width, height } = resolvePageContentBox(this.config);
-    return { width, height };
+    return { width: frame.size.width, height: frame.size.height };
   }
 
   override getProps(): PDFPageParams {

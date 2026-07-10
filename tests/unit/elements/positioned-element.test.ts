@@ -18,6 +18,12 @@ const metrics: FontMetrics = {
   getFontVerticals: unitVerticals,
 };
 const ctx = { metrics } as LayoutContext;
+// A `Positioned` refuses to lay out without a frame, so the out-of-flow tests below need one. It is
+// never drained: they assert what the element does NOT do to the flow, not where the child lands.
+const ctxWithFrame = {
+  metrics,
+  frame: { origin: { x: 0, y: 0 }, size: { width: 100, height: 100 }, place: [] },
+} as LayoutContext;
 
 // A fixed-size box with no border, easy to read coordinates off via getSize().
 const fixed = (width: number, height: number) =>
@@ -37,7 +43,11 @@ const frame = (opts: { width: number; height: number }, children: PositionedElem
 describe("PositionedElement - out of flow", () => {
   it("takes zero space in the normal flow", () => {
     const positioned = new PositionedElement({ child: fixed(20, 10), top: 0, left: 0 });
-    const size = positioned.calculateLayout(BoxConstraints.loose(100, 100), { x: 0, y: 0 }, ctx);
+    const size = positioned.calculateLayout(
+      BoxConstraints.loose(100, 100),
+      { x: 0, y: 0 },
+      ctxWithFrame,
+    );
     expect(size).toEqual({ width: 0, height: 0 });
   });
 
@@ -48,10 +58,19 @@ describe("PositionedElement - out of flow", () => {
       x: 0,
       y: 0,
       children: [a, new PositionedElement({ child: fixed(50, 50), top: 0, left: 0 }), b],
-    }).calculateLayout(BoxConstraints.loose(100, Infinity), { x: 0, y: 0 }, ctx);
+    }).calculateLayout(BoxConstraints.loose(100, Infinity), { x: 0, y: 0 }, ctxWithFrame);
     // b sits directly below a (12), unaffected by the 50-tall Positioned between them.
     expect(a.getSize().y).toBe(0);
     expect(b.getSize().y).toBe(12);
+  });
+
+  it("refuses to lay out with no frame, instead of silently drawing at (0, 0)", () => {
+    // It used to fall through and leave the child at its default origin, which is how a header
+    // watermark landed in the page corner without a word (ISSUE-4).
+    const positioned = new PositionedElement({ child: fixed(20, 10), top: 50, left: 50 });
+    expect(() =>
+      positioned.calculateLayout(BoxConstraints.loose(100, 100), { x: 0, y: 0 }, ctx),
+    ).toThrow(/no positioning frame/);
   });
 });
 
@@ -135,9 +154,59 @@ describe("PositionedElement - the page is the default frame", () => {
       metrics,
       pageConfig: {},
     } as LayoutContext);
-    // Body origin = the top-left margin (50, 50); child = origin + (left, top).
+    // Content-box origin = the top-left margin (50, 50); child = origin + (left, top).
     expect(child.getSize().x).toBe(58);
     expect(child.getSize().y).toBe(55);
+  });
+
+  // ISSUE-4. A band used to be laid out BEFORE the frame existed, so a `Positioned` in it had
+  // nothing to resolve against and its child stayed at (0, 0) - a watermark in the page corner.
+  const A4_CONTENT = { top: 50, bottom: 791.89, left: 50, right: 545.28 }; // A4 minus a 50pt margin
+
+  const pageWith = (bands: { header?: PositionedElement; footer?: PositionedElement }): void => {
+    new PageElement({
+      children: [fixed(10, 10)],
+      config: {
+        pageSize: PageSize.A4,
+        orientation: Orientation.portrait,
+        margin: { top: 50, right: 50, bottom: 50, left: 50 },
+      },
+      ...bands,
+    }).calculateLayout(new BoxConstraints(), { x: 0, y: 0 }, {
+      metrics,
+      pageConfig: {},
+    } as LayoutContext);
+  };
+
+  it("anchors a Positioned in the HEADER to the page, exactly like one in the body", () => {
+    const child = fixed(20, 10);
+    pageWith({ header: new PositionedElement({ child, top: 5, left: 8 }) });
+    expect(child.getSize().x).toBe(A4_CONTENT.left + 8);
+    expect(child.getSize().y).toBe(A4_CONTENT.top + 5);
+  });
+
+  it("anchors a Positioned in the FOOTER to the page, so bottom:0 is the foot of the page", () => {
+    const child = fixed(20, 10);
+    pageWith({ footer: new PositionedElement({ child, bottom: 0, right: 0 }) });
+    expect(child.getSize().x).toBe(A4_CONTENT.right - 20);
+    expect(child.getSize().y).toBe(A4_CONTENT.bottom - 10);
+  });
+
+  it("keeps a body Positioned put when a header is added (the frame is the page, not the body band)", () => {
+    const child = fixed(20, 10);
+    new PageElement({
+      children: [new PositionedElement({ child, top: 5, left: 8 })],
+      header: fixed(100, 40), // 40pt of header used to push the frame - and the child - down with it
+      config: {
+        pageSize: PageSize.A4,
+        orientation: Orientation.portrait,
+        margin: { top: 50, right: 50, bottom: 50, left: 50 },
+      },
+    }).calculateLayout(new BoxConstraints(), { x: 0, y: 0 }, {
+      metrics,
+      pageConfig: {},
+    } as LayoutContext);
+    expect(child.getSize().y).toBe(A4_CONTENT.top + 5); // not 50 + 40 + 5
   });
 });
 

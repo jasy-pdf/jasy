@@ -26,14 +26,17 @@ export interface PositionedInsets {
 interface PositionedElementParams extends WithChild, PositionedInsets {}
 
 /**
- * An out-of-flow child, placed relative to the nearest enclosing positioning frame (a `relative`
- * Box). It takes ZERO space in the normal flow - `calculateLayout` returns `Size(0,0)` and instead
- * registers a placement closure on the frame. The frame runs that closure once it knows its own
- * size, so `right`/`bottom` resolve against the final box and the child can overflow it (a negative
- * `top`/`left` makes it poke into / out of the corner, e.g. a badge or tab).
+ * An out-of-flow child, placed relative to the nearest enclosing positioning frame: a `relative`
+ * Box, or failing that the page's content box. It takes ZERO space in the normal flow -
+ * `calculateLayout` returns `Size(0,0)` and instead registers a placement closure on the frame. The
+ * frame runs that closure once it knows its own size, so `right`/`bottom` resolve against the final
+ * box and the child can overflow it (a negative `top`/`left` makes it poke into / out of the
+ * corner, e.g. a badge or tab).
  *
- * With no frame in scope the element is a no-op (nothing is drawn) - `Positioned` only makes sense
- * inside a `relative` Box.
+ * Every page supplies a frame - header, footer and body alike - so within a document there is
+ * always one. Outside of one we REFUSE rather than draw: the element used to fall through to its
+ * child's default (0, 0), which is how a header watermark landed silently in the page corner
+ * (ISSUE-4). Content that lands somewhere unasked is worse than content that does not render.
  */
 export class PositionedElement extends PDFElement {
   private child: PDFElement;
@@ -46,8 +49,14 @@ export class PositionedElement extends PDFElement {
   }
 
   calculateLayout(_constraints: BoxConstraints, _offset: Offset, ctx: LayoutContext): Size {
+    if (!ctx.frame) {
+      throw new Error(
+        "Positioned found no positioning frame. It must sit inside a Page (header, footer or body) " +
+          "or inside a Box({ relative: true }).",
+      );
+    }
     // Defer to the frame: it calls back once it has sized itself. Out of flow either way.
-    ctx.frame?.place.push((frame, frameCtx) => this.placeInFrame(frame, frameCtx));
+    ctx.frame.place.push((frame, frameCtx) => this.placeInFrame(frame, frameCtx));
     return { width: 0, height: 0 };
   }
 
