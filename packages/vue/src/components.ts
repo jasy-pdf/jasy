@@ -47,11 +47,13 @@ const stackProps = {
   justify: String as PropType<"start" | "center" | "end" | "between" | "around">,
   align: String as PropType<"start" | "center" | "end" | "stretch">,
 };
-// Page-break control shared by `<Box>`/`<Column>`/`<Row>` (CSS break-before/after: page). NOT on
-// `<Page>` (the top level cannot break before itself), so it is spread in explicitly, not via stackProps.
+// Page-break control shared by `<Box>`/`<Column>`/`<Row>` (CSS break-before/after: page +
+// break-inside: avoid). NOT on `<Page>` (the top level cannot break before itself), so it is spread in
+// explicitly, not via stackProps.
 const breakProps = {
   breakBefore: { type: Boolean, default: undefined },
   breakAfter: { type: Boolean, default: undefined },
+  keepTogether: { type: Boolean, default: undefined },
 };
 const boxProps = {
   bg: colorProp,
@@ -187,6 +189,13 @@ export const PageBreak = defineComponent({
   name: "JasyPageBreak",
   inheritAttrs: false,
   setup: fwd("page-break"),
+});
+// Keeps its default-slot children on one page (CSS `break-inside: avoid`). Also available as the
+// `keep-together` prop on `<Box>`/`<Column>`/`<Row>`.
+export const KeepTogether = defineComponent({
+  name: "JasyKeepTogether",
+  inheritAttrs: false,
+  setup: fwd("keep-together"),
 });
 export const Divider = defineComponent({
   name: "JasyDivider",

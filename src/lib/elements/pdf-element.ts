@@ -48,6 +48,10 @@ export interface LayoutContext {
   /** What to do when an element overflows a page region and cannot break (set from the render option;
    *  absent = clip silently). Evaluated in `packChildren` where the forced placement happens. */
   onOverflow?: OverflowPolicy;
+  /** The FULL body height of the current page (between header and footer), set by the page driver. A
+   *  `keepTogether` group reads it to decide the degrade rule: veto splitting only when the group would
+   *  fit on a fresh page; a group taller than a whole page drops the veto and splits. */
+  pageBodyHeight?: number;
 }
 
 let _nextStructId = 0;

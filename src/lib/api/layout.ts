@@ -4,6 +4,7 @@ import { RectangleElement } from "../elements/rectangle-element.ts";
 import { ExpandedElement } from "../elements/layout/expanded-element.ts";
 import { PaddingElement } from "../elements/layout/padding-element.ts";
 import { PageBreakElement } from "../elements/layout/page-break-element.ts";
+import { KeepTogetherElement } from "../elements/layout/keep-together-element.ts";
 import { PositionedElement, PositionedInsets } from "../elements/layout/positioned-element.ts";
 import { LinkElement } from "../elements/layout/link-element.ts";
 import { BookmarkElement } from "../elements/layout/bookmark-element.ts";
@@ -36,6 +37,9 @@ export interface StackOptions {
   breakBefore?: boolean;
   /** Start everything after this stack on a fresh page (CSS `break-after: page`). */
   breakAfter?: boolean;
+  /** Try to keep this stack on one page (CSS `break-inside: avoid`). If it does not fit here but would
+   *  fit on a fresh page, it moves there whole; if it is taller than a whole page, it splits anyway. */
+  keepTogether?: boolean;
 }
 
 /** Splits `StackOptions` width/height into the fixed points + fraction the stack elements expect. */
@@ -50,37 +54,60 @@ function stackSize(opts: StackOptions) {
 const DEFAULT_CROSS: CrossAlign = "start";
 
 /** A vertical stack. `Column(children)` or `Column(opts, children)`. */
-export function Column(children: PDFElement[]): ContainerElement;
-export function Column(opts: StackOptions, children: PDFElement[]): ContainerElement;
-export function Column(a: StackOptions | PDFElement[], b?: PDFElement[]): ContainerElement {
+export function Column(children: PDFElement[]): PDFElement;
+export function Column(opts: StackOptions, children: PDFElement[]): PDFElement;
+export function Column(a: StackOptions | PDFElement[], b?: PDFElement[]): PDFElement {
   const { opts, children } = splitArgs<StackOptions>(a, b);
-  return new ContainerElement({
-    x: 0,
-    y: 0,
-    children,
-    gap: opts.gap,
-    main: opts.justify, // undefined → engine default `start` (matches §5)
-    cross: opts.align ?? DEFAULT_CROSS,
-    breakBefore: opts.breakBefore,
-    breakAfter: opts.breakAfter,
-    ...stackSize(opts),
-  });
+  return maybeKeepTogether(
+    opts,
+    new ContainerElement({
+      x: 0,
+      y: 0,
+      children,
+      gap: opts.gap,
+      main: opts.justify, // undefined → engine default `start` (matches §5)
+      cross: opts.align ?? DEFAULT_CROSS,
+      breakBefore: opts.breakBefore,
+      breakAfter: opts.breakAfter,
+      ...stackSize(opts),
+    }),
+  );
 }
 
 /** A horizontal stack. `Row(children)` or `Row(opts, children)`. */
-export function Row(children: PDFElement[]): RowElement;
-export function Row(opts: StackOptions, children: PDFElement[]): RowElement;
-export function Row(a: StackOptions | PDFElement[], b?: PDFElement[]): RowElement {
+export function Row(children: PDFElement[]): PDFElement;
+export function Row(opts: StackOptions, children: PDFElement[]): PDFElement;
+export function Row(a: StackOptions | PDFElement[], b?: PDFElement[]): PDFElement {
   const { opts, children } = splitArgs<StackOptions>(a, b);
-  return new RowElement({
-    children,
-    gap: opts.gap,
-    main: opts.justify,
-    cross: opts.align ?? DEFAULT_CROSS,
-    breakBefore: opts.breakBefore,
-    breakAfter: opts.breakAfter,
-    ...stackSize(opts),
-  });
+  return maybeKeepTogether(
+    opts,
+    new RowElement({
+      children,
+      gap: opts.gap,
+      main: opts.justify,
+      cross: opts.align ?? DEFAULT_CROSS,
+      breakBefore: opts.breakBefore,
+      breakAfter: opts.breakAfter,
+      ...stackSize(opts),
+    }),
+  );
+}
+
+/** Wraps `element` in a `keepTogether` group when the `keepTogether` option is set; otherwise returns it
+ *  unchanged (byte-identical). Shared by the `Box`/`Column`/`Row` prop shortcut. */
+function maybeKeepTogether(opts: { keepTogether?: boolean }, element: PDFElement): PDFElement {
+  return opts.keepTogether ? new KeepTogetherElement({ child: element }) : element;
+}
+
+/**
+ * Keep a group of elements on ONE page (CSS `break-inside: avoid`). `keepTogether([...])` stacks the
+ * children in a `Column` and refuses to split them across a page break - unless they do not fit on a
+ * fresh page at all, in which case they split anyway (so pagination always terminates). Equivalent to
+ * the `keepTogether` prop on `Box`/`Column`/`Row`.
+ */
+export function keepTogether(children: PDFElement[]): KeepTogetherElement {
+  const child = children.length === 1 ? children[0] : Column(children);
+  return new KeepTogetherElement({ child });
 }
 
 /** A bordered / filled box that wraps its children (locked §4). */
@@ -118,6 +145,9 @@ export interface BoxOptions {
   breakBefore?: boolean;
   /** Start everything after this box on a fresh page (CSS `break-after: page`). */
   breakAfter?: boolean;
+  /** Try to keep this box on one page (CSS `break-inside: avoid`). Moves whole to a fresh page if it
+   *  would fit there; splits anyway if it is taller than a whole page. */
+  keepTogether?: boolean;
 }
 
 /**
@@ -125,9 +155,9 @@ export interface BoxOptions {
  * inside it, optionally inset by `padding` (a `PaddingElement` wrapping a `Column` of the
  * children). With no `border`/`borderWidth` the box has no outline (`borderWidth` 0).
  */
-export function Box(children: PDFElement[]): RectangleElement;
-export function Box(opts: BoxOptions, children: PDFElement[]): RectangleElement;
-export function Box(a: BoxOptions | PDFElement[], b?: PDFElement[]): RectangleElement {
+export function Box(children: PDFElement[]): PDFElement;
+export function Box(opts: BoxOptions, children: PDFElement[]): PDFElement;
+export function Box(a: BoxOptions | PDFElement[], b?: PDFElement[]): PDFElement {
   const { opts, children } = splitArgs<BoxOptions>(a, b);
 
   const content =
@@ -155,31 +185,34 @@ export function Box(a: BoxOptions | PDFElement[], b?: PDFElement[]): RectangleEl
   const w = opts.width !== undefined ? toDimension(opts.width) : undefined;
   const h = opts.height !== undefined ? toDimension(opts.height) : undefined;
 
-  return new RectangleElement({
-    x: 0,
-    y: 0,
-    children: content,
-    color: opts.border !== undefined ? toColor(opts.border) : undefined,
-    backgroundColor: opts.bg !== undefined ? toColor(opts.bg) : undefined,
-    borderWidth: hasBorder ? (opts.borderWidth ?? 1) : 0,
-    width: w?.points,
-    height: h?.points,
-    widthFactor: w?.factor,
-    heightFactor: h?.factor,
-    radius: opts.radius,
-    sideBorders: hasPerSide
-      ? {
-          top: side(opts.borderTop),
-          right: side(opts.borderRight),
-          bottom: side(opts.borderBottom),
-          left: side(opts.borderLeft),
-        }
-      : undefined,
-    relative: opts.relative,
-    overflow: opts.overflow,
-    breakBefore: opts.breakBefore,
-    breakAfter: opts.breakAfter,
-  });
+  return maybeKeepTogether(
+    opts,
+    new RectangleElement({
+      x: 0,
+      y: 0,
+      children: content,
+      color: opts.border !== undefined ? toColor(opts.border) : undefined,
+      backgroundColor: opts.bg !== undefined ? toColor(opts.bg) : undefined,
+      borderWidth: hasBorder ? (opts.borderWidth ?? 1) : 0,
+      width: w?.points,
+      height: h?.points,
+      widthFactor: w?.factor,
+      heightFactor: h?.factor,
+      radius: opts.radius,
+      sideBorders: hasPerSide
+        ? {
+            top: side(opts.borderTop),
+            right: side(opts.borderRight),
+            bottom: side(opts.borderBottom),
+            left: side(opts.borderLeft),
+          }
+        : undefined,
+      relative: opts.relative,
+      overflow: opts.overflow,
+      breakBefore: opts.breakBefore,
+      breakAfter: opts.breakAfter,
+    }),
+  );
 }
 
 /** Insets a single child by `padding` (a number / `{x,y}` / `{top,…}` / 4-tuple). */

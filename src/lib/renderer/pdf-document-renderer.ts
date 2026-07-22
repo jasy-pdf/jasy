@@ -123,6 +123,8 @@ export class PDFDocumentRenderer {
       footer,
       pageCtx,
     );
+    // A `keepTogether` group compares its height against a FULL fresh page (this band), so thread it in.
+    pageCtx.pageBodyHeight = height;
 
     const pages: PhysicalPage[] = [];
     let region: PDFElement | null = children[0];
