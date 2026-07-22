@@ -47,6 +47,12 @@ const stackProps = {
   justify: String as PropType<"start" | "center" | "end" | "between" | "around">,
   align: String as PropType<"start" | "center" | "end" | "stretch">,
 };
+// Page-break control shared by `<Box>`/`<Column>`/`<Row>` (CSS break-before/after: page). NOT on
+// `<Page>` (the top level cannot break before itself), so it is spread in explicitly, not via stackProps.
+const breakProps = {
+  breakBefore: { type: Boolean, default: undefined },
+  breakAfter: { type: Boolean, default: undefined },
+};
 const boxProps = {
   bg: colorProp,
   border: colorProp,
@@ -61,6 +67,7 @@ const boxProps = {
   radius: Number,
   relative: { type: Boolean, default: undefined },
   overflow: String as PropType<"hidden" | "visible">,
+  ...breakProps,
 };
 const imageProps = {
   src: [String, Object] as PropType<ImageSource>,
@@ -143,13 +150,13 @@ export const Page = defineComponent({
 export const Column = defineComponent({
   name: "JasyColumn",
   inheritAttrs: false,
-  props: stackProps,
+  props: { ...stackProps, ...breakProps },
   setup: fwd("column"),
 });
 export const Row = defineComponent({
   name: "JasyRow",
   inheritAttrs: false,
-  props: stackProps,
+  props: { ...stackProps, ...breakProps },
   setup: fwd("row"),
 });
 export const Box = defineComponent({

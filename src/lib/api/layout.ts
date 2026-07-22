@@ -31,6 +31,11 @@ export interface StackOptions {
    *  axis (`height: "50%"` only resolves where the parent bounds the height). */
   width?: SizeInput;
   height?: SizeInput;
+  /** Start this stack on a fresh page (CSS `break-before: page`, react-pdf's `break`). Ignored at the
+   *  top of a page. */
+  breakBefore?: boolean;
+  /** Start everything after this stack on a fresh page (CSS `break-after: page`). */
+  breakAfter?: boolean;
 }
 
 /** Splits `StackOptions` width/height into the fixed points + fraction the stack elements expect. */
@@ -56,6 +61,8 @@ export function Column(a: StackOptions | PDFElement[], b?: PDFElement[]): Contai
     gap: opts.gap,
     main: opts.justify, // undefined → engine default `start` (matches §5)
     cross: opts.align ?? DEFAULT_CROSS,
+    breakBefore: opts.breakBefore,
+    breakAfter: opts.breakAfter,
     ...stackSize(opts),
   });
 }
@@ -70,6 +77,8 @@ export function Row(a: StackOptions | PDFElement[], b?: PDFElement[]): RowElemen
     gap: opts.gap,
     main: opts.justify,
     cross: opts.align ?? DEFAULT_CROSS,
+    breakBefore: opts.breakBefore,
+    breakAfter: opts.breakAfter,
     ...stackSize(opts),
   });
 }
@@ -104,6 +113,11 @@ export interface BoxOptions {
   /** `"hidden"` crops children to the box (rounded corners included); `"visible"` (default) lets a
    *  `Positioned` child spill over the edge. */
   overflow?: "hidden" | "visible";
+  /** Start this box on a fresh page (CSS `break-before: page`, react-pdf's `break`). Ignored at the top
+   *  of a page. */
+  breakBefore?: boolean;
+  /** Start everything after this box on a fresh page (CSS `break-after: page`). */
+  breakAfter?: boolean;
 }
 
 /**
@@ -163,6 +177,8 @@ export function Box(a: BoxOptions | PDFElement[], b?: PDFElement[]): RectangleEl
       : undefined,
     relative: opts.relative,
     overflow: opts.overflow,
+    breakBefore: opts.breakBefore,
+    breakAfter: opts.breakAfter,
   });
 }
 

@@ -1,6 +1,11 @@
 import { FlexLayoutHelper, VERTICAL_AXIS, MainAlign, CrossAlign } from "../utils/flex-layout.ts";
 import { BoxConstraints, Offset, Size, resolveExtent } from "../layout/box-constraints.ts";
-import { Fragmentable, FragmentResult, packChildren } from "../layout/fragmentation.ts";
+import {
+  Fragmentable,
+  FragmentResult,
+  childrenForceBreak,
+  packChildren,
+} from "../layout/fragmentation.ts";
 import {
   FlexiblePDFElement,
   LayoutContext,
@@ -20,6 +25,10 @@ interface ContainerElementParams extends SizedElement, WithChildren {
   /** Width/height as a fraction (0..1) of the offered box instead of `width`/`height` (relative sizing). */
   widthFactor?: number;
   heightFactor?: number;
+  /** Start this stack on a fresh page (CSS `break-before: page`). */
+  breakBefore?: boolean;
+  /** Start everything after this stack on a fresh page (CSS `break-after: page`). */
+  breakAfter?: boolean;
 }
 
 export class ContainerElement extends SizedPDFElement implements Fragmentable {
@@ -27,6 +36,8 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
   private gap: number;
   private main: MainAlign;
   private cross: CrossAlign;
+  private breakBefore: boolean;
+  private breakAfter: boolean;
   // The requested size, snapshot at construction so re-layouts (fragmentation measuring, which
   // mutate this.width/height) still see what the user asked for. `undefined` = fill / shrink-wrap.
   private requested: {
@@ -47,6 +58,8 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
     cross,
     widthFactor,
     heightFactor,
+    breakBefore,
+    breakAfter,
   }: ContainerElementParams) {
     super({ x, y, width, height });
 
@@ -55,6 +68,16 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
     this.main = main ?? "start";
     this.cross = cross ?? "stretch";
     this.requested = { width, height, widthFactor, heightFactor };
+    this.breakBefore = breakBefore ?? false;
+    this.breakAfter = breakAfter ?? false;
+  }
+
+  override breaksBefore(): boolean {
+    return this.breakBefore;
+  }
+
+  override breaksAfter(): boolean {
+    return this.breakAfter;
   }
 
   /**
@@ -69,7 +92,7 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
    * in that case we don't fragment and hand the whole container back as `fitted`.
    */
   override hasForcedBreak(): boolean {
-    return this.children.some((child) => child.hasForcedBreak());
+    return childrenForceBreak(this.children);
   }
 
   fragment(maxHeight: number, width: number, ctx: LayoutContext): FragmentResult {

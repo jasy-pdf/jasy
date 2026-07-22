@@ -116,6 +116,24 @@ export abstract class PDFElement {
   hasForcedBreak(): boolean {
     return false;
   }
+
+  /**
+   * Whether this element asks to START on a fresh page (CSS `break-before: page`, react-pdf's `break`
+   * prop). Read by the parent packer at the child boundary, not by the element itself; ignored when the
+   * element is already at the top of a region (nothing before it), so it never makes an empty page.
+   * Default: no.
+   */
+  breaksBefore(): boolean {
+    return false;
+  }
+
+  /**
+   * Whether everything AFTER this element must start a fresh page (CSS `break-after: page`). Read by the
+   * parent packer once this element has been placed whole. Default: no.
+   */
+  breaksAfter(): boolean {
+    return false;
+  }
 }
 
 export abstract class SizedPDFElement extends PDFElement {

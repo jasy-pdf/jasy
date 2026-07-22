@@ -68,6 +68,17 @@ export function reportOverflow(
 }
 
 /**
+ * True if packing `children` will hit a forced cut: a child that IS a break, contains one deeper in its
+ * subtree, or asks to break before/after itself. A flow container reports this from `hasForcedBreak` so
+ * its parent fragments it (runs `packChildren`) instead of placing it whole and swallowing the cut.
+ */
+export function childrenForceBreak(children: PDFElement[]): boolean {
+  return children.some(
+    (child) => child.hasForcedBreak() || child.breaksBefore() || child.breaksAfter(),
+  );
+}
+
+/**
  * Packs a vertical stack of children into `maxHeight`, in order. Children are measured
  * against `width` (unbounded height) and added until one would overflow; that straddling
  * child is itself fragmented if it can be, otherwise placed/deferred whole. Everything
@@ -106,6 +117,10 @@ export function packChildren(
     // page, regardless of how much room is left.
     if (child.isPageBreak()) return spill(i + 1, true);
 
+    // break-before: this child wants a fresh page. Honour it only if something is already on this region
+    // (CSS ignores break-before at the top of a page); that guard also prevents an empty page + a loop.
+    if (child.breaksBefore() && fitted.length > 0) return spill(i, true);
+
     const childHeight = child.calculateLayout(
       BoxConstraints.loose(width, Infinity),
       { x: 0, y: 0 },
@@ -116,10 +131,13 @@ export function packChildren(
     const lead = fitted.length > 0 ? gap : 0;
 
     // Place whole only if it fits AND holds no forced break: a child that fits by height but contains
-    // a `PageBreak` in its subtree must still be fragmented, or the break would be swallowed.
+    // a `PageBreak` (or a break-before/after) in its subtree must still be fragmented, or the break
+    // would be swallowed.
     if (usedHeight + lead + childHeight <= maxHeight && !child.hasForcedBreak()) {
       fitted.push(child);
       usedHeight += lead + childHeight;
+      // break-after: everything after this child starts a fresh page.
+      if (child.breaksAfter()) return spill(i + 1, true);
       continue;
     }
 
@@ -132,6 +150,14 @@ export function packChildren(
       childBroke = split.forceBreak ?? false;
       if (split.fitted) {
         fitted.push(split.fitted);
+        // The child fully fit and triggered no cut: it only reached this path because its subtree
+        // FLAGGED a possible break (hasForcedBreak) that turned out to be a no-op here - e.g. a
+        // break-before at the top of the region, which CSS ignores. Keep packing the siblings after
+        // it instead of spilling them, so break-before does not accidentally push later content away.
+        if (!split.remainder && !childBroke) {
+          usedHeight += lead + childHeight;
+          continue;
+        }
         if (split.remainder) remainder.push(split.remainder);
         placedPart = true;
       }
