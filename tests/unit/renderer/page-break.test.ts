@@ -1,5 +1,14 @@
-import { describe, it, expect } from "vitest";
-import { Document, Page, Column, Box, Text, PageBreak, renderToBytes } from "../../../src/lib/api";
+import { describe, it, expect, vi } from "vitest";
+import {
+  Document,
+  Page,
+  Column,
+  Row,
+  Box,
+  Text,
+  PageBreak,
+  renderToBytes,
+} from "../../../src/lib/api";
 
 // A forced page break: everything after it starts a fresh page, even when it would have fit. Nesting
 // works because the `forceBreak` signal bubbles up through the fragment result.
@@ -63,5 +72,43 @@ describe("PageBreak", () => {
     );
     expect(pageCount(pdf)).toBe(3);
     expect(wordsPerStream(pdf, ["AAA", "BBB", "CCC"])).toEqual([["AAA"], ["BBB"], ["CCC"]]);
+  });
+
+  it("a break inside a Row has no effect and warns (a row is one horizontal line)", async () => {
+    // CSS and react-pdf both ignore a forced break here (measured: react-pdf 4.6 renders 1 page too).
+    // We match that - the break draws nothing - but warn once so the mistake is not silent.
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const pdf = await render(
+      Document([
+        Page({ margin: 40 }, [
+          Column([Row([Text("LEFT"), PageBreak(), Text("RIGHT")]), Text("AFTER")]),
+        ]),
+      ]),
+    );
+    expect(pageCount(pdf)).toBe(1);
+    expect(warn).toHaveBeenCalledOnce();
+    expect(warn.mock.calls[0][0]).toMatch(/PageBreak had no effect/);
+    warn.mockRestore();
+  });
+
+  it("a trailing break inside a Box does not warn or add a page", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const pdf = await render(
+      Document([
+        Page({ margin: 40 }, [Column([Box({ bg: "#eef" }, [Column([Text("AAA"), PageBreak()])])])]),
+      ]),
+    );
+    expect(pageCount(pdf)).toBe(1);
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("an effective break does not warn", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await render(
+      Document([Page({ margin: 40 }, [Column([Text("AAA"), PageBreak(), Text("BBB")])])]),
+    );
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 });

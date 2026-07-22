@@ -111,7 +111,10 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
       innerWidth,
       ctx,
     );
-    if (remainder.length === 0) return { fitted: this, remainder: null };
+    // Fits with no forced cut: return the whole box unchanged. A trailing forced break is the
+    // exception - fall through so the box is rebuilt from the packed children (without the consumed
+    // break marker), rather than handing back the original that still holds it.
+    if (remainder.length === 0 && !forceBreak) return { fitted: this, remainder: null };
 
     const contentHeight = (kids: PDFElement[]): number =>
       kids.reduce(
@@ -124,7 +127,11 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
 
     return {
       fitted: this.cloneWithChildren(fitted, contentHeight(fitted) + 2 * this.borderWidth),
-      remainder: this.cloneWithChildren(remainder, contentHeight(remainder) + 2 * this.borderWidth),
+      // A trailing forced break leaves nothing to carry over: no remainder box, no extra page.
+      remainder:
+        remainder.length === 0
+          ? null
+          : this.cloneWithChildren(remainder, contentHeight(remainder) + 2 * this.borderWidth),
       forceBreak,
     };
   }

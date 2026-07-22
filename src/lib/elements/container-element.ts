@@ -80,13 +80,15 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
       ctx,
       this.gap,
     );
-    // Fits as one region: hand the whole container back so the page renders unchanged
-    // (its normal layout distributes flex / fills the page).
-    if (remainder.length === 0) return { fitted: this, remainder: null };
+    // Fits as one region with no forced cut: hand the whole container back so the page renders
+    // unchanged (its normal layout distributes flex / fills the page). A forced break is excluded
+    // here even when nothing follows it (a trailing `PageBreak`): return the packed children, which
+    // no longer hold the consumed break marker, so it does not leak into the render pass.
+    if (remainder.length === 0 && !forceBreak) return { fitted: this, remainder: null };
 
     return {
       fitted: this.cloneWithChildren(fitted),
-      remainder: this.cloneWithChildren(remainder),
+      remainder: remainder.length === 0 ? null : this.cloneWithChildren(remainder),
       forceBreak,
     };
   }

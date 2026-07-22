@@ -137,12 +137,14 @@ export class PDFDocumentRenderer {
 
       // pageCtx, not the document ctx: a descendant that reads `pageConfig` while being measured (a
       // `PageBuilder` sizing its provisional build) must see THIS page's geometry, not the document default.
-      const { fitted, remainder } = region.fragment(height, width, pageCtx);
+      const { fitted, remainder, forceBreak } = region.fragment(height, width, pageCtx);
 
       // Everything fits on one page: keep the ORIGINAL page so output is unchanged. Measuring inside
       // fragment() left its children at the measuring origin; pass B lays the page out again, which
-      // restores their real positions (layout is deterministic).
-      if (isFirstRegion && remainder === null) {
+      // restores their real positions (layout is deterministic). A consumed trailing `PageBreak`
+      // (forceBreak with no remainder) is the exception: render the packed `fitted` instead, which no
+      // longer holds the break marker, so the original with the break does not leak into the render pass.
+      if (isFirstRegion && remainder === null && !forceBreak) {
         pages.push({ kind: "whole", page });
         break;
       }
