@@ -47,7 +47,7 @@ export function isFragmentable(element: PDFElement): element is PDFElement & Fra
  */
 export type OverflowPolicy = "error" | "warn" | "ignore";
 
-function reportOverflow(
+export function reportOverflow(
   child: PDFElement,
   childHeight: number,
   maxHeight: number,
