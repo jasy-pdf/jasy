@@ -95,8 +95,16 @@ sees a component:
 
 The hand-rolled core. Holds the indirect-object array, tracks byte offsets for the xref table, manages
 fonts and images, and owns config. Also the **font-metrics engine**: parses the 14 standard-font AFM
-files (`assets/*.afm` via `AFMParser`) to compute `getStringWidth` / `getCharWidth` / kerning — this
-is what makes text wrapping possible without a browser. Standard text is encoded as Windows-1252 /
+files (`assets/*.afm` via `AFMParser`) to compute `getStringWidth` / `getCharWidth` — this is what makes
+text wrapping possible without a browser. **We kern** — on by default since 2026-07-11 (opt out with
+`renderToBytes(doc, { kerning: false })`). PDF never kerns on its own, so a kerned run is emitted as a `TJ`
+array whose per-gap adjustments come from the font: `AFMParser.getKerning` for the standard-14, the `kern`
+table + `GPOS` for embedded fonts. Measuring uses the SAME adjustments in ONE place (`text/advance.ts`
+`runAdvance`, gated on `metrics.kerningEnabled`), so **measured equals drawn** — the 2026-07-10 bug was the
+reverse: `getStringWidth` folded the kern pairs into the MEASUREMENT while the `Tj` output ignored them, so
+every kerned string drew wider than its box ("AVATAR Wave" at 40pt by 19pt, "Total" at 11pt by 5.7%). Now the
+measurement is plain glyph widths and kerning is added in that one canonical place; with kerning off, the
+output is byte-identical to the plain-`Tj` past. Standard text is encoded as Windows-1252 /
 WinAnsiEncoding (`utils/utf8-to-windows1252-encoder.ts`). **Custom TrueType fonts** plug in beside this:
 `TTFParser` (`utils/ttf-parser.ts`) reads the same metrics straight from the `.ttf` (hmtx/cmap), and
 `registerCustomFont` embeds the font as a Type0/Identity-H graph (`/FontFile2`) — the metric + emission
@@ -157,25 +165,27 @@ shared state.
 
 ## Element & renderer inventory
 
-| Element                 | File                                         | Renderer              | Notes                                                                   |
-| ----------------------- | -------------------------------------------- | --------------------- | ----------------------------------------------------------------------- |
-| `PDFDocumentElement`    | `elements/pdf-document-element.ts`           | `PDFDocumentRenderer` | root, holds pages                                                       |
-| `PageElement`           | `elements/page-element.ts`                   | `PageRenderer`        | per-page `config` (size/orientation/margin)                             |
-| `ContainerElement`      | `elements/container-element.ts`              | `ContainerRenderer`   | sized box, flex column of children                                      |
-| `TextElement`           | `elements/text-element.ts`                   | `TextRenderer`        | string or `TextSegment[]` (mixed font/size/color), alignment, word-wrap |
-| `PaddingElement`        | `elements/layout/padding-element.ts`         | `PaddingRenderer`     | margin `[top,right,bottom,left]`, sizes to child                        |
-| `ExpandedElement`       | `elements/layout/expanded-element.ts`        | `ExpandedRenderer`    | flex child, fills remaining height                                      |
-| `SizedContainerElement` | `elements/layout/sized-container-element.ts` | —                     |                                                                         |
-| `ImageElement`          | `elements/image-element.ts`                  | `ImageRenderer`       | via `jimp`; `BoxFit`, grayscale; `CustomLocalImage`                     |
-| `LineElement`           | `elements/line-element.ts`                   | `LineRenderer`        | stroke                                                                  |
-| `RectangleElement`      | `elements/rectangle-element.ts`              | `RectangleRenderer`   | fill + stroke                                                           |
-| `Color`                 | `common/color.ts`                            | —                     | RGB → PDF color string                                                  |
-| `LinkElement`           | `elements/layout/link-element.ts`            | `LinkRenderer`        | `href` (URL) or `dest` (an `Anchor`) → a /Link annotation               |
-| `AnchorElement`         | `elements/layout/anchor-element.ts`          | `AnchorRenderer`      | named jump target → catalog /Names /Dests                               |
-| `BookmarkElement`       | `elements/layout/bookmark-element.ts`        | `BookmarkRenderer`    | outline entry, nested by `level` → /Outlines                            |
-| `RotatedElement`        | `elements/layout/rotated-element.ts`         | `RotatedRenderer`     | paint-only spin at any angle (stamps)                                   |
-| `RotatedBoxElement`     | `elements/layout/rotated-box-element.ts`     | `RotatedRenderer`     | layout-aware quarter-turns (vertical labels)                            |
-| `PageBuilderElement`    | `elements/layout/page-builder-element.ts`    | `PageBuilderRenderer` | builds from `PageInfo` (pageNumber/pageCount/pageSize)                  |
+| Element                 | File                                         | Renderer               | Notes                                                                                |
+| ----------------------- | -------------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------ |
+| `PDFDocumentElement`    | `elements/pdf-document-element.ts`           | `PDFDocumentRenderer`  | root, holds pages                                                                    |
+| `PageElement`           | `elements/page-element.ts`                   | `PageRenderer`         | per-page `config` (size/orientation/margin)                                          |
+| `ContainerElement`      | `elements/container-element.ts`              | `ContainerRenderer`    | sized box, flex column of children                                                   |
+| `TextElement`           | `elements/text-element.ts`                   | `TextRenderer`         | string or `TextSegment[]` (mixed font/size/color), alignment, word-wrap              |
+| `PaddingElement`        | `elements/layout/padding-element.ts`         | `PaddingRenderer`      | margin `[top,right,bottom,left]`, sizes to child                                     |
+| `ExpandedElement`       | `elements/layout/expanded-element.ts`        | `ExpandedRenderer`     | flex child, fills remaining height                                                   |
+| `SizedContainerElement` | `elements/layout/sized-container-element.ts` | —                      |                                                                                      |
+| `ImageElement`          | `elements/image-element.ts`                  | `ImageRenderer`        | via `jimp`; `BoxFit`, grayscale; `CustomLocalImage`                                  |
+| `LineElement`           | `elements/line-element.ts`                   | `LineRenderer`         | stroke                                                                               |
+| `RectangleElement`      | `elements/rectangle-element.ts`              | `RectangleRenderer`    | fill + stroke                                                                        |
+| `Color`                 | `common/color.ts`                            | —                      | RGB → PDF color string                                                               |
+| `LinkElement`           | `elements/layout/link-element.ts`            | `LinkRenderer`         | `href` (URL) or `dest` (an `Anchor`) → a /Link annotation                            |
+| `AnchorElement`         | `elements/layout/anchor-element.ts`          | `AnchorRenderer`       | named jump target → catalog /Names /Dests                                            |
+| `BookmarkElement`       | `elements/layout/bookmark-element.ts`        | `BookmarkRenderer`     | outline entry, nested by `level` → /Outlines                                         |
+| `RotatedElement`        | `elements/layout/rotated-element.ts`         | `RotatedRenderer`      | paint-only spin at any angle (stamps)                                                |
+| `RotatedBoxElement`     | `elements/layout/rotated-box-element.ts`     | `RotatedRenderer`      | layout-aware quarter-turns (vertical labels)                                         |
+| `PageBuilderElement`    | `elements/layout/page-builder-element.ts`    | `PageBuilderRenderer`  | builds from `PageInfo` (pageNumber/pageCount/pageSize)                               |
+| `PageBreakElement`      | `elements/layout/page-break-element.ts`      | `PageBreakRenderer`    | forced page break; zero-size, packer cuts at it (`forceBreak` bubbles up)            |
+| `KeepTogetherElement`   | `elements/layout/keep-together-element.ts`   | `KeepTogetherRenderer` | transparent wrapper; vetoes a page-split (break-inside: avoid), degrades if > 1 page |
 
 Every renderer's `render()` returns `Promise<IRNode[]>` (since roadmap Phase 1). Adding an element =
 new element + renderer that returns IR + (if it draws something new) a primitive in `ir/display-list.ts`
@@ -326,6 +336,16 @@ lineHeight, align, bold, italic }, …)` sets doc-wide text defaults; `DefaultTe
   (a 90/270 turn swaps w/h, so a vertical label reserves its strip). One IR pair `TransformPush{matrix}` /
   `TransformPop` → `q … cm … Q`; `flipY` conjugates the matrix (`M_pdf = F·M·F`) so producers stay
   coordinate-blind. Known gap: an annotation inside a transform does NOT rotate (see gap 6 below).
+- ✅ **letterSpacing** (2026-07-10) — `Text({ letterSpacing })` in points (CSS `letter-spacing`, the PDF
+  `Tc` operator), per `span` too, inheritable, negative tightens. Added after EVERY glyph (the last one
+  included, like `Tc` and like CSS), so a spaced paragraph still wraps correctly and a spaced run still
+  aligns. `Tc` is isolated in a `q/Q` so it cannot leak into the next run; at 0 nothing is emitted
+  (byte-identical). Verified against headless Chrome at the time (before kerning shipped): glyph positions
+  matched to within the kerning Chrome applied and we did not yet. Introduced **`text/advance.ts`** — the ONE
+  canonical run advance (`runAdvance`), the horizontal peer of `line-metrics.ts` and `line-breaker.ts`;
+  the line-breaker, `naturalWidth`, the renderer and the skip-ink pen all call it, so measuring and drawing
+  can never disagree. `advance = sum(glyph widths) + sum(kerning) + n*letterSpacing` — all three terms are
+  wired now (kerning via `TJ` + `GPOS`, on by default; see the font-writer section). Gallery `20-letter-spacing`.
 - ✅ **Text decoration** (2026-07-10) — `Text({ underline, strikethrough })`, also per `span` and inheritable
   from `Document`/`DefaultTextStyle`. The stroke sits at the font's `UnderlinePosition` and is
   `UnderlineThickness` thick; a strikethrough crosses at half the `XHeight` (which is where Chrome puts it,
@@ -337,6 +357,32 @@ lineHeight, align, bold, italic }, …)` sets doc-wide text defaults; `DefaultTe
   underline runs straight through `g` and `p`). It needs an EMBEDDED font — the standard-14 outlines live in
   the viewer, not in the AFM — and asking for it with a standard font **throws** rather than silently drawing
   a solid line. Gallery `19-text-decoration`; the skipInk specimen is `claude-data/out/decoration/`.
+- ✅ **Page-break control — Step 1 (termination guarantee) + Step 2 (`PageBreak`)** (2026-07-11) — the general
+  guard first: every physical page in the paginate loop has the FULL body height, so `fitted === null` means the
+  region did not shrink even on a whole page → advancing would loop forever → we place it whole (clipped) +
+  `reportOverflow` + stop. "A step that shrinks nothing ends the loop" is Flo's rule, replacing Flutter's
+  arbitrary N-attempts. Then `PageBreak()`: a zero-size, non-drawing marker; `packChildren` cuts the flow at it
+  (everything after → fresh page). Nesting works via a `forceBreak` field on `FragmentResult` that bubbles up +
+  `hasForcedBreak()` (recursive), so a break deep in a `Box` carries its later SIBLINGS over too. An INEFFECTIVE
+  break (inside a horizontal `Row`, or any non-paginating flow) is ignored — the NORM: measured react-pdf 4.6
+  ignores `<View break>` in a `flexDirection:row` (1 page), and react-pdf has no standalone break element at all
+  (break is a PROP = break-before). We keep the `PageBreak()` element as a convenience but match the ignore, plus
+  ONE `console.warn` at the single choke-point where an orphaned break surfaces (the `PageBreakRenderer` — a
+  consumed break never reaches render). A consumed TRAILING break must NOT warn, so the `fits-on-one-page` fast
+  paths (Container/Rectangle `return this`, driver `kind:"whole"`) gate on `!forceBreak`. Gallery byte-identical
+  (inert without a break). **Step 2b — `breakBefore`/`breakAfter` props** (the CSS/react-pdf NORM api: break is a
+  prop, not an element) on `Box`/`Column`/`Row`: `breaksBefore()`/`breaksAfter()` on the base element, read by
+  the parent `packChildren` at the child boundary (cut before, ignored at region top per CSS; cut after a
+  whole-placed child). A shared `childrenForceBreak()` helper folds them into `hasForcedBreak` so a break-before
+  nested deep in a box bubbles up. Fragment clones drop the flags (continuations). Gallery `21-page-breaks`.
+  **Step 3 — `keepTogether`** (CSS `break-inside: avoid`): `keepTogether([...])` factory + prop on
+  `Box`/`Column`/`Row`. A layout-TRANSPARENT wrapper (`KeepTogetherElement`, like `StructGroup`) whose
+  `fragment()` (1) keeps whole if it fits, (2) VETOES the split and defers the group whole to a fresh page if it
+  would fit there, (3) DEGRADES (splits) if it is taller than a whole page so pagination terminates. Needs the
+  full page body height, threaded as `LayoutContext.pageBodyHeight`. Inner keepTogethers survive an outer
+  degrade (re-evaluated when the child splits). A forced break inside WINS and WARNs once. The prop is wrapper
+  sugar (`maybeKeepTogether`), so `Box`/`Column`/`Row` now return `PDFElement`. Gallery `22-keep-together`.
+  **Page-break control is COMPLETE** (guard + PageBreak + breakBefore/After + keepTogether).
 - ✅ **Navigation** (2026-07-09, `@jasy/pdf@alpha.6`) — `Link({ href })` (external URL) or `Link({ to })`
   (internal jump); `href`/`to` on a `span` links just that run (one /Rect per wrapped line); `Anchor({ name })`
   is the jump target, resolved through the catalog `/Names /Dests` name tree, so a link may point at a page
