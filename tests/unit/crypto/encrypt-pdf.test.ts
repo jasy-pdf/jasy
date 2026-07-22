@@ -14,6 +14,7 @@ describe("PDF encryption (AES-256 R6) end-to-end", () => {
     // compress:false so the decrypted stream is the raw operators (no inflate step needed to assert).
     const bytes = await renderToBytes(doc, {
       compress: false,
+      kerning: false,
       encrypt: { userPassword: "letmein" },
     });
     const pdf = lat(bytes);

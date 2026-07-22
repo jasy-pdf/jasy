@@ -102,6 +102,12 @@ const stack = (n: number) =>
   });
 
 class HeaderFooterDoc extends PDFDocument {
+  // This suite asserts exact text markers (PAGEHEAD, Block N); kerning would split them into TJ
+  // chunks. It tests pagination, not text, so render un-kerned for a deterministic grep.
+  constructor() {
+    super();
+    this.objectManager.setKerning(false);
+  }
   build(): PDFDocumentElement {
     return new PDFDocumentElement({
       children: [

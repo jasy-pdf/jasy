@@ -10,7 +10,8 @@ const yOf = (pdf: string, text: string): number => {
   return Number(m[1]);
 };
 
-const render = (doc: Parameters<typeof renderPdf>[0]) => renderPdf(doc, { compress: false });
+const render = (doc: Parameters<typeof renderPdf>[0]) =>
+  renderPdf(doc, { compress: false, kerning: false });
 
 describe("Spacer / Expanded on an unbounded main axis (issue #10)", () => {
   it("pushes a sibling to the bottom when the Spacer sits directly in the Page", async () => {
