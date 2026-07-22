@@ -48,6 +48,10 @@ export interface LayoutContext {
   /** What to do when an element overflows a page region and cannot break (set from the render option;
    *  absent = clip silently). Evaluated in `packChildren` where the forced placement happens. */
   onOverflow?: OverflowPolicy;
+  /** The FULL body height of the current page (between header and footer), set by the page driver. A
+   *  `keepTogether` group reads it to decide the degrade rule: veto splitting only when the group would
+   *  fit on a fresh page; a group taller than a whole page drops the veto and splits. */
+  pageBodyHeight?: number;
 }
 
 let _nextStructId = 0;
@@ -96,6 +100,42 @@ export abstract class PDFElement {
    * the parent hands it the line's bounded main extent instead of `Infinity`. Default: no.
    */
   needsBoundedMain(_horizontal: boolean): boolean {
+    return false;
+  }
+
+  /**
+   * Whether this element IS a forced page break (a `PageBreak`). The pagination packer cuts the flow
+   * at such a marker: everything before it stays, everything after starts a new page. Default: no.
+   */
+  isPageBreak(): boolean {
+    return false;
+  }
+
+  /**
+   * Whether this element is, or CONTAINS anywhere in its subtree, a forced page break. A container
+   * that merely fits by height must still be fragmented when this is true, so a break nested inside
+   * it is honoured rather than swallowed. Containers override this to recurse into their children.
+   * Default: no.
+   */
+  hasForcedBreak(): boolean {
+    return false;
+  }
+
+  /**
+   * Whether this element asks to START on a fresh page (CSS `break-before: page`, react-pdf's `break`
+   * prop). Read by the parent packer at the child boundary, not by the element itself; ignored when the
+   * element is already at the top of a region (nothing before it), so it never makes an empty page.
+   * Default: no.
+   */
+  breaksBefore(): boolean {
+    return false;
+  }
+
+  /**
+   * Whether everything AFTER this element must start a fresh page (CSS `break-after: page`). Read by the
+   * parent packer once this element has been placed whole. Default: no.
+   */
+  breaksAfter(): boolean {
     return false;
   }
 }

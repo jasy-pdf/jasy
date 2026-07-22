@@ -20,6 +20,10 @@ interface RowElementParams extends WithChildren {
   height?: number;
   widthFactor?: number;
   heightFactor?: number;
+  /** Start this row on a fresh page (CSS `break-before: page`). */
+  breakBefore?: boolean;
+  /** Start everything after this row on a fresh page (CSS `break-after: page`). */
+  breakAfter?: boolean;
 }
 
 /**
@@ -39,6 +43,8 @@ export class RowElement extends SizedPDFElement {
   private gap: number;
   private main: MainAlign;
   private cross: CrossAlign;
+  private breakBefore: boolean;
+  private breakAfter: boolean;
   // The requested size (fixed points or a fraction), kept separate from the laid-out this.width/height.
   private requested: {
     width?: number;
@@ -56,6 +62,8 @@ export class RowElement extends SizedPDFElement {
     height,
     widthFactor,
     heightFactor,
+    breakBefore,
+    breakAfter,
   }: RowElementParams) {
     super({ x: 0, y: 0 });
     this.children = children;
@@ -63,6 +71,16 @@ export class RowElement extends SizedPDFElement {
     this.main = main ?? "start";
     this.cross = cross ?? "stretch";
     this.requested = { width, height, widthFactor, heightFactor };
+    this.breakBefore = breakBefore ?? false;
+    this.breakAfter = breakAfter ?? false;
+  }
+
+  override breaksBefore(): boolean {
+    return this.breakBefore;
+  }
+
+  override breaksAfter(): boolean {
+    return this.breakAfter;
   }
 
   override relativeSizeFactor(horizontal: boolean): number | undefined {

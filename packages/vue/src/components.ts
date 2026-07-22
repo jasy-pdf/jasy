@@ -47,6 +47,14 @@ const stackProps = {
   justify: String as PropType<"start" | "center" | "end" | "between" | "around">,
   align: String as PropType<"start" | "center" | "end" | "stretch">,
 };
+// Page-break control shared by `<Box>`/`<Column>`/`<Row>` (CSS break-before/after: page +
+// break-inside: avoid). NOT on `<Page>` (the top level cannot break before itself), so it is spread in
+// explicitly, not via stackProps.
+const breakProps = {
+  breakBefore: { type: Boolean, default: undefined },
+  breakAfter: { type: Boolean, default: undefined },
+  keepTogether: { type: Boolean, default: undefined },
+};
 const boxProps = {
   bg: colorProp,
   border: colorProp,
@@ -61,6 +69,7 @@ const boxProps = {
   radius: Number,
   relative: { type: Boolean, default: undefined },
   overflow: String as PropType<"hidden" | "visible">,
+  ...breakProps,
 };
 const imageProps = {
   src: [String, Object] as PropType<ImageSource>,
@@ -143,13 +152,13 @@ export const Page = defineComponent({
 export const Column = defineComponent({
   name: "JasyColumn",
   inheritAttrs: false,
-  props: stackProps,
+  props: { ...stackProps, ...breakProps },
   setup: fwd("column"),
 });
 export const Row = defineComponent({
   name: "JasyRow",
   inheritAttrs: false,
-  props: stackProps,
+  props: { ...stackProps, ...breakProps },
   setup: fwd("row"),
 });
 export const Box = defineComponent({
@@ -175,6 +184,18 @@ export const Spacer = defineComponent({
   inheritAttrs: false,
   props: { flex: Number },
   setup: fwd("spacer"),
+});
+export const PageBreak = defineComponent({
+  name: "JasyPageBreak",
+  inheritAttrs: false,
+  setup: fwd("page-break"),
+});
+// Keeps its default-slot children on one page (CSS `break-inside: avoid`). Also available as the
+// `keep-together` prop on `<Box>`/`<Column>`/`<Row>`.
+export const KeepTogether = defineComponent({
+  name: "JasyKeepTogether",
+  inheritAttrs: false,
+  setup: fwd("keep-together"),
 });
 export const Divider = defineComponent({
   name: "JasyDivider",

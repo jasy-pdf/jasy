@@ -8,7 +8,7 @@ import {
 } from "../elements/page-element.ts";
 import { LayoutContext, PDFElement } from "../elements/pdf-element.ts";
 import { BoxConstraints } from "../layout/box-constraints.ts";
-import { isFragmentable } from "../layout/fragmentation.ts";
+import { isFragmentable, reportOverflow } from "../layout/fragmentation.ts";
 import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 import { PageRenderer } from "./page-renderer.ts";
 
@@ -123,6 +123,8 @@ export class PDFDocumentRenderer {
       footer,
       pageCtx,
     );
+    // A `keepTogether` group compares its height against a FULL fresh page (this band), so thread it in.
+    pageCtx.pageBodyHeight = height;
 
     const pages: PhysicalPage[] = [];
     let region: PDFElement | null = children[0];
@@ -137,19 +139,37 @@ export class PDFDocumentRenderer {
 
       // pageCtx, not the document ctx: a descendant that reads `pageConfig` while being measured (a
       // `PageBuilder` sizing its provisional build) must see THIS page's geometry, not the document default.
-      const { fitted, remainder } = region.fragment(height, width, pageCtx);
+      const { fitted, remainder, forceBreak } = region.fragment(height, width, pageCtx);
 
       // Everything fits on one page: keep the ORIGINAL page so output is unchanged. Measuring inside
       // fragment() left its children at the measuring origin; pass B lays the page out again, which
-      // restores their real positions (layout is deterministic).
-      if (isFirstRegion && remainder === null) {
+      // restores their real positions (layout is deterministic). A consumed trailing `PageBreak`
+      // (forceBreak with no remainder) is the exception: render the packed `fitted` instead, which no
+      // longer holds the break marker, so the original with the break does not leak into the render pass.
+      if (isFirstRegion && remainder === null && !forceBreak) {
         pages.push({ kind: "whole", page });
         break;
       }
 
-      if (fitted) {
-        pages.push({ kind: "fragment", config, content: fitted, header, footer });
+      // TERMINATION GUARANTEE. Every page here has the full body height, so `fitted === null` means
+      // nothing fit even on a whole page - the region did not get smaller. Advancing to the
+      // (identical) remainder would loop forever. So we stop: place the region whole (clipped to the
+      // page) and surface it per the overflow policy. A step that shrinks nothing ends the loop, for
+      // ANY region - an oversized unbreakable block, a future keep-together group, or an engine bug.
+      if (fitted === null) {
+        // Measure the region's true height for the message (rare path, so the extra pass is free);
+        // pass B lays it out again, so this mutation does not leak.
+        const needed = region.calculateLayout(
+          BoxConstraints.loose(width, Infinity),
+          { x: 0, y: 0 },
+          pageCtx,
+        ).height;
+        reportOverflow(region, needed, height, pageCtx.onOverflow ?? "ignore");
+        pages.push({ kind: "fragment", config, content: region, header, footer });
+        break;
       }
+
+      pages.push({ kind: "fragment", config, content: fitted, header, footer });
       region = remainder;
       isFirstRegion = false;
     }

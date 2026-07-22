@@ -133,6 +133,9 @@ export abstract class PDFDocument {
       this.registerStandardFonts(this._objectManager);
     }
     if (config) this._objectManager.changePDFConfig(config);
+    // Kerning is on by default at the document level (the `renderToBytes` path sets the same). A
+    // bare `PDFObjectManager` still defaults OFF, so unit tests keep predictable un-kerned metrics.
+    this._objectManager.setKerning(true);
   }
 
   get objectManager() {

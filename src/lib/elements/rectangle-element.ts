@@ -1,6 +1,11 @@
 import { Color } from "../common/color.ts";
 import { BoxConstraints, Offset, Size, resolveExtent } from "../layout/box-constraints.ts";
-import { Fragmentable, FragmentResult, packChildren } from "../layout/fragmentation.ts";
+import {
+  Fragmentable,
+  FragmentResult,
+  childrenForceBreak,
+  packChildren,
+} from "../layout/fragmentation.ts";
 import {
   LayoutContext,
   PDFElement,
@@ -37,6 +42,10 @@ interface RectangleElementParams extends SizedElement, WithChildren {
   widthFactor?: number;
   /** Height as a fraction (0..1) of the offered height; see `widthFactor`. */
   heightFactor?: number;
+  /** Start this box on a fresh page (CSS `break-before: page`). */
+  breakBefore?: boolean;
+  /** Start everything after this box on a fresh page (CSS `break-after: page`). */
+  breakAfter?: boolean;
 }
 
 export class RectangleElement extends SizedPDFElement implements Fragmentable {
@@ -48,6 +57,8 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
   private sideBorders?: SideBorders;
   private relative: boolean;
   private overflow: "hidden" | "visible";
+  private breakBefore: boolean;
+  private breakAfter: boolean;
 
   private sizeMemory!: {
     x: number;
@@ -71,6 +82,8 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
     overflow,
     widthFactor,
     heightFactor,
+    breakBefore,
+    breakAfter,
   }: RectangleElementParams) {
     super({ x: 0, y: 0, width, height });
 
@@ -83,7 +96,17 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
     this.sideBorders = sideBorders;
     this.relative = relative ?? false;
     this.overflow = overflow ?? "visible";
+    this.breakBefore = breakBefore ?? false;
+    this.breakAfter = breakAfter ?? false;
     this.sizeMemory = { x: 0, y: 0, width, height, widthFactor, heightFactor };
+  }
+
+  override breaksBefore(): boolean {
+    return this.breakBefore;
+  }
+
+  override breaksAfter(): boolean {
+    return this.breakAfter;
   }
 
   /**
@@ -105,8 +128,16 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
     // holding `c` of content is `c + 2*border` tall. (Derived, not a fudge factor.)
     const innerMaxHeight = maxHeight - 2 * this.borderWidth;
 
-    const { fitted, remainder } = packChildren(this.children, innerMaxHeight, innerWidth, ctx);
-    if (remainder.length === 0) return { fitted: this, remainder: null };
+    const { fitted, remainder, forceBreak } = packChildren(
+      this.children,
+      innerMaxHeight,
+      innerWidth,
+      ctx,
+    );
+    // Fits with no forced cut: return the whole box unchanged. A trailing forced break is the
+    // exception - fall through so the box is rebuilt from the packed children (without the consumed
+    // break marker), rather than handing back the original that still holds it.
+    if (remainder.length === 0 && !forceBreak) return { fitted: this, remainder: null };
 
     const contentHeight = (kids: PDFElement[]): number =>
       kids.reduce(
@@ -119,11 +150,30 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
 
     return {
       fitted: this.cloneWithChildren(fitted, contentHeight(fitted) + 2 * this.borderWidth),
-      remainder: this.cloneWithChildren(remainder, contentHeight(remainder) + 2 * this.borderWidth),
+      // A trailing forced break leaves nothing to carry over: no remainder box, no extra page.
+      // Only the CONTINUATION carries `breakAfter` (a box that splits still breaks after its LAST
+      // fragment, not its first); `breakBefore` is dropped, already honoured before the split.
+      remainder:
+        remainder.length === 0
+          ? null
+          : this.cloneWithChildren(
+              remainder,
+              contentHeight(remainder) + 2 * this.borderWidth,
+              this.breakAfter,
+            ),
+      forceBreak,
     };
   }
 
-  private cloneWithChildren(children: PDFElement[], height: number): RectangleElement {
+  override hasForcedBreak(): boolean {
+    return childrenForceBreak(this.children);
+  }
+
+  private cloneWithChildren(
+    children: PDFElement[],
+    height: number,
+    breakAfter = false,
+  ): RectangleElement {
     return new RectangleElement({
       x: 0,
       y: 0,
@@ -140,6 +190,7 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
       sideBorders: this.sideBorders,
       relative: this.relative,
       overflow: this.overflow,
+      breakAfter,
     });
   }
 

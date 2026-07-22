@@ -23,6 +23,12 @@ const stack = (n: number) =>
   });
 
 class OverflowingDoc extends PDFDocument {
+  // Asserts exact `(Block N)` markers; kerning splits them into TJ chunks (Block has a c-k pair).
+  // These tests are about pagination, not text, so render un-kerned for a deterministic grep.
+  constructor() {
+    super();
+    this.objectManager.setKerning(false);
+  }
   build(): PDFDocumentElement {
     return new PDFDocumentElement({
       children: [

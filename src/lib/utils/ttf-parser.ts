@@ -385,14 +385,24 @@ export class TTFParser {
     return this.hasKerning;
   }
 
+  // Memoised getKerning results, keyed (leftGid << 16 | rightGid) -> em/1000. A GPOS lookup walks
+  // subtables (coverage + classDef) per pair, and a long document repeats the same pairs thousands
+  // of times, so the first lookup of a pair pays; the rest are O(1).
+  private kernCache = new Map<number, number>();
+
   /** Kerning between two glyphs, in em/1000 (the standard-14 unit); 0 if the pair is not kerned.
    *  Negative tightens, matching the AFM sign. GPOS wins over the legacy `kern` table when both
    *  exist (it is what a modern shaper uses, and can carry more pairs). */
   getKerning(leftGid: number, rightGid: number): number {
+    const key = (leftGid << 16) | rightGid;
+    const cached = this.kernCache.get(key);
+    if (cached !== undefined) return cached;
     let units: number | undefined;
     if (this.gposPairPos.length > 0) units = this.gposKern(leftGid, rightGid);
-    if (units === undefined) units = this.kernPairs.get((leftGid << 16) | rightGid);
-    return units === undefined ? 0 : Math.round((units * 1000) / this.unitsPerEm);
+    if (units === undefined) units = this.kernPairs.get(key);
+    const em = units === undefined ? 0 : Math.round((units * 1000) / this.unitsPerEm);
+    this.kernCache.set(key, em);
+    return em;
   }
 
   // The legacy `kern` table, format 0 (an explicit list of glyph-pair adjustments). Only horizontal

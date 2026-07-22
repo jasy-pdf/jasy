@@ -109,7 +109,7 @@ describe("the stroke spans exactly the glyphs the viewer draws", () => {
     const pdf = new TextDecoder("latin1").decode(
       await renderToBytes(
         Document([Page({ margin: 30 }, [Text("AVATAR Wave", { size: 40, underline: true })])]),
-        { compress: false },
+        { compress: false, kerning: false }, // this test is about the stroke vs the plain Tj advance
       ),
     );
     // The stroke is a `x1 y m \n x2 y l \n S` path; grab its two x coordinates.
