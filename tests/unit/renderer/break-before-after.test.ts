@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { Document, Page, Column, Box, Text, renderToBytes } from "../../../src/lib/api";
+import { Document, Page, Column, Box, Padding, Text, renderToBytes } from "../../../src/lib/api";
 
 // `breakBefore` / `breakAfter` props (CSS `break-before`/`break-after: page`, react-pdf's `break`).
 // The parent packer reads the flag at the child boundary - no standalone marker element involved.
@@ -8,6 +8,13 @@ const render = async (doc: Parameters<typeof renderToBytes>[0]) =>
   new TextDecoder("latin1").decode(await renderToBytes(doc, { compress: false, kerning: false }));
 
 const pageCount = (pdf: string) => (pdf.match(/\/Type\s*\/Page[^s]/g) ?? []).length;
+
+// 1-based index of the content stream (≈ physical page) a sentinel word is drawn on.
+const pageOf = (pdf: string, word: string): number =>
+  [...pdf.matchAll(/stream\n([\s\S]*?)\nendstream/g)].findIndex((m) => m[1].includes(`(${word})`)) +
+  1;
+
+const lines = (n: number) => Array.from({ length: n }, (_, i) => Text(`L${i + 1}`, { size: 12 }));
 
 const wordsPerStream = (pdf: string, sentinels: string[]): string[][] =>
   [...pdf.matchAll(/stream\n([\s\S]*?)\nendstream/g)]
@@ -85,5 +92,37 @@ describe("breakBefore / breakAfter", () => {
     );
     expect(warn).not.toHaveBeenCalled();
     warn.mockRestore();
+  });
+
+  it("breakAfter survives a box that itself splits across pages (only the LAST fragment breaks)", async () => {
+    // The box is too tall for one page, so it fragments; the break-after must still apply after its
+    // final fragment, not be lost. Regression: the continuation clone must carry breakAfter.
+    const pdf = await render(
+      Document([
+        Page({ margin: 40 }, [
+          Column([
+            Box({ breakAfter: true, bg: "#eef" }, [Text("BOXTOP"), ...lines(70), Text("BOXBOT")]),
+            Text("AFTER"),
+          ]),
+        ]),
+      ]),
+    );
+    expect(pageOf(pdf, "AFTER")).toBeGreaterThan(pageOf(pdf, "BOXBOT"));
+  });
+
+  it("a break-before survives being wrapped in Padding (the wrapper forwards it)", async () => {
+    const pdf = await render(
+      Document([
+        Page({ margin: 40 }, [
+          Column([
+            Text("AAA"),
+            Padding([10, 10, 10, 10], Box({ breakBefore: true }, [Text("BBB")])),
+          ]),
+        ]),
+      ]),
+    );
+    expect(pageCount(pdf)).toBe(2);
+    expect(pageOf(pdf, "AAA")).toBe(1);
+    expect(pageOf(pdf, "BBB")).toBe(2);
   });
 });

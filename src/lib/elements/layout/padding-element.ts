@@ -46,6 +46,16 @@ export class PaddingElement extends SizedPDFElement implements Fragmentable {
     return this.child.hasForcedBreak();
   }
 
+  // Padding is a transparent single-child wrapper, so a break-before/after on the wrapped element must
+  // still be seen by the parent packer at this boundary (otherwise it is swallowed).
+  override breaksBefore(): boolean {
+    return this.child.breaksBefore();
+  }
+
+  override breaksAfter(): boolean {
+    return this.child.breaksAfter();
+  }
+
   private cloneWithChild(child: PDFElement): PaddingElement {
     return new PaddingElement({ margin: this.margin, child });
   }

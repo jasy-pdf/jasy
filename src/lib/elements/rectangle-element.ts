@@ -151,10 +151,16 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
     return {
       fitted: this.cloneWithChildren(fitted, contentHeight(fitted) + 2 * this.borderWidth),
       // A trailing forced break leaves nothing to carry over: no remainder box, no extra page.
+      // Only the CONTINUATION carries `breakAfter` (a box that splits still breaks after its LAST
+      // fragment, not its first); `breakBefore` is dropped, already honoured before the split.
       remainder:
         remainder.length === 0
           ? null
-          : this.cloneWithChildren(remainder, contentHeight(remainder) + 2 * this.borderWidth),
+          : this.cloneWithChildren(
+              remainder,
+              contentHeight(remainder) + 2 * this.borderWidth,
+              this.breakAfter,
+            ),
       forceBreak,
     };
   }
@@ -163,7 +169,11 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
     return childrenForceBreak(this.children);
   }
 
-  private cloneWithChildren(children: PDFElement[], height: number): RectangleElement {
+  private cloneWithChildren(
+    children: PDFElement[],
+    height: number,
+    breakAfter = false,
+  ): RectangleElement {
     return new RectangleElement({
       x: 0,
       y: 0,
@@ -180,6 +190,7 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
       sideBorders: this.sideBorders,
       relative: this.relative,
       overflow: this.overflow,
+      breakAfter,
     });
   }
 

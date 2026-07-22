@@ -111,12 +111,15 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
 
     return {
       fitted: this.cloneWithChildren(fitted),
-      remainder: remainder.length === 0 ? null : this.cloneWithChildren(remainder),
+      // Only the CONTINUATION carries `breakAfter`, so a stack that splits across pages still breaks
+      // after its LAST fragment (not after the first one). `breakBefore` is dropped on both: it was
+      // already honoured by the parent before this stack was ever fragmented.
+      remainder: remainder.length === 0 ? null : this.cloneWithChildren(remainder, this.breakAfter),
       forceBreak,
     };
   }
 
-  private cloneWithChildren(children: PDFElement[]): ContainerElement {
+  private cloneWithChildren(children: PDFElement[], breakAfter = false): ContainerElement {
     return new ContainerElement({
       x: this.x,
       y: this.y,
@@ -128,6 +131,7 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
       gap: this.gap,
       main: this.main,
       cross: this.cross,
+      breakAfter,
     });
   }
 
