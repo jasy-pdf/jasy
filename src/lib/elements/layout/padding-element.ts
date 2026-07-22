@@ -38,7 +38,12 @@ export class PaddingElement extends SizedPDFElement implements Fragmentable {
     return {
       fitted: split.fitted ? this.cloneWithChild(split.fitted) : null,
       remainder: split.remainder ? this.cloneWithChild(split.remainder) : null,
+      forceBreak: split.forceBreak,
     };
+  }
+
+  override hasForcedBreak(): boolean {
+    return this.child.hasForcedBreak();
   }
 
   private cloneWithChild(child: PDFElement): PaddingElement {

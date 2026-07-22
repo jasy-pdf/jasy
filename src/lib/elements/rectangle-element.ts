@@ -105,7 +105,12 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
     // holding `c` of content is `c + 2*border` tall. (Derived, not a fudge factor.)
     const innerMaxHeight = maxHeight - 2 * this.borderWidth;
 
-    const { fitted, remainder } = packChildren(this.children, innerMaxHeight, innerWidth, ctx);
+    const { fitted, remainder, forceBreak } = packChildren(
+      this.children,
+      innerMaxHeight,
+      innerWidth,
+      ctx,
+    );
     if (remainder.length === 0) return { fitted: this, remainder: null };
 
     const contentHeight = (kids: PDFElement[]): number =>
@@ -120,7 +125,12 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
     return {
       fitted: this.cloneWithChildren(fitted, contentHeight(fitted) + 2 * this.borderWidth),
       remainder: this.cloneWithChildren(remainder, contentHeight(remainder) + 2 * this.borderWidth),
+      forceBreak,
     };
+  }
+
+  override hasForcedBreak(): boolean {
+    return this.children.some((child) => child.hasForcedBreak());
   }
 
   private cloneWithChildren(children: PDFElement[], height: number): RectangleElement {

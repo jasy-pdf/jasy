@@ -35,7 +35,9 @@ import { LinkRenderer } from "./link-renderer.ts";
 import { BookmarkElement } from "../elements/layout/bookmark-element.ts";
 import { BookmarkRenderer } from "./bookmark-renderer.ts";
 import { AnchorElement } from "../elements/layout/anchor-element.ts";
+import { PageBreakElement } from "../elements/layout/page-break-element.ts";
 import { AnchorRenderer } from "./anchor-renderer.ts";
+import { PageBreakRenderer } from "./page-break-renderer.ts";
 import { PageBuilderElement } from "../elements/layout/page-builder-element.ts";
 import { PageBuilderRenderer } from "./page-builder-renderer.ts";
 import { RotatedElement } from "../elements/layout/rotated-element.ts";
@@ -59,6 +61,7 @@ export class PDFRenderer {
     RendererRegistry.register(RectangleElement, RectangleRenderer.render);
     RendererRegistry.register(ExpandedElement, ExpandedRenderer.render);
     RendererRegistry.register(PaddingElement, PaddingRenderer.render);
+    RendererRegistry.register(PageBreakElement, PageBreakRenderer.render);
     RendererRegistry.register(DefaultTextStyleElement, DefaultTextStyleRenderer.render);
     RendererRegistry.register(ImageElement, ImageRenderer.render);
     RendererRegistry.register(LineElement, LineRenderer.render);

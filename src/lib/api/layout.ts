@@ -3,6 +3,7 @@ import { RowElement } from "../elements/row-element.ts";
 import { RectangleElement } from "../elements/rectangle-element.ts";
 import { ExpandedElement } from "../elements/layout/expanded-element.ts";
 import { PaddingElement } from "../elements/layout/padding-element.ts";
+import { PageBreakElement } from "../elements/layout/page-break-element.ts";
 import { PositionedElement, PositionedInsets } from "../elements/layout/positioned-element.ts";
 import { LinkElement } from "../elements/layout/link-element.ts";
 import { BookmarkElement } from "../elements/layout/bookmark-element.ts";
@@ -252,6 +253,15 @@ export function RotatedBox(opts: { turns: number }, child: PDFElement): RotatedB
  */
 export function Spacer(flex: number = 1): ExpandedElement {
   return new ExpandedElement({ flex, child: Column([]) });
+}
+
+/**
+ * A forced page break. Put it in a `Column` (or any vertical flow) and everything AFTER it starts on
+ * a fresh page, no matter how much space is left: `Column([intro, PageBreak(), chapterTwo])`. It takes
+ * no space and draws nothing. Works nested, and a break wins over `keepTogether`.
+ */
+export function PageBreak(): PageBreakElement {
+  return new PageBreakElement();
 }
 
 export interface ExpandedOptions {

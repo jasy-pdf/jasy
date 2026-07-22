@@ -6,6 +6,7 @@ export * from "./rectangle-element.ts";
 export * from "./image-element.ts";
 export * from "./layout/expanded-element.ts";
 export * from "./layout/padding-element.ts";
+export * from "./layout/page-break-element.ts";
 export * from "./layout/default-text-style-element.ts";
 export * from "./layout/positioned-element.ts";
 export * from "./layout/link-element.ts";

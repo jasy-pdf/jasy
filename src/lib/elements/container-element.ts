@@ -68,8 +68,18 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
    * Flex children make the container absorb the leftover space, so it never overflows -
    * in that case we don't fragment and hand the whole container back as `fitted`.
    */
+  override hasForcedBreak(): boolean {
+    return this.children.some((child) => child.hasForcedBreak());
+  }
+
   fragment(maxHeight: number, width: number, ctx: LayoutContext): FragmentResult {
-    const { fitted, remainder } = packChildren(this.children, maxHeight, width, ctx, this.gap);
+    const { fitted, remainder, forceBreak } = packChildren(
+      this.children,
+      maxHeight,
+      width,
+      ctx,
+      this.gap,
+    );
     // Fits as one region: hand the whole container back so the page renders unchanged
     // (its normal layout distributes flex / fills the page).
     if (remainder.length === 0) return { fitted: this, remainder: null };
@@ -77,6 +87,7 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
     return {
       fitted: this.cloneWithChildren(fitted),
       remainder: this.cloneWithChildren(remainder),
+      forceBreak,
     };
   }
 

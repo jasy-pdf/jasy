@@ -176,6 +176,11 @@ export const Spacer = defineComponent({
   props: { flex: Number },
   setup: fwd("spacer"),
 });
+export const PageBreak = defineComponent({
+  name: "JasyPageBreak",
+  inheritAttrs: false,
+  setup: fwd("page-break"),
+});
 export const Divider = defineComponent({
   name: "JasyDivider",
   inheritAttrs: false,
