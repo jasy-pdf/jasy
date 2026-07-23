@@ -42,6 +42,29 @@ PKG_JSON="$DIR/package.json"
 NPM_NAME=$(node -e "console.log(require('./$PKG_JSON').name)")
 TAG="${PACKAGE}-v${VERSION}"
 
+# Release ONLY from an up-to-date `main`. Both of these bit us on the alpha.7 cascade:
+#   - releasing from a feature branch strands the bump commits (a squash-merged branch is divergent
+#     from main, so `git push origin HEAD` pushes them to the branch, never to main);
+#   - releasing from a stale main bumps the wrong base.
+BRANCH=$(git branch --show-current)
+if [ "$BRANCH" != "main" ]; then
+  echo "Error: releases must run on 'main', but you are on '$BRANCH'."
+  echo "Run:  git checkout main && git pull"
+  exit 1
+fi
+
+# Verify local main is exactly at origin/main. The fetch ONLY refreshes the remote ref for this check -
+# it does not touch your working tree or local main. If you are behind, YOU pull (the script never does).
+git fetch --quiet origin main || { echo "Error: could not fetch origin/main to verify you are up to date."; exit 1; }
+LOCAL=$(git rev-parse HEAD)
+REMOTE=$(git rev-parse origin/main)
+if [ "$LOCAL" != "$REMOTE" ]; then
+  echo "Error: local 'main' is not in sync with origin/main - pull (or push) first, then re-run."
+  echo "  local:  $LOCAL"
+  echo "  origin: $REMOTE"
+  exit 1
+fi
+
 # the working tree must be clean - we're about to commit + tag exactly the version bump
 if [ -n "$(git status --porcelain)" ]; then
   echo "Error: working tree not clean. Commit or stash first."
