@@ -34,3 +34,41 @@ export function checkboxOn(w: number, h: number, style: FieldStyle): string {
     `${p(0.22, 0.52)} m ${p(0.42, 0.3)} l ${p(0.78, 0.74)} l S`;
   return `${box(w, h, style)}\n${tick}`;
 }
+
+// A circle path (4 cubic-bezier arcs, kappa = 0.5523) around (cx, cy) with radius r. Not stroked/filled -
+// the caller appends `S` (stroke) or `f` (fill).
+function circlePath(cx: number, cy: number, r: number): string {
+  const k = 0.5523 * r;
+  const n = num2;
+  return (
+    `${n(cx + r)} ${n(cy)} m ` +
+    `${n(cx + r)} ${n(cy + k)} ${n(cx + k)} ${n(cy + r)} ${n(cx)} ${n(cy + r)} c ` +
+    `${n(cx - k)} ${n(cy + r)} ${n(cx - r)} ${n(cy + k)} ${n(cx - r)} ${n(cy)} c ` +
+    `${n(cx - r)} ${n(cy - k)} ${n(cx - k)} ${n(cy - r)} ${n(cx)} ${n(cy - r)} c ` +
+    `${n(cx + k)} ${n(cy - r)} ${n(cx + r)} ${n(cy - k)} ${n(cx + r)} ${n(cy)} c`
+  );
+}
+
+/** The ring of a radio button (the outline), in [0 0 w h]. */
+function radioRing(w: number, h: number, style: FieldStyle): string {
+  const r = Math.min(w, h) / 2;
+  const bw = style.borderWidth > 0 ? style.borderWidth : 1;
+  const ops: string[] = [];
+  if (style.background)
+    ops.push(`${pdfColor(style.background)} rg ${circlePath(w / 2, h / 2, r)} f`);
+  const stroke = style.border ?? style.color;
+  ops.push(`${pdfColor(stroke)} RG ${num2(bw)} w ${circlePath(w / 2, h / 2, r - bw / 2)} S`);
+  return ops.join("\n");
+}
+
+/** An unselected radio button: just the ring. */
+export function radioOff(w: number, h: number, style: FieldStyle): string {
+  return radioRing(w, h, style);
+}
+
+/** A selected radio button: the ring plus a filled inner dot. */
+export function radioOn(w: number, h: number, style: FieldStyle): string {
+  const r = Math.min(w, h) / 2;
+  const dot = `${pdfColor(style.color)} rg ${circlePath(w / 2, h / 2, r * 0.45)} f`;
+  return `${radioRing(w, h, style)}\n${dot}`;
+}

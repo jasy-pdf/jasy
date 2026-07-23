@@ -1,6 +1,10 @@
+import { PDFElement } from "../elements/pdf-element.ts";
 import { TextFieldElement } from "../elements/forms/text-field-element.ts";
 import { CheckboxElement } from "../elements/forms/checkbox-element.ts";
+import { RadioElement } from "../elements/forms/radio-element.ts";
 import { ColorInput, toColor } from "./color.ts";
+import { Column, Row } from "./layout.ts";
+import { Text } from "./text.ts";
 
 /** Options for a `TextField` - an interactive text input in the generated PDF. */
 export interface TextFieldOptions {
@@ -90,4 +94,95 @@ export function Checkbox(opts: CheckboxOptions): CheckboxElement {
     border: opts.border !== undefined ? toColor(opts.border) : undefined,
     background: opts.background !== undefined ? toColor(opts.background) : undefined,
   });
+}
+
+/** Options for a single `Radio` button. Several sharing a `group` are one mutually-exclusive field. */
+export interface RadioOptions {
+  /** The shared group name - radios with the same `group` are one field. */
+  group: string;
+  /** This button's export value - unique within the group. */
+  value: string;
+  /** Whether it starts selected. */
+  selected?: boolean;
+  /** Tooltip / accessible name. */
+  tooltip?: string;
+  /** Show but do not allow changing. */
+  readOnly?: boolean;
+  /** Button diameter in points (default 14). */
+  size?: number;
+  /** Dot colour. */
+  color?: ColorInput;
+  /** Ring colour. */
+  border?: ColorInput;
+  /** Fill behind the ring. */
+  background?: ColorInput;
+  /** Ring thickness. */
+  borderWidth?: number;
+}
+
+/** A single radio button. Use `RadioGroup` for the common labelled-list layout, or this for custom ones. */
+export function Radio(opts: RadioOptions): RadioElement {
+  return new RadioElement({
+    ...opts,
+    color: opts.color !== undefined ? toColor(opts.color) : undefined,
+    border: opts.border !== undefined ? toColor(opts.border) : undefined,
+    background: opts.background !== undefined ? toColor(opts.background) : undefined,
+  });
+}
+
+/** One option in a `RadioGroup`. */
+export interface RadioChoice {
+  /** The export value stored when this option is picked. */
+  value: string;
+  /** The text shown next to the button. */
+  label: string;
+}
+
+/** Options for a `RadioGroup` - the labelled list of mutually-exclusive buttons. */
+export interface RadioGroupOptions {
+  /** The field name (shared by every button). */
+  name: string;
+  /** The value of the option that starts selected (matches one option's `value`). */
+  value?: string;
+  /** Vertical space between options (default 8). */
+  gap?: number;
+  /** Button diameter (default 14). */
+  size?: number;
+  /** Button ring / dot / background colours, applied to every option. */
+  color?: ColorInput;
+  border?: ColorInput;
+  background?: ColorInput;
+  /** Label font size (default 12) and colour. */
+  labelSize?: number;
+  labelColor?: ColorInput;
+}
+
+/**
+ * A labelled group of mutually-exclusive radio buttons. Sugar over `Radio` + `Text`: it lays each option
+ * out as a button-and-label row in a `Column`, and marks the one whose `value` matches the group `value`.
+ *
+ * ```ts
+ * RadioGroup({ name: "size", value: "m" }, [
+ *   { value: "s", label: "Small" },
+ *   { value: "m", label: "Medium" },
+ *   { value: "l", label: "Large" },
+ * ])
+ * ```
+ */
+export function RadioGroup(opts: RadioGroupOptions, options: RadioChoice[]): PDFElement {
+  const rows = options.map((o) =>
+    Row({ gap: 8, align: "center" }, [
+      Radio({
+        group: opts.name,
+        value: o.value,
+        selected: o.value === opts.value,
+        size: opts.size,
+        color: opts.color,
+        border: opts.border,
+        background: opts.background,
+      }),
+      Text(o.label, { size: opts.labelSize ?? 12, color: opts.labelColor }),
+    ]),
+  );
+  return Column({ gap: opts.gap ?? 8 }, rows);
 }

@@ -8,8 +8,8 @@ import type { Color } from "../common/color.ts";
  * A discriminated union, one `kind` per PDF field family (/Tx, /Btn, /Ch, /Sig). Step 1 implements
  * `text`; the union grows a member per family as the field types land.
  */
-export type FormFieldSpec = TextFieldSpec | CheckboxSpec;
-// Growing: | RadioSpec | ChoiceSpec | PushButtonSpec | SignatureSpec
+export type FormFieldSpec = TextFieldSpec | CheckboxSpec | RadioSpec;
+// Growing: | ChoiceSpec | PushButtonSpec | SignatureSpec
 
 /**
  * A variable text field (/Tx). The PDF variants live in field flags; here they are typed props, so you
@@ -48,6 +48,25 @@ export interface CheckboxSpec {
   /** A tooltip / accessible name (/TU). */
   tooltip?: string;
   /** Show but do not allow toggling. */
+  readOnly?: boolean;
+}
+
+/**
+ * One radio button (/Btn with the Radio flag). Every radio sharing a `group` is ONE AcroForm field whose
+ * `/Kids` are the individual buttons - mutually exclusive, so picking one clears the rest. `value` is this
+ * button's export name (unique within the group); it becomes the field's value when this one is picked.
+ */
+export interface RadioSpec {
+  kind: "radio";
+  /** The shared group name (/T of the parent field). All radios with the same `group` are one field. */
+  group: string;
+  /** This button's export value - unique in the group; the field's /V when this one is selected. */
+  value: string;
+  /** Whether this button starts selected (at most one per group should be). */
+  selected?: boolean;
+  /** A tooltip / accessible name. */
+  tooltip?: string;
+  /** Show but do not allow changing the group. */
   readOnly?: boolean;
 }
 
