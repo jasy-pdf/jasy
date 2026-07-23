@@ -339,6 +339,16 @@ export class PDFObjectManager implements FontMetrics {
     return this.addObject(this.stream("", new Uint8Array(getArrayBuffer(content))));
   }
 
+  // A Form XObject: a self-contained content stream with its own /BBox (+ optional /Resources). Used for
+  // form-field appearance streams (/AP). Routes through the same choke-point as page content, so
+  // compression and encryption apply. Returns the object number.
+  addFormXObject(bbox: string, content: string, resources?: string): number {
+    const dict =
+      `/Type /XObject /Subtype /Form /BBox ${bbox}` +
+      (resources ? ` /Resources << ${resources} >>` : "");
+    return this.addObject(this.stream(dict, new Uint8Array(getArrayBuffer(content))));
+  }
+
   changePDFConfig(config: PDFConfig) {
     this.pdfConfig = { ...this.pdfConfig, ...config };
   }

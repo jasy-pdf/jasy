@@ -1,6 +1,10 @@
 import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 import { TextFieldElement } from "../elements/forms/text-field-element.ts";
+import { CheckboxElement } from "../elements/forms/checkbox-element.ts";
 import { IRNode } from "../ir/display-list.ts";
+
+/** Any form-field element exposes its box + shared spec + style through `getProps()`. */
+type FormFieldElement = TextFieldElement | CheckboxElement;
 
 /**
  * Renders a form-field element to a single `formfield` IR node - the field's box + its shared
@@ -10,7 +14,7 @@ import { IRNode } from "../ir/display-list.ts";
  */
 export class FormFieldRenderer {
   static async render(
-    element: TextFieldElement,
+    element: FormFieldElement,
     _objectManager: PDFObjectManager,
   ): Promise<IRNode[]> {
     const { x, y, width, height, spec, style } = element.getProps();

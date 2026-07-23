@@ -41,6 +41,7 @@ import { PageBreakRenderer } from "./page-break-renderer.ts";
 import { KeepTogetherElement } from "../elements/layout/keep-together-element.ts";
 import { KeepTogetherRenderer } from "./keep-together-renderer.ts";
 import { TextFieldElement } from "../elements/forms/text-field-element.ts";
+import { CheckboxElement } from "../elements/forms/checkbox-element.ts";
 import { FormFieldRenderer } from "./form-field-renderer.ts";
 import { PageBuilderElement } from "../elements/layout/page-builder-element.ts";
 import { PageBuilderRenderer } from "./page-builder-renderer.ts";
@@ -68,6 +69,7 @@ export class PDFRenderer {
     RendererRegistry.register(PageBreakElement, PageBreakRenderer.render);
     RendererRegistry.register(KeepTogetherElement, KeepTogetherRenderer.render);
     RendererRegistry.register(TextFieldElement, FormFieldRenderer.render);
+    RendererRegistry.register(CheckboxElement, FormFieldRenderer.render);
     RendererRegistry.register(DefaultTextStyleElement, DefaultTextStyleRenderer.render);
     RendererRegistry.register(ImageElement, ImageRenderer.render);
     RendererRegistry.register(LineElement, LineRenderer.render);

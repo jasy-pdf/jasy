@@ -1,65 +1,67 @@
 import type { PDFObjectManager } from "../utils/pdf-object-manager.ts";
-import type { Color } from "../common/color.ts";
 import type { FormFieldNode } from "../ir/display-list.ts";
+import { escPdf, num2, pdfColor } from "./pdf.ts";
+import { checkboxOff, checkboxOn } from "./appearance.ts";
 
-// A PDF literal-string escape (same rule the rest of the writer uses).
-const esc = (s: string) => s.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
-const n2 = (n: number) => Number(n.toFixed(2));
-// A colour as PDF operands "r g b" in 0..1 (for /DA); Color stores 0..255.
-const rgb = (c: Color) =>
-  c
-    .toArray()
-    .map((v) => (v / 255).toFixed(3))
-    .join(" ");
-
-// AcroForm text-field flags (/Ff), 1-based bit positions per the PDF spec.
+// AcroForm field flags (/Ff), by 1-based bit position per the PDF spec.
 const FF_READ_ONLY = 1 << 0; // bit 1
-const FF_MULTILINE = 1 << 12; // bit 13
-const FF_PASSWORD = 1 << 13; // bit 14
+const FF_MULTILINE = 1 << 12; // bit 13 (text)
+const FF_PASSWORD = 1 << 13; // bit 14 (text)
 
-/**
- * Builds the widget-annotation object for one form field (a merged field + widget dict: the object is
- * BOTH the /AcroForm field and the page /Annot). The rect is already Y-flipped into page space by the
- * time it gets here. Step 1 handles the text field; other kinds add a branch.
- *
- * `daFont` is the resource name of the default-appearance font in the AcroForm /DR (see the collector).
- * With `/NeedAppearances` set (Step 1), the viewer draws the value from this /DA; a later step bakes an
- * explicit /AP so it is visible in print / headless / PDF-A too.
- */
-function buildWidgetDict(node: FormFieldNode, daFont: string): string {
-  const { field, style } = node;
-  const rect = `[${n2(node.x)} ${n2(node.y)} ${n2(node.x + node.width)} ${n2(node.y + node.height)}]`;
-  const parts: string[] = [`/Type /Annot /Subtype /Widget`];
-
-  if (field.kind === "text") {
-    parts.push(`/FT /Tx`);
-    parts.push(`/T (${esc(field.name)})`);
-    if (field.value !== undefined) parts.push(`/V (${esc(field.value)})`);
-    if (field.tooltip !== undefined) parts.push(`/TU (${esc(field.tooltip)})`);
-    let flags = 0;
-    if (field.readOnly) flags |= FF_READ_ONLY;
-    if (field.multiline) flags |= FF_MULTILINE;
-    if (field.password) flags |= FF_PASSWORD;
-    if (flags) parts.push(`/Ff ${flags}`);
-    if (field.maxLength !== undefined) parts.push(`/MaxLen ${field.maxLength}`);
-  }
-
-  // /F 4 = the Print flag, so the field is not screen-only. /DA is the default appearance the viewer
-  // uses to draw the value (font resource + size + colour).
-  parts.push(`/Rect ${rect}`);
-  parts.push(`/F 4`);
-  parts.push(`/DA (/${daFont} ${n2(style.fontSize)} Tf ${rgb(style.color)} rg)`);
-
-  // /MK gives the box its border (/BC) and background (/BG) colours; /BS its border width + style.
+/** The `/MK` (appearance characteristics) + `/BS` (border style) shared by every widget: the box border
+ *  colour + fill + width. Empty when the field has neither a border nor a background. */
+function boxChrome(node: FormFieldNode): string {
+  const { style } = node;
   const mk: string[] = [];
-  if (style.border) mk.push(`/BC [${rgb(style.border)}]`);
-  if (style.background) mk.push(`/BG [${rgb(style.background)}]`);
-  if (mk.length) parts.push(`/MK << ${mk.join(" ")} >>`);
-  if (style.border && style.borderWidth > 0) {
-    parts.push(`/BS << /W ${n2(style.borderWidth)} /S /S >>`);
-  }
+  if (style.border) mk.push(`/BC [${pdfColor(style.border)}]`);
+  if (style.background) mk.push(`/BG [${pdfColor(style.background)}]`);
+  let out = mk.length ? ` /MK << ${mk.join(" ")} >>` : "";
+  if (style.border && style.borderWidth > 0)
+    out += ` /BS << /W ${num2(style.borderWidth)} /S /S >>`;
+  return out;
+}
 
-  return `<< ${parts.join(" ")} >>`;
+function rectOf(node: FormFieldNode): string {
+  return `[${num2(node.x)} ${num2(node.y)} ${num2(node.x + node.width)} ${num2(node.y + node.height)}]`;
+}
+
+/** A text field (/Tx). Relies on /NeedAppearances (Step 1) - the viewer draws the value from /DA. */
+function buildTextWidget(node: FormFieldNode, daFont: string): string {
+  const f = node.field;
+  if (f.kind !== "text") throw new Error("buildTextWidget: not a text field");
+  const parts = [`/Type /Annot /Subtype /Widget /FT /Tx`, `/T (${escPdf(f.name)})`];
+  if (f.value !== undefined) parts.push(`/V (${escPdf(f.value)})`);
+  if (f.tooltip !== undefined) parts.push(`/TU (${escPdf(f.tooltip)})`);
+  let flags = 0;
+  if (f.readOnly) flags |= FF_READ_ONLY;
+  if (f.multiline) flags |= FF_MULTILINE;
+  if (f.password) flags |= FF_PASSWORD;
+  if (flags) parts.push(`/Ff ${flags}`);
+  if (f.maxLength !== undefined) parts.push(`/MaxLen ${f.maxLength}`);
+  parts.push(`/Rect ${rectOf(node)} /F 4`);
+  parts.push(`/DA (/${daFont} ${num2(node.style.fontSize)} Tf ${pdfColor(node.style.color)} rg)`);
+  return `<< ${parts.join(" ")}${boxChrome(node)} >>`;
+}
+
+/** A checkbox (/Btn). Bakes its own /AP appearance streams for the on + off states, so the check is
+ *  visible everywhere (print / headless / PDF-A), not only in viewers that honour /NeedAppearances. */
+function buildCheckboxWidget(node: FormFieldNode, om: PDFObjectManager): string {
+  const f = node.field;
+  if (f.kind !== "checkbox") throw new Error("buildCheckboxWidget: not a checkbox");
+  const on = f.onValue ?? "Yes";
+  const state = f.checked ? on : "Off";
+  const bbox = `[0 0 ${num2(node.width)} ${num2(node.height)}]`;
+  // One Form XObject per state; the widget's /AS picks which one shows.
+  const onRef = om.addFormXObject(bbox, checkboxOn(node.width, node.height, node.style));
+  const offRef = om.addFormXObject(bbox, checkboxOff(node.width, node.height, node.style));
+
+  const parts = [`/Type /Annot /Subtype /Widget /FT /Btn`, `/T (${escPdf(f.name)})`];
+  if (f.tooltip !== undefined) parts.push(`/TU (${escPdf(f.tooltip)})`);
+  if (f.readOnly) parts.push(`/Ff ${FF_READ_ONLY}`);
+  parts.push(`/V /${state} /AS /${state}`);
+  parts.push(`/Rect ${rectOf(node)} /F 4`);
+  parts.push(`/AP << /N << /${on} ${onRef} 0 R /Off ${offRef} 0 R >> >>`);
+  return `<< ${parts.join(" ")}${boxChrome(node)} >>`;
 }
 
 /**
@@ -69,9 +71,9 @@ function buildWidgetDict(node: FormFieldNode, daFont: string): string {
  */
 export class AcroFormCollector {
   private fieldRefs: number[] = [];
-  // Step 1 relies on the viewer to render field appearances from /DA. A later step generates /AP and
-  // flips this off (PDF/A forbids NeedAppearances).
-  private needAppearances = true;
+  // Text fields still lean on the viewer (Step 1); a later step bakes their /AP too and turns this off
+  // (PDF/A forbids NeedAppearances). Checkboxes already carry a baked /AP.
+  private needAppearances = false;
 
   get isEmpty(): boolean {
     return this.fieldRefs.length === 0;
@@ -80,14 +82,21 @@ export class AcroFormCollector {
   /** Emit the widget object for one form-field IR node, register it as a field, and return its object
    *  number so the PageRenderer can add it to that page's /Annots. */
   addField(node: FormFieldNode, om: PDFObjectManager): number {
-    const objNum = om.addObject(buildWidgetDict(node, "Helv"));
+    let dict: string;
+    if (node.field.kind === "checkbox") {
+      dict = buildCheckboxWidget(node, om);
+    } else {
+      dict = buildTextWidget(node, "Helv");
+      this.needAppearances = true; // this text field needs the viewer to render its value
+    }
+    const objNum = om.addObject(dict);
     this.fieldRefs.push(objNum);
     return objNum;
   }
 
   finalize(om: PDFObjectManager): string {
     if (this.fieldRefs.length === 0) return "";
-    // The default resources the fields' /DA references: a Helvetica the viewer can use to lay out text.
+    // The default resources the text fields' /DA references.
     const helv = om.addObject(
       `<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>`,
     );
