@@ -459,11 +459,12 @@ starting work. Working agreement: **phase by phase, Flo approves each gate, Clau
 unprompted, comments English + sensible, don't break the font math.**
 
 Status: **LAUNCHED 2026-06-27**, still shipping alpha increments (no beta/rc/stable until the feature set is
-complete — see `todo.md`). All five packages live on npm; **current (2026-07-09): `@jasy/pdf`@alpha.6,
-`@jasy/zugferd`@alpha.3, `@jasy/cli`@alpha.5, `@jasy/vue`@alpha.6, `@jasy/nuxt`@alpha.5** (the alpha.6 cascade =
-rotate + navigation + page numbers + the Spacer fix + a 4.8x speed-up). Repo public + locked, full CI + changelog +
+complete — see `todo.md`). All five packages live on npm; **current (2026-07-23): `@jasy/pdf`@alpha.7,
+`@jasy/zugferd`@alpha.4, `@jasy/cli`@alpha.6, `@jasy/vue`@alpha.7, `@jasy/nuxt`@alpha.6** (the alpha.7 cascade =
+page-break control — the termination guard, `PageBreak`, `breakBefore`/`breakAfter`, `keepTogether` — plus
+kerning turned on by default). Repo public + locked, full CI + changelog +
 bots in place (see Repo facts). The engine is **feature-complete for the alpha** — inheritance, `onOverflow`,
-custom formats, the line-breaker fixes; **512 tests green**. The **landing**
+custom formats, the line-breaker fixes; **582 tests green**. The **landing**
 (`~/projects/jasy-landing` → **jasy.dev**) is built: showroom (12 cards), validator, docs, a home-page
 roadmap section, and a full **SEO + AI-discoverability layer** (OG image, JSON-LD, `robots.txt`,
 `llms.txt`, `sitemap.xml`).
@@ -499,8 +500,8 @@ more e-invoice profiles, framework bindings). See `todo.md` "⭐ Active" + "🔮
   Content 3). It has its **own CLAUDE.md + HARD RULES: never start/stop its dev server (Flo runs it),
   only Flo commits.** Package links there use **npmx.dev** (Daniel Roe's registry browser), not npmjs.com.
 - License MIT, author Florian Heuberger. **Launched 2026-06-27** (Bluesky + npm; landed with the Vue/Nuxt core
-  crew). npm current (alpha + latest dist-tags): `@jasy/pdf`@alpha.5, `@jasy/zugferd`@alpha.2, `@jasy/cli`@alpha.4,
-  `@jasy/vue`@alpha.5, `@jasy/nuxt`@alpha.4 (released via `scripts/release.sh <pkg> <version>` → `<pkg>-v*` tag →
+  crew). npm current (alpha + latest dist-tags): `@jasy/pdf`@alpha.7, `@jasy/zugferd`@alpha.4, `@jasy/cli`@alpha.6,
+  `@jasy/vue`@alpha.7, `@jasy/nuxt`@alpha.6 (released via `scripts/release.sh <pkg> <version>` → `<pkg>-v*` tag →
   CI publish; order matters, deps `workspace:*` pin EXACT so dependents re-release when a dep does; the tag also
   builds the GitHub Release notes via `scripts/gh-release.mjs` — changelogen groups + per-commit contributors,
   idempotent upsert). `latest` dist-tag points at the newest alpha per package.

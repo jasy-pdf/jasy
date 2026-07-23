@@ -1,6 +1,6 @@
 {
   "name": "@jasy/pdf",
-  "version": "1.0.0-alpha.6",
+  "version": "1.0.0-alpha.7",
   "description": "Declarative, component-based PDF generation in pure TypeScript - Flutter-style components, real AFM font metrics, a hand-rolled PDF writer. No headless browser, no Java.",
   "keywords": [
     "declarative",
