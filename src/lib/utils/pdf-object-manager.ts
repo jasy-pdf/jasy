@@ -16,6 +16,7 @@ import type { FontDecoration } from "../text/text-decoration.ts";
 import { StructTree } from "./struct-tree.ts";
 import { OutlineBuilder } from "./outline.ts";
 import { DestRegistry } from "./dest-registry.ts";
+import { AcroFormCollector } from "../forms/acroform.ts";
 // Enums come from the leaf config module (never in a cycle); the config type is
 // erased at runtime so it can come from the cyclic module safely.
 import { ColorMode, Orientation } from "../renderer/pdf-config.ts";
@@ -253,6 +254,13 @@ export class PDFObjectManager implements FontMetrics {
   private _dests = new DestRegistry();
   get dests(): DestRegistry {
     return this._dests;
+  }
+
+  // Interactive form fields (AcroForm). Empty unless a form field was placed; then finalize() emits the
+  // catalog /AcroForm dict and each field's widget lands in its page /Annots.
+  private _acroform = new AcroFormCollector();
+  get acroform(): AcroFormCollector {
+    return this._acroform;
   }
 
   constructor();

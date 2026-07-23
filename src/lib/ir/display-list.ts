@@ -1,5 +1,6 @@
 import { Color } from "../common/color.ts";
 import { FontStyle } from "../utils/pdf-object-manager.ts";
+import type { FormFieldSpec, FieldStyle } from "../forms/field.ts";
 
 /**
  * Display list - the seam between layout and the PDF backend.
@@ -153,6 +154,22 @@ export interface Outline {
 }
 
 /**
+ * An interactive form field (AcroForm). Like `Link` it draws NOTHING into the content stream - it becomes
+ * a Widget ANNOTATION on the page (`/Annots`) and a field in the catalog `/AcroForm`, both built from the
+ * shared `FormFieldSpec`. The rect is the field box in top-left engine coords; the Y-flip converts it to
+ * page space. See `forms/acroform.ts` for the widget/field assembly.
+ */
+export interface FormFieldNode {
+  type: "formfield";
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  field: FormFieldSpec;
+  style: FieldStyle;
+}
+
+/**
  * Pushes an affine transform (a `q` + `cm` in the content stream): everything between this and the
  * matching `TransformPop` is painted through `matrix`. This is what `Rotated` wraps its child's nodes
  * in, so a subtree draws rotated (or scaled/translated) around a pivot without touching its layout.
@@ -239,5 +256,6 @@ export type IRNode =
   | Link
   | Outline
   | Anchor
+  | FormFieldNode
   | TransformPush
   | TransformPop;

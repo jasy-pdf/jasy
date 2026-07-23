@@ -91,6 +91,12 @@ export class PageRenderer {
     const num = (n: number) => Number(n.toFixed(2));
     const annotRefs: string[] = [];
     for (const node of flipped) {
+      // A form field: build its Widget annotation + register it as an /AcroForm field (the logic lives in
+      // forms/acroform.ts), then reference it here in the page /Annots - the same side channel as a link.
+      if (node.type === "formfield") {
+        annotRefs.push(`${objectManager.acroform.addField(node, objectManager)} 0 R`);
+        continue;
+      }
       if (node.type !== "link") continue;
       const rect = `[${num(node.x)} ${num(node.y)} ${num(node.x + node.width)} ${num(node.y + node.height)}]`;
       // Either an external URL (/URI) or an internal named destination (/GoTo, resolved via /Names /Dests).

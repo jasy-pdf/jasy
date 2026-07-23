@@ -69,6 +69,9 @@ export class PdfBackend {
         case "link":
           // A link's clickable rect flips around its bottom edge, exactly like a rect.
           return { ...node, y: pageHeight - node.y - node.height };
+        case "formfield":
+          // A form field's box flips around its bottom edge, exactly like a link rect.
+          return { ...node, y: pageHeight - node.y - node.height };
         case "outline":
           // An outline anchor is a single point (the target's top); flip it like a text baseline.
           return { ...node, y: pageHeight - node.y };
@@ -150,6 +153,7 @@ export class PdfBackend {
           node.type === "link" ||
           node.type === "outline" ||
           node.type === "anchor" ||
+          node.type === "formfield" ||
           ops === ""
         )
           return ops;
@@ -393,6 +397,10 @@ export class PdfBackend {
         return "";
       case "anchor":
         // A named destination draws nothing - it becomes a /Names /Dests entry (built in PageRenderer/PDFRenderer).
+        return "";
+      case "formfield":
+        // A form field draws nothing in the content stream - it becomes a Widget /Annot + /AcroForm field
+        // (built in PageRenderer via forms/acroform.ts).
         return "";
       default: {
         // Exhaustiveness guard: if a new IRNode variant is added, this fails to compile.

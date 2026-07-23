@@ -40,6 +40,8 @@ import { AnchorRenderer } from "./anchor-renderer.ts";
 import { PageBreakRenderer } from "./page-break-renderer.ts";
 import { KeepTogetherElement } from "../elements/layout/keep-together-element.ts";
 import { KeepTogetherRenderer } from "./keep-together-renderer.ts";
+import { TextFieldElement } from "../elements/forms/text-field-element.ts";
+import { FormFieldRenderer } from "./form-field-renderer.ts";
 import { PageBuilderElement } from "../elements/layout/page-builder-element.ts";
 import { PageBuilderRenderer } from "./page-builder-renderer.ts";
 import { RotatedElement } from "../elements/layout/rotated-element.ts";
@@ -65,6 +67,7 @@ export class PDFRenderer {
     RendererRegistry.register(PaddingElement, PaddingRenderer.render);
     RendererRegistry.register(PageBreakElement, PageBreakRenderer.render);
     RendererRegistry.register(KeepTogetherElement, KeepTogetherRenderer.render);
+    RendererRegistry.register(TextFieldElement, FormFieldRenderer.render);
     RendererRegistry.register(DefaultTextStyleElement, DefaultTextStyleRenderer.render);
     RendererRegistry.register(ImageElement, ImageRenderer.render);
     RendererRegistry.register(LineElement, LineRenderer.render);
@@ -150,6 +153,11 @@ export class PDFRenderer {
     // "" (no-op) when no Bookmark was placed, so a plain document's catalog is unchanged.
     const outlineCatalog = objectManager.outline.finalize(objectManager);
     if (outlineCatalog) catalogParts.push(outlineCatalog);
+
+    // Interactive form fields: emit the catalog /AcroForm dict collected as pages rendered. Returns ""
+    // (no-op) when no field was placed, so a plain document's catalog is unchanged.
+    const acroformCatalog = objectManager.acroform.finalize(objectManager);
+    if (acroformCatalog) catalogParts.push(acroformCatalog);
 
     // Named destinations (internal-link targets): a /Dests entry in the shared /Names dict.
     const destsNames = objectManager.dests.finalize();
