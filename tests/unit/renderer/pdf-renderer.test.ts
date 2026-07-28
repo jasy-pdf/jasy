@@ -35,6 +35,7 @@ describe("PDFRenderer", () => {
       struct: { enabled: false, finalize: vi.fn().mockReturnValue("") },
       outline: { isEmpty: true, finalize: vi.fn().mockReturnValue("") },
       dests: { isEmpty: true, finalize: vi.fn().mockReturnValue("") },
+      acroform: { isEmpty: true, finalize: vi.fn().mockReturnValue("") },
     } as unknown as PDFObjectManager;
 
     vi.spyOn(PDFDocumentRenderer, "render").mockResolvedValue(1);

@@ -252,6 +252,12 @@ export interface RenderOptions {
    *  embedded `GPOS` Type 2, so every font path kerns. Set `false` to opt out (byte-identical to the
    *  pre-kerning output). Verified against headless Chrome and measured == drawn to the thousandth. */
   kerning?: boolean;
+  /** Bake a form field's VALUE into its own appearance stream (`/AP`) - ON by default. Baked values
+   *  render identically in every viewer and in print, and are what flattening (later) draws from. Set
+   *  `false` to leave text and choice values to the viewer instead (`/NeedAppearances`, what
+   *  react-pdf/pdfkit always do). Checkboxes, radios, buttons and signature boxes always carry their
+   *  own appearance either way - there is no value to defer. Only meaningful with form fields present. */
+  fieldAppearances?: boolean;
   /** What to do when content is taller than a page and cannot break: `"error"` throws (default),
    *  `"warn"` logs and clips, `"ignore"` clips silently. It is always clipped either way. */
   onOverflow?: OverflowPolicy;
@@ -300,6 +306,7 @@ export async function renderPdf(doc: PDFDocumentElement, options?: RenderOptions
       om.setCompress(options?.compress !== false); // FlateDecode streams by default
       om.setOverflowPolicy(options?.onOverflow ?? "error");
       om.setKerning(options?.kerning !== false); // on by default (experimental); `kerning:false` opts out
+      om.acroform.setBakeAppearances(options?.fieldAppearances !== false); // baked unless opted out
 
       for (const [name, value] of Object.entries(fonts)) {
         if (isFontBytes(value)) {

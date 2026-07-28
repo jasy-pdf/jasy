@@ -16,6 +16,7 @@ import type { FontDecoration } from "../text/text-decoration.ts";
 import { StructTree } from "./struct-tree.ts";
 import { OutlineBuilder } from "./outline.ts";
 import { DestRegistry } from "./dest-registry.ts";
+import { AcroFormCollector } from "../forms/acroform.ts";
 // Enums come from the leaf config module (never in a cycle); the config type is
 // erased at runtime so it can come from the cyclic module safely.
 import { ColorMode, Orientation } from "../renderer/pdf-config.ts";
@@ -255,6 +256,13 @@ export class PDFObjectManager implements FontMetrics {
     return this._dests;
   }
 
+  // Interactive form fields (AcroForm). Empty unless a form field was placed; then finalize() emits the
+  // catalog /AcroForm dict and each field's widget lands in its page /Annots.
+  private _acroform = new AcroFormCollector();
+  get acroform(): AcroFormCollector {
+    return this._acroform;
+  }
+
   constructor();
   constructor(pageSize?: PageSize) {
     if (pageSize) this.pageFormat = pageFormats[pageSize];
@@ -329,6 +337,16 @@ export class PDFObjectManager implements FontMetrics {
   // For every char <= 0xFF the encoder passes the byte through, so existing streams stay byte-identical.
   addContentStream(content: string): number {
     return this.addObject(this.stream("", new Uint8Array(getArrayBuffer(content))));
+  }
+
+  // A Form XObject: a self-contained content stream with its own /BBox (+ optional /Resources). Used for
+  // form-field appearance streams (/AP). Routes through the same choke-point as page content, so
+  // compression and encryption apply. Returns the object number.
+  addFormXObject(bbox: string, content: string, resources?: string): number {
+    const dict =
+      `/Type /XObject /Subtype /Form /BBox ${bbox}` +
+      (resources ? ` /Resources << ${resources} >>` : "");
+    return this.addObject(this.stream(dict, new Uint8Array(getArrayBuffer(content))));
   }
 
   changePDFConfig(config: PDFConfig) {

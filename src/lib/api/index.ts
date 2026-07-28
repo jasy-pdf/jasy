@@ -10,4 +10,5 @@ export * from "./content.ts";
 export * from "./page-builder.ts";
 export * from "./structure.ts";
 export * from "./table.ts";
+export * from "./forms.ts";
 export * from "./descriptor.ts";
