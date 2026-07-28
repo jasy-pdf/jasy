@@ -1,7 +1,8 @@
 import type { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 import type { FormFieldNode } from "../ir/display-list.ts";
-import { escPdf, num2, pdfColor } from "./pdf.ts";
-import { checkboxOff, checkboxOn, radioOff, radioOn } from "./appearance.ts";
+import { NORMAL_STYLE, escPdf, num2, pdfColor } from "./pdf.ts";
+import { checkboxOff, checkboxOn, pushButtonFace, radioOff, radioOn } from "./appearance.ts";
+import type { ButtonAction } from "./field.ts";
 
 // AcroForm field flags (/Ff), by 1-based bit position per the PDF spec.
 const FF_READ_ONLY = 1 << 0; // bit 1
@@ -9,15 +10,18 @@ const FF_MULTILINE = 1 << 12; // bit 13 (text)
 const FF_PASSWORD = 1 << 13; // bit 14 (text)
 const FF_NO_TOGGLE_OFF = 1 << 14; // bit 15 (button): clicking the selected radio does not clear it
 const FF_RADIO = 1 << 15; // bit 16 (button): the group's kids are mutually exclusive
+const FF_PUSHBUTTON = 1 << 16; // bit 17 (button): a click target with no value
 const FF_COMBO = 1 << 17; // bit 18 (choice): a dropdown, not a list box
 const FF_EDIT = 1 << 18; // bit 19 (choice): a combo whose value may be typed, not only picked
 const FF_MULTI_SELECT = 1 << 21; // bit 22 (choice): a list box that allows several selections
 
 /** The `/MK` (appearance characteristics) + `/BS` (border style) shared by every widget: the box border
- *  colour + fill + width. Empty when the field has neither a border nor a background. */
-function boxChrome(node: FormFieldNode): string {
+ *  colour + fill + width. `extraMK` adds field-specific entries (a push button's `/CA` caption) to the
+ *  SAME /MK dict. Empty when the field has neither a border, a background nor an extra entry. */
+function boxChrome(node: FormFieldNode, extraMK = ""): string {
   const { style } = node;
   const mk: string[] = [];
+  if (extraMK) mk.push(extraMK);
   if (style.border) mk.push(`/BC [${pdfColor(style.border)}]`);
   if (style.background) mk.push(`/BG [${pdfColor(style.background)}]`);
   let out = mk.length ? ` /MK << ${mk.join(" ")} >>` : "";
@@ -107,6 +111,20 @@ function buildChoiceWidget(node: FormFieldNode, daFont: string): string {
   return `<< ${parts.join(" ")}${boxChrome(node)} >>`;
 }
 
+/** The `/A` action a push button fires. Scripted actions are deliberately not offered. */
+function actionDict(a: ButtonAction): string {
+  switch (a.kind) {
+    case "reset":
+      return `/A << /S /ResetForm >>`;
+    case "submit":
+      // /Flags 4 = ExportFormat: post the field values as HTML form data rather than FDF, which is what
+      // an ordinary web endpoint expects.
+      return `/A << /S /SubmitForm /F << /FS /URL /F (${escPdf(a.url)}) >> /Flags 4 >>`;
+    case "url":
+      return `/A << /S /URI /URI (${escPdf(a.url)}) >>`;
+  }
+}
+
 // One radio GROUP, collected across its individual buttons. `parentNum` is the shared /Btn field object
 // (reserved up front, filled at finalize with the /Kids + the winning /V).
 interface RadioGroup {
@@ -127,9 +145,19 @@ export class AcroFormCollector {
   // Text fields still lean on the viewer (Step 1); a later step bakes their /AP too and turns this off
   // (PDF/A forbids NeedAppearances). Checkboxes + radios already carry a baked /AP.
   private needAppearances = false;
+  // The built-in Helvetica every field's /DA (and a button's baked caption) refers to. Created on first
+  // use and shared, so the /DR entry and the appearance streams point at ONE font object - and a document
+  // of checkboxes alone never emits it.
+  private helvNum?: number;
 
   get isEmpty(): boolean {
     return this.fieldRefs.length === 0;
+  }
+
+  private helv(om: PDFObjectManager): number {
+    return (this.helvNum ??= om.addObject(
+      `<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>`,
+    ));
   }
 
   /** Emit the widget object for one form-field IR node, register it as a field, and return its object
@@ -139,16 +167,59 @@ export class AcroFormCollector {
     let dict: string;
     if (node.field.kind === "checkbox") {
       dict = buildCheckboxWidget(node, om);
+    } else if (node.field.kind === "pushbutton") {
+      dict = this.buildPushButtonWidget(node, om);
     } else if (node.field.kind === "choice") {
+      this.helv(om);
       dict = buildChoiceWidget(node, "Helv");
       this.needAppearances = true; // the viewer draws the selected value (baked in Step 4)
     } else {
+      this.helv(om);
       dict = buildTextWidget(node, "Helv");
       this.needAppearances = true; // this text field needs the viewer to render its value
     }
     const objNum = om.addObject(dict);
     this.fieldRefs.push(objNum);
     return objNum;
+  }
+
+  /** A push button (/Btn, Pushbutton flag): no value, an optional action, and a baked caption. The
+   *  caption is measured here (the appearance module stays free of font metrics) and drawn into an
+   *  appearance stream that carries its own font resource. */
+  private buildPushButtonWidget(node: FormFieldNode, om: PDFObjectManager): string {
+    const f = node.field;
+    if (f.kind !== "pushbutton") throw new Error("buildPushButtonWidget: not a push button");
+    const size = node.style.fontSize;
+    const width = om.getStringWidth(f.label, "Helvetica", size, NORMAL_STYLE);
+    const { capHeight } = om.getFontDecoration("Helvetica", NORMAL_STYLE);
+    const fontNum = this.helv(om);
+    const face = pushButtonFace(
+      node.width,
+      node.height,
+      node.style,
+      f.label,
+      width,
+      capHeight,
+      "Helv",
+    );
+    const apRef = om.addFormXObject(
+      `[0 0 ${num2(node.width)} ${num2(node.height)}]`,
+      face,
+      `/Font << /Helv ${fontNum} 0 R >>`,
+    );
+
+    const parts = [`/Type /Annot /Subtype /Widget /FT /Btn`, `/T (${escPdf(f.name)})`];
+    if (f.tooltip !== undefined) parts.push(`/TU (${escPdf(f.tooltip)})`);
+    parts.push(`/Ff ${FF_PUSHBUTTON | (f.readOnly ? FF_READ_ONLY : 0)}`);
+    parts.push(`/Rect ${rectOf(node)} /F 4`);
+    // /DA as well as the baked /AP: a viewer that REGENERATES the face (poppler does this for push
+    // buttons; others do it while the button is pressed) needs the font + size + colour, or it draws the
+    // box with no caption. With /DA it reproduces what we baked.
+    parts.push(`/DA (/Helv ${num2(size)} Tf ${pdfColor(node.style.color)} rg)`);
+    parts.push(`/AP << /N ${apRef} 0 R >>`);
+    if (f.action) parts.push(actionDict(f.action));
+    // /MK /CA is the caption the viewer falls back to when IT regenerates the face (e.g. while pressed).
+    return `<< ${parts.join(" ")}${boxChrome(node, `/CA (${escPdf(f.label)})`)} >>`;
   }
 
   /** A radio button: one KID widget of its group's shared field. The group field is reserved on first
@@ -191,12 +262,10 @@ export class AcroFormCollector {
       );
     }
     if (this.fieldRefs.length === 0) return "";
-    // The default resources the text fields' /DA references.
-    const helv = om.addObject(
-      `<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>`,
-    );
     const fields = this.fieldRefs.map((r) => `${r} 0 R`).join(" ");
+    // /DR only when a field's /DA actually references the font (text, choice, button captions).
+    const dr = this.helvNum ? ` /DR << /Font << /Helv ${this.helvNum} 0 R >> >>` : "";
     const na = this.needAppearances ? " /NeedAppearances true" : "";
-    return `/AcroForm << /Fields [${fields}] /DR << /Font << /Helv ${helv} 0 R >> >>${na} >>`;
+    return `/AcroForm << /Fields [${fields}]${dr}${na} >>`;
   }
 }

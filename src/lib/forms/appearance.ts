@@ -1,5 +1,5 @@
 import type { FieldStyle } from "./field.ts";
-import { num2, pdfColor } from "./pdf.ts";
+import { escPdf, num2, pdfColor } from "./pdf.ts";
 
 // Appearance streams (/AP): the actual drawn content of a field's box, in the field's OWN coordinate
 // space (bottom-left origin, [0 0 w h]). Shared between CREATE (bake the field's look now) and, later,
@@ -71,4 +71,30 @@ export function radioOn(w: number, h: number, style: FieldStyle): string {
   const r = Math.min(w, h) / 2;
   const dot = `${pdfColor(style.color)} rg ${circlePath(w / 2, h / 2, r * 0.45)} f`;
   return `${radioRing(w, h, style)}\n${dot}`;
+}
+
+/**
+ * A push button's face: the box plus its caption, centred. The caller measures the caption (this module
+ * stays free of font metrics and the writer) and passes `captionWidth` in points and `capHeight` as an em
+ * fraction; the baseline is placed so the CAPITALS sit optically centred, not the em box. `fontRes` is
+ * the font's resource name inside the appearance stream's own /Resources.
+ */
+export function pushButtonFace(
+  w: number,
+  h: number,
+  style: FieldStyle,
+  caption: string,
+  captionWidth: number,
+  capHeight: number,
+  fontRes: string,
+): string {
+  const size = style.fontSize;
+  const x = (w - captionWidth) / 2;
+  const y = (h - capHeight * size) / 2;
+  // Clipped to the box, so an over-long caption is cut instead of bleeding across the page.
+  const text =
+    `q 0 0 ${num2(w)} ${num2(h)} re W n ` +
+    `BT /${fontRes} ${num2(size)} Tf ${pdfColor(style.color)} rg ` +
+    `${num2(x)} ${num2(y)} Td (${escPdf(caption)}) Tj ET Q`;
+  return `${box(w, h, style)}\n${text}`;
 }

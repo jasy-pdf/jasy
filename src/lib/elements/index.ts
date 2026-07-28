@@ -12,6 +12,7 @@ export * from "./forms/text-field-element.ts";
 export * from "./forms/checkbox-element.ts";
 export * from "./forms/radio-element.ts";
 export * from "./forms/choice-element.ts";
+export * from "./forms/push-button-element.ts";
 export * from "./layout/default-text-style-element.ts";
 export * from "./layout/positioned-element.ts";
 export * from "./layout/link-element.ts";

@@ -8,8 +8,8 @@ import type { Color } from "../common/color.ts";
  * A discriminated union, one `kind` per PDF field family (/Tx, /Btn, /Ch, /Sig). Step 1 implements
  * `text`; the union grows a member per family as the field types land.
  */
-export type FormFieldSpec = TextFieldSpec | CheckboxSpec | RadioSpec | ChoiceSpec;
-// Growing: | PushButtonSpec | SignatureSpec
+export type FormFieldSpec = TextFieldSpec | CheckboxSpec | RadioSpec | ChoiceSpec | PushButtonSpec;
+// Growing: | SignatureSpec
 
 /**
  * A variable text field (/Tx). The PDF variants live in field flags; here they are typed props, so you
@@ -100,6 +100,35 @@ export interface ChoiceSpec {
   /** Tooltip / accessible name. */
   tooltip?: string;
   /** Show but do not allow changing. */
+  readOnly?: boolean;
+}
+
+/**
+ * What a push button does when clicked. A typed union, so an action can never be half-specified (a
+ * submit without a target is not expressible). Scripted (JavaScript) actions are deliberately out of
+ * scope - a jasy form is data, not a program.
+ */
+export type ButtonAction =
+  | { kind: "reset" }
+  | { kind: "submit"; url: string }
+  | { kind: "url"; url: string };
+
+/**
+ * A push button (/Btn with the Pushbutton flag). Unlike every other field it holds NO value - it is a
+ * click target that fires an action. Its caption is baked into the appearance stream, so the button
+ * looks the same in every viewer and in print.
+ */
+export interface PushButtonSpec {
+  kind: "pushbutton";
+  /** The field name (/T). */
+  name: string;
+  /** The caption drawn on the button. */
+  label: string;
+  /** What clicking it does; omit for a button that does nothing (a plain label). */
+  action?: ButtonAction;
+  /** A tooltip / accessible name (/TU). */
+  tooltip?: string;
+  /** Draw it but do not let it be clicked. */
   readOnly?: boolean;
 }
 

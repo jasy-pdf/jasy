@@ -3,7 +3,8 @@ import { TextFieldElement } from "../elements/forms/text-field-element.ts";
 import { CheckboxElement } from "../elements/forms/checkbox-element.ts";
 import { RadioElement } from "../elements/forms/radio-element.ts";
 import { ChoiceElement } from "../elements/forms/choice-element.ts";
-import type { ChoiceOption } from "../forms/field.ts";
+import { PushButtonElement } from "../elements/forms/push-button-element.ts";
+import type { ButtonAction, ChoiceOption } from "../forms/field.ts";
 import { ColorInput, toColor } from "./color.ts";
 import { Column, Row } from "./layout.ts";
 import { Text } from "./text.ts";
@@ -275,5 +276,86 @@ export function ListBox(opts: ListBoxOptions, options: ChoiceOptionInput[]): Cho
     value: opts.value,
     values: opts.values,
     ...choiceStyle(opts),
+  });
+}
+
+/**
+ * What a `PushButton` does when clicked: `"reset"` clears the form, `{ submit: url }` posts the field
+ * values, `{ open: url }` opens a link. Omit it for a button that does nothing. Scripted (JavaScript)
+ * actions are deliberately not offered - a jasy form is data, not a program.
+ *
+ * VIEWER SUPPORT. All three actions we emit are spec-correct; what differs is what a viewer implements.
+ * PROVEN, not assumed - the same cases built with pdf-lib (an independent producer) behave identically,
+ * so none of this is a jasy bug. Measured 2026-07 in pdf.js (VS Code) and poppler/Evince:
+ *   - `"reset"`         - works in both. The safe one.
+ *   - `{ open: url }`   - works in pdf.js, dead in Evince, and NOT fixable from here: poppler's glib
+ *                         layer surfaces actions only through `poppler_page_get_link_mapping` (i.e.
+ *                         /Link annotations); its form-field API has no action getter at all, so a
+ *                         WIDGET's /A can never be reached. **For a plain hyperlink use `Link({ href })`**
+ *                         - the identical URI action on a real /Link annotation works in both.
+ *   - `{ submit: url }` - Acrobat only. `POPPLER_ACTION_SUBMIT_FORM` does not exist in poppler-glib (no
+ *                         such enum value), and pdf.js does not implement /SubmitForm either.
+ * Ruled out as causes: pdf-lib splits field and widget, sets /P and a /D appearance - and still fails
+ * the same way, so none of those structural differences matter.
+ */
+export type ButtonActionInput = "reset" | { submit: string } | { open: string };
+
+const toAction = (a?: ButtonActionInput): ButtonAction | undefined => {
+  if (a === undefined) return undefined;
+  if (a === "reset") return { kind: "reset" };
+  return "submit" in a ? { kind: "submit", url: a.submit } : { kind: "url", url: a.open };
+};
+
+/** Options for a `PushButton`. */
+export interface PushButtonOptions {
+  /** The field name - unique in the document. */
+  name: string;
+  /** The caption drawn on the button. */
+  label: string;
+  /** What clicking it does. */
+  action?: ButtonActionInput;
+  /** Tooltip / accessible name shown on hover. */
+  tooltip?: string;
+  /** Draw it but do not let it be clicked. */
+  readOnly?: boolean;
+  /** Width in points; omit to fill the offered width. */
+  width?: number;
+  /** Height in points; omit for a comfortable default. */
+  height?: number;
+  /** Caption font size (default 12). */
+  fontSize?: number;
+  /** Caption colour. */
+  color?: ColorInput;
+  /** Border colour. */
+  border?: ColorInput;
+  /** Button face fill. */
+  background?: ColorInput;
+  /** Border thickness in points. */
+  borderWidth?: number;
+}
+
+/**
+ * A clickable push button (AcroForm /Btn). It holds no value - it fires an action. Its caption is baked
+ * into the appearance, so the button looks the same in every viewer and in print.
+ *
+ * ```ts
+ * PushButton({ name: "send", label: "Submit", action: { submit: "https://example.com/f" }, width: 120 })
+ * PushButton({ name: "clear", label: "Reset", action: "reset", width: 90 })
+ * ```
+ */
+export function PushButton(opts: PushButtonOptions): PushButtonElement {
+  return new PushButtonElement({
+    name: opts.name,
+    label: opts.label,
+    action: toAction(opts.action),
+    tooltip: opts.tooltip,
+    readOnly: opts.readOnly,
+    width: opts.width,
+    height: opts.height,
+    fontSize: opts.fontSize,
+    color: opts.color !== undefined ? toColor(opts.color) : undefined,
+    border: opts.border !== undefined ? toColor(opts.border) : undefined,
+    background: opts.background !== undefined ? toColor(opts.background) : undefined,
+    borderWidth: opts.borderWidth,
   });
 }

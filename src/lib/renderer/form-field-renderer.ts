@@ -3,10 +3,16 @@ import { TextFieldElement } from "../elements/forms/text-field-element.ts";
 import { CheckboxElement } from "../elements/forms/checkbox-element.ts";
 import { RadioElement } from "../elements/forms/radio-element.ts";
 import { ChoiceElement } from "../elements/forms/choice-element.ts";
+import { PushButtonElement } from "../elements/forms/push-button-element.ts";
 import { IRNode } from "../ir/display-list.ts";
 
 /** Any form-field element exposes its box + shared spec + style through `getProps()`. */
-type FormFieldElement = TextFieldElement | CheckboxElement | RadioElement | ChoiceElement;
+type FormFieldElement =
+  | TextFieldElement
+  | CheckboxElement
+  | RadioElement
+  | ChoiceElement
+  | PushButtonElement;
 
 /**
  * Renders a form-field element to a single `formfield` IR node - the field's box + its shared
