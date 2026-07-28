@@ -1,0 +1,222 @@
+%PDF-1.3
+%ˇˇˇˇ
+10 0 obj
+<<
+/borderWidth 1
+/FT /Tx
+/V (Ada Lovelace)
+/T (full_name)
+/Subtype /Widget
+/F 4
+/Type /Annot
+/Rect [56 707.89 356 731.89]
+/Border [0 0 0]
+/C [0 0 0]
+/BorderWidth 1
+>>
+endobj
+11 0 obj
+<<
+/borderWidth 1
+/FT /Tx
+/Ff 4096
+/T (notes)
+/Subtype /Widget
+/F 4
+/Type /Annot
+/Rect [56 625.89 356 681.89]
+/Border [0 0 0]
+/C [0 0 0]
+/BorderWidth 1
+>>
+endobj
+12 0 obj
+<<
+/borderWidth 1
+/FT /Btn
+/V (Yes)
+/T (agree)
+/Subtype /Widget
+/F 4
+/Type /Annot
+/Rect [56 585.89 72 601.89]
+/Border [0 0 0]
+/C [0 0 0]
+/BorderWidth 1
+>>
+endobj
+13 0 obj
+<<
+/borderWidth 1
+/FT /Ch
+/Ff 131072
+/Opt [(Germany) (France)]
+/V (France)
+/T (country)
+/Subtype /Widget
+/F 4
+/Type /Annot
+/Rect [56 537.89 256 561.89]
+/Border [0 0 0]
+/C [0 0 0]
+/BorderWidth 1
+>>
+endobj
+14 0 obj
+<<
+/borderWidth 1
+/FT /Ch
+/Opt [(S) (M) (L)]
+/T (size)
+/Subtype /Widget
+/F 4
+/Type /Annot
+/Rect [56 451.89 256 511.89]
+/Border [0 0 0]
+/C [0 0 0]
+/BorderWidth 1
+>>
+endobj
+15 0 obj
+<<
+/borderWidth 1
+/FT /Btn
+/Ff 65536
+/MK <<
+/CA (Go)
+>>
+/T (go)
+/Subtype /Widget
+/F 4
+/Type /Annot
+/Rect [56 405.89 176 431.89]
+/Border [0 0 0]
+/C [0 0 0]
+/BorderWidth 1
+>>
+endobj
+7 0 obj
+<<
+/Type /Page
+/Parent 1 0 R
+/MediaBox [0 0 595.28 841.89]
+/Contents 5 0 R
+/Resources 6 0 R
+/UserUnit 1
+/Annots [10 0 R 11 0 R 12 0 R 13 0 R 14 0 R 15 0 R]
+>>
+endobj
+6 0 obj
+<<
+/ProcSet [/PDF /Text /ImageB /ImageC /ImageI]
+/Font <<
+/F1 8 0 R
+>>
+/ColorSpace <<
+>>
+>>
+endobj
+5 0 obj
+<<
+/Length 105
+/Filter /FlateDecode
+>>
+stream
+xúm»!É@P?ß¯ÄŒ,√H6+H@‡H∆55mÉCÙ˛¶¶≤O>ÉB—ì[?Õx]Ú˚◊K˛ﬁ0ﬁª‰%∑Õ`DûrØ°tíOŒ·E…ÜAQyFiË à wÉ>êª¨)á|d
+endstream
+endobj
+17 0 obj
+(PDFKit)
+endobj
+18 0 obj
+(PDFKit)
+endobj
+19 0 obj
+(D:20260728201458Z)
+endobj
+16 0 obj
+<<
+/Producer 17 0 R
+/Creator 18 0 R
+/CreationDate 19 0 R
+>>
+endobj
+8 0 obj
+<<
+/Type /Font
+/BaseFont /Helvetica
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+>>
+endobj
+4 0 obj
+<<
+>>
+endobj
+3 0 obj
+<<
+/Type /Catalog
+/Pages 1 0 R
+/Names 2 0 R
+/AcroForm 9 0 R
+>>
+endobj
+1 0 obj
+<<
+/Type /Pages
+/Count 1
+/Kids [7 0 R]
+>>
+endobj
+2 0 obj
+<<
+/Dests <<
+  /Names [
+]
+>>
+>>
+endobj
+9 0 obj
+<<
+/Fields [10 0 R 11 0 R 12 0 R 13 0 R 14 0 R 15 0 R]
+/NeedAppearances true
+/DA (/F1 0 Tf 0 g)
+/DR <<
+/Font <<
+/F1 8 0 R
+>>
+>>
+>>
+endobj
+xref
+0 20
+0000000000 65535 f 
+0000001939 00000 n 
+0000001996 00000 n 
+0000001861 00000 n 
+0000001840 00000 n 
+0000001404 00000 n 
+0000001297 00000 n 
+0000001123 00000 n 
+0000001743 00000 n 
+0000002043 00000 n 
+0000000015 00000 n 
+0000000199 00000 n 
+0000000370 00000 n 
+0000000541 00000 n 
+0000000754 00000 n 
+0000000934 00000 n 
+0000001667 00000 n 
+0000001581 00000 n 
+0000001606 00000 n 
+0000001631 00000 n 
+trailer
+<<
+/Size 20
+/Root 3 0 R
+/Info 16 0 R
+/ID [<37b63760ffc341802a294ecc40868a9c> <37b63760ffc341802a294ecc40868a9c>]
+>>
+startxref
+2189
+%%EOF
