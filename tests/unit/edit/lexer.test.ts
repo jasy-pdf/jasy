@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
-import { Lexer } from "../../../src/lib/pdf-reader/lexer";
+import { Lexer } from "../../../src/lib/edit/lexer.ts";
 import {
   get,
   isDict,
@@ -10,15 +10,20 @@ import {
   nameOf,
   textOf,
   type PdfObject,
-} from "../../../src/lib/pdf-reader/objects";
+} from "../../../src/lib/edit/objects.ts";
 
 // The object parser is the foundation the whole reader stands on: if it mangles a byte here, every
 // value above it is wrong. So this suite is deliberately paranoid about ENCODING and BINARY SAFETY -
 // a PDF string may hold any byte, and a field name from another producer is often UTF-16.
 
 const bytes = (s: string) => new Uint8Array(Array.from(s, (c) => c.charCodeAt(0)));
-const parse = (src: string | Uint8Array) =>
-  new Lexer(typeof src === "string" ? bytes(src) : src).parse();
+/** Parse one object. Every case here feeds the lexer something it MUST understand, so `undefined` is a
+ *  failure of the test's own input rather than a result worth asserting on. */
+const parse = (src: string | Uint8Array): PdfObject => {
+  const out = new Lexer(typeof src === "string" ? bytes(src) : src).parse();
+  if (out === undefined) throw new Error("the lexer read nothing from this input");
+  return out;
+};
 
 /** A hex string as a producer would write a unicode value: UTF-16BE behind a BOM. */
 const utf16beHex = (s: string) => {

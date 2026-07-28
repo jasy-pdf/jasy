@@ -173,6 +173,16 @@ function plan(
     throw new FillError(`field "${field.name}" is a text field; give it a string or null`);
   }
   if (value === null) return { v: undefined };
+  // /MaxLen is what the field itself promises to accept. A viewer enforces it while typing, so writing
+  // past it produces a value the user could never have entered - and a comb field draws exactly MaxLen
+  // cells, so the surplus has nowhere to go at all. Counting CODE POINTS, not UTF-16 units, or an emoji
+  // would count double.
+  const length = [...value].length;
+  if (field.maxLen !== undefined && length > field.maxLen) {
+    throw new FillError(
+      `"${field.name}" holds at most ${field.maxLen} characters, but the value has ${length}`,
+    );
+  }
   return { v: pdfText(value) };
 }
 
@@ -188,6 +198,17 @@ export function fillForm(
   options: FillOptions = {},
 ): FillResult {
   const doc = PdfDocument.load(bytes);
+
+  // An encrypted document has every string and stream enciphered, so what we would read as a field name
+  // is ciphertext and what we wrote back would be plain text in a file where nothing else is. The result
+  // looks like it worked and is broken, which is the one outcome the contract rules out. Refuse until the
+  // password path exists.
+  if (doc.trailer.map.get("Encrypt") !== undefined) {
+    throw new FillError(
+      "this PDF is encrypted; jasy cannot fill it yet - filling a password-protected document is not supported",
+    );
+  }
+
   const form = readAcroForm(doc);
   if (!form) throw new FillError("this PDF has no AcroForm to fill");
 

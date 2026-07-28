@@ -28,6 +28,8 @@ export interface ReadField {
   values?: string[];
   /** The `/Ff` field flags, already merged with anything inherited. */
   flags: number;
+  /** `/MaxLen`: the longest text the field accepts, in characters. Inherited like the type. */
+  maxLen?: number;
   /** The selectable options of a choice field, as `[export, label]`. */
   options?: Array<{ value: string; label: string }>;
   /** For a check box or radio group: every export name its widgets can take, besides `Off`. */
@@ -111,7 +113,8 @@ export function readAcroForm(doc: PdfDocument): ReadForm | undefined {
   const roots = doc.resolve(get(acro, "Fields"));
   const fields: ReadField[] = [];
   if (Array.isArray(roots)) {
-    for (const ref of roots) walk(doc, ref, "", undefined, 0, fields, 0);
+    for (const ref of roots)
+      walk(doc, ref, "", { type: undefined, flags: 0, maxLen: undefined }, fields, 0);
   }
   return {
     fields,
@@ -119,6 +122,13 @@ export function readAcroForm(doc: PdfDocument): ReadForm | undefined {
     hasXfa: get(acro, "XFA") !== undefined,
     recovered: doc.recovered,
   };
+}
+
+/** The attributes a field takes from its parent when it states none of its own. */
+interface Inherited {
+  type: string | undefined;
+  flags: number;
+  maxLen: number | undefined;
 }
 
 /**
@@ -130,8 +140,7 @@ function walk(
   doc: PdfDocument,
   ref: PdfObject,
   parentName: string,
-  parentType: string | undefined,
-  parentFlags: number,
+  parent: Inherited,
   out: ReadField[],
   depth: number,
 ): void {
@@ -140,8 +149,9 @@ function walk(
   if (node === undefined || !isDict(node)) return;
 
   const name = joinName(parentName, textOf(doc.lookup(node, "T")));
-  const type = nameOf(doc.lookup(node, "FT")) ?? parentType;
-  const flags = numberOf(doc.lookup(node, "Ff")) ?? parentFlags;
+  const type = nameOf(doc.lookup(node, "FT")) ?? parent.type;
+  const flags = numberOf(doc.lookup(node, "Ff")) ?? parent.flags;
+  const maxLen = numberOf(doc.lookup(node, "MaxLen")) ?? parent.maxLen;
   const kidsRaw = doc.lookup(node, "Kids");
   const kids = Array.isArray(kidsRaw) ? kidsRaw : [];
 
@@ -152,7 +162,7 @@ function walk(
     return get(kid, "T") !== undefined || get(kid, "FT") !== undefined;
   });
   if (childFields.length > 0) {
-    for (const k of childFields) walk(doc, k, name, type, flags, out, depth + 1);
+    for (const k of childFields) walk(doc, k, name, { type, flags, maxLen }, out, depth + 1);
     return;
   }
 
@@ -183,6 +193,7 @@ function walk(
     value,
     values,
     flags,
+    maxLen,
     options: readOptions(doc, doc.lookup(node, "Opt")),
     onValues: onValues && onValues.length > 0 ? onValues : undefined,
     objNum: isRef(ref) ? ref.num : undefined,

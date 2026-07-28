@@ -1,9 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
-import { fillForm, FillError } from "../../../src/lib/pdf-reader/fill";
-import { PdfDocument } from "../../../src/lib/pdf-reader/document";
-import { readAcroForm } from "../../../src/lib/pdf-reader/acroform-reader";
-import { get } from "../../../src/lib/pdf-reader/objects";
+import { fillForm, FillError } from "../../../src/lib/edit/fill.ts";
+import { PdfDocument } from "../../../src/lib/edit/document.ts";
+import { readAcroForm } from "../../../src/lib/edit/acroform-reader.ts";
+import { get } from "../../../src/lib/edit/objects.ts";
+import { Column, Document, Page, TextField, renderToBytes } from "../../../src/lib/api/index.ts";
 
 // Filling an EXISTING form, against the same five producers the reader is tested with. Writing into a
 // foreign file is where assumptions get punished: every one of these tests exists because something
@@ -19,6 +20,32 @@ const PRODUCERS = [
   "pdfkit-form",
   "reactpdf-form",
 ];
+
+/**
+ * A minimal PDF whose field tree has a PARENT stating `/FT` and `/MaxLen` and a kid stating neither.
+ * Written out by hand because no producer we have fixtures from splits a field this way, and offsets are
+ * computed so the file has a real cross-reference table - a rescued one would prove less.
+ */
+function inheritedMaxLenPdf(): Uint8Array {
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [4 0 R] >> >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Annots [5 0 R] >>",
+    "<< /T (group) /FT /Tx /MaxLen 5 /Kids [5 0 R] >>",
+    "<< /Type /Annot /Subtype /Widget /Parent 4 0 R /T (child) /Rect [10 10 190 40] >>",
+  ];
+  let body = "%PDF-1.7\n";
+  const offsets: number[] = [];
+  objects.forEach((o, i) => {
+    offsets.push(body.length);
+    body += `${i + 1} 0 obj\n${o}\nendobj\n`;
+  });
+  const startxref = body.length;
+  body += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (const off of offsets) body += `${String(off).padStart(10, "0")} 00000 n \n`;
+  body += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${startxref}\n%%EOF\n`;
+  return new TextEncoder().encode(body);
+}
 
 const readBack = (bytes: Uint8Array) => {
   const doc = PdfDocument.load(bytes);
@@ -107,8 +134,11 @@ describe("fillForm - the appearance must not go stale", () => {
     const plan = field("plan")!;
     expect(plan.value).toBe("basic");
     const states = plan.widgets.map((w) => {
+      // `typeof null` is "object" too, so the null case has to be ruled out before reading .name.
       const as = get(doc.getObject(w.num!), "AS");
-      return as !== undefined && typeof as === "object" && "name" in as ? as.name : undefined;
+      return as !== undefined && as !== null && typeof as === "object" && "name" in as
+        ? as.name
+        : undefined;
     });
     expect(states.filter((s) => s !== "Off" && s !== undefined)).toEqual(["basic"]);
     expect(states.filter((s) => s === "Off")).toHaveLength(1);
@@ -156,8 +186,71 @@ describe("fillForm - the form is a contract", () => {
     expect(warnings.join(" ")).toMatch(/XFA/);
   });
 
+  it("refuses an encrypted document instead of writing plain text into it", async () => {
+    // Without this guard the fill "succeeds" and returns a file whose new values are plain text among
+    // ciphertext - it looks like it worked and is broken. Refusing is the honest answer until filling a
+    // password-protected document is actually built.
+    const doc = Document([
+      Page({ margin: 56 }, [Column([TextField({ name: "full_name", border: "#888" })])]),
+    ]);
+    const encrypted = await renderToBytes(doc, { encrypt: { userPassword: "secret" } });
+    expect(() => fillForm(encrypted, { full_name: "Ada" })).toThrow(FillError);
+    expect(() => fillForm(encrypted, { full_name: "Ada" })).toThrow(/encrypted/);
+  });
+
   it("refuses a document that has no form at all", () => {
     expect(() => fillForm(new Uint8Array([1, 2, 3]), { a: "b" })).toThrow(/no AcroForm/);
+  });
+});
+
+describe("fillForm - /MaxLen", () => {
+  // The real IRS form is the test case here: it declares /MaxLen on six fields, which none of the
+  // producer fixtures do. A viewer stops the user at that limit while typing, so a longer value could
+  // never have been entered by hand - and a comb field draws exactly MaxLen cells, leaving the surplus
+  // nowhere to go.
+  const w9 = () => fixture("gov-w9");
+  const capped = () => {
+    const form = readAcroForm(PdfDocument.load(w9()))!;
+    return form.fields.find((f) => f.maxLen === 7)!; // f1_15, seven characters
+  };
+
+  it("reads /MaxLen off a real government form", () => {
+    const withMax = readAcroForm(PdfDocument.load(w9()))!.fields.filter(
+      (f) => f.maxLen !== undefined,
+    );
+    expect(withMax.length).toBeGreaterThan(0);
+    expect(capped().maxLen).toBe(7);
+  });
+
+  it("accepts a value exactly at the limit and refuses one past it", () => {
+    const name = capped().name;
+    expect(() => fillForm(w9(), { [name]: "1234567" })).not.toThrow();
+    expect(() => fillForm(w9(), { [name]: "12345678" })).toThrow(
+      /holds at most 7 characters, but the value has 8/,
+    );
+  });
+
+  it("counts code points, not UTF-16 units", () => {
+    // Four emoji are eight UTF-16 units but four characters; `.length` would reject a value the field
+    // can hold perfectly well.
+    const name = capped().name;
+    expect([..."😀😀😀😀"].length).toBe(4);
+    expect("😀😀😀😀".length).toBe(8);
+    expect(() => fillForm(w9(), { [name]: "😀😀😀😀" })).not.toThrow();
+  });
+
+  it("inherits /MaxLen from a parent field, the way the type is inherited", () => {
+    // Every fixture declares /MaxLen on the leaf, so inheritance needs a document built for it: a parent
+    // field carrying /FT and /MaxLen, and a kid that states neither. Without this the rule would be
+    // untested - the tree walk could ignore the parent entirely and every other test would still pass.
+    const doc = PdfDocument.load(inheritedMaxLenPdf());
+    expect(doc.recovered).toBe(false); // read through a real index, not a rescued one
+    const field = readAcroForm(doc)!.fields.find((f) => f.name === "group.child")!;
+    expect(field.type).toBe("Tx"); // inherited too, the established rule this rides on
+    expect(field.maxLen).toBe(5);
+    expect(() => fillForm(inheritedMaxLenPdf(), { "group.child": "123456" })).toThrow(
+      /holds at most 5 characters/,
+    );
   });
 });
 

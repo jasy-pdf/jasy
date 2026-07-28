@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
-import { PdfDocument } from "../../../src/lib/pdf-reader/document";
-import { readAcroForm } from "../../../src/lib/pdf-reader/acroform-reader";
-import { get, nameOf, numberOf } from "../../../src/lib/pdf-reader/objects";
-import { Document, Page, Text, renderToBytes } from "../../../src/lib/api";
+import { PdfDocument } from "../../../src/lib/edit/document.ts";
+import { readAcroForm } from "../../../src/lib/edit/acroform-reader.ts";
+import { get, nameOf, numberOf } from "../../../src/lib/edit/objects.ts";
+import { Document, Page, Text, renderToBytes } from "../../../src/lib/api/index.ts";
 
 // Opening a PDF is not "read it, decompress it". The index sits at the END of the file, exists in two
 // formats, may chain back through incremental updates, and objects may be packed inside object streams.

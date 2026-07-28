@@ -67,19 +67,21 @@ export type PdfObject =
 // is fatal.
 // ---------------------------------------------------------------------------------------------
 
-export const isName = (o: PdfObject): o is PdfName =>
+// The guards take an OPTIONAL object on purpose: they are nearly always applied to the result of a
+// lookup that may find nothing (`isRef(get(o, "AP"))`), and a missing entry simply is not of the type.
+export const isName = (o: PdfObject | undefined): o is PdfName =>
   typeof o === "object" && o !== null && !Array.isArray(o) && o.kind === "name";
 
-export const isString = (o: PdfObject): o is PdfString =>
+export const isString = (o: PdfObject | undefined): o is PdfString =>
   typeof o === "object" && o !== null && !Array.isArray(o) && o.kind === "string";
 
-export const isRef = (o: PdfObject): o is PdfRef =>
+export const isRef = (o: PdfObject | undefined): o is PdfRef =>
   typeof o === "object" && o !== null && !Array.isArray(o) && o.kind === "ref";
 
-export const isDict = (o: PdfObject): o is PdfDict =>
+export const isDict = (o: PdfObject | undefined): o is PdfDict =>
   typeof o === "object" && o !== null && !Array.isArray(o) && o.kind === "dict";
 
-export const isStream = (o: PdfObject): o is PdfStream =>
+export const isStream = (o: PdfObject | undefined): o is PdfStream =>
   typeof o === "object" && o !== null && !Array.isArray(o) && o.kind === "stream";
 
 /** A dictionary entry, by key without the slash. Reads through a stream to its dictionary, since the
