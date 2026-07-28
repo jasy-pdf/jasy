@@ -1,6 +1,6 @@
 import type { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 import type { FormFieldNode } from "../ir/display-list.ts";
-import { NORMAL_STYLE, escPdf, num2, pdfColor } from "./pdf.ts";
+import { NORMAL_STYLE, escName, escPdf, num2, pdfColor } from "./pdf.ts";
 import {
   type FieldLine,
   checkboxOff,
@@ -89,7 +89,8 @@ function buildTextWidget(node: FormFieldNode, daFont: string, apRef?: number): s
 function buildCheckboxWidget(node: FormFieldNode, om: PDFObjectManager): string {
   const f = node.field;
   if (f.kind !== "checkbox") throw new Error("buildCheckboxWidget: not a checkbox");
-  const on = f.onValue ?? "Yes";
+  // Export values become Name tokens, so they are #XX-escaped, not string-escaped.
+  const on = escName(f.onValue ?? "Yes");
   const state = f.checked ? on : "Off";
   const bbox = `[0 0 ${num2(node.width)} ${num2(node.height)}]`;
   // One Form XObject per state; the widget's /AS picks which one shows.
@@ -323,12 +324,14 @@ export class AcroFormCollector {
     } else if (node.field.kind === "choice") {
       this.helv(om);
       dict = buildChoiceWidget(node, "Helv", this.bake ? this.bakeChoice(node, om) : undefined);
+      // Only text and choice depend on the flag; the other kinds always carry a complete appearance,
+      // so a document of checkboxes alone must not ask the viewer to redraw anything.
+      if (!this.bake) this.needAppearances = true;
     } else {
       this.helv(om);
       dict = buildTextWidget(node, "Helv", this.bake ? this.bakeText(node, om) : undefined);
+      if (!this.bake) this.needAppearances = true;
     }
-    // Nothing baked -> the viewer has to draw every value itself.
-    if (!this.bake) this.needAppearances = true;
     const objNum = om.addObject(dict);
     this.fieldRefs.push(objNum);
     return objNum;
@@ -340,9 +343,10 @@ export class AcroFormCollector {
   private buildPushButtonWidget(node: FormFieldNode, om: PDFObjectManager): string {
     const f = node.field;
     if (f.kind !== "pushbutton") throw new Error("buildPushButtonWidget: not a push button");
-    const size = node.style.fontSize;
-    const width = om.getStringWidth(f.label, "Helvetica", size, NORMAL_STYLE);
     const { capHeight } = om.getFontDecoration("Helvetica", NORMAL_STYLE);
+    // `fontSize: 0` means auto-size, here as everywhere: resolve it before measuring or drawing.
+    const size = this.drawSize(node.style, node.height, capHeight);
+    const width = om.getStringWidth(f.label, "Helvetica", size, NORMAL_STYLE);
     const fontNum = this.helv(om);
     const face = pushButtonFace(
       node.width,
@@ -352,6 +356,7 @@ export class AcroFormCollector {
       width,
       capHeight,
       "Helv",
+      size,
     );
     const apRef = om.addFormXObject(
       `[0 0 ${num2(node.width)} ${num2(node.height)}]`,
@@ -381,10 +386,13 @@ export class AcroFormCollector {
     if (f.kind !== "radio") throw new Error("addRadio: not a radio");
     let g = this.radioGroups.get(f.group);
     if (!g) {
-      g = { parentNum: om.addObject(""), kids: [], flags: commonFlags(f) };
+      g = { parentNum: om.addObject(""), kids: [], flags: 0 };
       this.radioGroups.set(f.group, g);
       this.fieldRefs.push(g.parentNum);
     }
+    // The flags live on the shared field, so every button contributes: marking any one of them
+    // required (or read-only) applies to the group.
+    g.flags |= commonFlags(f);
     if (f.selected) g.selected = f.value;
 
     const bbox = `[0 0 ${num2(node.width)} ${num2(node.height)}]`;
@@ -394,8 +402,8 @@ export class AcroFormCollector {
     const parts = [
       `/Type /Annot /Subtype /Widget /Parent ${g.parentNum} 0 R`,
       `/Rect ${rectOf(node)} /F ${annotFlags(f)}`,
-      `/AP << /N << /${f.value} ${onRef} 0 R /Off ${offRef} 0 R >> >>`,
-      `/AS /${as}`,
+      `/AP << /N << /${escName(f.value)} ${onRef} 0 R /Off ${offRef} 0 R >> >>`,
+      `/AS /${escName(as)}`,
     ];
     const kidNum = om.addObject(`<< ${parts.join(" ")}${boxChrome(node)} >>`);
     g.kids.push(kidNum);
@@ -409,13 +417,13 @@ export class AcroFormCollector {
     if (f.kind !== "signature") throw new Error("buildSignatureWidget: not a signature");
     this.hasSignature = true;
     const label = f.label ?? "";
-    const labelWidth = label
-      ? om.getStringWidth(label, "Helvetica", node.style.fontSize, NORMAL_STYLE)
-      : 0;
+    const { capHeight } = om.getFontDecoration("Helvetica", NORMAL_STYLE);
+    const size = this.drawSize(node.style, node.height, capHeight);
+    const labelWidth = label ? om.getStringWidth(label, "Helvetica", size, NORMAL_STYLE) : 0;
     const fontNum = this.helv(om);
     const apRef = om.addFormXObject(
       `[0 0 ${num2(node.width)} ${num2(node.height)}]`,
-      signatureFace(node.width, node.height, node.style, label, labelWidth, "Helv"),
+      signatureFace(node.width, node.height, node.style, label, labelWidth, "Helv", size),
       `/Font << /Helv ${fontNum} 0 R >>`,
     );
 
@@ -434,7 +442,7 @@ export class AcroFormCollector {
       const ff = FF_RADIO | FF_NO_TOGGLE_OFF | g.flags;
       om.replaceObject(
         g.parentNum,
-        `<< /FT /Btn /Ff ${ff} /T (${escPdf(name)}) /V /${g.selected ?? "Off"} /Kids [${kids}] >>`,
+        `<< /FT /Btn /Ff ${ff} /T (${escPdf(name)}) /V /${escName(g.selected ?? "Off")} /Kids [${kids}] >>`,
       );
     }
     if (this.fieldRefs.length === 0) return "";

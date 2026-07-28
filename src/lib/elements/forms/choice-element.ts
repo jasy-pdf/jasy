@@ -14,9 +14,9 @@ export interface ChoiceParams {
   values?: string[];
   tooltip?: string;
   readOnly?: boolean;
-  /** Mark it as a field that must be filled in before submitting. */
   /** How the value sits in the box (default left). */
   align?: FieldAlign;
+  /** Mark it as a field that must be filled in before submitting. */
   required?: boolean;
   /** Hide the widget entirely - neither on screen nor in print. */
   hidden?: boolean;

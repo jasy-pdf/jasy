@@ -24,3 +24,18 @@ export const pdfColor = (c: Color) =>
     .toArray()
     .map((v) => (v / 255).toFixed(3))
     .join(" ");
+
+/**
+ * Escape a PDF **Name** token (`/Yes`, `/Off`, a checkbox's export value). A Name may only hold the
+ * regular characters; whitespace, the delimiters `()<>[]{}/%` and `#` itself must be written `#XX` by
+ * BYTE. Without this, an export value like `"Ja / Nein"` would break the dictionary it sits in.
+ * Literal strings - `(text)` - use `escPdf` instead; the two escapes are not interchangeable.
+ */
+export const escName = (s: string): string =>
+  Array.from(new TextEncoder().encode(s))
+    .map((b) =>
+      b >= 0x21 && b <= 0x7e && !"()<>[]{}/%#".includes(String.fromCharCode(b))
+        ? String.fromCharCode(b)
+        : "#" + b.toString(16).padStart(2, "0").toUpperCase(),
+    )
+    .join("");

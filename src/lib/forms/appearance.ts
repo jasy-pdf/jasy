@@ -87,10 +87,12 @@ export function pushButtonFace(
   captionWidth: number,
   capHeight: number,
   fontRes: string,
+  size: number,
 ): string {
   // Baseline placed so the CAPITALS sit optically centred in the box, not the em square.
-  const y = (h - capHeight * style.fontSize) / 2;
-  return `${box(w, h, style)}\n${caption ? centredText(w, h, style, caption, captionWidth, y, fontRes) : ""}`;
+  const y = (h - capHeight * size) / 2;
+  const caption_ = caption ? centredText(w, h, style, caption, captionWidth, y, fontRes, size) : "";
+  return `${box(w, h, style)}\n${caption_}`;
 }
 
 /** One centred, clipped text run inside a field box. Clipping means an over-long caption is cut at the
@@ -103,10 +105,11 @@ function centredText(
   textWidth: number,
   baselineY: number,
   fontRes: string,
+  size: number,
 ): string {
   return (
     `q 0 0 ${num2(w)} ${num2(h)} re W n ` +
-    `BT /${fontRes} ${num2(style.fontSize)} Tf ${pdfColor(style.color)} rg ` +
+    `BT /${fontRes} ${num2(size)} Tf ${pdfColor(style.color)} rg ` +
     `${num2((w - textWidth) / 2)} ${num2(baselineY)} Td (${escPdf(text)}) Tj ET Q`
   );
 }
@@ -123,6 +126,7 @@ export function signatureFace(
   label: string,
   labelWidth: number,
   fontRes: string,
+  size: number,
 ): string {
   const ruleY = h * 0.3;
   const inset = w * 0.08;
@@ -130,7 +134,7 @@ export function signatureFace(
   const rule =
     `${pdfColor(stroke)} RG ${num2(Math.max(0.5, style.borderWidth * 0.75))} w ` +
     `${num2(inset)} ${num2(ruleY)} m ${num2(w - inset)} ${num2(ruleY)} l S`;
-  const hint = label ? centredText(w, h, style, label, labelWidth, ruleY + 6, fontRes) : "";
+  const hint = label ? centredText(w, h, style, label, labelWidth, ruleY + 6, fontRes, size) : "";
   return `${box(w, h, style)}\n${rule}\n${hint}`;
 }
 

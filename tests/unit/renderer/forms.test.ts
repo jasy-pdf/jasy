@@ -406,4 +406,83 @@ describe("form fields (AcroForm)", () => {
     expect(xs[1]).toBeLessThan(160);
     expect(xs[2]).toBeGreaterThan(280); // hard right
   });
+
+  it("passes the shared flags through to Dropdown and ListBox too", async () => {
+    // These reach ChoiceElement through one mapper; forgetting them there made the props silently inert.
+    const pdf = await render(
+      Document([
+        Page({ margin: 56 }, [
+          Column([Dropdown({ name: "d", required: true, print: false }, ["a"])]),
+        ]),
+      ]),
+    );
+    expect(pdf).toContain("/Ff 131074"); // Combo (131072) | Required (2)
+    expect(pdf).toContain("/F 0"); // screen only
+  });
+
+  it("escapes an export value that is not a bare PDF Name", async () => {
+    // A Name may not hold spaces or delimiters; "Ja / Nein" must become #XX or the dictionary breaks.
+    const pdf = await render(
+      Document([
+        Page({ margin: 56 }, [
+          Column([Checkbox({ name: "c", checked: true, onValue: "Ja / Nein" })]),
+        ]),
+      ]),
+    );
+    expect(pdf).toContain("/Ja#20#2F#20Nein");
+    expect(pdf).toContain("/V /Ja#20#2F#20Nein");
+    expect(pdf).toContain("/AS /Ja#20#2F#20Nein");
+    expect(pdf).not.toContain("/V /Ja / Nein"); // the unescaped form must not appear
+  });
+
+  it("only asks the viewer to draw values that we did not bake", async () => {
+    const opts = { compress: false, fieldAppearances: false } as const;
+    const boxes = new TextDecoder("latin1").decode(
+      await renderToBytes(
+        Document([Page({ margin: 56 }, [Column([Checkbox({ name: "c", checked: true })])])]),
+        opts,
+      ),
+    );
+    // A checkbox always carries a complete /AP, so nothing is deferred - even with baking off.
+    expect(boxes).not.toContain("/NeedAppearances");
+    const text = new TextDecoder("latin1").decode(
+      await renderToBytes(
+        Document([Page({ margin: 56 }, [Column([TextField({ name: "t", value: "x" })])])]),
+        opts,
+      ),
+    );
+    expect(text).toContain("/NeedAppearances true");
+  });
+
+  it("auto-sizes a button caption and a signature hint when fontSize is 0", async () => {
+    const pdf = await render(
+      Document([
+        Page({ margin: 56 }, [
+          Column([
+            PushButton({ name: "b", label: "Auto", fontSize: 0, width: 120, height: 30 }),
+            SignatureField({ name: "s", label: "Sign", fontSize: 0, height: 50 }),
+          ]),
+        ]),
+      ]),
+    );
+    // `0 Tf` would draw an invisible caption; every baked run must use a real size.
+    const sizes = [...pdf.matchAll(/\/Helv ([\d.]+) Tf/g)].map((m) => Number(m[1]));
+    expect(sizes.length).toBeGreaterThan(0);
+    expect(sizes.every((v) => v > 0)).toBe(true);
+  });
+
+  it("takes the group flags from EVERY radio button, not just the first", async () => {
+    const options = [
+      { value: "a", label: "A" },
+      { value: "b", label: "B" },
+    ];
+    const plain = await render(
+      Document([Page({ margin: 56 }, [RadioGroup({ name: "g" }, options)])]),
+    );
+    const required = await render(
+      Document([Page({ margin: 56 }, [RadioGroup({ name: "g", required: true }, options)])]),
+    );
+    expect(plain).toContain("/FT /Btn /Ff 49152"); // Radio | NoToggleToOff
+    expect(required).toContain("/FT /Btn /Ff 49154"); // ... | Required
+  });
 });
