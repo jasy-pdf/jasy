@@ -2,14 +2,18 @@ import type { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 import type { FormFieldNode } from "../ir/display-list.ts";
 import { NORMAL_STYLE, escPdf, num2, pdfColor } from "./pdf.ts";
 import {
+  type FieldLine,
   checkboxOff,
   checkboxOn,
+  listBoxFace,
   pushButtonFace,
   radioOff,
   radioOn,
   signatureFace,
+  textFieldFace,
 } from "./appearance.ts";
-import type { ButtonAction } from "./field.ts";
+import { wrapStringIntoLines } from "../text/line-breaker.ts";
+import type { ButtonAction, ChoiceSpec, FieldStyle } from "./field.ts";
 
 // AcroForm field flags (/Ff), by 1-based bit position per the PDF spec.
 const FF_READ_ONLY = 1 << 0; // bit 1
@@ -41,8 +45,9 @@ function rectOf(node: FormFieldNode): string {
   return `[${num2(node.x)} ${num2(node.y)} ${num2(node.x + node.width)} ${num2(node.y + node.height)}]`;
 }
 
-/** A text field (/Tx). Relies on /NeedAppearances (Step 1) - the viewer draws the value from /DA. */
-function buildTextWidget(node: FormFieldNode, daFont: string): string {
+/** A text field (/Tx). `apRef` is its baked appearance (the default); without one the field carries only
+ *  /DA and the viewer draws the value itself (`fieldAppearances: false`). */
+function buildTextWidget(node: FormFieldNode, daFont: string, apRef?: number): string {
   const f = node.field;
   if (f.kind !== "text") throw new Error("buildTextWidget: not a text field");
   const parts = [`/Type /Annot /Subtype /Widget /FT /Tx`, `/T (${escPdf(f.name)})`];
@@ -56,6 +61,7 @@ function buildTextWidget(node: FormFieldNode, daFont: string): string {
   if (f.maxLength !== undefined) parts.push(`/MaxLen ${f.maxLength}`);
   parts.push(`/Rect ${rectOf(node)} /F 4`);
   parts.push(`/DA (/${daFont} ${num2(node.style.fontSize)} Tf ${pdfColor(node.style.color)} rg)`);
+  if (apRef !== undefined) parts.push(`/AP << /N ${apRef} 0 R >>`);
   return `<< ${parts.join(" ")}${boxChrome(node)} >>`;
 }
 
@@ -80,9 +86,18 @@ function buildCheckboxWidget(node: FormFieldNode, om: PDFObjectManager): string 
   return `<< ${parts.join(" ")}${boxChrome(node)} >>`;
 }
 
-/** A choice field (/Ch): a dropdown (combo) or list box. Relies on /NeedAppearances (like text) so the
- *  viewer draws the selected value; Step 4 bakes its /AP alongside the text fields. */
-function buildChoiceWidget(node: FormFieldNode, daFont: string): string {
+/** What a choice field has selected. A multi-select box uses `values`; a single-select one uses `value`
+ *  but tolerates a one-entry `values` - the two props are easy to confuse, and silently dropping the
+ *  user's selection is worse than accepting either spelling. */
+function choiceSelection(f: ChoiceSpec): string[] {
+  if (f.multiSelect) return f.values ?? (f.value !== undefined ? [f.value] : []);
+  if (f.value !== undefined) return [f.value];
+  return f.values?.length ? [f.values[0]] : [];
+}
+
+/** A choice field (/Ch): a dropdown (combo) or list box. `apRef` is its baked appearance (the default);
+ *  without one the viewer draws the selected value from /DA + /V. */
+function buildChoiceWidget(node: FormFieldNode, daFont: string, apRef?: number): string {
   const f = node.field;
   if (f.kind !== "choice") throw new Error("buildChoiceWidget: not a choice");
   // /Opt: each entry is [ (export) (display) ], so a label can differ from the stored value.
@@ -103,18 +118,21 @@ function buildChoiceWidget(node: FormFieldNode, daFont: string): string {
   if (flags) parts.push(`/Ff ${flags}`);
 
   const indexOf = (v: string) => f.options.findIndex((o) => o.value === v);
-  if (f.multiSelect && f.values && f.values.length) {
-    parts.push(`/V [${f.values.map((v) => `(${escPdf(v)})`).join(" ")}]`);
-    const idx = f.values.map(indexOf).filter((i) => i >= 0);
+  const chosen = choiceSelection(f);
+  if (chosen.length > 0) {
+    // A multi-select field's value is an ARRAY of strings; every other choice field holds one string.
+    parts.push(
+      f.multiSelect
+        ? `/V [${chosen.map((v) => `(${escPdf(v)})`).join(" ")}]`
+        : `/V (${escPdf(chosen[0])})`,
+    );
+    const idx = chosen.map(indexOf).filter((i) => i >= 0);
     if (idx.length) parts.push(`/I [${idx.join(" ")}]`);
-  } else if (f.value !== undefined) {
-    parts.push(`/V (${escPdf(f.value)})`);
-    const i = indexOf(f.value);
-    if (i >= 0) parts.push(`/I [${i}]`);
   }
 
   parts.push(`/Rect ${rectOf(node)} /F 4`);
   parts.push(`/DA (/${daFont} ${num2(node.style.fontSize)} Tf ${pdfColor(node.style.color)} rg)`);
+  if (apRef !== undefined) parts.push(`/AP << /N ${apRef} 0 R >>`);
   return `<< ${parts.join(" ")}${boxChrome(node)} >>`;
 }
 
@@ -149,8 +167,8 @@ interface RadioGroup {
 export class AcroFormCollector {
   private fieldRefs: number[] = [];
   private radioGroups = new Map<string, RadioGroup>();
-  // Text fields still lean on the viewer (Step 1); a later step bakes their /AP too and turns this off
-  // (PDF/A forbids NeedAppearances). Checkboxes + radios already carry a baked /AP.
+  // Only set when appearance baking is OFF - then the viewer has to draw every value. With baking on
+  // (the default) it stays absent, which is also what PDF/A requires.
   private needAppearances = false;
   // The built-in Helvetica every field's /DA (and a button's baked caption) refers to. Created on first
   // use and shared, so the /DR entry and the appearance streams point at ONE font object - and a document
@@ -158,6 +176,99 @@ export class AcroFormCollector {
   private helvNum?: number;
   // Set once a signature field exists; the catalog then needs /SigFlags.
   private hasSignature = false;
+  // Bake every field's appearance (default). Off = emit no /AP and set /NeedAppearances, i.e. let the
+  // viewer draw everything - what react-pdf/pdfkit always does, and what we did before this step.
+  private bake = true;
+
+  /** Turn appearance baking off (`renderToBytes(doc, { fieldAppearances: false })`). */
+  setBakeAppearances(on: boolean): void {
+    this.bake = on;
+  }
+
+  /** The size to draw a value at. A field may ask for `0` - the PDF convention for "auto-size"; we then
+   *  fit the capitals comfortably inside the box, which is what a viewer's auto-size does. */
+  private drawSize(style: FieldStyle, height: number, capHeight: number): number {
+    if (style.fontSize > 0) return style.fontSize;
+    const available = height - 2 * (2 + style.borderWidth);
+    return Math.max(4, Math.min(12, (available * 0.7) / (capHeight || 0.7)));
+  }
+
+  /** Measure one line for the appearance generator. */
+  private line(om: PDFObjectManager, text: string, size: number): FieldLine {
+    return { text, width: om.getStringWidth(text, "Helvetica", size, NORMAL_STYLE) };
+  }
+
+  /** Bake a text field's value into an appearance stream; returns the XObject number. */
+  private bakeText(node: FormFieldNode, om: PDFObjectManager): number {
+    const f = node.field;
+    if (f.kind !== "text") throw new Error("bakeText: not a text field");
+    const { capHeight } = om.getFontDecoration("Helvetica", NORMAL_STYLE);
+    const size = this.drawSize(node.style, node.height, capHeight);
+    // A password field shows the mask, never the characters - the value still lives in /V.
+    const value = f.password ? "•".repeat([...(f.value ?? "")].length) : (f.value ?? "");
+    const innerWidth = Math.max(1, node.width - 2 * (2 + node.style.borderWidth));
+
+    let lines: FieldLine[] = [];
+    if (value) {
+      const texts = f.multiline
+        ? wrapStringIntoLines(value, "Helvetica", size, NORMAL_STYLE, innerWidth, om)
+        : [value];
+      lines = texts.map((t) => this.line(om, t, size));
+    }
+    const face = textFieldFace(
+      node.width,
+      node.height,
+      node.style,
+      lines,
+      capHeight,
+      size,
+      "Helv",
+      f.multiline ?? false,
+    );
+    return om.addFormXObject(
+      `[0 0 ${num2(node.width)} ${num2(node.height)}]`,
+      face,
+      `/Font << /Helv ${this.helv(om)} 0 R >>`,
+    );
+  }
+
+  /** Bake a choice field: a combo shows its current value on one line, a list box shows its options
+   *  with the selected rows highlighted. */
+  private bakeChoice(node: FormFieldNode, om: PDFObjectManager): number {
+    const f = node.field;
+    if (f.kind !== "choice") throw new Error("bakeChoice: not a choice");
+    const { capHeight } = om.getFontDecoration("Helvetica", NORMAL_STYLE);
+    const size = this.drawSize(node.style, node.height, capHeight);
+    const shown = (v: string) => f.options.find((o) => o.value === v)?.label ?? v;
+    const chosen = choiceSelection(f);
+    const selected = new Set(chosen);
+
+    let face: string;
+    if (f.combo) {
+      const current = chosen.length ? [this.line(om, shown(chosen[0]), size)] : [];
+      face = textFieldFace(
+        node.width,
+        node.height,
+        node.style,
+        current,
+        capHeight,
+        size,
+        "Helv",
+        false,
+      );
+    } else {
+      const rows = f.options.map((o) => ({
+        ...this.line(om, o.label ?? o.value, size),
+        selected: selected.has(o.value),
+      }));
+      face = listBoxFace(node.width, node.height, node.style, rows, capHeight, size, "Helv");
+    }
+    return om.addFormXObject(
+      `[0 0 ${num2(node.width)} ${num2(node.height)}]`,
+      face,
+      `/Font << /Helv ${this.helv(om)} 0 R >>`,
+    );
+  }
 
   get isEmpty(): boolean {
     return this.fieldRefs.length === 0;
@@ -182,13 +293,13 @@ export class AcroFormCollector {
       dict = this.buildSignatureWidget(node, om);
     } else if (node.field.kind === "choice") {
       this.helv(om);
-      dict = buildChoiceWidget(node, "Helv");
-      this.needAppearances = true; // the viewer draws the selected value (baked in Step 4)
+      dict = buildChoiceWidget(node, "Helv", this.bake ? this.bakeChoice(node, om) : undefined);
     } else {
       this.helv(om);
-      dict = buildTextWidget(node, "Helv");
-      this.needAppearances = true; // this text field needs the viewer to render its value
+      dict = buildTextWidget(node, "Helv", this.bake ? this.bakeText(node, om) : undefined);
     }
+    // Nothing baked -> the viewer has to draw every value itself.
+    if (!this.bake) this.needAppearances = true;
     const objNum = om.addObject(dict);
     this.fieldRefs.push(objNum);
     return objNum;

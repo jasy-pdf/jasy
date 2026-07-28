@@ -133,3 +133,102 @@ export function signatureFace(
   const hint = label ? centredText(w, h, style, label, labelWidth, ruleY + 6, fontRes) : "";
   return `${box(w, h, style)}\n${rule}\n${hint}`;
 }
+
+// Horizontal padding inside a field box, on top of the border - the same small inset Acrobat leaves so
+// the value does not touch the frame.
+const FIELD_PAD = 2;
+// A list box highlights its selected rows. Viewers each pick their own colour; once we bake the
+// appearance WE decide, and this light blue is the familiar selection tint.
+const SELECTION_TINT = "0.60 0.75 0.95";
+
+/** One pre-measured line of field text. The caller owns wrapping + measuring, so this module stays free
+ *  of font metrics (and can be reused verbatim when filling an existing PDF). */
+export interface FieldLine {
+  text: string;
+  width: number;
+  /** List box only: draw a selection highlight behind this row. */
+  selected?: boolean;
+}
+
+/** `BT … ET` for absolutely-placed lines. `Tm` (not `Td`) so each line's position is independent. */
+function textBlock(
+  lines: Array<{ text: string; x: number; y: number }>,
+  style: FieldStyle,
+  size: number,
+  fontRes: string,
+): string {
+  const runs = lines
+    .map((l) => `1 0 0 1 ${num2(l.x)} ${num2(l.y)} Tm (${escPdf(l.text)}) Tj`)
+    .join("\n");
+  return `BT /${fontRes} ${num2(size)} Tf ${pdfColor(style.color)} rg\n${runs}\nET`;
+}
+
+/** Everything a field draws is clipped to its own box, so a long value is cut at the frame rather than
+ *  bleeding across the page. */
+function clipped(w: number, h: number, ops: string): string {
+  return `q 0 0 ${num2(w)} ${num2(h)} re W n\n${ops}\nQ`;
+}
+
+/**
+ * A text field's value, baked. `lines` is already wrapped (one entry for a single-line field). A
+ * single line sits optically centred; a multi-line field stacks from the top, both measured off the
+ * font's cap height rather than a guessed ratio.
+ */
+export function textFieldFace(
+  w: number,
+  h: number,
+  style: FieldStyle,
+  lines: FieldLine[],
+  capHeight: number,
+  size: number,
+  fontRes: string,
+  multiline: boolean,
+): string {
+  const face = box(w, h, style);
+  if (lines.length === 0) return face;
+  const pad = FIELD_PAD + style.borderWidth;
+  const lineHeight = size * 1.15;
+  const placed = lines.map((l, i) => ({
+    text: l.text,
+    x: pad,
+    // Multi-line: the first line's capitals start one cap-height below the top inset, then step down.
+    // Single line: centre the capitals in the box.
+    y: multiline ? h - pad - capHeight * size - i * lineHeight : (h - capHeight * size) / 2,
+  }));
+  return `${face}\n${clipped(w, h, textBlock(placed, style, size, fontRes))}`;
+}
+
+/**
+ * A list box, baked: the visible options stacked from the top, with a highlight behind the selected
+ * ones. A combo box (dropdown) uses `textFieldFace` instead - it shows only its current value.
+ */
+export function listBoxFace(
+  w: number,
+  h: number,
+  style: FieldStyle,
+  lines: FieldLine[],
+  capHeight: number,
+  size: number,
+  fontRes: string,
+): string {
+  const pad = FIELD_PAD + style.borderWidth;
+  const lineHeight = size * 1.15;
+  const rowTop = (i: number) => h - pad - (i + 1) * lineHeight;
+  // Highlights first, so the text sits on top of them.
+  const highlights = lines
+    .map((l, i) =>
+      l.selected
+        ? `${SELECTION_TINT} rg ${num2(pad / 2)} ${num2(rowTop(i))} ${num2(w - pad)} ${num2(lineHeight)} re f`
+        : "",
+    )
+    .filter(Boolean)
+    .join("\n");
+  const placed = lines.map((l, i) => ({
+    text: l.text,
+    x: pad,
+    // Baseline inside the row: lift it off the row bottom by the slack under the capitals.
+    y: rowTop(i) + (lineHeight - capHeight * size) / 2,
+  }));
+  const inner = [highlights, textBlock(placed, style, size, fontRes)].filter(Boolean).join("\n");
+  return `${box(w, h, style)}\n${clipped(w, h, inner)}`;
+}

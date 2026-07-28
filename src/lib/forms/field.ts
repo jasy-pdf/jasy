@@ -5,8 +5,8 @@ import type { Color } from "../common/color.ts";
  * elements produce it) or FILLED in an existing PDF (the reader parses existing fields into it, later).
  * This shared model is the spine that makes "create" and "fill existing" two parts of one feature.
  *
- * A discriminated union, one `kind` per PDF field family (/Tx, /Btn, /Ch, /Sig). Step 1 implements
- * `text`; the union grows a member per family as the field types land.
+ * A discriminated union, one `kind` per PDF field family (/Tx, /Btn, /Ch, /Sig) - all of them
+ * implemented, so a `switch` over `kind` is exhaustive.
  */
 export type FormFieldSpec =
   | TextFieldSpec
