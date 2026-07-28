@@ -17,10 +17,30 @@ export type FormFieldSpec =
   | SignatureSpec;
 
 /**
+ * What every field kind shares, whatever its family. Kept in one place so a new field type cannot
+ * silently miss them.
+ */
+export interface CommonFieldProps {
+  /** A tooltip / accessible name (/TU). */
+  tooltip?: string;
+  /** Show the field but do not let it be changed. */
+  readOnly?: boolean;
+  /** Mark it as a field that must be filled in before the form is submitted (/Ff Required). */
+  required?: boolean;
+  /** Hide the widget entirely - neither on screen nor in print. */
+  hidden?: boolean;
+  /** Include the widget when printing (default true). `false` keeps it on screen only. */
+  print?: boolean;
+}
+
+/** How a value is aligned inside its field box (the PDF calls this "quadding", /Q). */
+export type FieldAlign = "left" | "center" | "right";
+
+/**
  * A variable text field (/Tx). The PDF variants live in field flags; here they are typed props, so you
  * never hand-assemble a `/Ff` bitmask.
  */
-export interface TextFieldSpec {
+export interface TextFieldSpec extends CommonFieldProps {
   kind: "text";
   /** The field's name (/T) - what you read the value back by. Must be unique in the document. */
   name: string;
@@ -32,17 +52,17 @@ export interface TextFieldSpec {
   multiline?: boolean;
   /** Mask the typed characters (the Password flag). */
   password?: boolean;
+  /** How the value sits in the box (default left). Applies to the baked appearance AND /Q. */
+  align?: FieldAlign;
   /** Maximum number of characters the field accepts (/MaxLen). */
   maxLength?: number;
-  /** The value is shown but cannot be edited (the ReadOnly flag). */
-  readOnly?: boolean;
 }
 
 /**
  * A checkbox (/Btn, neither the Radio nor the Pushbutton flag). Its value is the "on" export name when
  * checked and `Off` when not - PDF checkboxes use NAMES, not strings; we hide that behind `checked`.
  */
-export interface CheckboxSpec {
+export interface CheckboxSpec extends CommonFieldProps {
   kind: "checkbox";
   /** The field name (/T). */
   name: string;
@@ -50,10 +70,6 @@ export interface CheckboxSpec {
   checked?: boolean;
   /** The "on" export value (the /AP state name + /V when checked). Default `"Yes"`. */
   onValue?: string;
-  /** A tooltip / accessible name (/TU). */
-  tooltip?: string;
-  /** Show but do not allow toggling. */
-  readOnly?: boolean;
 }
 
 /**
@@ -61,7 +77,7 @@ export interface CheckboxSpec {
  * `/Kids` are the individual buttons - mutually exclusive, so picking one clears the rest. `value` is this
  * button's export name (unique within the group); it becomes the field's value when this one is picked.
  */
-export interface RadioSpec {
+export interface RadioSpec extends CommonFieldProps {
   kind: "radio";
   /** The shared group name (/T of the parent field). All radios with the same `group` are one field. */
   group: string;
@@ -69,10 +85,6 @@ export interface RadioSpec {
   value: string;
   /** Whether this button starts selected (at most one per group should be). */
   selected?: boolean;
-  /** A tooltip / accessible name. */
-  tooltip?: string;
-  /** Show but do not allow changing the group. */
-  readOnly?: boolean;
 }
 
 /** One entry of a choice field. `label` is what the reader sees; `value` is what gets stored. */
@@ -86,7 +98,7 @@ export interface ChoiceOption {
  * export strings from `options`. A combo may be `editable` (the reader can type a value not in the list);
  * a list box may allow `multiSelect`.
  */
-export interface ChoiceSpec {
+export interface ChoiceSpec extends CommonFieldProps {
   kind: "choice";
   /** The field name (/T). */
   name: string;
@@ -100,12 +112,12 @@ export interface ChoiceSpec {
   multiSelect?: boolean;
   /** The selected value (single-select). */
   value?: string;
+  /** How the value sits in the box (default left). */
+  align?: FieldAlign;
   /** The selected values (a `multiSelect` list box). */
   values?: string[];
   /** Tooltip / accessible name. */
   tooltip?: string;
-  /** Show but do not allow changing. */
-  readOnly?: boolean;
 }
 
 /**
@@ -123,7 +135,7 @@ export type ButtonAction =
  * click target that fires an action. Its caption is baked into the appearance stream, so the button
  * looks the same in every viewer and in print.
  */
-export interface PushButtonSpec {
+export interface PushButtonSpec extends CommonFieldProps {
   kind: "pushbutton";
   /** The field name (/T). */
   name: string;
@@ -131,10 +143,6 @@ export interface PushButtonSpec {
   label: string;
   /** What clicking it does; omit for a button that does nothing (a plain label). */
   action?: ButtonAction;
-  /** A tooltip / accessible name (/TU). */
-  tooltip?: string;
-  /** Draw it but do not let it be clicked. */
-  readOnly?: boolean;
 }
 
 /**
@@ -142,16 +150,12 @@ export interface PushButtonSpec {
  * field and its empty appearance; it does not sign (real signing needs a certificate and a byte-range
  * digest, a separate feature). An unsigned field has no /V; a signer fills that in later.
  */
-export interface SignatureSpec {
+export interface SignatureSpec extends CommonFieldProps {
   kind: "signature";
   /** The field name (/T). */
   name: string;
   /** A hint drawn inside the empty box, e.g. "Signature" or the signer's role. */
   label?: string;
-  /** A tooltip / accessible name (/TU). */
-  tooltip?: string;
-  /** Draw it but do not let it be signed. */
-  readOnly?: boolean;
 }
 
 /**

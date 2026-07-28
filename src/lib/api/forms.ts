@@ -5,7 +5,7 @@ import { RadioElement } from "../elements/forms/radio-element.ts";
 import { ChoiceElement } from "../elements/forms/choice-element.ts";
 import { PushButtonElement } from "../elements/forms/push-button-element.ts";
 import { SignatureFieldElement } from "../elements/forms/signature-element.ts";
-import type { ButtonAction, ChoiceOption } from "../forms/field.ts";
+import type { ButtonAction, ChoiceOption, FieldAlign } from "../forms/field.ts";
 import { ColorInput, toColor } from "./color.ts";
 import { Column, Row } from "./layout.ts";
 import { Text } from "./text.ts";
@@ -27,10 +27,18 @@ export interface TextFieldOptions {
   multiline?: boolean;
   /** Mask the typed characters (a password field). */
   password?: boolean;
+  /** How the value sits in the box: left (default), center or right. */
+  align?: FieldAlign;
   /** Maximum number of characters. */
   maxLength?: number;
   /** Show the value but do not let the user edit it. */
   readOnly?: boolean;
+  /** Mark it as a field that must be filled in before the form is submitted. */
+  required?: boolean;
+  /** Hide the widget entirely - neither on screen nor in print. */
+  hidden?: boolean;
+  /** Include the widget when printing (default true). `false` keeps it on screen only. */
+  print?: boolean;
   /** Box width in points; omit to fill the offered width. */
   width?: number;
   /** Box height in points; omit for a single-line default. */
@@ -76,6 +84,12 @@ export interface CheckboxOptions {
   tooltip?: string;
   /** Show the state but do not let the user toggle it. */
   readOnly?: boolean;
+  /** Mark it as a field that must be filled in before the form is submitted. */
+  required?: boolean;
+  /** Hide the widget entirely - neither on screen nor in print. */
+  hidden?: boolean;
+  /** Include the widget when printing (default true). `false` keeps it on screen only. */
+  print?: boolean;
   /** Box side length in points (default 14). */
   size?: number;
   /** Checkmark colour (default black). */
@@ -117,6 +131,12 @@ export interface RadioOptions {
   tooltip?: string;
   /** Show but do not allow changing. */
   readOnly?: boolean;
+  /** Mark it as a field that must be filled in before the form is submitted. */
+  required?: boolean;
+  /** Hide the widget entirely - neither on screen nor in print. */
+  hidden?: boolean;
+  /** Include the widget when printing (default true). `false` keeps it on screen only. */
+  print?: boolean;
   /** Button diameter in points (default 14). */
   size?: number;
   /** Dot colour. */
@@ -151,6 +171,12 @@ export interface RadioChoice {
 export interface RadioGroupOptions {
   /** The field name (shared by every button). */
   name: string;
+  /** Mark the group as required. */
+  required?: boolean;
+  /** Hide every button - neither on screen nor in print. */
+  hidden?: boolean;
+  /** Include the buttons when printing (default true). */
+  print?: boolean;
   /** The value of the option that starts selected (matches one option's `value`). */
   value?: string;
   /** Vertical space between options (default 8). */
@@ -185,6 +211,9 @@ export function RadioGroup(opts: RadioGroupOptions, options: RadioChoice[]): PDF
         group: opts.name,
         value: o.value,
         selected: o.value === opts.value,
+        required: opts.required,
+        hidden: opts.hidden,
+        print: opts.print,
         size: opts.size,
         color: opts.color,
         border: opts.border,
@@ -198,8 +227,16 @@ export function RadioGroup(opts: RadioGroupOptions, options: RadioChoice[]): PDF
 
 /** Style + geometry shared by `Dropdown` and `ListBox`. */
 interface ChoiceStyleOptions {
+  /** How the value sits in the box: left (default), center or right. */
+  align?: FieldAlign;
   tooltip?: string;
   readOnly?: boolean;
+  /** Mark it as a field that must be filled in before the form is submitted. */
+  required?: boolean;
+  /** Hide the widget entirely - neither on screen nor in print. */
+  hidden?: boolean;
+  /** Include the widget when printing (default true). `false` keeps it on screen only. */
+  print?: boolean;
   width?: number;
   height?: number;
   fontSize?: number;
@@ -210,6 +247,7 @@ interface ChoiceStyleOptions {
 }
 
 const choiceStyle = (o: ChoiceStyleOptions) => ({
+  align: o.align,
   tooltip: o.tooltip,
   readOnly: o.readOnly,
   width: o.width,
@@ -319,6 +357,12 @@ export interface PushButtonOptions {
   tooltip?: string;
   /** Draw it but do not let it be clicked. */
   readOnly?: boolean;
+  /** Mark it as a field that must be filled in before the form is submitted. */
+  required?: boolean;
+  /** Hide the widget entirely - neither on screen nor in print. */
+  hidden?: boolean;
+  /** Include the widget when printing (default true). `false` keeps it on screen only. */
+  print?: boolean;
   /** Width in points; omit to fill the offered width. */
   width?: number;
   /** Height in points; omit for a comfortable default. */
@@ -351,6 +395,9 @@ export function PushButton(opts: PushButtonOptions): PushButtonElement {
     action: toAction(opts.action),
     tooltip: opts.tooltip,
     readOnly: opts.readOnly,
+    required: opts.required,
+    hidden: opts.hidden,
+    print: opts.print,
     width: opts.width,
     height: opts.height,
     fontSize: opts.fontSize,
@@ -371,6 +418,12 @@ export interface SignatureFieldOptions {
   tooltip?: string;
   /** Draw it but do not let it be signed. */
   readOnly?: boolean;
+  /** Mark it as a field that must be filled in before the form is submitted. */
+  required?: boolean;
+  /** Hide the widget entirely - neither on screen nor in print. */
+  hidden?: boolean;
+  /** Include the widget when printing (default true). `false` keeps it on screen only. */
+  print?: boolean;
   /** Width in points; omit to fill the offered width. */
   width?: number;
   /** Height in points (default 48). */

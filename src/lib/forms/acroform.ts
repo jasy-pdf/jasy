@@ -13,10 +13,11 @@ import {
   textFieldFace,
 } from "./appearance.ts";
 import { wrapStringIntoLines } from "../text/line-breaker.ts";
-import type { ButtonAction, ChoiceSpec, FieldStyle } from "./field.ts";
+import type { ButtonAction, ChoiceSpec, FieldAlign, FieldStyle, FormFieldSpec } from "./field.ts";
 
 // AcroForm field flags (/Ff), by 1-based bit position per the PDF spec.
 const FF_READ_ONLY = 1 << 0; // bit 1
+const FF_REQUIRED = 1 << 1; // bit 2: must be filled in before the form is submitted
 const FF_MULTILINE = 1 << 12; // bit 13 (text)
 const FF_PASSWORD = 1 << 13; // bit 14 (text)
 const FF_NO_TOGGLE_OFF = 1 << 14; // bit 15 (button): clicking the selected radio does not clear it
@@ -41,6 +42,25 @@ function boxChrome(node: FormFieldNode, extraMK = ""): string {
   return out;
 }
 
+/** The annotation flags (/F). Bit 2 = Hidden, bit 3 = Print. A widget prints by default; `hidden`
+ *  removes it from screen AND print, `print: false` keeps it on screen only. */
+function annotFlags(f: FormFieldSpec): number {
+  if (f.hidden) return 2;
+  return f.print === false ? 0 : 4;
+}
+
+/** The field flags every kind shares. */
+function commonFlags(f: FormFieldSpec): number {
+  return (f.readOnly ? FF_READ_ONLY : 0) | (f.required ? FF_REQUIRED : 0);
+}
+
+/** Quadding (/Q): 0 left (the default, so we omit it), 1 centre, 2 right. */
+function quadding(align?: FieldAlign): string {
+  if (align === "center") return " /Q 1";
+  if (align === "right") return " /Q 2";
+  return "";
+}
+
 function rectOf(node: FormFieldNode): string {
   return `[${num2(node.x)} ${num2(node.y)} ${num2(node.x + node.width)} ${num2(node.y + node.height)}]`;
 }
@@ -53,13 +73,12 @@ function buildTextWidget(node: FormFieldNode, daFont: string, apRef?: number): s
   const parts = [`/Type /Annot /Subtype /Widget /FT /Tx`, `/T (${escPdf(f.name)})`];
   if (f.value !== undefined) parts.push(`/V (${escPdf(f.value)})`);
   if (f.tooltip !== undefined) parts.push(`/TU (${escPdf(f.tooltip)})`);
-  let flags = 0;
-  if (f.readOnly) flags |= FF_READ_ONLY;
+  let flags = commonFlags(f);
   if (f.multiline) flags |= FF_MULTILINE;
   if (f.password) flags |= FF_PASSWORD;
   if (flags) parts.push(`/Ff ${flags}`);
   if (f.maxLength !== undefined) parts.push(`/MaxLen ${f.maxLength}`);
-  parts.push(`/Rect ${rectOf(node)} /F 4`);
+  parts.push(`/Rect ${rectOf(node)} /F ${annotFlags(f)}${quadding(f.align)}`);
   parts.push(`/DA (/${daFont} ${num2(node.style.fontSize)} Tf ${pdfColor(node.style.color)} rg)`);
   if (apRef !== undefined) parts.push(`/AP << /N ${apRef} 0 R >>`);
   return `<< ${parts.join(" ")}${boxChrome(node)} >>`;
@@ -79,9 +98,9 @@ function buildCheckboxWidget(node: FormFieldNode, om: PDFObjectManager): string 
 
   const parts = [`/Type /Annot /Subtype /Widget /FT /Btn`, `/T (${escPdf(f.name)})`];
   if (f.tooltip !== undefined) parts.push(`/TU (${escPdf(f.tooltip)})`);
-  if (f.readOnly) parts.push(`/Ff ${FF_READ_ONLY}`);
+  if (commonFlags(f)) parts.push(`/Ff ${commonFlags(f)}`);
   parts.push(`/V /${state} /AS /${state}`);
-  parts.push(`/Rect ${rectOf(node)} /F 4`);
+  parts.push(`/Rect ${rectOf(node)} /F ${annotFlags(f)}`);
   parts.push(`/AP << /N << /${on} ${onRef} 0 R /Off ${offRef} 0 R >> >>`);
   return `<< ${parts.join(" ")}${boxChrome(node)} >>`;
 }
@@ -111,8 +130,7 @@ function buildChoiceWidget(node: FormFieldNode, daFont: string, apRef?: number):
   ];
   if (f.tooltip !== undefined) parts.push(`/TU (${escPdf(f.tooltip)})`);
 
-  let flags = 0;
-  if (f.readOnly) flags |= FF_READ_ONLY;
+  let flags = commonFlags(f);
   if (f.combo) flags |= FF_COMBO | (f.editable ? FF_EDIT : 0);
   else if (f.multiSelect) flags |= FF_MULTI_SELECT;
   if (flags) parts.push(`/Ff ${flags}`);
@@ -130,7 +148,7 @@ function buildChoiceWidget(node: FormFieldNode, daFont: string, apRef?: number):
     if (idx.length) parts.push(`/I [${idx.join(" ")}]`);
   }
 
-  parts.push(`/Rect ${rectOf(node)} /F 4`);
+  parts.push(`/Rect ${rectOf(node)} /F ${annotFlags(f)}${quadding(f.align)}`);
   parts.push(`/DA (/${daFont} ${num2(node.style.fontSize)} Tf ${pdfColor(node.style.color)} rg)`);
   if (apRef !== undefined) parts.push(`/AP << /N ${apRef} 0 R >>`);
   return `<< ${parts.join(" ")}${boxChrome(node)} >>`;
@@ -156,7 +174,7 @@ interface RadioGroup {
   parentNum: number;
   kids: number[];
   selected?: string;
-  readOnly: boolean;
+  flags: number;
 }
 
 /**
@@ -224,6 +242,7 @@ export class AcroFormCollector {
       size,
       "Helv",
       f.multiline ?? false,
+      f.align,
     );
     return om.addFormXObject(
       `[0 0 ${num2(node.width)} ${num2(node.height)}]`,
@@ -255,13 +274,23 @@ export class AcroFormCollector {
         size,
         "Helv",
         false,
+        f.align,
       );
     } else {
       const rows = f.options.map((o) => ({
         ...this.line(om, o.label ?? o.value, size),
         selected: selected.has(o.value),
       }));
-      face = listBoxFace(node.width, node.height, node.style, rows, capHeight, size, "Helv");
+      face = listBoxFace(
+        node.width,
+        node.height,
+        node.style,
+        rows,
+        capHeight,
+        size,
+        "Helv",
+        f.align,
+      );
     }
     return om.addFormXObject(
       `[0 0 ${num2(node.width)} ${num2(node.height)}]`,
@@ -332,8 +361,8 @@ export class AcroFormCollector {
 
     const parts = [`/Type /Annot /Subtype /Widget /FT /Btn`, `/T (${escPdf(f.name)})`];
     if (f.tooltip !== undefined) parts.push(`/TU (${escPdf(f.tooltip)})`);
-    parts.push(`/Ff ${FF_PUSHBUTTON | (f.readOnly ? FF_READ_ONLY : 0)}`);
-    parts.push(`/Rect ${rectOf(node)} /F 4`);
+    parts.push(`/Ff ${FF_PUSHBUTTON | commonFlags(f)}`);
+    parts.push(`/Rect ${rectOf(node)} /F ${annotFlags(f)}`);
     // /DA as well as the baked /AP: a viewer that REGENERATES the face (poppler does this for push
     // buttons; others do it while the button is pressed) needs the font + size + colour, or it draws the
     // box with no caption. With /DA it reproduces what we baked.
@@ -352,7 +381,7 @@ export class AcroFormCollector {
     if (f.kind !== "radio") throw new Error("addRadio: not a radio");
     let g = this.radioGroups.get(f.group);
     if (!g) {
-      g = { parentNum: om.addObject(""), kids: [], readOnly: f.readOnly ?? false };
+      g = { parentNum: om.addObject(""), kids: [], flags: commonFlags(f) };
       this.radioGroups.set(f.group, g);
       this.fieldRefs.push(g.parentNum);
     }
@@ -364,7 +393,7 @@ export class AcroFormCollector {
     const as = f.selected ? f.value : "Off";
     const parts = [
       `/Type /Annot /Subtype /Widget /Parent ${g.parentNum} 0 R`,
-      `/Rect ${rectOf(node)} /F 4`,
+      `/Rect ${rectOf(node)} /F ${annotFlags(f)}`,
       `/AP << /N << /${f.value} ${onRef} 0 R /Off ${offRef} 0 R >> >>`,
       `/AS /${as}`,
     ];
@@ -392,8 +421,8 @@ export class AcroFormCollector {
 
     const parts = [`/Type /Annot /Subtype /Widget /FT /Sig`, `/T (${escPdf(f.name)})`];
     if (f.tooltip !== undefined) parts.push(`/TU (${escPdf(f.tooltip)})`);
-    if (f.readOnly) parts.push(`/Ff ${FF_READ_ONLY}`);
-    parts.push(`/Rect ${rectOf(node)} /F 4`);
+    if (commonFlags(f)) parts.push(`/Ff ${commonFlags(f)}`);
+    parts.push(`/Rect ${rectOf(node)} /F ${annotFlags(f)}`);
     parts.push(`/AP << /N ${apRef} 0 R >>`);
     return `<< ${parts.join(" ")}${boxChrome(node)} >>`;
   }
@@ -402,7 +431,7 @@ export class AcroFormCollector {
     // Fill each reserved radio-group field now that all its buttons (Kids) are known.
     for (const [name, g] of this.radioGroups) {
       const kids = g.kids.map((k) => `${k} 0 R`).join(" ");
-      const ff = FF_RADIO | FF_NO_TOGGLE_OFF | (g.readOnly ? FF_READ_ONLY : 0);
+      const ff = FF_RADIO | FF_NO_TOGGLE_OFF | g.flags;
       om.replaceObject(
         g.parentNum,
         `<< /FT /Btn /Ff ${ff} /T (${escPdf(name)}) /V /${g.selected ?? "Off"} /Kids [${kids}] >>`,

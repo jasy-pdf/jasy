@@ -1,4 +1,4 @@
-import type { FieldStyle } from "./field.ts";
+import type { FieldAlign, FieldStyle } from "./field.ts";
 import { escPdf, num2, pdfColor } from "./pdf.ts";
 
 // Appearance streams (/AP): the actual drawn content of a field's box, in the field's OWN coordinate
@@ -150,6 +150,13 @@ export interface FieldLine {
   selected?: boolean;
 }
 
+/** Where a line of `width` starts, given the box, its padding and the requested alignment. */
+function alignX(boxWidth: number, pad: number, width: number, align: FieldAlign = "left"): number {
+  if (align === "center") return (boxWidth - width) / 2;
+  if (align === "right") return boxWidth - pad - width;
+  return pad;
+}
+
 /** `BT … ET` for absolutely-placed lines. `Tm` (not `Td`) so each line's position is independent. */
 function textBlock(
   lines: Array<{ text: string; x: number; y: number }>,
@@ -183,6 +190,7 @@ export function textFieldFace(
   size: number,
   fontRes: string,
   multiline: boolean,
+  align: FieldAlign = "left",
 ): string {
   const face = box(w, h, style);
   if (lines.length === 0) return face;
@@ -190,7 +198,7 @@ export function textFieldFace(
   const lineHeight = size * 1.15;
   const placed = lines.map((l, i) => ({
     text: l.text,
-    x: pad,
+    x: alignX(w, pad, l.width, align),
     // Multi-line: the first line's capitals start one cap-height below the top inset, then step down.
     // Single line: centre the capitals in the box.
     y: multiline ? h - pad - capHeight * size - i * lineHeight : (h - capHeight * size) / 2,
@@ -210,6 +218,7 @@ export function listBoxFace(
   capHeight: number,
   size: number,
   fontRes: string,
+  align: FieldAlign = "left",
 ): string {
   const pad = FIELD_PAD + style.borderWidth;
   const lineHeight = size * 1.15;
@@ -225,7 +234,7 @@ export function listBoxFace(
     .join("\n");
   const placed = lines.map((l, i) => ({
     text: l.text,
-    x: pad,
+    x: alignX(w, pad, l.width, align),
     // Baseline inside the row: lift it off the row bottom by the slack under the capitals.
     y: rowTop(i) + (lineHeight - capHeight * size) / 2,
   }));

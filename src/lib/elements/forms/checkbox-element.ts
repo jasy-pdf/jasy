@@ -14,6 +14,12 @@ export interface CheckboxParams {
   tooltip?: string;
   /** Show but do not allow toggling. */
   readOnly?: boolean;
+  /** Mark it as a field that must be filled in before submitting. */
+  required?: boolean;
+  /** Hide the widget entirely - neither on screen nor in print. */
+  hidden?: boolean;
+  /** Include the widget when printing (default true). */
+  print?: boolean;
   /** Box side length in points (default 14). */
   size?: number;
   /** Checkmark colour (default black). */
@@ -46,6 +52,9 @@ export class CheckboxElement extends SizedPDFElement {
       onValue: p.onValue,
       tooltip: p.tooltip,
       readOnly: p.readOnly,
+      required: p.required,
+      hidden: p.hidden,
+      print: p.print,
     };
     this.style = {
       border: p.border ?? new Color(102, 102, 102),

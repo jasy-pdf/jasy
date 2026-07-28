@@ -344,4 +344,66 @@ describe("form fields (AcroForm)", () => {
     expect(multi).toContain("/V [(s) (m)]");
     expect(multi).toContain("/I [0 1]");
   });
+
+  it("marks a required field, and combines the flag with the field's own", async () => {
+    const pdf = await render(
+      Document([
+        Page({ margin: 56 }, [
+          Column([
+            TextField({ name: "a", required: true }),
+            TextField({ name: "b", required: true, multiline: true, height: 40 }),
+            Checkbox({ name: "c", required: true }),
+          ]),
+        ]),
+      ]),
+    );
+    expect(pdf).toContain("/Ff 2"); // Required alone
+    expect(pdf).toContain("/Ff 4098"); // Required | Multiline (2 | 4096)
+  });
+
+  it("controls printing and visibility through the annotation flags", async () => {
+    const pdf = await render(
+      Document([
+        Page({ margin: 56 }, [
+          Column([
+            TextField({ name: "normal" }),
+            TextField({ name: "screen", print: false }),
+            TextField({ name: "gone", hidden: true }),
+          ]),
+        ]),
+      ]),
+    );
+    const widgetOf = (name: string) =>
+      (pdf.match(/<< \/Type \/Annot \/Subtype \/Widget[^\n]*/g) ?? []).find((w) =>
+        w.includes(`/T (${name})`),
+      )!;
+    expect(widgetOf("normal")).toContain("/F 4"); // printable, visible (the default)
+    expect(widgetOf("screen")).toContain("/F 0"); // on screen only
+    expect(widgetOf("gone")).toContain("/F 2"); // hidden everywhere
+  });
+
+  it("aligns a value, and the baked drawing agrees with /Q", async () => {
+    // /Q tells a viewer how to align when IT redraws; our appearance must place the text the same way,
+    // or the field jumps the moment someone clicks it.
+    const pdf = await render(
+      Document([
+        Page({ margin: 56 }, [
+          Column([
+            TextField({ name: "l", value: "x", width: 300 }),
+            TextField({ name: "c", value: "x", width: 300, align: "center" }),
+            TextField({ name: "r", value: "x", width: 300, align: "right" }),
+          ]),
+        ]),
+      ]),
+    );
+    expect(pdf).toContain("/Q 1"); // centre
+    expect(pdf).toContain("/Q 2"); // right
+    // Three drawn runs, left to right: the default near 0, then centre, then right.
+    const xs = [...pdf.matchAll(/1 0 0 1 ([\d.]+) [\d.]+ Tm \(x\) Tj/g)].map((m) => Number(m[1]));
+    expect(xs).toHaveLength(3);
+    expect(xs[0]).toBeLessThan(10); // left
+    expect(xs[1]).toBeGreaterThan(140); // centred in a 300pt box
+    expect(xs[1]).toBeLessThan(160);
+    expect(xs[2]).toBeGreaterThan(280); // hard right
+  });
 });

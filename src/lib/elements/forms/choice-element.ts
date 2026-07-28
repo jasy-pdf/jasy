@@ -1,7 +1,7 @@
 import { Color } from "../../common/color.ts";
 import { BoxConstraints, Offset, Size } from "../../layout/box-constraints.ts";
 import { LayoutContext, SizedPDFElement } from "../pdf-element.ts";
-import type { ChoiceOption, ChoiceSpec, FieldStyle } from "../../forms/field.ts";
+import type { ChoiceOption, ChoiceSpec, FieldAlign, FieldStyle } from "../../forms/field.ts";
 
 export interface ChoiceParams {
   name: string;
@@ -14,6 +14,14 @@ export interface ChoiceParams {
   values?: string[];
   tooltip?: string;
   readOnly?: boolean;
+  /** Mark it as a field that must be filled in before submitting. */
+  /** How the value sits in the box (default left). */
+  align?: FieldAlign;
+  required?: boolean;
+  /** Hide the widget entirely - neither on screen nor in print. */
+  hidden?: boolean;
+  /** Include the widget when printing (default true). */
+  print?: boolean;
   /** Box width; omit to fill the offered width. */
   width?: number;
   /** Box height; omit for a single-line default (dropdown) / a few rows (list box). */
@@ -49,6 +57,10 @@ export class ChoiceElement extends SizedPDFElement {
       values: p.values,
       tooltip: p.tooltip,
       readOnly: p.readOnly,
+      align: p.align,
+      required: p.required,
+      hidden: p.hidden,
+      print: p.print,
     };
     this.style = {
       border: p.border ?? new Color(154, 164, 178),

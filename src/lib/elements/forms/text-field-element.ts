@@ -1,7 +1,7 @@
 import { Color } from "../../common/color.ts";
 import { BoxConstraints, Offset, Size } from "../../layout/box-constraints.ts";
 import { LayoutContext, SizedPDFElement } from "../pdf-element.ts";
-import type { FieldStyle, TextFieldSpec } from "../../forms/field.ts";
+import type { FieldAlign, FieldStyle, TextFieldSpec } from "../../forms/field.ts";
 
 export interface TextFieldParams {
   /** The field name (/T) - unique in the document; you read the value back by it. */
@@ -18,6 +18,14 @@ export interface TextFieldParams {
   maxLength?: number;
   /** Show but do not allow editing. */
   readOnly?: boolean;
+  /** Mark it as a field that must be filled in before submitting. */
+  /** How the value sits in the box (default left). */
+  align?: FieldAlign;
+  required?: boolean;
+  /** Hide the widget entirely - neither on screen nor in print. */
+  hidden?: boolean;
+  /** Include the widget when printing (default true). */
+  print?: boolean;
   /** Box width in points; omit to fill the offered width. */
   width?: number;
   /** Box height in points; omit for a single-line default (`multiline` wants an explicit height). */
@@ -55,6 +63,10 @@ export class TextFieldElement extends SizedPDFElement {
       password: p.password,
       maxLength: p.maxLength,
       readOnly: p.readOnly,
+      align: p.align,
+      required: p.required,
+      hidden: p.hidden,
+      print: p.print,
     };
     this.style = {
       border: p.border,

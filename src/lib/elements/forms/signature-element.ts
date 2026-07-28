@@ -12,6 +12,12 @@ export interface SignatureFieldParams {
   tooltip?: string;
   /** Draw it but do not let it be signed. */
   readOnly?: boolean;
+  /** Mark it as a field that must be filled in before submitting. */
+  required?: boolean;
+  /** Hide the widget entirely - neither on screen nor in print. */
+  hidden?: boolean;
+  /** Include the widget when printing (default true). */
+  print?: boolean;
   /** Box width in points; omit to fill the offered width. */
   width?: number;
   /** Box height in points (default 48 - room for a signature). */
@@ -46,6 +52,9 @@ export class SignatureFieldElement extends SizedPDFElement {
       label: p.label,
       tooltip: p.tooltip,
       readOnly: p.readOnly,
+      required: p.required,
+      hidden: p.hidden,
+      print: p.print,
     };
     this.style = {
       border: p.border ?? new Color(154, 164, 178),

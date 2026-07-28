@@ -14,6 +14,12 @@ export interface RadioParams {
   tooltip?: string;
   /** Show but do not allow changing the group. */
   readOnly?: boolean;
+  /** Mark it as a field that must be filled in before submitting. */
+  required?: boolean;
+  /** Hide the widget entirely - neither on screen nor in print. */
+  hidden?: boolean;
+  /** Include the widget when printing (default true). */
+  print?: boolean;
   /** Button diameter in points (default 14). */
   size?: number;
   /** Dot colour (default black). */
@@ -47,6 +53,9 @@ export class RadioElement extends SizedPDFElement {
       selected: p.selected,
       tooltip: p.tooltip,
       readOnly: p.readOnly,
+      required: p.required,
+      hidden: p.hidden,
+      print: p.print,
     };
     this.style = {
       border: p.border ?? new Color(102, 102, 102),
