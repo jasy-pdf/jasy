@@ -1,7 +1,14 @@
 import type { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 import type { FormFieldNode } from "../ir/display-list.ts";
 import { NORMAL_STYLE, escPdf, num2, pdfColor } from "./pdf.ts";
-import { checkboxOff, checkboxOn, pushButtonFace, radioOff, radioOn } from "./appearance.ts";
+import {
+  checkboxOff,
+  checkboxOn,
+  pushButtonFace,
+  radioOff,
+  radioOn,
+  signatureFace,
+} from "./appearance.ts";
 import type { ButtonAction } from "./field.ts";
 
 // AcroForm field flags (/Ff), by 1-based bit position per the PDF spec.
@@ -149,6 +156,8 @@ export class AcroFormCollector {
   // use and shared, so the /DR entry and the appearance streams point at ONE font object - and a document
   // of checkboxes alone never emits it.
   private helvNum?: number;
+  // Set once a signature field exists; the catalog then needs /SigFlags.
+  private hasSignature = false;
 
   get isEmpty(): boolean {
     return this.fieldRefs.length === 0;
@@ -169,6 +178,8 @@ export class AcroFormCollector {
       dict = buildCheckboxWidget(node, om);
     } else if (node.field.kind === "pushbutton") {
       dict = this.buildPushButtonWidget(node, om);
+    } else if (node.field.kind === "signature") {
+      dict = this.buildSignatureWidget(node, om);
     } else if (node.field.kind === "choice") {
       this.helv(om);
       dict = buildChoiceWidget(node, "Helv");
@@ -251,6 +262,31 @@ export class AcroFormCollector {
     return kidNum;
   }
 
+  /** A signature field (/Sig): an EMPTY placeholder with a baked "sign here" face. No /V - an unsigned
+   *  field has no value; a signing tool fills that in (and replaces this appearance) later. */
+  private buildSignatureWidget(node: FormFieldNode, om: PDFObjectManager): string {
+    const f = node.field;
+    if (f.kind !== "signature") throw new Error("buildSignatureWidget: not a signature");
+    this.hasSignature = true;
+    const label = f.label ?? "";
+    const labelWidth = label
+      ? om.getStringWidth(label, "Helvetica", node.style.fontSize, NORMAL_STYLE)
+      : 0;
+    const fontNum = this.helv(om);
+    const apRef = om.addFormXObject(
+      `[0 0 ${num2(node.width)} ${num2(node.height)}]`,
+      signatureFace(node.width, node.height, node.style, label, labelWidth, "Helv"),
+      `/Font << /Helv ${fontNum} 0 R >>`,
+    );
+
+    const parts = [`/Type /Annot /Subtype /Widget /FT /Sig`, `/T (${escPdf(f.name)})`];
+    if (f.tooltip !== undefined) parts.push(`/TU (${escPdf(f.tooltip)})`);
+    if (f.readOnly) parts.push(`/Ff ${FF_READ_ONLY}`);
+    parts.push(`/Rect ${rectOf(node)} /F 4`);
+    parts.push(`/AP << /N ${apRef} 0 R >>`);
+    return `<< ${parts.join(" ")}${boxChrome(node)} >>`;
+  }
+
   finalize(om: PDFObjectManager): string {
     // Fill each reserved radio-group field now that all its buttons (Kids) are known.
     for (const [name, g] of this.radioGroups) {
@@ -266,6 +302,9 @@ export class AcroFormCollector {
     // /DR only when a field's /DA actually references the font (text, choice, button captions).
     const dr = this.helvNum ? ` /DR << /Font << /Helv ${this.helvNum} 0 R >> >>` : "";
     const na = this.needAppearances ? " /NeedAppearances true" : "";
-    return `/AcroForm << /Fields [${fields}]${dr}${na} >>`;
+    // /SigFlags 3 = SignaturesExist | AppendOnly: the document holds a signature field, and it must be
+    // updated incrementally so an existing signature stays verifiable.
+    const sig = this.hasSignature ? " /SigFlags 3" : "";
+    return `/AcroForm << /Fields [${fields}]${dr}${na}${sig} >>`;
   }
 }

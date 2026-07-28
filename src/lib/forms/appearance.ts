@@ -88,13 +88,48 @@ export function pushButtonFace(
   capHeight: number,
   fontRes: string,
 ): string {
-  const size = style.fontSize;
-  const x = (w - captionWidth) / 2;
-  const y = (h - capHeight * size) / 2;
-  // Clipped to the box, so an over-long caption is cut instead of bleeding across the page.
-  const text =
+  // Baseline placed so the CAPITALS sit optically centred in the box, not the em square.
+  const y = (h - capHeight * style.fontSize) / 2;
+  return `${box(w, h, style)}\n${caption ? centredText(w, h, style, caption, captionWidth, y, fontRes) : ""}`;
+}
+
+/** One centred, clipped text run inside a field box. Clipping means an over-long caption is cut at the
+ *  border instead of bleeding across the page. Shared by the push button and the signature placeholder. */
+function centredText(
+  w: number,
+  h: number,
+  style: FieldStyle,
+  text: string,
+  textWidth: number,
+  baselineY: number,
+  fontRes: string,
+): string {
+  return (
     `q 0 0 ${num2(w)} ${num2(h)} re W n ` +
-    `BT /${fontRes} ${num2(size)} Tf ${pdfColor(style.color)} rg ` +
-    `${num2(x)} ${num2(y)} Td (${escPdf(caption)}) Tj ET Q`;
-  return `${box(w, h, style)}\n${text}`;
+    `BT /${fontRes} ${num2(style.fontSize)} Tf ${pdfColor(style.color)} rg ` +
+    `${num2((w - textWidth) / 2)} ${num2(baselineY)} Td (${escPdf(text)}) Tj ET Q`
+  );
+}
+
+/**
+ * An EMPTY signature field: the box, a signing rule across the lower third, and an optional hint centred
+ * just above it. This is the placeholder look - once someone actually signs, the signing tool replaces
+ * this appearance with its own.
+ */
+export function signatureFace(
+  w: number,
+  h: number,
+  style: FieldStyle,
+  label: string,
+  labelWidth: number,
+  fontRes: string,
+): string {
+  const ruleY = h * 0.3;
+  const inset = w * 0.08;
+  const stroke = style.border ?? style.color;
+  const rule =
+    `${pdfColor(stroke)} RG ${num2(Math.max(0.5, style.borderWidth * 0.75))} w ` +
+    `${num2(inset)} ${num2(ruleY)} m ${num2(w - inset)} ${num2(ruleY)} l S`;
+  const hint = label ? centredText(w, h, style, label, labelWidth, ruleY + 6, fontRes) : "";
+  return `${box(w, h, style)}\n${rule}\n${hint}`;
 }

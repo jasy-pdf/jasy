@@ -8,8 +8,13 @@ import type { Color } from "../common/color.ts";
  * A discriminated union, one `kind` per PDF field family (/Tx, /Btn, /Ch, /Sig). Step 1 implements
  * `text`; the union grows a member per family as the field types land.
  */
-export type FormFieldSpec = TextFieldSpec | CheckboxSpec | RadioSpec | ChoiceSpec | PushButtonSpec;
-// Growing: | SignatureSpec
+export type FormFieldSpec =
+  | TextFieldSpec
+  | CheckboxSpec
+  | RadioSpec
+  | ChoiceSpec
+  | PushButtonSpec
+  | SignatureSpec;
 
 /**
  * A variable text field (/Tx). The PDF variants live in field flags; here they are typed props, so you
@@ -129,6 +134,23 @@ export interface PushButtonSpec {
   /** A tooltip / accessible name (/TU). */
   tooltip?: string;
   /** Draw it but do not let it be clicked. */
+  readOnly?: boolean;
+}
+
+/**
+ * A signature field (/Sig) - a PLACEHOLDER where a signature can later be applied. jasy creates the
+ * field and its empty appearance; it does not sign (real signing needs a certificate and a byte-range
+ * digest, a separate feature). An unsigned field has no /V; a signer fills that in later.
+ */
+export interface SignatureSpec {
+  kind: "signature";
+  /** The field name (/T). */
+  name: string;
+  /** A hint drawn inside the empty box, e.g. "Signature" or the signer's role. */
+  label?: string;
+  /** A tooltip / accessible name (/TU). */
+  tooltip?: string;
+  /** Draw it but do not let it be signed. */
   readOnly?: boolean;
 }
 

@@ -4,6 +4,7 @@ import { CheckboxElement } from "../elements/forms/checkbox-element.ts";
 import { RadioElement } from "../elements/forms/radio-element.ts";
 import { ChoiceElement } from "../elements/forms/choice-element.ts";
 import { PushButtonElement } from "../elements/forms/push-button-element.ts";
+import { SignatureFieldElement } from "../elements/forms/signature-element.ts";
 import type { ButtonAction, ChoiceOption } from "../forms/field.ts";
 import { ColorInput, toColor } from "./color.ts";
 import { Column, Row } from "./layout.ts";
@@ -357,5 +358,49 @@ export function PushButton(opts: PushButtonOptions): PushButtonElement {
     border: opts.border !== undefined ? toColor(opts.border) : undefined,
     background: opts.background !== undefined ? toColor(opts.background) : undefined,
     borderWidth: opts.borderWidth,
+  });
+}
+
+/** Options for a `SignatureField`. */
+export interface SignatureFieldOptions {
+  /** The field name - unique in the document. */
+  name: string;
+  /** A hint drawn inside the empty box, e.g. "Signature" or "Approved by". */
+  label?: string;
+  /** Tooltip / accessible name shown on hover. */
+  tooltip?: string;
+  /** Draw it but do not let it be signed. */
+  readOnly?: boolean;
+  /** Width in points; omit to fill the offered width. */
+  width?: number;
+  /** Height in points (default 48). */
+  height?: number;
+  /** Hint font size (default 9). */
+  fontSize?: number;
+  /** Hint colour. */
+  color?: ColorInput;
+  /** Box border + signing-rule colour. */
+  border?: ColorInput;
+  /** Box background fill. */
+  background?: ColorInput;
+  /** Border thickness in points. */
+  borderWidth?: number;
+}
+
+/**
+ * A signature field (AcroForm /Sig) - a placeholder someone can sign later in a PDF tool. jasy creates
+ * the field and draws its empty "sign here" box; it does not apply signatures itself (real signing needs
+ * a certificate and a byte-range digest).
+ *
+ * ```ts
+ * SignatureField({ name: "approver", label: "Signature", width: 240 })
+ * ```
+ */
+export function SignatureField(opts: SignatureFieldOptions): SignatureFieldElement {
+  return new SignatureFieldElement({
+    ...opts,
+    color: opts.color !== undefined ? toColor(opts.color) : undefined,
+    border: opts.border !== undefined ? toColor(opts.border) : undefined,
+    background: opts.background !== undefined ? toColor(opts.background) : undefined,
   });
 }
