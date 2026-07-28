@@ -123,7 +123,7 @@ describe("acroform reader - fields as a caller thinks of them", () => {
   it("reads a choice field's options", () => {
     const country = readAcroForm(load("pdflib-form"))!.fields.find((f) => f.name === "country");
     expect(country?.type).toBe("Ch");
-    expect(country?.options?.map((o) => o.value)).toEqual(["Germany", "France"]);
+    expect(country?.options?.map((o) => o.value)).toEqual(["Germany", "France", "Spain"]);
     expect(country?.value).toBe("France");
   });
 

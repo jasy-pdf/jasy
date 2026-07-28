@@ -41,6 +41,10 @@ export class PdfDocument {
    *  a caller can report it - a silently repaired file is exactly the kind of guess we avoid. */
   recovered = false;
   trailer: PdfDict = { kind: "dict", map: new Map() };
+  /** Whether this file indexes itself with an xref STREAM rather than a classic table. An incremental
+   *  update has to follow suit: mixing the two leaves readers that understand only one kind unable to
+   *  walk the chain back. */
+  usesXrefStream = false;
 
   private constructor(readonly bytes: Uint8Array) {}
 
@@ -105,6 +109,7 @@ export class PdfDocument {
     const obj = lx.parse();
     if (obj === undefined || !isStream(obj)) return undefined;
     if (nameOf(get(obj, "Type")) !== "XRef") return undefined;
+    this.usesXrefStream = true;
     this.readXrefStream(obj);
     return obj.dict;
   }

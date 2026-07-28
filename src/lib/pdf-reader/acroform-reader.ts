@@ -1,5 +1,5 @@
 import type { PdfDocument } from "./document.ts";
-import { get, isDict, nameOf, numberOf, textOf, type PdfObject } from "./objects.ts";
+import { get, isDict, isRef, nameOf, numberOf, textOf, type PdfObject } from "./objects.ts";
 
 /**
  * Reads an existing document's `/AcroForm` into a flat list of fields.
@@ -30,12 +30,23 @@ export interface ReadField {
   flags: number;
   /** The selectable options of a choice field, as `[export, label]`. */
   options?: Array<{ value: string; label: string }>;
-  /** For a check box or radio group: the export names its widgets can take, besides `Off`. */
+  /** For a check box or radio group: every export name its widgets can take, besides `Off`. */
   onValues?: string[];
-  /** The object numbers of the widget annotations that display this field. */
-  widgets: number[];
+  /** The object number of the FIELD dictionary - where `/V` lives, and what an update rewrites. */
+  objNum?: number;
+  /** The widgets that display this field. A radio group has one per button, and each knows only its
+   *  OWN export name, which is what its `/AS` has to be set to. */
+  widgets: ReadWidget[];
   /** True when no widget carries an appearance stream - filling it means generating one. */
   needsAppearance: boolean;
+}
+
+/** One widget annotation belonging to a field. */
+export interface ReadWidget {
+  num?: number;
+  /** The export names this particular widget can show (its `/AP /N` keys, minus `Off`). */
+  onValues: string[];
+  hasAppearance: boolean;
 }
 
 /** What a document says about its form as a whole. */
@@ -149,18 +160,16 @@ function walk(
 
   // The widgets: either the kids, or this very object when field and widget are merged.
   const widgetRefs = kids.length > 0 ? kids : [ref];
-  const widgetNums = widgetRefs
-    .map((w) =>
-      typeof w === "object" && w !== null && !Array.isArray(w) && w.kind === "ref"
-        ? w.num
-        : undefined,
-    )
-    .filter((n): n is number => n !== undefined);
   const widgets = widgetRefs.map((w) => doc.resolve(w));
+  const readWidgets: ReadWidget[] = widgetRefs.map((w, i) => ({
+    num: isRef(w) ? w.num : undefined,
+    onValues: type === "Btn" ? readOnValues(doc, widgets[i]) : [],
+    hasAppearance: get(widgets[i], "AP") !== undefined,
+  }));
 
   let { value, values } = readValue(doc, get(node, "V"));
   const onValues =
-    type === "Btn" ? [...new Set(widgets.flatMap((w) => readOnValues(doc, w)))] : undefined;
+    type === "Btn" ? [...new Set(readWidgets.flatMap((w) => w.onValues))] : undefined;
 
   // A button's value is a NAME by spec (`/Yes`), and that is what its `/AP` state keys are. Producers
   // disagree: PDFKit writes the string `(Yes)`, react-pdf the string `(/Yes)`. All three mean the same
@@ -176,9 +185,10 @@ function walk(
     flags,
     options: readOptions(doc, doc.lookup(node, "Opt")),
     onValues: onValues && onValues.length > 0 ? onValues : undefined,
-    widgets: widgetNums,
+    objNum: isRef(ref) ? ref.num : undefined,
+    widgets: readWidgets,
     // Only meaningful when we know where the widgets are; a field whose widgets all lack /AP has to
     // have one generated before its value can be seen.
-    needsAppearance: widgets.every((w) => get(w, "AP") === undefined),
+    needsAppearance: readWidgets.every((w) => !w.hasAppearance),
   });
 }
