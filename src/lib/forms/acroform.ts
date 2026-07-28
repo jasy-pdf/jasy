@@ -9,6 +9,9 @@ const FF_MULTILINE = 1 << 12; // bit 13 (text)
 const FF_PASSWORD = 1 << 13; // bit 14 (text)
 const FF_NO_TOGGLE_OFF = 1 << 14; // bit 15 (button): clicking the selected radio does not clear it
 const FF_RADIO = 1 << 15; // bit 16 (button): the group's kids are mutually exclusive
+const FF_COMBO = 1 << 17; // bit 18 (choice): a dropdown, not a list box
+const FF_EDIT = 1 << 18; // bit 19 (choice): a combo whose value may be typed, not only picked
+const FF_MULTI_SELECT = 1 << 21; // bit 22 (choice): a list box that allows several selections
 
 /** The `/MK` (appearance characteristics) + `/BS` (border style) shared by every widget: the box border
  *  colour + fill + width. Empty when the field has neither a border nor a background. */
@@ -66,11 +69,44 @@ function buildCheckboxWidget(node: FormFieldNode, om: PDFObjectManager): string 
   return `<< ${parts.join(" ")}${boxChrome(node)} >>`;
 }
 
-/**
- * Collects the document's form fields as pages render, then emits the catalog `/AcroForm` dictionary at
- * finalize. Mirrors `OutlineBuilder` / `DestRegistry`: a no-op returning "" when no field was placed, so
- * a document without a form stays byte-identical.
- */
+/** A choice field (/Ch): a dropdown (combo) or list box. Relies on /NeedAppearances (like text) so the
+ *  viewer draws the selected value; Step 4 bakes its /AP alongside the text fields. */
+function buildChoiceWidget(node: FormFieldNode, daFont: string): string {
+  const f = node.field;
+  if (f.kind !== "choice") throw new Error("buildChoiceWidget: not a choice");
+  // /Opt: each entry is [ (export) (display) ], so a label can differ from the stored value.
+  const opt = f.options
+    .map((o) => `[(${escPdf(o.value)}) (${escPdf(o.label ?? o.value)})]`)
+    .join(" ");
+  const parts = [
+    `/Type /Annot /Subtype /Widget /FT /Ch`,
+    `/T (${escPdf(f.name)})`,
+    `/Opt [${opt}]`,
+  ];
+  if (f.tooltip !== undefined) parts.push(`/TU (${escPdf(f.tooltip)})`);
+
+  let flags = 0;
+  if (f.readOnly) flags |= FF_READ_ONLY;
+  if (f.combo) flags |= FF_COMBO | (f.editable ? FF_EDIT : 0);
+  else if (f.multiSelect) flags |= FF_MULTI_SELECT;
+  if (flags) parts.push(`/Ff ${flags}`);
+
+  const indexOf = (v: string) => f.options.findIndex((o) => o.value === v);
+  if (f.multiSelect && f.values && f.values.length) {
+    parts.push(`/V [${f.values.map((v) => `(${escPdf(v)})`).join(" ")}]`);
+    const idx = f.values.map(indexOf).filter((i) => i >= 0);
+    if (idx.length) parts.push(`/I [${idx.join(" ")}]`);
+  } else if (f.value !== undefined) {
+    parts.push(`/V (${escPdf(f.value)})`);
+    const i = indexOf(f.value);
+    if (i >= 0) parts.push(`/I [${i}]`);
+  }
+
+  parts.push(`/Rect ${rectOf(node)} /F 4`);
+  parts.push(`/DA (/${daFont} ${num2(node.style.fontSize)} Tf ${pdfColor(node.style.color)} rg)`);
+  return `<< ${parts.join(" ")}${boxChrome(node)} >>`;
+}
+
 // One radio GROUP, collected across its individual buttons. `parentNum` is the shared /Btn field object
 // (reserved up front, filled at finalize with the /Kids + the winning /V).
 interface RadioGroup {
@@ -80,6 +116,11 @@ interface RadioGroup {
   readOnly: boolean;
 }
 
+/**
+ * Collects the document's form fields as pages render, then emits the catalog `/AcroForm` dictionary at
+ * finalize. Mirrors `OutlineBuilder` / `DestRegistry`: a no-op returning "" when no field was placed, so
+ * a document without a form stays byte-identical.
+ */
 export class AcroFormCollector {
   private fieldRefs: number[] = [];
   private radioGroups = new Map<string, RadioGroup>();
@@ -98,6 +139,9 @@ export class AcroFormCollector {
     let dict: string;
     if (node.field.kind === "checkbox") {
       dict = buildCheckboxWidget(node, om);
+    } else if (node.field.kind === "choice") {
+      dict = buildChoiceWidget(node, "Helv");
+      this.needAppearances = true; // the viewer draws the selected value (baked in Step 4)
     } else {
       dict = buildTextWidget(node, "Helv");
       this.needAppearances = true; // this text field needs the viewer to render its value

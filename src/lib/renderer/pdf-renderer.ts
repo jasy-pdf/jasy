@@ -43,6 +43,7 @@ import { KeepTogetherRenderer } from "./keep-together-renderer.ts";
 import { TextFieldElement } from "../elements/forms/text-field-element.ts";
 import { CheckboxElement } from "../elements/forms/checkbox-element.ts";
 import { RadioElement } from "../elements/forms/radio-element.ts";
+import { ChoiceElement } from "../elements/forms/choice-element.ts";
 import { FormFieldRenderer } from "./form-field-renderer.ts";
 import { PageBuilderElement } from "../elements/layout/page-builder-element.ts";
 import { PageBuilderRenderer } from "./page-builder-renderer.ts";
@@ -72,6 +73,7 @@ export class PDFRenderer {
     RendererRegistry.register(TextFieldElement, FormFieldRenderer.render);
     RendererRegistry.register(CheckboxElement, FormFieldRenderer.render);
     RendererRegistry.register(RadioElement, FormFieldRenderer.render);
+    RendererRegistry.register(ChoiceElement, FormFieldRenderer.render);
     RendererRegistry.register(DefaultTextStyleElement, DefaultTextStyleRenderer.render);
     RendererRegistry.register(ImageElement, ImageRenderer.render);
     RendererRegistry.register(LineElement, LineRenderer.render);

@@ -2,9 +2,16 @@ import { PDFElement } from "../elements/pdf-element.ts";
 import { TextFieldElement } from "../elements/forms/text-field-element.ts";
 import { CheckboxElement } from "../elements/forms/checkbox-element.ts";
 import { RadioElement } from "../elements/forms/radio-element.ts";
+import { ChoiceElement } from "../elements/forms/choice-element.ts";
+import type { ChoiceOption } from "../forms/field.ts";
 import { ColorInput, toColor } from "./color.ts";
 import { Column, Row } from "./layout.ts";
 import { Text } from "./text.ts";
+
+/** A choice option: a plain string (value = label) or `{ value, label }`. */
+export type ChoiceOptionInput = string | { value: string; label?: string };
+const toOptions = (opts: ChoiceOptionInput[]): ChoiceOption[] =>
+  opts.map((o) => (typeof o === "string" ? { value: o } : o));
 
 /** Options for a `TextField` - an interactive text input in the generated PDF. */
 export interface TextFieldOptions {
@@ -185,4 +192,88 @@ export function RadioGroup(opts: RadioGroupOptions, options: RadioChoice[]): PDF
     ]),
   );
   return Column({ gap: opts.gap ?? 8 }, rows);
+}
+
+/** Style + geometry shared by `Dropdown` and `ListBox`. */
+interface ChoiceStyleOptions {
+  tooltip?: string;
+  readOnly?: boolean;
+  width?: number;
+  height?: number;
+  fontSize?: number;
+  color?: ColorInput;
+  border?: ColorInput;
+  background?: ColorInput;
+  borderWidth?: number;
+}
+
+const choiceStyle = (o: ChoiceStyleOptions) => ({
+  tooltip: o.tooltip,
+  readOnly: o.readOnly,
+  width: o.width,
+  height: o.height,
+  fontSize: o.fontSize,
+  color: o.color !== undefined ? toColor(o.color) : undefined,
+  border: o.border !== undefined ? toColor(o.border) : undefined,
+  background: o.background !== undefined ? toColor(o.background) : undefined,
+  borderWidth: o.borderWidth,
+});
+
+/** Options for a `Dropdown` (combo box). */
+export interface DropdownOptions extends ChoiceStyleOptions {
+  /** The field name. */
+  name: string;
+  /** The selected value. */
+  value?: string;
+  /** Let the reader type a value that is not in the list. */
+  editable?: boolean;
+}
+
+/**
+ * A dropdown / combo box (AcroForm /Ch). Options are plain strings or `{ value, label }`.
+ *
+ * ```ts
+ * Dropdown({ name: "country", value: "de" }, [{ value: "de", label: "Germany" }, "France"])
+ * ```
+ */
+export function Dropdown(opts: DropdownOptions, options: ChoiceOptionInput[]): ChoiceElement {
+  return new ChoiceElement({
+    name: opts.name,
+    options: toOptions(options),
+    combo: true,
+    editable: opts.editable,
+    value: opts.value,
+    ...choiceStyle(opts),
+  });
+}
+
+/** `Select` is an alias for `Dropdown`. */
+export const Select = Dropdown;
+
+/** Options for a `ListBox`. */
+export interface ListBoxOptions extends ChoiceStyleOptions {
+  /** The field name. */
+  name: string;
+  /** The selected value (single-select). */
+  value?: string;
+  /** The selected values (when `multiSelect`). */
+  values?: string[];
+  /** Allow more than one selection. */
+  multiSelect?: boolean;
+}
+
+/**
+ * A scrollable list box (AcroForm /Ch). Give it a `height` to show more rows. Set `multiSelect` for
+ * several selections at once.
+ */
+export function ListBox(opts: ListBoxOptions, options: ChoiceOptionInput[]): ChoiceElement {
+  return new ChoiceElement({
+    name: opts.name,
+    options: toOptions(options),
+    combo: false,
+    multiSelect: opts.multiSelect,
+    value: opts.value,
+    values: opts.values,
+    ...choiceStyle(opts),
+  });
 }

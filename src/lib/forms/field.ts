@@ -8,8 +8,8 @@ import type { Color } from "../common/color.ts";
  * A discriminated union, one `kind` per PDF field family (/Tx, /Btn, /Ch, /Sig). Step 1 implements
  * `text`; the union grows a member per family as the field types land.
  */
-export type FormFieldSpec = TextFieldSpec | CheckboxSpec | RadioSpec;
-// Growing: | ChoiceSpec | PushButtonSpec | SignatureSpec
+export type FormFieldSpec = TextFieldSpec | CheckboxSpec | RadioSpec | ChoiceSpec;
+// Growing: | PushButtonSpec | SignatureSpec
 
 /**
  * A variable text field (/Tx). The PDF variants live in field flags; here they are typed props, so you
@@ -67,6 +67,39 @@ export interface RadioSpec {
   /** A tooltip / accessible name. */
   tooltip?: string;
   /** Show but do not allow changing the group. */
+  readOnly?: boolean;
+}
+
+/** One entry of a choice field. `label` is what the reader sees; `value` is what gets stored. */
+export interface ChoiceOption {
+  value: string;
+  label?: string;
+}
+
+/**
+ * A choice field (/Ch): a dropdown (combo box) or a list box. `combo` picks which. The value(s) are
+ * export strings from `options`. A combo may be `editable` (the reader can type a value not in the list);
+ * a list box may allow `multiSelect`.
+ */
+export interface ChoiceSpec {
+  kind: "choice";
+  /** The field name (/T). */
+  name: string;
+  /** The selectable options. */
+  options: ChoiceOption[];
+  /** `true` = dropdown (combo box), `false` = list box. */
+  combo: boolean;
+  /** Combo only: let the reader type a value that is not in the list. */
+  editable?: boolean;
+  /** List box only: allow more than one selection. */
+  multiSelect?: boolean;
+  /** The selected value (single-select). */
+  value?: string;
+  /** The selected values (a `multiSelect` list box). */
+  values?: string[];
+  /** Tooltip / accessible name. */
+  tooltip?: string;
+  /** Show but do not allow changing. */
   readOnly?: boolean;
 }
 
