@@ -160,4 +160,32 @@ describe("acroform reader - fields as a caller thinks of them", () => {
     expect(junk.catalog).toBeUndefined();
     expect(readAcroForm(junk)).toBeUndefined();
   });
+
+  describe("recovering a file whose index is unusable", () => {
+    /** Break `startxref` so the chain cannot be followed and the scan-rebuild has to take over. */
+    const breakIndex = (name: string): Uint8Array => {
+      const bytes = new Uint8Array(readFileSync(`tests/fixtures/forms/${name}.pdf`));
+      const text = new TextDecoder("latin1").decode(bytes);
+      const at = text.lastIndexOf("startxref");
+      // Point it far past the end of the file: present, parseable, and useless.
+      for (let i = 0; i < "startxref".length; i++) bytes[at + i] = 0x25; // '%' - a comment
+      return bytes;
+    };
+
+    for (const name of ["pdflib-form", "gov-w9"]) {
+      it(`finds the catalog in ${name}.pdf even though its objects live in object streams`, () => {
+        // A scan only sees top-level `N G obj` headers, and in these two files the catalog is INSIDE an
+        // /ObjStm. Without unpacking those during recovery the rebuild finds a few streams and no
+        // catalog, and the whole document reads as empty.
+        const doc = PdfDocument.load(breakIndex(name));
+        expect(doc.recovered).toBe(true); // the index really was rejected
+        expect(doc.catalog).toBeDefined();
+        expect(readAcroForm(doc)!.fields.length).toBeGreaterThan(0);
+      });
+    }
+
+    it("reports the rebuild rather than hiding it", () => {
+      expect(readAcroForm(PdfDocument.load(breakIndex("pdflib-form")))!.recovered).toBe(true);
+    });
+  });
 });

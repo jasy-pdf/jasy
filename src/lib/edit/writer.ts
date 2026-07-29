@@ -82,6 +82,8 @@ export interface NewStream {
 export class IncrementalWriter {
   /** Object number -> its new body, in PDF syntax. */
   private readonly changed = new Map<number, string | NewStream>();
+  /** Numbers this writer invented, as opposed to ones it replaces - they have no recorded generation. */
+  private readonly added = new Set<number>();
   private nextNum: number;
 
   constructor(private readonly doc: PdfDocument) {
@@ -97,8 +99,14 @@ export class IncrementalWriter {
   /** Append a new object and return its number. */
   add(body: string | NewStream): number {
     const n = this.nextNum++;
+    this.added.add(n);
     this.changed.set(n, body);
     return n;
+  }
+
+  /** The generation to write for an object: the file's own for one we replace, 0 for one we add. */
+  private generationOf(objNum: number): number {
+    return this.added.has(objNum) ? 0 : this.doc.generationOf(objNum);
   }
 
   get hasChanges(): boolean {
@@ -124,7 +132,9 @@ export class IncrementalWriter {
     const offsets = new Map<number, number>();
     for (const [objNum, body] of [...this.changed].sort((a, b) => a[0] - b[0])) {
       offsets.set(objNum, offset);
-      const head = enc(`${objNum} 0 obj\n`);
+      // The generation has to match what the file records, or the new entry describes a different
+      // object than the one being replaced. Objects we ADD are new numbers, and those start at 0.
+      const head = enc(`${objNum} ${this.generationOf(objNum)} obj\n`);
       chunks.push(head);
       offset += head.length;
       if (typeof body === "string") {
@@ -195,8 +205,17 @@ export class IncrementalWriter {
       const rows = new Uint8Array(nums.length * 7);
       nums.forEach((n, i) => {
         const off = all.get(n)!;
+        const g = n === selfNum ? 0 : this.generationOf(n);
         rows.set(
-          [1, (off >>> 24) & 0xff, (off >>> 16) & 0xff, (off >>> 8) & 0xff, off & 0xff, 0, 0],
+          [
+            1,
+            (off >>> 24) & 0xff,
+            (off >>> 16) & 0xff,
+            (off >>> 8) & 0xff,
+            off & 0xff,
+            (g >>> 8) & 0xff,
+            g & 0xff,
+          ],
           i * 7,
         );
       });
@@ -224,7 +243,10 @@ export class IncrementalWriter {
     let table = "xref\n";
     for (const [start, group] of runs) {
       table += `${start} ${group.length}\n`;
-      for (const n of group) table += `${String(all.get(n)).padStart(10, "0")} 00000 n \n`;
+      for (const n of group) {
+        const g = String(this.generationOf(n)).padStart(5, "0");
+        table += `${String(all.get(n)).padStart(10, "0")} ${g} n \n`;
+      }
     }
     const trailer = [
       `/Size ${size}`,

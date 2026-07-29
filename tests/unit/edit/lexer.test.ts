@@ -70,6 +70,22 @@ describe("lexer - strings", () => {
     expect(textOf(parse("(one\\\ntwo)"))).toBe("onetwo"); // a backslash-newline joins the lines
   });
 
+  it("stops at a backslash with nothing after it instead of inventing a byte", () => {
+    // A truncated file ends mid-escape. Reading past the end yielded `undefined`, which was pushed into
+    // the byte array and became a stray NUL in the value.
+    const s = parse("(abc\\");
+    expect(isString(s) && Array.from(s.bytes)).toEqual([0x61, 0x62, 0x63]);
+  });
+
+  it("keeps a byte in 0x80-0x9F as itself rather than remapping it", () => {
+    // TextDecoder("latin1") is a WHATWG alias for windows-1252, which turns byte 0x95 into a bullet
+    // (U+2022). A reader that may write the string back has to keep the byte it read.
+    const s = parse(new Uint8Array([0x28, 0x41, 0x95, 0x29])); // ( A 0x95 )
+    expect(textOf(s)).toHaveLength(2);
+    expect(textOf(s)?.charCodeAt(0)).toBe(0x41);
+    expect(textOf(s)?.charCodeAt(1)).toBe(0x95); // NOT 0x2022, which windows-1252 would give
+  });
+
   it("reads hex strings, including odd digits and embedded whitespace", () => {
     const a = parse("<48656C6C6F>");
     expect(isString(a) && new TextDecoder("latin1").decode(a.bytes)).toBe("Hello");
@@ -168,6 +184,10 @@ describe("lexer - against real files from five different producers", () => {
     return out;
   };
 
+  /** How many `N G obj` headers the file actually has - the number the parser has to match. */
+  const headerCount = (data: Uint8Array): number =>
+    [...new TextDecoder("latin1").decode(data).matchAll(/(\d+) (\d+) obj/g)].length;
+
   const producers = [
     "jasy-form",
     "pdflib-form",
@@ -179,10 +199,12 @@ describe("lexer - against real files from five different producers", () => {
 
   for (const name of producers) {
     it(`parses every top-level object in ${name}.pdf`, () => {
-      const objects = topLevelObjects(fixture(name));
+      const data = fixture(name);
+      const objects = topLevelObjects(data);
       expect(objects.length).toBeGreaterThan(5);
-      // Every one came back as something we model - no silent `undefined` holes.
-      expect(objects.every((o) => o !== undefined)).toBe(true);
+      // EVERY header produced an object. Asserting `!== undefined` on the collected array would prove
+      // nothing - the helper only collects what parsed; the count is what catches a silent hole.
+      expect(objects.length).toBe(headerCount(data));
     });
   }
 

@@ -165,27 +165,28 @@ shared state.
 
 ## Element & renderer inventory
 
-| Element                 | File                                         | Renderer               | Notes                                                                                |
-| ----------------------- | -------------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------ |
-| `PDFDocumentElement`    | `elements/pdf-document-element.ts`           | `PDFDocumentRenderer`  | root, holds pages                                                                    |
-| `PageElement`           | `elements/page-element.ts`                   | `PageRenderer`         | per-page `config` (size/orientation/margin)                                          |
-| `ContainerElement`      | `elements/container-element.ts`              | `ContainerRenderer`    | sized box, flex column of children                                                   |
-| `TextElement`           | `elements/text-element.ts`                   | `TextRenderer`         | string or `TextSegment[]` (mixed font/size/color), alignment, word-wrap              |
-| `PaddingElement`        | `elements/layout/padding-element.ts`         | `PaddingRenderer`      | margin `[top,right,bottom,left]`, sizes to child                                     |
-| `ExpandedElement`       | `elements/layout/expanded-element.ts`        | `ExpandedRenderer`     | flex child, fills remaining height                                                   |
-| `SizedContainerElement` | `elements/layout/sized-container-element.ts` | —                      |                                                                                      |
-| `ImageElement`          | `elements/image-element.ts`                  | `ImageRenderer`        | via `jimp`; `BoxFit`, grayscale; `CustomLocalImage`                                  |
-| `LineElement`           | `elements/line-element.ts`                   | `LineRenderer`         | stroke                                                                               |
-| `RectangleElement`      | `elements/rectangle-element.ts`              | `RectangleRenderer`    | fill + stroke                                                                        |
-| `Color`                 | `common/color.ts`                            | —                      | RGB → PDF color string                                                               |
-| `LinkElement`           | `elements/layout/link-element.ts`            | `LinkRenderer`         | `href` (URL) or `dest` (an `Anchor`) → a /Link annotation                            |
-| `AnchorElement`         | `elements/layout/anchor-element.ts`          | `AnchorRenderer`       | named jump target → catalog /Names /Dests                                            |
-| `BookmarkElement`       | `elements/layout/bookmark-element.ts`        | `BookmarkRenderer`     | outline entry, nested by `level` → /Outlines                                         |
-| `RotatedElement`        | `elements/layout/rotated-element.ts`         | `RotatedRenderer`      | paint-only spin at any angle (stamps)                                                |
-| `RotatedBoxElement`     | `elements/layout/rotated-box-element.ts`     | `RotatedRenderer`      | layout-aware quarter-turns (vertical labels)                                         |
-| `PageBuilderElement`    | `elements/layout/page-builder-element.ts`    | `PageBuilderRenderer`  | builds from `PageInfo` (pageNumber/pageCount/pageSize)                               |
-| `PageBreakElement`      | `elements/layout/page-break-element.ts`      | `PageBreakRenderer`    | forced page break; zero-size, packer cuts at it (`forceBreak` bubbles up)            |
-| `KeepTogetherElement`   | `elements/layout/keep-together-element.ts`   | `KeepTogetherRenderer` | transparent wrapper; vetoes a page-split (break-inside: avoid), degrades if > 1 page |
+| Element                 | File                                         | Renderer               | Notes                                                                                     |
+| ----------------------- | -------------------------------------------- | ---------------------- | ----------------------------------------------------------------------------------------- |
+| `PDFDocumentElement`    | `elements/pdf-document-element.ts`           | `PDFDocumentRenderer`  | root, holds pages                                                                         |
+| `PageElement`           | `elements/page-element.ts`                   | `PageRenderer`         | per-page `config` (size/orientation/margin)                                               |
+| `ContainerElement`      | `elements/container-element.ts`              | `ContainerRenderer`    | sized box, flex column of children                                                        |
+| `TextElement`           | `elements/text-element.ts`                   | `TextRenderer`         | string or `TextSegment[]` (mixed font/size/color), alignment, word-wrap                   |
+| `PaddingElement`        | `elements/layout/padding-element.ts`         | `PaddingRenderer`      | margin `[top,right,bottom,left]`, sizes to child                                          |
+| `ExpandedElement`       | `elements/layout/expanded-element.ts`        | `ExpandedRenderer`     | flex child, fills remaining height                                                        |
+| `SizedContainerElement` | `elements/layout/sized-container-element.ts` | —                      |                                                                                           |
+| `ImageElement`          | `elements/image-element.ts`                  | `ImageRenderer`        | via `jimp`; `BoxFit`, grayscale; `CustomLocalImage`                                       |
+| `LineElement`           | `elements/line-element.ts`                   | `LineRenderer`         | stroke                                                                                    |
+| `RectangleElement`      | `elements/rectangle-element.ts`              | `RectangleRenderer`    | fill + stroke                                                                             |
+| `Color`                 | `common/color.ts`                            | —                      | RGB → PDF color string                                                                    |
+| `LinkElement`           | `elements/layout/link-element.ts`            | `LinkRenderer`         | `href` (URL) or `dest` (an `Anchor`) → a /Link annotation                                 |
+| `AnchorElement`         | `elements/layout/anchor-element.ts`          | `AnchorRenderer`       | named jump target → catalog /Names /Dests                                                 |
+| `BookmarkElement`       | `elements/layout/bookmark-element.ts`        | `BookmarkRenderer`     | outline entry, nested by `level` → /Outlines                                              |
+| `RotatedElement`        | `elements/layout/rotated-element.ts`         | `RotatedRenderer`      | paint-only spin at any angle (stamps)                                                     |
+| `RotatedBoxElement`     | `elements/layout/rotated-box-element.ts`     | `RotatedRenderer`      | layout-aware quarter-turns (vertical labels)                                              |
+| `PageBuilderElement`    | `elements/layout/page-builder-element.ts`    | `PageBuilderRenderer`  | builds from `PageInfo` (pageNumber/pageCount/pageSize)                                    |
+| `PageBreakElement`      | `elements/layout/page-break-element.ts`      | `PageBreakRenderer`    | forced page break; zero-size, packer cuts at it (`forceBreak` bubbles up)                 |
+| `KeepTogetherElement`   | `elements/layout/keep-together-element.ts`   | `KeepTogetherRenderer` | transparent wrapper; vetoes a page-split (break-inside: avoid), degrades if > 1 page      |
+| form fields (6 classes) | `elements/forms/*.ts`                        | `FormFieldRenderer`    | AcroForm widgets; reserve a rect, emit a widget annotation. Shared spec: `forms/field.ts` |
 
 Every renderer's `render()` returns `Promise<IRNode[]>` (since roadmap Phase 1). Adding an element =
 new element + renderer that returns IR + (if it draws something new) a primitive in `ir/display-list.ts`
@@ -409,6 +410,29 @@ lineHeight, align, bold, italic }, …)` sets doc-wide text defaults; `DefaultTe
   too. Standard-14: 590 → 124 ms. Custom TTF: 778 → 119 ms (react-pdf 4.5.1: 181 ms on the same document).
   Output byte-identical throughout, veraPDF still PDF/A-3b compliant. Harness: `node claude-data/bench.mjs`.
 
+- ✅ **AcroForm — create AND fill** (2026-07, branch `feat/forms` then `feat/forms-edit`, NOT yet released).
+  **Creating**: `TextField`, `Checkbox`, `Radio`/`RadioGroup`, `Dropdown`/`Select`, `ListBox`, `PushButton`,
+  `SignatureField` (`api/forms.ts`) — react-pdf parity plus Signature. A field is a layout element reserving a
+  rect and emitting a **widget annotation** through the SAME side-channel path as `Link`/`Anchor`/`Bookmark`;
+  the shared spine is `FormFieldSpec` (`forms/field.ts`), appearances are baked in `forms/appearance.ts`
+  (opt out with `renderToBytes(doc, { fieldAppearances: false })`). Field text is deliberately UNKERNED -
+  viewers do not kern field text, and a baked appearance must match what the viewer redraws.
+  **Filling an existing PDF**: `@jasy/pdf/edit` (own entry point, `src/lib/edit/`, lazily loaded so a
+  generate-only bundle never ships the parser). `readAcroForm(doc)` → fields; `fillForm(bytes, { name: "Ada",
+agree: true })` → declarative values, not object mutation. Save is an **incremental update**: original bytes
+  verbatim, changed objects appended, new xref chained by `/Prev` — giving the checkable invariant **the
+  original file is a literal PREFIX of the output**. The form is a CONTRACT: unknown name, wrong type for the
+  kind, value past `/MaxLen` (inherited like `/FT`), choice outside `/Opt`, read-only, signature, push button,
+  ENCRYPTED input — each a named error, never a silent no-op. Reader parts: `lexer.ts` (byte parser; CR/LF/CRLF
+  in a literal all mean one LF), `document.ts` (xref table AND xref stream, `/Prev` chains, object streams,
+  PNG predictor, scan-rebuild fallback), `acroform-reader.ts` (hierarchical dotted names, `/FT`+`/Ff`+`/MaxLen`
+  inheritance, field-vs-widget detection, button value normalisation). Tested against a FIVE-producer corpus
+  (`tests/fixtures/forms/`: jasy, pdf-lib ×2, PDFKit, react-pdf) plus a real IRS W-9 (XFA hybrid → warns).
+  **The bug worth remembering**: a filled field showed nothing until clicked. Cause was NOT lazy viewers -
+  producers that DRAW their fields (jasy, pdf-lib) leave a stale picture of the old value; we wrote a new `/V`
+  and kept the old drawing, a self-contradicting document. Fix: drop `/AP` for `Tx`/`Ch` on fill; a BUTTON's
+  `/AP` holds its on/off STATES and is kept, only `/AS` moves.
+
 Genuine remaining gaps / deferred:
 
 1. **Absolute positioning — Stages 1+2 built** (2026-06-21). CSS-style: `Box({ relative: true })` is a
@@ -436,7 +460,8 @@ Genuine remaining gaps / deferred:
    DONE too: `platform/browser-image.ts` decodes via OffscreenCanvas (transparency → `/SMask`), swapped for the
    jimp path by the `browser` field. Nice-to-haves left: compact-AFM (size), `addFontFromUrl()`. See todo.md.
 4. `manual-test` has hard-coded machine-specific paths.
-5. Font gaps: no TrueType kerning; only TTF / TrueType-flavoured OTF parsed (OTF/CFF, WOFF2 not yet).
+5. Font gaps: only TTF / TrueType-flavoured OTF parsed (OTF/CFF, WOFF2 not yet). (TrueType kerning is DONE -
+   `kern` table + GPOS, on by default since 2026-07-11; this line used to claim otherwise.)
    Bold/italic resolve via registered family variants with a clean fallback to `normal` (no faux styles).
    Color-emoji deferred (none blocking): COLR v1 **rotate/skew** transforms (24-31 —
    Noto doesn't use them; not built without a test font), variable-font paint variants, **sweep** gradient,
@@ -451,6 +476,26 @@ Genuine remaining gaps / deferred:
    place (measured: 152.3 × 96.8 pt where the true AABB is 155.56 × 155.56), and it emits no `/QuadPoints` at
    all. The fix (a matrix stack at the `flipY` seam → `/QuadPoints` + a correct AABB `/Rect`) would make us the
    only one who gets it right; it is a corner case, hence LOW.
+7. 🔴 **An encrypted PDF leaves every STRING in plain text** (`todo.md` ISSUE-7, **PRIORITY: HIGHEST**, found
+   2026-07-28). We encrypt **streams only** — `streamPayload()` (`pdf-object-manager.ts:310`) is the single
+   choke-point and it takes bytes of a stream. There is no counterpart for strings, so a form field's `/T`,
+   `/V` and `/TU`, every bookmark `/Title` and every link `/URI` sit in the file unencrypted. ISO 32000-1
+   §7.6.2 requires ALL strings and streams to be encrypted (exceptions: trailer `/ID`, strings inside the
+   `/Encrypt` dict, strings inside an already-encrypted stream). **Two damages**: a confidentiality leak (an
+   IBAN typed into a field is readable with a hex editor, no password), and outright breakage (a conforming
+   reader decrypts every string, so ours fails to decrypt — measured, AES error; poppler/Evince only LOOK fine
+   because the visible text comes from the appearance stream, which IS encrypted). **Not caused by forms** —
+   bookmarks/links shipped in alpha.6 and leak identically, so this is in RELEASED code. The hard part of the
+   fix is not AES: objects are assembled as finished PDF syntax (`/T (${escPdf(name)})`), so nothing knows
+   "this token is a string". Ship it with a test that scans an encrypted file for known plain-text values.
+   Until then `fillForm` REFUSES an encrypted document by name rather than corrupting it.
+8. **The test tree is not type-checked** (`todo.md` ISSUE-6, MEDIUM). `tsconfig.json` compiles only `src/**`
+   and CI runs vitest, never tsc over `tests/**`; `tsc --noEmit -p tsconfig.test.json` reports ~420 errors.
+   Dominant cause: tests import without the `.ts` extension, which `nodenext` rejects — the module then
+   resolves to `any`, so a REAL type error in a test cannot be seen. `tests/unit/edit/` is already fixed
+   (extensions added; the guards in `edit/objects.ts` widened to `PdfObject | undefined`, since they are
+   nearly always applied to a lookup that may find nothing). The rest are not, and the CLAUDE.md test
+   convention below still documents the extensionless form.
 
 ## Roadmap
 

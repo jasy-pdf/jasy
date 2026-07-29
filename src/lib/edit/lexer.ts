@@ -136,6 +136,7 @@ export class Lexer {
       const b = this.bytes[this.pos++];
       if (b === 0x5c) {
         // backslash
+        if (this.pos >= this.bytes.length) break; // truncated file: nothing follows the escape
         const e = this.bytes[this.pos++];
         const simple: Record<number, number> = { 0x6e: 10, 0x72: 13, 0x74: 9, 0x62: 8, 0x66: 12 };
         if (e in simple) out.push(simple[e]);

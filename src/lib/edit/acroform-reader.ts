@@ -9,7 +9,8 @@ import { get, isDict, isRef, nameOf, numberOf, textOf, type PdfObject } from "./
  * - **A field and its widget need not be the same object.** pdf-lib splits them (the field carries
  *   `/T`, `/FT` and `/V`; its `/Kids` are bare widget annotations); PDFKit and our own writer merge
  *   them into one. Both are legal, so the walk must cope with either.
- * - **`/FT` is inherited.** A child may state no type at all and take its parent's.
+ * - **Attributes are inherited.** `/FT`, `/Ff`, `/V` and `/MaxLen` all pass down the tree, so a child may
+ *   state none of them and still have a type, flags and a value (ISO 32000-1 table 220).
  * - **Names are hierarchical.** The name you address a field by is the `/T` values along the path,
  *   joined with dots - `address.street`, not `street`.
  * - **A field may own several widgets** (a radio group, or one field shown on several pages). It is
@@ -108,13 +109,27 @@ function readOnValues(doc: PdfDocument, widget: PdfObject | undefined): string[]
  * a plain PDF, not an error.
  */
 export function readAcroForm(doc: PdfDocument): ReadForm | undefined {
+  // In an encrypted file every string is ciphertext, so a field "name" read out of it is noise. Handing
+  // that back would be the silent guess this reader exists to avoid.
+  if (doc.isEncrypted) {
+    throw new Error(
+      "@jasy/pdf: this PDF is encrypted; reading its form needs the password, which is not supported yet",
+    );
+  }
   const acro = doc.lookup(doc.catalog, "AcroForm");
   if (acro === undefined || !isDict(acro)) return undefined;
   const roots = doc.resolve(get(acro, "Fields"));
   const fields: ReadField[] = [];
   if (Array.isArray(roots)) {
     for (const ref of roots)
-      walk(doc, ref, "", { type: undefined, flags: 0, maxLen: undefined }, fields, 0);
+      walk(
+        doc,
+        ref,
+        "",
+        { type: undefined, flags: 0, maxLen: undefined, value: undefined },
+        fields,
+        0,
+      );
   }
   return {
     fields,
@@ -124,11 +139,14 @@ export function readAcroForm(doc: PdfDocument): ReadForm | undefined {
   };
 }
 
-/** The attributes a field takes from its parent when it states none of its own. */
+/** The attributes a field takes from its parent when it states none of its own. `/FT`, `/Ff`, `/V` and
+ *  `/MaxLen` are all inheritable (ISO 32000-1 table 220), which is how a radio group can hold one value
+ *  for kids that state none. */
 interface Inherited {
   type: string | undefined;
   flags: number;
   maxLen: number | undefined;
+  value: PdfObject | undefined;
 }
 
 /**
@@ -152,6 +170,7 @@ function walk(
   const type = nameOf(doc.lookup(node, "FT")) ?? parent.type;
   const flags = numberOf(doc.lookup(node, "Ff")) ?? parent.flags;
   const maxLen = numberOf(doc.lookup(node, "MaxLen")) ?? parent.maxLen;
+  const rawValue = get(node, "V") ?? parent.value;
   const kidsRaw = doc.lookup(node, "Kids");
   const kids = Array.isArray(kidsRaw) ? kidsRaw : [];
 
@@ -162,7 +181,8 @@ function walk(
     return get(kid, "T") !== undefined || get(kid, "FT") !== undefined;
   });
   if (childFields.length > 0) {
-    for (const k of childFields) walk(doc, k, name, { type, flags, maxLen }, out, depth + 1);
+    for (const k of childFields)
+      walk(doc, k, name, { type, flags, maxLen, value: rawValue }, out, depth + 1);
     return;
   }
 
@@ -177,7 +197,7 @@ function walk(
     hasAppearance: get(widgets[i], "AP") !== undefined,
   }));
 
-  let { value, values } = readValue(doc, get(node, "V"));
+  let { value, values } = readValue(doc, rawValue);
   const onValues =
     type === "Btn" ? [...new Set(readWidgets.flatMap((w) => w.onValues))] : undefined;
 

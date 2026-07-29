@@ -189,6 +189,9 @@ export class PdfDocument {
     this.recovered = true;
     this.xref.clear();
     this.cache.clear();
+    // Unpacked object streams belong to the index we just threw away; keeping them would serve members
+    // resolved against offsets that no longer apply.
+    this.objStmCache.clear();
     const text = new TextDecoder("latin1").decode(this.bytes);
     for (const m of text.matchAll(/(?:^|[\s>])(\d+)\s+(\d+)\s+obj\b/g)) {
       const num = Number(m[1]);
@@ -200,6 +203,26 @@ export class PdfDocument {
         gen: Number(m[2]),
       });
     }
+    // A scan only finds top-level `N G obj` headers, but in a modern file most objects - the catalog
+    // included - live INSIDE an object stream. Unpack every /ObjStm we found so they can be reached at
+    // all; without this, recovering a compressed file finds a handful of streams and no catalog.
+    // A snapshot, not the live keys: the loop ADDS entries to the same map.
+    const scanned = Array.from(this.xref.keys());
+    for (const num of scanned) {
+      const stm = this.getObject(num);
+      if (stm === undefined || !isStream(stm) || nameOf(get(stm, "Type")) !== "ObjStm") continue;
+      const data = this.streamData(stm);
+      const head = new Lexer(data, 0);
+      const count = numberOf(get(stm, "N")) ?? 0;
+      for (let i = 0; i < count; i++) {
+        const on = head.parse();
+        const off = head.parse();
+        if (typeof on !== "number" || typeof off !== "number") break;
+        // A top-level definition found by the scan is the newer one and keeps precedence.
+        this.note(on, { kind: "inStream", stream: num, index: i });
+      }
+    }
+
     if (this.trailer.map.size === 0 || this.trailer.map.get("Root") === undefined) {
       const t = /trailer\s*<</g;
       let last: RegExpExecArray | null, found: number | undefined;
@@ -291,6 +314,21 @@ export class PdfDocument {
   /** A dictionary entry, with the reference already followed. */
   lookup(o: PdfObject | undefined, key: string): PdfObject | undefined {
     return this.resolve(get(this.resolve(o), key));
+  }
+
+  /**
+   * The file is password-protected. Every string and stream in it is enciphered, so anything read out
+   * of it is ciphertext until a decryption path exists - which is why the form layer refuses rather
+   * than handing back nonsense field names.
+   */
+  get isEncrypted(): boolean {
+    return this.trailer.map.get("Encrypt") !== undefined;
+  }
+
+  /** The generation of an object as the file records it. Members of an object stream are always 0. */
+  generationOf(num: number): number {
+    const entry = this.xref.get(num);
+    return entry?.kind === "offset" ? entry.gen : 0;
   }
 
   get catalog(): PdfObject | undefined {

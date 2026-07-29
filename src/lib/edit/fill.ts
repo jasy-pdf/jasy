@@ -72,7 +72,9 @@ const escName = (s: string): string =>
 function withEntries(dict: PdfDict, changes: Record<string, string | undefined>): string {
   const parts: string[] = [];
   for (const [k, v] of dict.map) {
-    if (k in changes) continue; // replaced or dropped below
+    // hasOwnProperty, not `in`: a PDF key may legitimately be called "constructor" or "toString", and
+    // `in` would find those on Object.prototype and silently drop the entry.
+    if (Object.prototype.hasOwnProperty.call(changes, k)) continue; // replaced or dropped below
     parts.push(`/${escName(k)} ${serialize(v)}`);
   }
   for (const [k, v] of Object.entries(changes))
@@ -147,7 +149,15 @@ function plan(
     const editable = (flags & FF_EDIT) !== 0;
     const multi = (flags & FF_MULTI_SELECT) !== 0;
     if (value === null) return { v: undefined, i: undefined };
-    const list = Array.isArray(value) ? value : [String(value)];
+    if (typeof value === "boolean") {
+      throw new FillError(
+        `field "${field.name}" is a choice field; give it one of ${[...allowed].map((s) => `"${s}"`).join(", ")}, an array, or null`,
+      );
+    }
+    // An empty array is a well-defined request - select nothing - and means the same as null. Without
+    // this it fell through and wrote the literal text "undefined" into the field.
+    if (Array.isArray(value) && value.length === 0) return { v: undefined, i: undefined };
+    const list = Array.isArray(value) ? value : [value];
     if (!multi && list.length > 1) {
       throw new FillError(`field "${field.name}" takes a single value, not ${list.length}`);
     }
@@ -287,8 +297,19 @@ export function fillForm(
   if (options.needAppearances !== false) {
     const acroRef = get(doc.catalog, "AcroForm");
     const acro = doc.resolve(acroRef);
-    if (acro !== undefined && isDict(acro) && acroRef !== undefined && isRef(acroRef)) {
-      writer.update(acroRef.num, withEntries(acro, { NeedAppearances: "true" }));
+    if (acro !== undefined && isDict(acro)) {
+      if (isRef(acroRef)) {
+        writer.update(acroRef.num, withEntries(acro, { NeedAppearances: "true" }));
+      } else {
+        // The form dict can also sit INLINE in the catalog (our own hand-written fixtures do). Then the
+        // catalog is what has to be rewritten - skipping it left the new values undrawn.
+        const rootRef = doc.trailer.map.get("Root");
+        const catalog = doc.catalog;
+        if (isRef(rootRef) && catalog !== undefined && isDict(catalog)) {
+          const inlined = withEntries(acro, { NeedAppearances: "true" });
+          writer.update(rootRef.num, withEntries(catalog, { AcroForm: inlined }));
+        }
+      }
     }
   }
 

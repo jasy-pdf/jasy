@@ -9,6 +9,8 @@
  * the distinction and mangle names.
  */
 
+import { latin1FromBytes } from "../utils/bytes.ts";
+
 export interface PdfName {
   kind: "name";
   /** The name WITHOUT the leading slash, `#XX` already decoded. */
@@ -112,5 +114,8 @@ export function textOf(o: PdfObject | undefined): string | undefined {
     for (let i = 2; i + 1 < b.length; i += 2) s += String.fromCharCode((b[i] << 8) | b[i + 1]);
     return s;
   }
-  return new TextDecoder("latin1").decode(b);
+  // latin1FromBytes, NOT TextDecoder("latin1"): the latter is a WHATWG alias for windows-1252, which
+  // remaps 0x80-0x9F (byte 0x95 becomes a bullet). Mapping each byte to the same code point keeps the
+  // value round-trippable, which is what a reader that may write the string back needs.
+  return latin1FromBytes(b);
 }

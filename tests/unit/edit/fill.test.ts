@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { fillForm, FillError } from "../../../src/lib/edit/fill.ts";
 import { PdfDocument } from "../../../src/lib/edit/document.ts";
 import { readAcroForm } from "../../../src/lib/edit/acroform-reader.ts";
-import { get } from "../../../src/lib/edit/objects.ts";
+import { get, textOf } from "../../../src/lib/edit/objects.ts";
 import { Column, Document, Page, TextField, renderToBytes } from "../../../src/lib/api/index.ts";
 
 // Filling an EXISTING form, against the same five producers the reader is tested with. Writing into a
@@ -21,30 +21,38 @@ const PRODUCERS = [
   "reactpdf-form",
 ];
 
-/**
- * A minimal PDF whose field tree has a PARENT stating `/FT` and `/MaxLen` and a kid stating neither.
- * Written out by hand because no producer we have fixtures from splits a field this way, and offsets are
- * computed so the file has a real cross-reference table - a rescued one would prove less.
- */
-function inheritedMaxLenPdf(): Uint8Array {
-  const objects = [
-    "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [4 0 R] >> >>",
-    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Annots [5 0 R] >>",
-    "<< /T (group) /FT /Tx /MaxLen 5 /Kids [5 0 R] >>",
-    "<< /Type /Annot /Subtype /Widget /Parent 4 0 R /T (child) /Rect [10 10 190 40] >>",
-  ];
+/** Assemble a tiny PDF with a real cross-reference table, so a test never depends on the scan-rebuild
+ *  fallback. `gens` gives each object's generation, defaulting to 0. */
+function buildPdf(objects: string[], gens: number[] = []): Uint8Array {
   let body = "%PDF-1.7\n";
   const offsets: number[] = [];
   objects.forEach((o, i) => {
     offsets.push(body.length);
-    body += `${i + 1} 0 obj\n${o}\nendobj\n`;
+    body += `${i + 1} ${gens[i] ?? 0} obj\n${o}\nendobj\n`;
   });
   const startxref = body.length;
   body += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
-  for (const off of offsets) body += `${String(off).padStart(10, "0")} 00000 n \n`;
+  offsets.forEach((off, i) => {
+    body += `${String(off).padStart(10, "0")} ${String(gens[i] ?? 0).padStart(5, "0")} n \n`;
+  });
   body += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${startxref}\n%%EOF\n`;
   return new TextEncoder().encode(body);
+}
+
+/**
+ * A minimal PDF whose field tree has a PARENT stating `/FT`, `/MaxLen` and `/V`, and a kid stating none
+ * of them. No producer we have fixtures from splits a field this way, so inheritance would otherwise be
+ * untested. The `/AcroForm` sits INLINE in the catalog rather than behind a reference - also legal, and
+ * also a case no fixture covers. `/constructor` is there to catch a key that exists on Object.prototype.
+ */
+function inheritedFieldPdf(): Uint8Array {
+  return buildPdf([
+    "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [4 0 R] >> >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Annots [5 0 R] >>",
+    "<< /T (group) /FT /Tx /MaxLen 5 /V (dad) /Kids [5 0 R] >>",
+    "<< /Type /Annot /Subtype /Widget /Parent 4 0 R /T (child) /Rect [10 10 190 40] /constructor (keep me) >>",
+  ]);
 }
 
 const readBack = (bytes: Uint8Array) => {
@@ -198,6 +206,27 @@ describe("fillForm - the form is a contract", () => {
     expect(() => fillForm(encrypted, { full_name: "Ada" })).toThrow(/encrypted/);
   });
 
+  it("refuses a boolean for a choice field instead of writing the word 'true'", () => {
+    // `String(true)` used to reach the option check, so an EDITABLE combo would have accepted the text
+    // "true" as a value.
+    expect(() => fillForm(fixture("jasy-form"), { country: true })).toThrow(/choice field/);
+  });
+
+  it("treats an empty array as clearing the choice", () => {
+    // It fell through to `pdfText(list[0])` on undefined and wrote the literal text "(undefined)".
+    const { bytes } = fillForm(fixture("jasy-form"), { size: [] });
+    expect(readBack(bytes).field("size")?.value).toBeUndefined();
+    expect(new TextDecoder("latin1").decode(bytes)).not.toContain("(undefined)");
+  });
+
+  it("refuses to READ an encrypted form rather than hand back ciphertext as names", async () => {
+    const doc = Document([
+      Page({ margin: 56 }, [Column([TextField({ name: "full_name", border: "#888" })])]),
+    ]);
+    const encrypted = await renderToBytes(doc, { encrypt: { userPassword: "secret" } });
+    expect(() => readAcroForm(PdfDocument.load(encrypted))).toThrow(/encrypted/);
+  });
+
   it("refuses a document that has no form at all", () => {
     expect(() => fillForm(new Uint8Array([1, 2, 3]), { a: "b" })).toThrow(/no AcroForm/);
   });
@@ -243,14 +272,63 @@ describe("fillForm - /MaxLen", () => {
     // Every fixture declares /MaxLen on the leaf, so inheritance needs a document built for it: a parent
     // field carrying /FT and /MaxLen, and a kid that states neither. Without this the rule would be
     // untested - the tree walk could ignore the parent entirely and every other test would still pass.
-    const doc = PdfDocument.load(inheritedMaxLenPdf());
+    const doc = PdfDocument.load(inheritedFieldPdf());
     expect(doc.recovered).toBe(false); // read through a real index, not a rescued one
     const field = readAcroForm(doc)!.fields.find((f) => f.name === "group.child")!;
     expect(field.type).toBe("Tx"); // inherited too, the established rule this rides on
     expect(field.maxLen).toBe(5);
-    expect(() => fillForm(inheritedMaxLenPdf(), { "group.child": "123456" })).toThrow(
+    expect(() => fillForm(inheritedFieldPdf(), { "group.child": "123456" })).toThrow(
       /holds at most 5 characters/,
     );
+  });
+});
+
+describe("fillForm - awkward shapes a producer is allowed to write", () => {
+  it("inherits /V from a parent field, so a kid that states no value still has one", () => {
+    const form = readAcroForm(PdfDocument.load(inheritedFieldPdf()))!;
+    expect(form.fields.find((f) => f.name === "group.child")?.value).toBe("dad");
+  });
+
+  it("sets /NeedAppearances when the AcroForm sits INLINE in the catalog", () => {
+    // Only a referenced /AcroForm used to be rewritten, so an inline one silently kept its old flag and
+    // the freshly written values were never drawn.
+    const { bytes } = fillForm(inheritedFieldPdf(), { "group.child": "abc" });
+    const doc = PdfDocument.load(bytes);
+    const acro = doc.lookup(doc.catalog, "AcroForm");
+    expect(get(acro, "NeedAppearances")).toBe(true);
+    expect(readAcroForm(doc)!.fields.find((f) => f.name === "group.child")?.value).toBe("abc");
+  });
+
+  it("keeps a dictionary key that collides with Object.prototype", () => {
+    // `k in changes` finds "constructor" on the prototype and would drop the entry from the rewritten
+    // dictionary - silently deleting data we were never asked to touch.
+    const { bytes } = fillForm(inheritedFieldPdf(), { "group.child": "abc" });
+    const doc = PdfDocument.load(bytes);
+    const widget = doc.getObject(5);
+    expect(textOf(get(widget, "constructor"))).toBe("keep me");
+  });
+
+  it("preserves an object's generation instead of writing 0", () => {
+    // Object 5 lives at generation 3. Re-emitting it as `5 0 obj` would describe a DIFFERENT object than
+    // the one being replaced, and the xref entry would point at the wrong thing.
+    const pdf = buildPdf(
+      [
+        "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [5 0 R] >> >>",
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Annots [5 0 R] >>",
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+        "<< /Type /Annot /Subtype /Widget /T (aged) /FT /Tx /Rect [10 10 190 40] >>",
+      ],
+      [0, 0, 0, 0, 3],
+    );
+    const { bytes } = fillForm(pdf, { aged: "value" });
+    const appended = new TextDecoder("latin1").decode(bytes.subarray(pdf.length));
+    expect(appended).toContain("5 3 obj");
+    expect(appended).not.toContain("5 0 obj");
+    // and it is still readable through the real index
+    const doc = PdfDocument.load(bytes);
+    expect(doc.recovered).toBe(false);
+    expect(readAcroForm(doc)!.fields.find((f) => f.name === "aged")?.value).toBe("value");
   });
 });
 
