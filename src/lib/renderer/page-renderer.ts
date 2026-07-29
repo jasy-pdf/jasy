@@ -103,8 +103,8 @@ export class PageRenderer {
       // The Link IR guarantees exactly one is set; prefer `dest` when present.
       const action =
         node.dest !== undefined
-          ? `/A << /S /GoTo /D (${PdfBackend.escapePdfString(node.dest)}) >>`
-          : `/A << /S /URI /URI (${PdfBackend.escapePdfString(node.href ?? "")}) >>`;
+          ? `/A << /S /GoTo /D ${objectManager.pdfString(node.dest)} >>`
+          : `/A << /S /URI /URI ${objectManager.pdfString(node.href ?? "")} >>`;
       const annot = objectManager.addObject(
         `<< /Type /Annot /Subtype /Link /Rect ${rect} /Border [0 0 0] ${action} >>`,
       );

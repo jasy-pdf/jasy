@@ -1,7 +1,6 @@
 import type { PDFObjectManager } from "./pdf-object-manager.ts";
 
 // A PDF literal string escape (same rule as elsewhere): backslash first, then the string delimiters.
-const esc = (s: string) => s.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
 const num = (n: number) => Number(n.toFixed(2));
 
 // One bookmark, collected in document (reading) order as pages render. `top` is the page-space
@@ -72,7 +71,7 @@ export class OutlineBuilder {
     // Emit each item dict, wired to its parent, siblings (prev/next) and first/last child.
     const emit = (nodes: Node[], parentNum: number) => {
       nodes.forEach((n, i) => {
-        const parts = [`/Title (${esc(n.title)})`, `/Parent ${parentNum} 0 R`];
+        const parts = [`/Title ${om.pdfString(n.title)}`, `/Parent ${parentNum} 0 R`];
         if (i > 0) parts.push(`/Prev ${objOf.get(nodes[i - 1])!} 0 R`);
         if (i < nodes.length - 1) parts.push(`/Next ${objOf.get(nodes[i + 1])!} 0 R`);
         if (n.children.length > 0) {

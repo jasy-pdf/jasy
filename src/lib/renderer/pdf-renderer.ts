@@ -170,7 +170,7 @@ export class PDFRenderer {
     if (acroformCatalog) catalogParts.push(acroformCatalog);
 
     // Named destinations (internal-link targets): a /Dests entry in the shared /Names dict.
-    const destsNames = objectManager.dests.finalize();
+    const destsNames = objectManager.dests.finalize(objectManager);
     if (destsNames) namesParts.push(destsNames);
 
     // Emit the single /Names dict if either embedded files or destinations contributed to it.

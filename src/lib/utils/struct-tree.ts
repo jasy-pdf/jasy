@@ -17,7 +17,6 @@ interface StructElem {
 }
 
 // Escapes a PDF literal string ( ... ) - the language tag is safe ASCII, but /Alt can carry arbitrary text.
-const esc = (s: string) => s.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
 
 // A structure role reaches the PDF as a raw name (/H1, /S /Table). Roles come from a controlled set,
 // but restrict them to a safe PDF-name token anyway (defence-in-depth) so a stray "/", whitespace, or
@@ -117,7 +116,7 @@ export class StructTree {
         ...childrenOf(e.key).map((c) => `${objNum.get(c.key)!} 0 R`),
         ...e.mc.map((m) => `<< /Type /MCR /Pg ${pg(m.structParents)} 0 R /MCID ${m.mcid} >>`),
       ].join(" ");
-      const alt = e.alt ? ` /Alt (${esc(e.alt)})` : "";
+      const alt = e.alt ? ` /Alt ${om.pdfString(e.alt)}` : "";
       // PDF/UA 7.5: a header cell needs a Scope so a reader can associate data cells with it. Our headers
       // are a header ROW (the Table `header` option), so each TH is the head of its Column.
       const attr = e.role === "TH" ? " /A << /O /Table /Scope /Column >>" : "";
@@ -165,6 +164,6 @@ export class StructTree {
         `/ParentTreeNextKey ${this.structParentsCounter} >>`,
     );
 
-    return `/MarkInfo << /Marked true >> /StructTreeRoot ${rootNum} 0 R /Lang (${esc(this.lang)})`;
+    return `/MarkInfo << /Marked true >> /StructTreeRoot ${rootNum} 0 R /Lang ${om.pdfString(this.lang)}`;
   }
 }
