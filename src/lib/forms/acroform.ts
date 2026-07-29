@@ -84,7 +84,9 @@ function buildTextWidget(
   if (flags) parts.push(`/Ff ${flags}`);
   if (f.maxLength !== undefined) parts.push(`/MaxLen ${f.maxLength}`);
   parts.push(`/Rect ${rectOf(node)} /F ${annotFlags(f)}${quadding(f.align)}`);
-  parts.push(`/DA (/${daFont} ${num2(node.style.fontSize)} Tf ${pdfColor(node.style.color)} rg)`);
+  parts.push(
+    `/DA ${om.pdfString(`/${daFont} ${num2(node.style.fontSize)} Tf ${pdfColor(node.style.color)} rg`)}`,
+  );
   if (apRef !== undefined) parts.push(`/AP << /N ${apRef} 0 R >>`);
   return `<< ${parts.join(" ")}${boxChrome(node)} >>`;
 }
@@ -160,7 +162,9 @@ function buildChoiceWidget(
   }
 
   parts.push(`/Rect ${rectOf(node)} /F ${annotFlags(f)}${quadding(f.align)}`);
-  parts.push(`/DA (/${daFont} ${num2(node.style.fontSize)} Tf ${pdfColor(node.style.color)} rg)`);
+  parts.push(
+    `/DA ${om.pdfString(`/${daFont} ${num2(node.style.fontSize)} Tf ${pdfColor(node.style.color)} rg`)}`,
+  );
   if (apRef !== undefined) parts.push(`/AP << /N ${apRef} 0 R >>`);
   return `<< ${parts.join(" ")}${boxChrome(node)} >>`;
 }
@@ -381,7 +385,7 @@ export class AcroFormCollector {
     // /DA as well as the baked /AP: a viewer that REGENERATES the face (poppler does this for push
     // buttons; others do it while the button is pressed) needs the font + size + colour, or it draws the
     // box with no caption. With /DA it reproduces what we baked.
-    parts.push(`/DA (/Helv ${num2(size)} Tf ${pdfColor(node.style.color)} rg)`);
+    parts.push(`/DA ${om.pdfString(`/Helv ${num2(size)} Tf ${pdfColor(node.style.color)} rg`)}`);
     parts.push(`/AP << /N ${apRef} 0 R >>`);
     if (f.action) parts.push(actionDict(f.action, om));
     // /MK /CA is the caption the viewer falls back to when IT regenerates the face (e.g. while pressed).

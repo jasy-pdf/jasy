@@ -486,11 +486,9 @@ endstream`;
         data,
       ),
     );
-    const escaped = (s: string) =>
-      s.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
-    const desc = opts.description ? ` /Desc (${escaped(opts.description)})` : "";
+    const desc = opts.description ? ` /Desc ${this.pdfString(opts.description)}` : "";
     const filespec = this.addObject(
-      `<< /Type /Filespec /F (${escaped(name)}) /UF (${escaped(name)}) ` +
+      `<< /Type /Filespec /F ${this.pdfString(name)} /UF ${this.pdfString(name)} ` +
         `/AFRelationship /${opts.relationship ?? "Unspecified"}${desc} ` +
         `/EF << /F ${embedded} 0 R /UF ${embedded} 0 R >> >>`,
     );
@@ -517,8 +515,8 @@ endstream`;
     const profile = this.addObject(this.stream("/N 3", icc));
     this.outputIntent = this.addObject(
       `<< /Type /OutputIntent /S /GTS_PDFA1 ` +
-        `/OutputConditionIdentifier (${opts.identifier ?? "sRGB"}) ` +
-        `/Info (${opts.info ?? "sRGB IEC61966-2.1"}) /DestOutputProfile ${profile} 0 R >>`,
+        `/OutputConditionIdentifier ${this.pdfString(opts.identifier ?? "sRGB")} ` +
+        `/Info ${this.pdfString(opts.info ?? "sRGB IEC61966-2.1")} /DestOutputProfile ${profile} 0 R >>`,
     );
   }
 
@@ -905,7 +903,7 @@ endstream`;
       .join(" ");
     return (
       `<< /Type /Font /Subtype /CIDFontType2 /BaseFont /${pdfName(name)} ` +
-      `/CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> ` +
+      `/CIDSystemInfo << /Registry ${this.pdfString("Adobe")} /Ordering ${this.pdfString("Identity")} /Supplement 0 >> ` +
       `/FontDescriptor ${descriptor} 0 R /CIDToGIDMap /Identity ` +
       `/DW 1000 /W [${w}] >>`
     );

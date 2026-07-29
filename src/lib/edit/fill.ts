@@ -1,7 +1,15 @@
 import { PdfDocument } from "./document.ts";
 import { readAcroForm, type ReadField } from "./acroform-reader.ts";
-import { IncrementalWriter, serialize } from "./writer.ts";
-import { get, isDict, isRef, type PdfDict, type PdfObject } from "./objects.ts";
+import { IncrementalWriter, serialize, type StringCipher } from "./writer.ts";
+import {
+  get,
+  isDict,
+  isRef,
+  isString,
+  type PdfDict,
+  type PdfObject,
+  type PdfString,
+} from "./objects.ts";
 
 /**
  * Filling the form of an EXISTING PDF.
@@ -20,6 +28,8 @@ import { get, isDict, isRef, type PdfDict, type PdfObject } from "./objects.ts";
 export type FieldValue = string | boolean | string[] | null;
 
 export interface FillOptions {
+  /** The user password, for a document that is encrypted. Wrong or missing gives a named error. */
+  password?: string;
   /**
    * Leave the drawing of the values to the viewer by setting `/NeedAppearances`, instead of generating
    * appearance streams. Default `true` today - baking them is the next step.
@@ -48,15 +58,34 @@ const FF_RADIO = 1 << 15;
  * carries an umlaut or an emoji unambiguously. Writing UTF-8 into a literal (the obvious mistake) reads
  * back as mojibake, because a literal is PDFDocEncoded.
  */
-const pdfText = (s: string): string => {
+const plainBytes = (s: string): Uint8Array => {
+  if (/^[\x20-\x7e]*$/.test(s)) return Uint8Array.from(s, (c) => c.charCodeAt(0));
+  const out = new Uint8Array(2 + s.length * 2);
+  out[0] = 0xfe;
+  out[1] = 0xff;
+  for (let i = 0; i < s.length; i++) {
+    out[2 + i * 2] = s.charCodeAt(i) >> 8;
+    out[3 + i * 2] = s.charCodeAt(i) & 0xff;
+  }
+  return out;
+};
+
+const hex = (b: Uint8Array): string =>
+  `<${Array.from(b, (x) => x.toString(16).padStart(2, "0").toUpperCase()).join("")}>`;
+
+/** A value in PDF form. `enciphered` holds ciphertext for the strings of an encrypted document; without
+ *  it the value is written in the clear, exactly as before. */
+const pdfText = (s: string, enciphered?: Map<string, string>): string => {
+  const ready = enciphered?.get(s);
+  if (ready !== undefined) return ready;
   const ascii = /^[\x20-\x7e]*$/.test(s);
   if (ascii) {
     return `(${s.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)")})`;
   }
-  let hex = "FEFF";
+  let out = "FEFF";
   for (let i = 0; i < s.length; i++)
-    hex += s.charCodeAt(i).toString(16).padStart(4, "0").toUpperCase();
-  return `<${hex}>`;
+    out += s.charCodeAt(i).toString(16).padStart(4, "0").toUpperCase();
+  return `<${out}>`;
 };
 
 const escName = (s: string): string =>
@@ -69,17 +98,30 @@ const escName = (s: string): string =>
     .join("");
 
 /** Rewrite a dictionary with some entries replaced or removed, keeping everything else byte-faithful. */
-function withEntries(dict: PdfDict, changes: Record<string, string | undefined>): string {
+function withEntries(
+  dict: PdfDict,
+  changes: Record<string, string | undefined>,
+  cipher?: StringCipher,
+): string {
   const parts: string[] = [];
   for (const [k, v] of dict.map) {
     // hasOwnProperty, not `in`: a PDF key may legitimately be called "constructor" or "toString", and
     // `in` would find those on Object.prototype and silently drop the entry.
     if (Object.prototype.hasOwnProperty.call(changes, k)) continue; // replaced or dropped below
-    parts.push(`/${escName(k)} ${serialize(v)}`);
+    parts.push(`/${escName(k)} ${serialize(v, cipher)}`);
   }
   for (const [k, v] of Object.entries(changes))
     if (v !== undefined) parts.push(`/${escName(k)} ${v}`);
   return `<< ${parts.join(" ")} >>`;
+}
+
+/** Every string reachable inside an object, so a dictionary can be re-enciphered in one walk. */
+function stringsIn(o: PdfObject | undefined, out: PdfString[] = [], depth = 0): PdfString[] {
+  if (o === undefined || o === null || depth > 64) return out;
+  if (isString(o)) out.push(o);
+  else if (Array.isArray(o)) for (const e of o) stringsIn(e, out, depth + 1);
+  else if (isDict(o)) for (const v of o.map.values()) stringsIn(v, out, depth + 1);
+  return out;
 }
 
 class FillError extends Error {}
@@ -88,6 +130,7 @@ class FillError extends Error {}
 function plan(
   field: ReadField,
   value: FieldValue,
+  enciphered?: Map<string, string>,
 ): { v?: string; as?: Map<number, string>; i?: string } {
   const flags = field.flags;
   if (flags & FF_READ_ONLY) {
@@ -173,7 +216,9 @@ function plan(
       .filter((i) => i >= 0)
       .sort((a, b) => a - b);
     return {
-      v: multi ? `[${list.map(pdfText).join(" ")}]` : pdfText(list[0]),
+      v: multi
+        ? `[${list.map((x) => pdfText(x, enciphered)).join(" ")}]`
+        : pdfText(list[0], enciphered),
       i: indices.length > 0 ? `[${indices.join(" ")}]` : undefined,
     };
   }
@@ -193,7 +238,7 @@ function plan(
       `"${field.name}" holds at most ${field.maxLen} characters, but the value has ${length}`,
     );
   }
-  return { v: pdfText(value) };
+  return { v: pdfText(value, enciphered) };
 }
 
 /**
@@ -202,21 +247,26 @@ function plan(
  * @param bytes  the original document
  * @param values field name -> value. Names are the fully qualified ones `readAcroForm` reports.
  */
-export function fillForm(
+export async function fillForm(
   bytes: Uint8Array,
   values: Record<string, FieldValue>,
   options: FillOptions = {},
-): FillResult {
-  const doc = PdfDocument.load(bytes);
+): Promise<FillResult> {
+  // Async because an encrypted document has to be deciphered before its field names mean anything, and
+  // because the values written back have to be enciphered again with the same file key.
+  const doc = await PdfDocument.open(bytes, { password: options.password });
 
-  // An encrypted document has every string and stream enciphered, so what we would read as a field name
-  // is ciphertext and what we wrote back would be plain text in a file where nothing else is. The result
-  // looks like it worked and is broken, which is the one outcome the contract rules out. Refuse until the
-  // password path exists.
-  if (doc.trailer.map.get("Encrypt") !== undefined) {
-    throw new FillError(
-      "this PDF is encrypted; jasy cannot fill it yet - filling a password-protected document is not supported",
-    );
+  // Every string we are about to WRITE has to go in enciphered. They are known up front - they are the
+  // values passed in - so they are done in one pass here rather than threading async through planning.
+  const enciphered = new Map<string, string>();
+  if (doc.isEncrypted) {
+    for (const v of Object.values(values)) {
+      for (const text of typeof v === "string" ? [v] : Array.isArray(v) ? v : []) {
+        if (enciphered.has(text)) continue;
+        const cipher = await doc.encryptForWrite(plainBytes(text));
+        if (cipher) enciphered.set(text, hex(cipher));
+      }
+    }
   }
 
   const form = readAcroForm(doc);
@@ -246,10 +296,17 @@ export function fillForm(
 
   const writer = new IncrementalWriter(doc);
   const filled: string[] = [];
+  // Emission is deferred: the objects we rewrite carry strings we are NOT changing, and in an encrypted
+  // document those have to be enciphered again before they go back in.
+  const pending: Array<{
+    objNum: number;
+    target: PdfDict;
+    changes: Record<string, string | undefined>;
+  }> = [];
 
   for (const [name, value] of Object.entries(values)) {
     const field = byName.get(name)!;
-    const change = plan(field, value);
+    const change = plan(field, value, enciphered);
 
     if (field.objNum === undefined) {
       throw new FillError(`field "${name}" is not stored as its own object and cannot be updated`);
@@ -288,9 +345,25 @@ export function fillForm(
     for (const [objNum, changes] of edits) {
       const target = objNum === field.objNum ? node : doc.getObject(objNum);
       if (target === undefined || !isDict(target)) continue;
-      writer.update(objNum, withEntries(target, changes));
+      pending.push({ objNum, target, changes });
     }
     filled.push(name);
+  }
+
+  // One pass over every string that will be carried over unchanged. Without this a preserved tooltip
+  // would be written back in the clear, into a file where nothing else is.
+  const carried: StringCipher = new Map();
+  if (doc.isEncrypted) {
+    for (const { target } of pending) {
+      for (const str of stringsIn(target)) {
+        if (carried.has(str)) continue;
+        const cipher = await doc.encryptForWrite(str.bytes);
+        if (cipher) carried.set(str, hex(cipher));
+      }
+    }
+  }
+  for (const { objNum, target, changes } of pending) {
+    writer.update(objNum, withEntries(target, changes, carried));
   }
 
   // Until appearances are generated here, the viewer has to draw the new values.
@@ -299,15 +372,15 @@ export function fillForm(
     const acro = doc.resolve(acroRef);
     if (acro !== undefined && isDict(acro)) {
       if (isRef(acroRef)) {
-        writer.update(acroRef.num, withEntries(acro, { NeedAppearances: "true" }));
+        writer.update(acroRef.num, withEntries(acro, { NeedAppearances: "true" }, carried));
       } else {
         // The form dict can also sit INLINE in the catalog (our own hand-written fixtures do). Then the
         // catalog is what has to be rewritten - skipping it left the new values undrawn.
         const rootRef = doc.trailer.map.get("Root");
         const catalog = doc.catalog;
         if (isRef(rootRef) && catalog !== undefined && isDict(catalog)) {
-          const inlined = withEntries(acro, { NeedAppearances: "true" });
-          writer.update(rootRef.num, withEntries(catalog, { AcroForm: inlined }));
+          const inlined = withEntries(acro, { NeedAppearances: "true" }, carried);
+          writer.update(rootRef.num, withEntries(catalog, { AcroForm: inlined }, carried));
         }
       }
     }
