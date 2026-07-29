@@ -1,4 +1,4 @@
-import type { PdfDocument } from "./document.ts";
+import { PdfEncryptedError, type PdfDocument } from "./document.ts";
 import { get, isDict, isRef, nameOf, numberOf, textOf, type PdfObject } from "./objects.ts";
 
 /**
@@ -113,8 +113,8 @@ export function readAcroForm(doc: PdfDocument): ReadForm | undefined {
   // field "name" read out of it is noise. Handing that back would be the silent guess this reader exists
   // to avoid. `PdfDocument.open(bytes, { password })` is what makes it readable.
   if (!doc.isReadable) {
-    throw new Error(
-      "@jasy/pdf: this PDF is encrypted; open it with PdfDocument.open(bytes, { password }) first",
+    throw new PdfEncryptedError(
+      "this PDF is encrypted; open it with PdfDocument.open(bytes, { password }) first",
     );
   }
   const acro = doc.lookup(doc.catalog, "AcroForm");
