@@ -161,7 +161,15 @@ function alignX(boxWidth: number, pad: number, width: number, align: FieldAlign 
   return pad;
 }
 
-/** `BT … ET` for absolutely-placed lines. `Tm` (not `Td`) so each line's position is independent. */
+/**
+ * `BT … ET` for absolutely-placed lines. `Tm` (not `Td`) so each line's position is independent.
+ *
+ * Field text is drawn UNKERNED (a plain `Tj`, never a `TJ` array), even though ordinary document text
+ * kerns by default. That is deliberate: the moment someone clicks into a field, the viewer regenerates
+ * this appearance from `/DA` - and viewers do not kern field text. Kerning here would make the value
+ * visibly shift on first click. The measurement matches: `getStringWidth` is the plain glyph sum, so
+ * measured still equals drawn.
+ */
 function textBlock(
   lines: Array<{ text: string; x: number; y: number }>,
   style: FieldStyle,

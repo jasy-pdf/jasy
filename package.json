@@ -30,7 +30,12 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
-    }
+    },
+    "./edit": {
+      "types": "./dist/edit/index.d.ts",
+      "default": "./dist/edit/index.js"
+    },
+    "./package.json": "./package.json"
   },
   "scripts": {
     "copy-assets": "ncp ./src/lib/assets ./dist/assets",
