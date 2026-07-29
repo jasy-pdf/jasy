@@ -110,6 +110,10 @@ function buildCheckboxWidget(node: FormFieldNode, om: PDFObjectManager): string 
   parts.push(`/V /${state} /AS /${state}`);
   parts.push(`/Rect ${rectOf(node)} /F ${annotFlags(f)}`);
   parts.push(`/AP << /N << /${on} ${onRef} 0 R /Off ${offRef} 0 R >> >>`);
+  // The check mark lives in ZapfDingbats. We bake the appearance ourselves, so this /DA is only read by
+  // a viewer that REGENERATES (which /NeedAppearances asks for) - but then it needs it, and it needs the
+  // matching /DR entry, or it silently draws an empty box.
+  parts.push(`/DA ${om.pdfString(`/ZaDb 0 Tf ${pdfColor(node.style.color)} rg`)}`);
   return `<< ${parts.join(" ")}${boxChrome(node)} >>`;
 }
 
@@ -207,6 +211,8 @@ export class AcroFormCollector {
   // use and shared, so the /DR entry and the appearance streams point at ONE font object - and a document
   // of checkboxes alone never emits it.
   private helvNum?: number;
+  // Same for ZapfDingbats, emitted only when a check box or radio button exists.
+  private zadbNum?: number;
   // Set once a signature field exists; the catalog then needs /SigFlags.
   private hasSignature = false;
   // Bake every field's appearance (default). Off = emit no /AP and set /NeedAppearances, i.e. let the
@@ -324,12 +330,26 @@ export class AcroFormCollector {
     ));
   }
 
+  /**
+   * ZapfDingbats, the font a check mark lives in. Needed even though we bake the appearance ourselves:
+   * a viewer told to regenerate (`/NeedAppearances`, which filling a form sets) redraws a check box from
+   * its `/DA`, and the conventional `/DA` for one names `/ZaDb`. Without the matching `/DR` entry the
+   * viewer cannot resolve the font - poppler says "Unknown font tag 'ZaDb'" and draws no check at all.
+   * No encoding: ZapfDingbats brings its own.
+   */
+  private zadb(om: PDFObjectManager): number {
+    return (this.zadbNum ??= om.addObject(
+      `<< /Type /Font /Subtype /Type1 /BaseFont /ZapfDingbats >>`,
+    ));
+  }
+
   /** Emit the widget object for one form-field IR node, register it as a field, and return its object
    *  number so the PageRenderer can add it to that page's /Annots. */
   addField(node: FormFieldNode, om: PDFObjectManager): number {
     if (node.field.kind === "radio") return this.addRadio(node, om);
     let dict: string;
     if (node.field.kind === "checkbox") {
+      this.zadb(om); // its /DA names /ZaDb, so /DR has to carry it
       dict = buildCheckboxWidget(node, om);
     } else if (node.field.kind === "pushbutton") {
       dict = this.buildPushButtonWidget(node, om);
@@ -413,11 +433,13 @@ export class AcroFormCollector {
     const onRef = om.addFormXObject(bbox, radioOn(node.width, node.height, node.style));
     const offRef = om.addFormXObject(bbox, radioOff(node.width, node.height, node.style));
     const as = f.selected ? f.value : "Off";
+    this.zadb(om); // same as a check box: a regenerating viewer draws the dot from /DA + /DR
     const parts = [
       `/Type /Annot /Subtype /Widget /Parent ${g.parentNum} 0 R`,
       `/Rect ${rectOf(node)} /F ${annotFlags(f)}`,
       `/AP << /N << /${escName(f.value)} ${onRef} 0 R /Off ${offRef} 0 R >> >>`,
       `/AS /${escName(as)}`,
+      `/DA ${om.pdfString(`/ZaDb 0 Tf ${pdfColor(node.style.color)} rg`)}`,
     ];
     const kidNum = om.addObject(`<< ${parts.join(" ")}${boxChrome(node)} >>`);
     g.kids.push(kidNum);
@@ -461,8 +483,13 @@ export class AcroFormCollector {
     }
     if (this.fieldRefs.length === 0) return "";
     const fields = this.fieldRefs.map((r) => `${r} 0 R`).join(" ");
-    // /DR only when a field's /DA actually references the font (text, choice, button captions).
-    const dr = this.helvNum ? ` /DR << /Font << /Helv ${this.helvNum} 0 R >> >>` : "";
+    // /DR only lists the fonts a field's /DA actually references: /Helv for text, choice and button
+    // captions, /ZaDb for the check mark of a box or radio button.
+    const fonts = [
+      this.helvNum ? `/Helv ${this.helvNum} 0 R` : "",
+      this.zadbNum ? `/ZaDb ${this.zadbNum} 0 R` : "",
+    ].filter(Boolean);
+    const dr = fonts.length ? ` /DR << /Font << ${fonts.join(" ")} >> >>` : "";
     const na = this.needAppearances ? " /NeedAppearances true" : "";
     // /SigFlags 3 = SignaturesExist | AppendOnly: the document holds a signature field, and it must be
     // updated incrementally so an existing signature stays verifiable.
