@@ -37,9 +37,13 @@ describe("what the module claims to auto-import", () => {
   });
 
   it("registers each name exactly once", () => {
-    // A duplicate would register the component twice and Nuxt would warn at build time - easy to add by
-    // hand, invisible until someone reads the log.
+    // A duplicate registers the same name twice and Nuxt warns at build time - easy to add by hand,
+    // invisible until someone reads the log.
     expect(new Set(COMPONENTS).size).toBe(COMPONENTS.length);
-    expect(new Set(SERVER_FACTORIES).size).toBe(SERVER_FACTORIES.length);
+
+    // The server side goes further: factories and utils are spread into ONE addImports call, so a name
+    // in both lists collides just as a repeat within one does. Checking them together covers both.
+    const server = [...SERVER_FACTORIES, ...SERVER_UTILS];
+    expect(new Set(server).size).toBe(server.length);
   });
 });
