@@ -514,8 +514,9 @@ starting work. Working agreement: **phase by phase, Flo approves each gate, Clau
 unprompted, comments English + sensible, don't break the font math.**
 
 Status: **LAUNCHED 2026-06-27**, still shipping alpha increments (no beta/rc/stable until the feature set is
-complete — see `todo.md`). All five packages live on npm; **current (2026-07-23): `@jasy/pdf`@alpha.7,
-`@jasy/e-invoice`@alpha.4, `@jasy/cli`@alpha.6, `@jasy/vue`@alpha.7, `@jasy/nuxt`@alpha.6** (the alpha.7 cascade =
+complete — see `todo.md`). All five packages live on npm; **published as of 2026-07-30: `@jasy/pdf`@alpha.7,
+`@jasy/zugferd`@alpha.4 (the OLD name - `@jasy/e-invoice` has not been published yet, see the rename
+below), `@jasy/cli`@alpha.6, `@jasy/vue`@alpha.7, `@jasy/nuxt`@alpha.6** (the alpha.7 cascade =
 page-break control — the termination guard, `PageBreak`, `breakBefore`/`breakAfter`, `keepTogether` — plus
 kerning turned on by default). Repo public + locked, full CI + changelog +
 bots in place (see Repo facts). The engine is **feature-complete for the alpha** — inheritance, `onOverflow`,

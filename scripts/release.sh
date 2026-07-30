@@ -29,8 +29,12 @@ case "$PACKAGE" in
   cli)     DIR="packages/cli" ;;
   vue)     DIR="packages/vue" ;;
   nuxt)    DIR="packages/nuxt" ;;
-  # The old key still works so a habit does not become an error - it just points at the new name.
-  zugferd) echo "Note: '@jasy/zugferd' is now '@jasy/e-invoice'; use 'e-invoice'."; DIR="packages/e-invoice" ;;
+  # The old key still works so a habit does not become an error. PACKAGE is normalised here because the
+  # TAG is built from it further down - leaving it as "zugferd" would push a tag no workflow listens to,
+  # and the release would silently never happen.
+  zugferd)
+    echo "Note: '@jasy/zugferd' is now '@jasy/e-invoice'; releasing as e-invoice."
+    PACKAGE="e-invoice"; DIR="packages/e-invoice" ;;
   *) echo "Error: unknown package '$PACKAGE' (use: pdf, e-invoice, cli, vue, nuxt)"; exit 1 ;;
 esac
 
