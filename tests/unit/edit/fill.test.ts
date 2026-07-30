@@ -135,13 +135,33 @@ describe("fillForm - the appearance must not go stale", () => {
     return widget === undefined ? undefined : get(doc.getObject(widget), "AP");
   };
 
-  it("drops a text field's stale drawing when the value changes", async () => {
-    for (const name of ["jasy-form", "pdflib-form"]) {
-      // These two DO draw their fields, so there is something to invalidate.
-      expect(appearanceOf(fixture(name), "notes")).toBeDefined();
+  it("REDRAWS a text field, so the picture shows the new value", async () => {
+    for (const name of ["jasy-form", "pdflib-form", "pdfkit-form", "reactpdf-form"]) {
       const { bytes } = await fillForm(fixture(name), { notes: "new text" });
-      expect(appearanceOf(bytes, "notes")).toBeUndefined();
+      // There IS an appearance afterwards - including for the two producers that ship none at all -
+      // and it draws the value we just wrote.
+      expect(appearanceOf(bytes, "notes")).toBeDefined();
+      const doc = PdfDocument.load(bytes);
+      const form = readAcroForm(doc)!;
+      const widget = form.fields.find((f) => f.name === "notes")!.widgets[0].num!;
+      const ap = get(doc.getObject(widget), "AP");
+      const n = doc.resolve(get(ap, "N"));
+      const drawn = new TextDecoder("latin1").decode(
+        doc.streamData(n as Parameters<typeof doc.streamData>[0]),
+      );
+      expect(drawn).toContain("new text");
     }
+  });
+
+  it("leaves the drawing to the viewer when asked to", async () => {
+    // The opt-out is the old behaviour, and it has to stay reachable: no picture, /NeedAppearances set.
+    const { bytes } = await fillForm(
+      fixture("jasy-form"),
+      { notes: "new text" },
+      { fieldAppearances: false },
+    );
+    expect(appearanceOf(bytes, "notes")).toBeUndefined();
+    expect(new TextDecoder("latin1").decode(bytes)).toContain("/NeedAppearances true");
   });
 
   it("keeps a check box's drawing, because it holds STATES and not a value", async () => {
@@ -152,6 +172,22 @@ describe("fillForm - the appearance must not go stale", () => {
     const { doc, field } = readBack(bytes);
     const widget = doc.getObject(field("agree")!.widgets[0].num!);
     expect(get(widget, "AS")).toBeDefined(); // the visible state was switched
+  });
+
+  it("ticks a check box whose widget declares no states of its own", async () => {
+    // PDFKit and react-pdf write no appearance states, so a widget "owns" nothing and the usual test -
+    // does this widget have the target state? - left every box Off however it was filled. It only became
+    // visible once we started drawing the states ourselves.
+    for (const name of ["pdfkit-form", "reactpdf-form"]) {
+      const { bytes } = await fillForm(fixture(name), { agree: true });
+      const { doc, field } = readBack(bytes);
+      const widget = doc.getObject(field("agree")!.widgets[0].num!);
+      const as = get(widget, "AS");
+      expect(
+        as !== undefined && as !== null && typeof as === "object" && "name" in as ? as.name : "",
+      ).not.toBe("Off");
+      expect(get(widget, "AP")).toBeDefined(); // and the state pictures now exist
+    }
   });
 
   it("switches a radio group so that exactly one button is on", async () => {
@@ -168,6 +204,94 @@ describe("fillForm - the appearance must not go stale", () => {
     });
     expect(states.filter((s) => s !== "Off" && s !== undefined)).toEqual(["basic"]);
     expect(states.filter((s) => s === "Off")).toHaveLength(1);
+  });
+});
+
+describe("fillForm - what the drawn appearance shows", () => {
+  it("draws a choice field's LABEL, while /V keeps the export value", async () => {
+    // A dropdown stores "DE" and shows "Germany". Drawing the export value would put a code on the page
+    // where the reader expects a country. No fixture has the two differ, so the form is built here.
+    const pdf = buildPdf([
+      "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [4 0 R] >> >>",
+      "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+      "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] /Annots [4 0 R] >>",
+      "<< /Type /Annot /Subtype /Widget /FT /Ch /T (country) /Rect [10 150 200 166] " +
+        "/Opt [[(DE) (Germany)] [(FR) (France)]] /DA (/Helv 10 Tf 0 g) >>",
+    ]);
+    const { bytes } = await fillForm(pdf, { country: "DE" });
+    const doc = PdfDocument.load(bytes);
+    const field = readAcroForm(doc)!.fields[0];
+    expect(field.value).toBe("DE"); // the file still stores the export value
+
+    const ap = get(doc.getObject(field.widgets[0].num!), "AP");
+    const drawn = new TextDecoder("latin1").decode(
+      doc.streamData(doc.resolve(get(ap, "N")) as Parameters<typeof doc.streamData>[0]),
+    );
+    expect(drawn).toContain("Germany");
+    expect(drawn).not.toContain("(DE)");
+  });
+
+  it("takes /Q from the field when the widget does not state it", async () => {
+    // Alignment is inheritable in the same chain as /DA. Reading it off the widget alone left a
+    // right-aligned form drawing left-aligned.
+    const build = (onField: string, onWidget: string) =>
+      buildPdf([
+        "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [4 0 R] >> >>",
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] /Annots [5 0 R] >>",
+        `<< /T (v) /FT /Tx /Kids [5 0 R] ${onField} >>`,
+        "<< /Type /Annot /Subtype /Widget /Parent 4 0 R /Rect [10 150 200 172] " +
+          `/DA (/Helv 10 Tf 0 g) ${onWidget} >>`,
+      ]);
+    const drawnX = async (pdf: Uint8Array) => {
+      const { bytes } = await fillForm(pdf, { v: "x" });
+      const doc = PdfDocument.load(bytes);
+      const f = readAcroForm(doc)!.fields[0];
+      const ap = get(doc.getObject(f.widgets[0].num!), "AP");
+      const drawn = new TextDecoder("latin1").decode(
+        doc.streamData(doc.resolve(get(ap, "N")) as Parameters<typeof doc.streamData>[0]),
+      );
+      return Number(/1 0 0 1 ([\d.]+) [\d.]+ Tm/.exec(drawn)?.[1] ?? 0);
+    };
+    // /Q 2 = right. Stated on the FIELD it has to reach the widget's drawing all the same.
+    expect(await drawnX(build("/Q 2", ""))).toBeGreaterThan(await drawnX(build("", "")));
+  });
+
+  it("asks the viewer to draw after all when one widget could not be drawn", async () => {
+    // Baking and /NeedAppearances are two answers to the same question, and exactly one applies - but a
+    // widget we failed to draw has NO picture, so claiming none is needed would leave it invisible.
+    const pdf = buildPdf([
+      "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [4 0 R] >> >>",
+      "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+      "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] /Annots [4 0 R] >>",
+      // No /Rect at all: nothing to draw into.
+      "<< /Type /Annot /Subtype /Widget /FT /Tx /T (nowhere) >>",
+    ]);
+    const { bytes } = await fillForm(pdf, { nowhere: "x" });
+    expect(new TextDecoder("latin1").decode(bytes)).toContain("/NeedAppearances true");
+  });
+
+  it("resolves the auto font size the same way the writer does", async () => {
+    // `/DA … 0 Tf` means "fit the box". Creating a field and filling one used different formulas, so the
+    // same field came out ~11% smaller after a fill than it was drawn at creation.
+    const created = await renderToBytes(
+      Document([
+        Page({ margin: 20 }, [
+          Column([TextField({ name: "a", value: "Hg", height: 30, fontSize: 0 })]),
+        ]),
+      ]),
+    );
+    const sizeIn = (bytes: Uint8Array, name: string) => {
+      const doc = PdfDocument.load(bytes);
+      const f = readAcroForm(doc)!.fields.find((x) => x.name === name)!;
+      const ap = get(doc.getObject(f.widgets[0].num!), "AP");
+      const drawn = new TextDecoder("latin1").decode(
+        doc.streamData(doc.resolve(get(ap, "N")) as Parameters<typeof doc.streamData>[0]),
+      );
+      return /\/Helv\s+([\d.]+)\s+Tf/.exec(drawn)?.[1];
+    };
+    const filled = (await fillForm(created, { a: "Hg" })).bytes;
+    expect(sizeIn(filled, "a")).toBe(sizeIn(created, "a"));
   });
 });
 
@@ -310,8 +434,13 @@ describe("fillForm - awkward shapes a producer is allowed to write", () => {
 
   it("sets /NeedAppearances when the AcroForm sits INLINE in the catalog", async () => {
     // Only a referenced /AcroForm used to be rewritten, so an inline one silently kept its old flag and
-    // the freshly written values were never drawn.
-    const { bytes } = await fillForm(inheritedFieldPdf(), { "group.child": "abc" });
+    // the freshly written values were never drawn. Only reachable with the drawing left to the viewer -
+    // when jasy bakes the picture itself there is nothing for the viewer to regenerate.
+    const { bytes } = await fillForm(
+      inheritedFieldPdf(),
+      { "group.child": "abc" },
+      { fieldAppearances: false },
+    );
     const doc = PdfDocument.load(bytes);
     const acro = doc.lookup(doc.catalog, "AcroForm");
     expect(get(acro, "NeedAppearances")).toBe(true);

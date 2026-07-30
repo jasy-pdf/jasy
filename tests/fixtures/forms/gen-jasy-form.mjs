@@ -13,6 +13,7 @@ import {
   RadioGroup,
   Dropdown,
   ListBox,
+  Row,
   PushButton,
   SignatureField,
   renderToBytes,
@@ -28,7 +29,11 @@ const doc = Document({ size: 11 }, [
       TextField({ name: "full_name", value: "Ada Lovelace", height: 24, border: "#888" }),
       label("Notes (multiline)"),
       TextField({ name: "notes", multiline: true, height: 56, border: "#888" }),
-      Checkbox({ name: "agree", label: "I agree to the terms", checked: true, size: 14 }),
+      // Checkbox draws no label of its own (unlike RadioGroup), so it is composed here.
+      Row({ gap: 8, align: "center" }, [
+        Checkbox({ name: "agree", checked: true, size: 14 }),
+        Text("I agree to the terms", { size: 11 }),
+      ]),
       label("Plan"),
       RadioGroup({ name: "plan", value: "pro", size: 14 }, [
         { value: "basic", label: "Basic" },

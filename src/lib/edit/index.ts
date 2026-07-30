@@ -13,6 +13,8 @@ export { readAcroForm } from "./acroform-reader.ts";
 export type { ReadField, ReadForm, ReadWidget } from "./acroform-reader.ts";
 
 export { fillForm, FillError } from "./fill.ts";
+export { flattenForm, FlattenError } from "./flatten.ts";
+export type { FlattenOptions, FlattenResult } from "./flatten.ts";
 export type { FieldValue, FillOptions, FillResult } from "./fill.ts";
 
 // The document itself, for callers who want to look further than the form.

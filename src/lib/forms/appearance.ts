@@ -1,5 +1,8 @@
 import type { FieldAlign, FieldStyle } from "./field.ts";
 import { escPdf, num2, pdfColor } from "./pdf.ts";
+import { wrapStringIntoLines } from "../text/line-breaker.ts";
+import type { FontMetrics } from "../utils/font-metrics.ts";
+import type { FontStyle } from "../utils/pdf-object-manager.ts";
 
 // Appearance streams (/AP): the actual drawn content of a field's box, in the field's OWN coordinate
 // space (bottom-left origin, [0 0 w h]). Shared between CREATE (bake the field's look now) and, later,
@@ -147,6 +150,50 @@ const SELECTION_TINT = "0.60 0.75 0.95";
 
 /** One pre-measured line of field text. The caller owns wrapping + measuring, so this module stays free
  *  of font metrics (and can be reused verbatim when filling an existing PDF). */
+/**
+ * A field value split into the lines it is DRAWN as.
+ *
+ * An explicit line break in the value is a line break, and only then does width wrapping apply within
+ * each paragraph. Wrapping on width alone ran the paragraphs together - a multi-line field showed
+ * "first lineSecond line" - and it did so on BOTH paths, creating a field and filling one, which is why
+ * this lives here rather than in either of them.
+ */
+export function wrapFieldValue(
+  value: string,
+  fontFamily: string,
+  fontSize: number,
+  fontStyle: FontStyle,
+  maxWidth: number,
+  metrics: FontMetrics,
+  multiline: boolean,
+): string[] {
+  if (!multiline) return [value.replace(/\r\n?|\n/g, " ")];
+  // CR, LF and CRLF all mean one break (PDF 7.3.4.2 says the same about a literal string).
+  return value
+    .split(/\r\n?|\n/)
+    .flatMap((para) =>
+      para === ""
+        ? [""]
+        : wrapStringIntoLines(para, fontFamily, fontSize, fontStyle, maxWidth, metrics),
+    );
+}
+
+/**
+ * The size a field draws its value at. `0` in `/DA` is the PDF convention for "auto, fit the box", and
+ * both paths - creating a field and filling one - have to resolve it the SAME way, or the same field
+ * comes out at two different sizes depending on which one touched it last.
+ */
+export function fieldDrawSize(
+  fontSize: number,
+  height: number,
+  borderWidth: number,
+  capHeight: number,
+): number {
+  if (fontSize > 0) return fontSize;
+  const available = height - 2 * (2 + borderWidth);
+  return Math.max(4, Math.min(12, (available * 0.7) / (capHeight || 0.7)));
+}
+
 export interface FieldLine {
   text: string;
   width: number;
