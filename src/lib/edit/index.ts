@@ -16,5 +16,6 @@ export { fillForm, FillError } from "./fill.ts";
 export type { FieldValue, FillOptions, FillResult } from "./fill.ts";
 
 // The document itself, for callers who want to look further than the form.
-export { PdfDocument } from "./document.ts";
+// PdfEncryptedError is what a caller catches to tell "wrong password" apart from a broken file.
+export { PdfDocument, PdfEncryptedError } from "./document.ts";
 export type { PdfDict, PdfName, PdfObject, PdfRef, PdfStream, PdfString } from "./objects.ts";

@@ -13,6 +13,9 @@ import {
 
 /** A handler encrypts/decrypts the strings + streams of a document and describes itself as an `/Encrypt` dict. */
 export interface SecurityHandler {
+  /** Whether this scheme may be WRITTEN. False for the legacy revisions: we open them as a service to
+   *  files that already exist, but handing a user protection known to be broken is not one. */
+  readonly canEncrypt: boolean;
   /** The `/Encrypt` dictionary body (between `<<` and `>>`). Its own strings are never encrypted. */
   encryptDict(): string;
   /** Encrypt one string/stream. `ref` is unused for V5/R6 (one file key) but kept for future per-object schemes. */
@@ -139,6 +142,8 @@ class StandardAes256 implements SecurityHandler {
     return new StandardAes256(fileKey, dict);
   }
 
+  readonly canEncrypt = true;
+
   encryptDict(): string {
     return this.dict;
   }
@@ -168,6 +173,43 @@ class StandardAes256 implements SecurityHandler {
       throw new Error("@jasy/pdf: wrong password.");
     }
     const intermediate = await hash2B(pw, u.subarray(40, 48), new Uint8Array(0));
+    return aesCbcDecryptNoPad(intermediate, new Uint8Array(16), ue);
+  }
+
+  /**
+   * A handler for READING an existing file: recover its key from the password, then decrypt with it.
+   * The `/Encrypt` dictionary is the file's own, so this handler never has to describe one.
+   *
+   * `revision` 6 is the standard (ISO 32000-2). Revision **5** is Adobe's withdrawn 2008 extension and
+   * differs in ONE respect: the key is a plain SHA-256 of password + salt, without the iterated
+   * procedure of algorithm 2.B. The cipher is the same AES-256, which is why supporting it costs almost
+   * nothing - and it matters, because PDFKit and react-pdf both emit R5 when asked for AES.
+   */
+  static async forReading(
+    userPassword: string,
+    u: Uint8Array,
+    ue: Uint8Array,
+    revision: 5 | 6 = 6,
+  ): Promise<SecurityHandler> {
+    const key =
+      revision === 6
+        ? await StandardAes256.recoverFileKey(userPassword, u, ue)
+        : await StandardAes256.recoverFileKeyR5(userPassword, u, ue);
+    return new StandardAes256(key, "");
+  }
+
+  /** Revision 5: validate against /U with a single SHA-256, then unwrap /UE the same way R6 does. */
+  private static async recoverFileKeyR5(
+    userPassword: string,
+    u: Uint8Array,
+    ue: Uint8Array,
+  ): Promise<Uint8Array> {
+    const pw = utf8(userPassword);
+    const check = await sha(256, concat(pw, u.subarray(32, 40)));
+    if (!bytesEqual(check, u.subarray(0, 32))) {
+      throw new Error("@jasy/pdf: wrong password.");
+    }
+    const intermediate = await sha(256, concat(pw, u.subarray(40, 48)));
     return aesCbcDecryptNoPad(intermediate, new Uint8Array(16), ue);
   }
 }

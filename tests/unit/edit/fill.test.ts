@@ -55,6 +55,24 @@ function inheritedFieldPdf(): Uint8Array {
   ]);
 }
 
+/** A small encrypted form, built with our own writer - the only encrypted PDF we can produce. */
+const encryptedForm = () =>
+  renderToBytes(
+    Document([
+      Page({ margin: 56 }, [
+        Column([
+          TextField({
+            name: "full_name",
+            value: "Ada Lovelace",
+            tooltip: "Your name",
+            border: "#888",
+          }),
+        ]),
+      ]),
+    ]),
+    { encrypt: { userPassword: "secret" } },
+  );
+
 const readBack = (bytes: Uint8Array) => {
   const doc = PdfDocument.load(bytes);
   const form = readAcroForm(doc);
@@ -64,9 +82,9 @@ const readBack = (bytes: Uint8Array) => {
 
 describe("fillForm - across producers", () => {
   for (const name of PRODUCERS) {
-    it(`fills ${name}.pdf and reads the values back`, () => {
+    it(`fills ${name}.pdf and reads the values back`, async () => {
       const original = fixture(name);
-      const { bytes } = fillForm(original, {
+      const { bytes } = await fillForm(original, {
         full_name: "Grace Hopper",
         notes: "a note",
         agree: true,
@@ -84,21 +102,21 @@ describe("fillForm - across producers", () => {
     });
   }
 
-  it("carries unicode through every producer - umlauts, currency, CJK and emoji", () => {
+  it("carries unicode through every producer - umlauts, currency, CJK and emoji", async () => {
     // A PDF literal is PDFDocEncoded; writing UTF-8 into one (the obvious mistake) reads back as
     // mojibake. Anything outside ASCII therefore has to go out as a UTF-16BE hex string.
     const hard = "Jörg Müller — 1.234,56 € · 日本 😀 · a(b)c\\d";
     for (const name of PRODUCERS) {
-      const { bytes } = fillForm(fixture(name), { full_name: hard });
+      const { bytes } = await fillForm(fixture(name), { full_name: hard });
       expect(readBack(bytes).field("full_name")?.value).toBe(hard);
     }
   });
 
-  it("leaves fields it was not asked about completely alone", () => {
+  it("leaves fields it was not asked about completely alone", async () => {
     // The point of an incremental update: a form with 20 fields of which you fill 3 keeps the other 17
     // byte for byte, values and all.
     const before = readBack(fixture("pdflib-form"));
-    const { bytes } = fillForm(fixture("pdflib-form"), { full_name: "only this one" });
+    const { bytes } = await fillForm(fixture("pdflib-form"), { full_name: "only this one" });
     const after = readBack(bytes);
     for (const name of ["notes", "agree", "plan", "country", "size"]) {
       expect(after.field(name)?.value).toBe(before.field(name)?.value);
@@ -117,27 +135,27 @@ describe("fillForm - the appearance must not go stale", () => {
     return widget === undefined ? undefined : get(doc.getObject(widget), "AP");
   };
 
-  it("drops a text field's stale drawing when the value changes", () => {
+  it("drops a text field's stale drawing when the value changes", async () => {
     for (const name of ["jasy-form", "pdflib-form"]) {
       // These two DO draw their fields, so there is something to invalidate.
       expect(appearanceOf(fixture(name), "notes")).toBeDefined();
-      const { bytes } = fillForm(fixture(name), { notes: "new text" });
+      const { bytes } = await fillForm(fixture(name), { notes: "new text" });
       expect(appearanceOf(bytes, "notes")).toBeUndefined();
     }
   });
 
-  it("keeps a check box's drawing, because it holds STATES and not a value", () => {
+  it("keeps a check box's drawing, because it holds STATES and not a value", async () => {
     // /AP for a button is `<< /Yes … /Off … >>`; both stay valid and only /AS moves. Dropping it would
     // leave the box with nothing to display at all.
-    const { bytes } = fillForm(fixture("jasy-form"), { agree: true });
+    const { bytes } = await fillForm(fixture("jasy-form"), { agree: true });
     expect(appearanceOf(bytes, "agree")).toBeDefined();
     const { doc, field } = readBack(bytes);
     const widget = doc.getObject(field("agree")!.widgets[0].num!);
     expect(get(widget, "AS")).toBeDefined(); // the visible state was switched
   });
 
-  it("switches a radio group so that exactly one button is on", () => {
-    const { bytes } = fillForm(fixture("jasy-form"), { plan: "basic" });
+  it("switches a radio group so that exactly one button is on", async () => {
+    const { bytes } = await fillForm(fixture("jasy-form"), { plan: "basic" });
     const { doc, field } = readBack(bytes);
     const plan = field("plan")!;
     expect(plan.value).toBe("basic");
@@ -154,81 +172,82 @@ describe("fillForm - the appearance must not go stale", () => {
 });
 
 describe("fillForm - the form is a contract", () => {
-  it("names an unknown field instead of quietly doing nothing", () => {
-    expect(() => fillForm(fixture("jasy-form"), { nope: "x" })).toThrow(FillError);
-    expect(() => fillForm(fixture("jasy-form"), { nope: "x" })).toThrow(/no such field: "nope"/);
+  it("names an unknown field instead of quietly doing nothing", async () => {
+    await expect(fillForm(fixture("jasy-form"), { nope: "x" })).rejects.toThrow(FillError);
+    await expect(fillForm(fixture("jasy-form"), { nope: "x" })).rejects.toThrow(
+      /no such field: "nope"/,
+    );
   });
 
-  it("rejects a value the field's type cannot hold", () => {
-    expect(() => fillForm(fixture("jasy-form"), { full_name: true })).toThrow(/text field/);
-    expect(() => fillForm(fixture("jasy-form"), { agree: ["a"] })).toThrow(/button/);
+  it("rejects a value the field's type cannot hold", async () => {
+    await expect(fillForm(fixture("jasy-form"), { full_name: true })).rejects.toThrow(/text field/);
+    await expect(fillForm(fixture("jasy-form"), { agree: ["a"] })).rejects.toThrow(/button/);
   });
 
-  it("rejects a choice that is not one of the options", () => {
-    expect(() => fillForm(fixture("jasy-form"), { country: "Atlantis" })).toThrow(
+  it("rejects a choice that is not one of the options", async () => {
+    await expect(fillForm(fixture("jasy-form"), { country: "Atlantis" })).rejects.toThrow(
       /not an option of "country"/,
     );
     // ... and lists what IS accepted, so the message is actionable.
-    expect(() => fillForm(fixture("jasy-form"), { country: "Atlantis" })).toThrow(/"Germany"/);
+    await expect(fillForm(fixture("jasy-form"), { country: "Atlantis" })).rejects.toThrow(
+      /"Germany"/,
+    );
   });
 
-  it("refuses a signature field rather than pretending to sign", () => {
-    expect(() => fillForm(fixture("jasy-form"), { sig: "me" })).toThrow(/signature field/);
+  it("refuses a signature field rather than pretending to sign", async () => {
+    await expect(fillForm(fixture("jasy-form"), { sig: "me" })).rejects.toThrow(/signature field/);
   });
 
-  it("refuses a push button, which holds no value", () => {
-    expect(() => fillForm(fixture("jasy-form"), { go: "x" })).toThrow(/push button/);
+  it("refuses a push button, which holds no value", async () => {
+    await expect(fillForm(fixture("jasy-form"), { go: "x" })).rejects.toThrow(/push button/);
   });
 
-  it("clears a value with null", () => {
-    const { bytes } = fillForm(fixture("jasy-form"), { full_name: null });
+  it("clears a value with null", async () => {
+    const { bytes } = await fillForm(fixture("jasy-form"), { full_name: null });
     expect(readBack(bytes).field("full_name")?.value).toBeUndefined();
   });
 
-  it("warns about an XFA hybrid instead of silently filling half a document", () => {
+  it("warns about an XFA hybrid instead of silently filling half a document", async () => {
     // gov-w9 carries both an AcroForm and an XFA packet; a viewer preferring XFA may ignore our values.
     const w9 = fixture("gov-w9");
     const name = readAcroForm(PdfDocument.load(w9))!.fields[0].name;
-    const { warnings, filled } = fillForm(w9, { [name]: "Ada" });
+    const { warnings, filled } = await fillForm(w9, { [name]: "Ada" });
     expect(filled).toEqual([name]);
     expect(warnings.join(" ")).toMatch(/XFA/);
   });
 
-  it("refuses an encrypted document instead of writing plain text into it", async () => {
-    // Without this guard the fill "succeeds" and returns a file whose new values are plain text among
-    // ciphertext - it looks like it worked and is broken. Refusing is the honest answer until filling a
-    // password-protected document is actually built.
-    const doc = Document([
-      Page({ margin: 56 }, [Column([TextField({ name: "full_name", border: "#888" })])]),
-    ]);
-    const encrypted = await renderToBytes(doc, { encrypt: { userPassword: "secret" } });
-    expect(() => fillForm(encrypted, { full_name: "Ada" })).toThrow(FillError);
-    expect(() => fillForm(encrypted, { full_name: "Ada" })).toThrow(/encrypted/);
+  it("names WHICH encryption problem it is, rather than just refusing", async () => {
+    const encrypted = await encryptedForm();
+    await expect(fillForm(encrypted, { full_name: "Ada" })).rejects.toThrow(/pass its password/);
+    await expect(fillForm(encrypted, { full_name: "Ada" }, { password: "nope" })).rejects.toThrow(
+      /wrong password/,
+    );
   });
 
-  it("refuses a boolean for a choice field instead of writing the word 'true'", () => {
+  it("refuses a boolean for a choice field instead of writing the word 'true'", async () => {
     // `String(true)` used to reach the option check, so an EDITABLE combo would have accepted the text
     // "true" as a value.
-    expect(() => fillForm(fixture("jasy-form"), { country: true })).toThrow(/choice field/);
+    await expect(fillForm(fixture("jasy-form"), { country: true })).rejects.toThrow(/choice field/);
   });
 
-  it("treats an empty array as clearing the choice", () => {
+  it("treats an empty array as clearing the choice", async () => {
     // It fell through to `pdfText(list[0])` on undefined and wrote the literal text "(undefined)".
-    const { bytes } = fillForm(fixture("jasy-form"), { size: [] });
+    const { bytes } = await fillForm(fixture("jasy-form"), { size: [] });
     expect(readBack(bytes).field("size")?.value).toBeUndefined();
     expect(new TextDecoder("latin1").decode(bytes)).not.toContain("(undefined)");
   });
 
-  it("refuses to READ an encrypted form rather than hand back ciphertext as names", async () => {
-    const doc = Document([
-      Page({ margin: 56 }, [Column([TextField({ name: "full_name", border: "#888" })])]),
-    ]);
-    const encrypted = await renderToBytes(doc, { encrypt: { userPassword: "secret" } });
-    expect(() => readAcroForm(PdfDocument.load(encrypted))).toThrow(/encrypted/);
+  it("refuses to read an encrypted form that was never opened with its password", async () => {
+    // `load` does not decipher, so every string is still ciphertext; handing those back as field names
+    // would be the silent guess this reader exists to avoid.
+    const encrypted = await encryptedForm();
+    expect(() => readAcroForm(PdfDocument.load(encrypted))).toThrow(
+      /open it with PdfDocument.open/,
+    );
   });
 
-  it("refuses a document that has no form at all", () => {
-    expect(() => fillForm(new Uint8Array([1, 2, 3]), { a: "b" })).toThrow(/no AcroForm/);
+  it("refuses a document that has no form at all", async () => {
+    await expect(fillForm(new Uint8Array([1, 2, 3]), { a: "b" })).rejects.toThrow(/no AcroForm/);
   });
 });
 
@@ -243,7 +262,7 @@ describe("fillForm - /MaxLen", () => {
     return form.fields.find((f) => f.maxLen === 7)!; // f1_15, seven characters
   };
 
-  it("reads /MaxLen off a real government form", () => {
+  it("reads /MaxLen off a real government form", async () => {
     const withMax = readAcroForm(PdfDocument.load(w9()))!.fields.filter(
       (f) => f.maxLen !== undefined,
     );
@@ -251,24 +270,24 @@ describe("fillForm - /MaxLen", () => {
     expect(capped().maxLen).toBe(7);
   });
 
-  it("accepts a value exactly at the limit and refuses one past it", () => {
+  it("accepts a value exactly at the limit and refuses one past it", async () => {
     const name = capped().name;
-    expect(() => fillForm(w9(), { [name]: "1234567" })).not.toThrow();
-    expect(() => fillForm(w9(), { [name]: "12345678" })).toThrow(
+    await expect(fillForm(w9(), { [name]: "1234567" })).resolves.toBeDefined();
+    await expect(fillForm(w9(), { [name]: "12345678" })).rejects.toThrow(
       /holds at most 7 characters, but the value has 8/,
     );
   });
 
-  it("counts code points, not UTF-16 units", () => {
+  it("counts code points, not UTF-16 units", async () => {
     // Four emoji are eight UTF-16 units but four characters; `.length` would reject a value the field
     // can hold perfectly well.
     const name = capped().name;
     expect([..."😀😀😀😀"].length).toBe(4);
     expect("😀😀😀😀".length).toBe(8);
-    expect(() => fillForm(w9(), { [name]: "😀😀😀😀" })).not.toThrow();
+    await expect(fillForm(w9(), { [name]: "😀😀😀😀" })).resolves.toBeDefined();
   });
 
-  it("inherits /MaxLen from a parent field, the way the type is inherited", () => {
+  it("inherits /MaxLen from a parent field, the way the type is inherited", async () => {
     // Every fixture declares /MaxLen on the leaf, so inheritance needs a document built for it: a parent
     // field carrying /FT and /MaxLen, and a kid that states neither. Without this the rule would be
     // untested - the tree walk could ignore the parent entirely and every other test would still pass.
@@ -277,38 +296,38 @@ describe("fillForm - /MaxLen", () => {
     const field = readAcroForm(doc)!.fields.find((f) => f.name === "group.child")!;
     expect(field.type).toBe("Tx"); // inherited too, the established rule this rides on
     expect(field.maxLen).toBe(5);
-    expect(() => fillForm(inheritedFieldPdf(), { "group.child": "123456" })).toThrow(
+    await expect(fillForm(inheritedFieldPdf(), { "group.child": "123456" })).rejects.toThrow(
       /holds at most 5 characters/,
     );
   });
 });
 
 describe("fillForm - awkward shapes a producer is allowed to write", () => {
-  it("inherits /V from a parent field, so a kid that states no value still has one", () => {
+  it("inherits /V from a parent field, so a kid that states no value still has one", async () => {
     const form = readAcroForm(PdfDocument.load(inheritedFieldPdf()))!;
     expect(form.fields.find((f) => f.name === "group.child")?.value).toBe("dad");
   });
 
-  it("sets /NeedAppearances when the AcroForm sits INLINE in the catalog", () => {
+  it("sets /NeedAppearances when the AcroForm sits INLINE in the catalog", async () => {
     // Only a referenced /AcroForm used to be rewritten, so an inline one silently kept its old flag and
     // the freshly written values were never drawn.
-    const { bytes } = fillForm(inheritedFieldPdf(), { "group.child": "abc" });
+    const { bytes } = await fillForm(inheritedFieldPdf(), { "group.child": "abc" });
     const doc = PdfDocument.load(bytes);
     const acro = doc.lookup(doc.catalog, "AcroForm");
     expect(get(acro, "NeedAppearances")).toBe(true);
     expect(readAcroForm(doc)!.fields.find((f) => f.name === "group.child")?.value).toBe("abc");
   });
 
-  it("keeps a dictionary key that collides with Object.prototype", () => {
+  it("keeps a dictionary key that collides with Object.prototype", async () => {
     // `k in changes` finds "constructor" on the prototype and would drop the entry from the rewritten
     // dictionary - silently deleting data we were never asked to touch.
-    const { bytes } = fillForm(inheritedFieldPdf(), { "group.child": "abc" });
+    const { bytes } = await fillForm(inheritedFieldPdf(), { "group.child": "abc" });
     const doc = PdfDocument.load(bytes);
     const widget = doc.getObject(5);
     expect(textOf(get(widget, "constructor"))).toBe("keep me");
   });
 
-  it("preserves an object's generation instead of writing 0", () => {
+  it("preserves an object's generation instead of writing 0", async () => {
     // Object 5 lives at generation 3. Re-emitting it as `5 0 obj` would describe a DIFFERENT object than
     // the one being replaced, and the xref entry would point at the wrong thing.
     const pdf = buildPdf(
@@ -321,7 +340,7 @@ describe("fillForm - awkward shapes a producer is allowed to write", () => {
       ],
       [0, 0, 0, 0, 3],
     );
-    const { bytes } = fillForm(pdf, { aged: "value" });
+    const { bytes } = await fillForm(pdf, { aged: "value" });
     const appended = new TextDecoder("latin1").decode(bytes.subarray(pdf.length));
     expect(appended).toContain("5 3 obj");
     expect(appended).not.toContain("5 0 obj");
@@ -332,20 +351,74 @@ describe("fillForm - awkward shapes a producer is allowed to write", () => {
   });
 });
 
+describe("fillForm - an ENCRYPTED document", () => {
+  it("fills it with the password and the result is still fully encrypted", async () => {
+    const original = await encryptedForm();
+    const { bytes } = await fillForm(
+      original,
+      { full_name: "Grace Hopper äöü" },
+      { password: "secret" },
+    );
+
+    // Still an incremental update: the original bytes are untouched at the front.
+    expect(Array.from(bytes.subarray(0, original.length))).toEqual(Array.from(original));
+
+    const doc = await PdfDocument.open(bytes, { password: "secret" });
+    const form = readAcroForm(doc)!;
+    expect(form.fields[0].value).toBe("Grace Hopper äöü");
+
+    // The written value must be ciphertext, and so must the tooltip we did NOT touch but did rewrite
+    // along with the rest of the dictionary - that one is the trap: it is plaintext in memory after
+    // opening, and copying it through unchanged would put it in the clear.
+    const raw = new TextDecoder("latin1").decode(bytes);
+    expect(raw).not.toContain("Grace Hopper");
+    expect(raw).not.toContain("Your name");
+    expect(raw).not.toContain("full_name");
+  });
+
+  it("fills an ACCESSIBLE encrypted document, whose metadata stream is deliberately plaintext", async () => {
+    // `/EncryptMetadata false` leaves the XMP stream in the clear on purpose. Deciphering it anyway - as
+    // the first version did - destroyed it, and an accessible+encrypted file could not be opened at all.
+    // Found by writing this test; it is the reason it exists.
+    const original = await renderToBytes(
+      Document([
+        Page({ margin: 56 }, [
+          Column([TextField({ name: "full_name", value: "x", border: "#888" })]),
+        ]),
+      ]),
+      { encrypt: { userPassword: "secret" }, accessible: true, lang: "de-DE", title: "T" },
+    );
+    // /Lang really is in there, and enciphered to begin with.
+    expect(new TextDecoder("latin1").decode(original)).not.toContain("de-DE");
+
+    const { bytes } = await fillForm(original, { full_name: "Ada" }, { password: "secret" });
+    expect(new TextDecoder("latin1").decode(bytes)).not.toContain("de-DE");
+
+    const doc = await PdfDocument.open(bytes, { password: "secret" });
+    expect(readAcroForm(doc)!.fields[0].value).toBe("Ada");
+  });
+
+  it("still refuses a wrong value, before any encryption happens", async () => {
+    await expect(
+      fillForm(await encryptedForm(), { nope: "x" }, { password: "secret" }),
+    ).rejects.toThrow(/no such field/);
+  });
+});
+
 describe("fillForm - the file stays valid", () => {
-  it("can be filled twice, each update chaining onto the last", () => {
+  it("can be filled twice, each update chaining onto the last", async () => {
     // Two incremental updates in a row: the second must find the first one's values and add to them.
-    const once = fillForm(fixture("pdflib-form"), { full_name: "First" }).bytes;
-    const twice = fillForm(once, { notes: "Second" }).bytes;
+    const once = (await fillForm(fixture("pdflib-form"), { full_name: "First" })).bytes;
+    const twice = (await fillForm(once, { notes: "Second" })).bytes;
     expect(Array.from(twice.subarray(0, once.length))).toEqual(Array.from(once));
     const { field } = readBack(twice);
     expect(field("full_name")?.value).toBe("First");
     expect(field("notes")?.value).toBe("Second");
   });
 
-  it("keeps the document readable: catalog, pages and index all still resolve", () => {
+  it("keeps the document readable: catalog, pages and index all still resolve", async () => {
     for (const name of PRODUCERS) {
-      const { bytes } = fillForm(fixture(name), { full_name: "X" });
+      const { bytes } = await fillForm(fixture(name), { full_name: "X" });
       const doc = PdfDocument.load(bytes);
       // Read through the REAL index, not a rebuilt one - a broken update would force recovery.
       expect(doc.recovered).toBe(false);
@@ -355,10 +428,10 @@ describe("fillForm - the file stays valid", () => {
     }
   });
 
-  it("writes an xref stream for a stream-indexed file and a table for a table-indexed one", () => {
+  it("writes an xref stream for a stream-indexed file and a table for a table-indexed one", async () => {
     // Mixing the two would leave a reader that follows only one kind unable to walk the chain back.
-    const modern = fillForm(fixture("pdflib-form"), { full_name: "X" }).bytes;
-    const classic = fillForm(fixture("pdflib-form-classic"), { full_name: "X" }).bytes;
+    const modern = (await fillForm(fixture("pdflib-form"), { full_name: "X" })).bytes;
+    const classic = (await fillForm(fixture("pdflib-form-classic"), { full_name: "X" })).bytes;
     const tailOf = (b: Uint8Array) => new TextDecoder("latin1").decode(b.subarray(b.length - 900));
     expect(tailOf(modern)).toContain("/Type /XRef");
     expect(tailOf(classic)).toContain("xref");
@@ -368,10 +441,10 @@ describe("fillForm - the file stays valid", () => {
     expect(tailOf(classic)).toMatch(/\/Prev \d+/);
   });
 
-  it("does not corrupt binary bytes in the appended index", () => {
+  it("does not corrupt binary bytes in the appended index", async () => {
     // The xref stream is binary; running it through a UTF-8 encoder turns every value above 127 into
     // two bytes and the whole index becomes garbage - which is exactly what happened first time round.
-    const bytes = fillForm(fixture("pdflib-form"), { full_name: "X" }).bytes;
+    const bytes = (await fillForm(fixture("pdflib-form"), { full_name: "X" })).bytes;
     const doc = PdfDocument.load(bytes);
     expect(doc.recovered).toBe(false); // a garbled index would have forced a rebuild
     expect(readAcroForm(doc)!.fields.length).toBe(6);

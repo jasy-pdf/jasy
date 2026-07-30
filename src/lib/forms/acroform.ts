@@ -1,6 +1,6 @@
 import type { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 import type { FormFieldNode } from "../ir/display-list.ts";
-import { NORMAL_STYLE, escName, escPdf, num2, pdfColor } from "./pdf.ts";
+import { NORMAL_STYLE, escName, num2, pdfColor } from "./pdf.ts";
 import {
   type FieldLine,
   checkboxOff,
@@ -67,19 +67,26 @@ function rectOf(node: FormFieldNode): string {
 
 /** A text field (/Tx). `apRef` is its baked appearance (the default); without one the field carries only
  *  /DA and the viewer draws the value itself (`fieldAppearances: false`). */
-function buildTextWidget(node: FormFieldNode, daFont: string, apRef?: number): string {
+function buildTextWidget(
+  node: FormFieldNode,
+  daFont: string,
+  om: PDFObjectManager,
+  apRef?: number,
+): string {
   const f = node.field;
   if (f.kind !== "text") throw new Error("buildTextWidget: not a text field");
-  const parts = [`/Type /Annot /Subtype /Widget /FT /Tx`, `/T (${escPdf(f.name)})`];
-  if (f.value !== undefined) parts.push(`/V (${escPdf(f.value)})`);
-  if (f.tooltip !== undefined) parts.push(`/TU (${escPdf(f.tooltip)})`);
+  const parts = [`/Type /Annot /Subtype /Widget /FT /Tx`, `/T ${om.pdfString(f.name)}`];
+  if (f.value !== undefined) parts.push(`/V ${om.pdfString(f.value)}`);
+  if (f.tooltip !== undefined) parts.push(`/TU ${om.pdfString(f.tooltip)}`);
   let flags = commonFlags(f);
   if (f.multiline) flags |= FF_MULTILINE;
   if (f.password) flags |= FF_PASSWORD;
   if (flags) parts.push(`/Ff ${flags}`);
   if (f.maxLength !== undefined) parts.push(`/MaxLen ${f.maxLength}`);
   parts.push(`/Rect ${rectOf(node)} /F ${annotFlags(f)}${quadding(f.align)}`);
-  parts.push(`/DA (/${daFont} ${num2(node.style.fontSize)} Tf ${pdfColor(node.style.color)} rg)`);
+  parts.push(
+    `/DA ${om.pdfString(`/${daFont} ${num2(node.style.fontSize)} Tf ${pdfColor(node.style.color)} rg`)}`,
+  );
   if (apRef !== undefined) parts.push(`/AP << /N ${apRef} 0 R >>`);
   return `<< ${parts.join(" ")}${boxChrome(node)} >>`;
 }
@@ -97,12 +104,16 @@ function buildCheckboxWidget(node: FormFieldNode, om: PDFObjectManager): string 
   const onRef = om.addFormXObject(bbox, checkboxOn(node.width, node.height, node.style));
   const offRef = om.addFormXObject(bbox, checkboxOff(node.width, node.height, node.style));
 
-  const parts = [`/Type /Annot /Subtype /Widget /FT /Btn`, `/T (${escPdf(f.name)})`];
-  if (f.tooltip !== undefined) parts.push(`/TU (${escPdf(f.tooltip)})`);
+  const parts = [`/Type /Annot /Subtype /Widget /FT /Btn`, `/T ${om.pdfString(f.name)}`];
+  if (f.tooltip !== undefined) parts.push(`/TU ${om.pdfString(f.tooltip)}`);
   if (commonFlags(f)) parts.push(`/Ff ${commonFlags(f)}`);
   parts.push(`/V /${state} /AS /${state}`);
   parts.push(`/Rect ${rectOf(node)} /F ${annotFlags(f)}`);
   parts.push(`/AP << /N << /${on} ${onRef} 0 R /Off ${offRef} 0 R >> >>`);
+  // The check mark lives in ZapfDingbats. We bake the appearance ourselves, so this /DA is only read by
+  // a viewer that REGENERATES (which /NeedAppearances asks for) - but then it needs it, and it needs the
+  // matching /DR entry, or it silently draws an empty box.
+  parts.push(`/DA ${om.pdfString(`/ZaDb 0 Tf ${pdfColor(node.style.color)} rg`)}`);
   return `<< ${parts.join(" ")}${boxChrome(node)} >>`;
 }
 
@@ -117,19 +128,24 @@ function choiceSelection(f: ChoiceSpec): string[] {
 
 /** A choice field (/Ch): a dropdown (combo) or list box. `apRef` is its baked appearance (the default);
  *  without one the viewer draws the selected value from /DA + /V. */
-function buildChoiceWidget(node: FormFieldNode, daFont: string, apRef?: number): string {
+function buildChoiceWidget(
+  node: FormFieldNode,
+  daFont: string,
+  om: PDFObjectManager,
+  apRef?: number,
+): string {
   const f = node.field;
   if (f.kind !== "choice") throw new Error("buildChoiceWidget: not a choice");
   // /Opt: each entry is [ (export) (display) ], so a label can differ from the stored value.
   const opt = f.options
-    .map((o) => `[(${escPdf(o.value)}) (${escPdf(o.label ?? o.value)})]`)
+    .map((o) => `[${om.pdfString(o.value)} ${om.pdfString(o.label ?? o.value)}]`)
     .join(" ");
   const parts = [
     `/Type /Annot /Subtype /Widget /FT /Ch`,
-    `/T (${escPdf(f.name)})`,
+    `/T ${om.pdfString(f.name)}`,
     `/Opt [${opt}]`,
   ];
-  if (f.tooltip !== undefined) parts.push(`/TU (${escPdf(f.tooltip)})`);
+  if (f.tooltip !== undefined) parts.push(`/TU ${om.pdfString(f.tooltip)}`);
 
   let flags = commonFlags(f);
   if (f.combo) flags |= FF_COMBO | (f.editable ? FF_EDIT : 0);
@@ -142,30 +158,32 @@ function buildChoiceWidget(node: FormFieldNode, daFont: string, apRef?: number):
     // A multi-select field's value is an ARRAY of strings; every other choice field holds one string.
     parts.push(
       f.multiSelect
-        ? `/V [${chosen.map((v) => `(${escPdf(v)})`).join(" ")}]`
-        : `/V (${escPdf(chosen[0])})`,
+        ? `/V [${chosen.map((v) => `${om.pdfString(v)}`).join(" ")}]`
+        : `/V ${om.pdfString(chosen[0])}`,
     );
     const idx = chosen.map(indexOf).filter((i) => i >= 0);
     if (idx.length) parts.push(`/I [${idx.join(" ")}]`);
   }
 
   parts.push(`/Rect ${rectOf(node)} /F ${annotFlags(f)}${quadding(f.align)}`);
-  parts.push(`/DA (/${daFont} ${num2(node.style.fontSize)} Tf ${pdfColor(node.style.color)} rg)`);
+  parts.push(
+    `/DA ${om.pdfString(`/${daFont} ${num2(node.style.fontSize)} Tf ${pdfColor(node.style.color)} rg`)}`,
+  );
   if (apRef !== undefined) parts.push(`/AP << /N ${apRef} 0 R >>`);
   return `<< ${parts.join(" ")}${boxChrome(node)} >>`;
 }
 
 /** The `/A` action a push button fires. Scripted actions are deliberately not offered. */
-function actionDict(a: ButtonAction): string {
+function actionDict(a: ButtonAction, om: PDFObjectManager): string {
   switch (a.kind) {
     case "reset":
       return `/A << /S /ResetForm >>`;
     case "submit":
       // /Flags 4 = ExportFormat: post the field values as HTML form data rather than FDF, which is what
       // an ordinary web endpoint expects.
-      return `/A << /S /SubmitForm /F << /FS /URL /F (${escPdf(a.url)}) >> /Flags 4 >>`;
+      return `/A << /S /SubmitForm /F << /FS /URL /F ${om.pdfString(a.url)} >> /Flags 4 >>`;
     case "url":
-      return `/A << /S /URI /URI (${escPdf(a.url)}) >>`;
+      return `/A << /S /URI /URI ${om.pdfString(a.url)} >>`;
   }
 }
 
@@ -193,6 +211,8 @@ export class AcroFormCollector {
   // use and shared, so the /DR entry and the appearance streams point at ONE font object - and a document
   // of checkboxes alone never emits it.
   private helvNum?: number;
+  // Same for ZapfDingbats, emitted only when a check box or radio button exists.
+  private zadbNum?: number;
   // Set once a signature field exists; the catalog then needs /SigFlags.
   private hasSignature = false;
   // Bake every field's appearance (default). Off = emit no /AP and set /NeedAppearances, i.e. let the
@@ -310,12 +330,26 @@ export class AcroFormCollector {
     ));
   }
 
+  /**
+   * ZapfDingbats, the font a check mark lives in. Needed even though we bake the appearance ourselves:
+   * a viewer told to regenerate (`/NeedAppearances`, which filling a form sets) redraws a check box from
+   * its `/DA`, and the conventional `/DA` for one names `/ZaDb`. Without the matching `/DR` entry the
+   * viewer cannot resolve the font - poppler says "Unknown font tag 'ZaDb'" and draws no check at all.
+   * No encoding: ZapfDingbats brings its own.
+   */
+  private zadb(om: PDFObjectManager): number {
+    return (this.zadbNum ??= om.addObject(
+      `<< /Type /Font /Subtype /Type1 /BaseFont /ZapfDingbats >>`,
+    ));
+  }
+
   /** Emit the widget object for one form-field IR node, register it as a field, and return its object
    *  number so the PageRenderer can add it to that page's /Annots. */
   addField(node: FormFieldNode, om: PDFObjectManager): number {
     if (node.field.kind === "radio") return this.addRadio(node, om);
     let dict: string;
     if (node.field.kind === "checkbox") {
+      this.zadb(om); // its /DA names /ZaDb, so /DR has to carry it
       dict = buildCheckboxWidget(node, om);
     } else if (node.field.kind === "pushbutton") {
       dict = this.buildPushButtonWidget(node, om);
@@ -323,13 +357,13 @@ export class AcroFormCollector {
       dict = this.buildSignatureWidget(node, om);
     } else if (node.field.kind === "choice") {
       this.helv(om);
-      dict = buildChoiceWidget(node, "Helv", this.bake ? this.bakeChoice(node, om) : undefined);
+      dict = buildChoiceWidget(node, "Helv", om, this.bake ? this.bakeChoice(node, om) : undefined);
       // Only text and choice depend on the flag; the other kinds always carry a complete appearance,
       // so a document of checkboxes alone must not ask the viewer to redraw anything.
       if (!this.bake) this.needAppearances = true;
     } else {
       this.helv(om);
-      dict = buildTextWidget(node, "Helv", this.bake ? this.bakeText(node, om) : undefined);
+      dict = buildTextWidget(node, "Helv", om, this.bake ? this.bakeText(node, om) : undefined);
       if (!this.bake) this.needAppearances = true;
     }
     const objNum = om.addObject(dict);
@@ -364,18 +398,18 @@ export class AcroFormCollector {
       `/Font << /Helv ${fontNum} 0 R >>`,
     );
 
-    const parts = [`/Type /Annot /Subtype /Widget /FT /Btn`, `/T (${escPdf(f.name)})`];
-    if (f.tooltip !== undefined) parts.push(`/TU (${escPdf(f.tooltip)})`);
+    const parts = [`/Type /Annot /Subtype /Widget /FT /Btn`, `/T ${om.pdfString(f.name)}`];
+    if (f.tooltip !== undefined) parts.push(`/TU ${om.pdfString(f.tooltip)}`);
     parts.push(`/Ff ${FF_PUSHBUTTON | commonFlags(f)}`);
     parts.push(`/Rect ${rectOf(node)} /F ${annotFlags(f)}`);
     // /DA as well as the baked /AP: a viewer that REGENERATES the face (poppler does this for push
     // buttons; others do it while the button is pressed) needs the font + size + colour, or it draws the
     // box with no caption. With /DA it reproduces what we baked.
-    parts.push(`/DA (/Helv ${num2(size)} Tf ${pdfColor(node.style.color)} rg)`);
+    parts.push(`/DA ${om.pdfString(`/Helv ${num2(size)} Tf ${pdfColor(node.style.color)} rg`)}`);
     parts.push(`/AP << /N ${apRef} 0 R >>`);
-    if (f.action) parts.push(actionDict(f.action));
+    if (f.action) parts.push(actionDict(f.action, om));
     // /MK /CA is the caption the viewer falls back to when IT regenerates the face (e.g. while pressed).
-    return `<< ${parts.join(" ")}${boxChrome(node, `/CA (${escPdf(f.label)})`)} >>`;
+    return `<< ${parts.join(" ")}${boxChrome(node, `/CA ${om.pdfString(f.label)}`)} >>`;
   }
 
   /** A radio button: one KID widget of its group's shared field. The group field is reserved on first
@@ -399,11 +433,13 @@ export class AcroFormCollector {
     const onRef = om.addFormXObject(bbox, radioOn(node.width, node.height, node.style));
     const offRef = om.addFormXObject(bbox, radioOff(node.width, node.height, node.style));
     const as = f.selected ? f.value : "Off";
+    this.zadb(om); // same as a check box: a regenerating viewer draws the dot from /DA + /DR
     const parts = [
       `/Type /Annot /Subtype /Widget /Parent ${g.parentNum} 0 R`,
       `/Rect ${rectOf(node)} /F ${annotFlags(f)}`,
       `/AP << /N << /${escName(f.value)} ${onRef} 0 R /Off ${offRef} 0 R >> >>`,
       `/AS /${escName(as)}`,
+      `/DA ${om.pdfString(`/ZaDb 0 Tf ${pdfColor(node.style.color)} rg`)}`,
     ];
     const kidNum = om.addObject(`<< ${parts.join(" ")}${boxChrome(node)} >>`);
     g.kids.push(kidNum);
@@ -427,8 +463,8 @@ export class AcroFormCollector {
       `/Font << /Helv ${fontNum} 0 R >>`,
     );
 
-    const parts = [`/Type /Annot /Subtype /Widget /FT /Sig`, `/T (${escPdf(f.name)})`];
-    if (f.tooltip !== undefined) parts.push(`/TU (${escPdf(f.tooltip)})`);
+    const parts = [`/Type /Annot /Subtype /Widget /FT /Sig`, `/T ${om.pdfString(f.name)}`];
+    if (f.tooltip !== undefined) parts.push(`/TU ${om.pdfString(f.tooltip)}`);
     if (commonFlags(f)) parts.push(`/Ff ${commonFlags(f)}`);
     parts.push(`/Rect ${rectOf(node)} /F ${annotFlags(f)}`);
     parts.push(`/AP << /N ${apRef} 0 R >>`);
@@ -442,13 +478,18 @@ export class AcroFormCollector {
       const ff = FF_RADIO | FF_NO_TOGGLE_OFF | g.flags;
       om.replaceObject(
         g.parentNum,
-        `<< /FT /Btn /Ff ${ff} /T (${escPdf(name)}) /V /${escName(g.selected ?? "Off")} /Kids [${kids}] >>`,
+        `<< /FT /Btn /Ff ${ff} /T ${om.pdfString(name)} /V /${escName(g.selected ?? "Off")} /Kids [${kids}] >>`,
       );
     }
     if (this.fieldRefs.length === 0) return "";
     const fields = this.fieldRefs.map((r) => `${r} 0 R`).join(" ");
-    // /DR only when a field's /DA actually references the font (text, choice, button captions).
-    const dr = this.helvNum ? ` /DR << /Font << /Helv ${this.helvNum} 0 R >> >>` : "";
+    // /DR only lists the fonts a field's /DA actually references: /Helv for text, choice and button
+    // captions, /ZaDb for the check mark of a box or radio button.
+    const fonts = [
+      this.helvNum ? `/Helv ${this.helvNum} 0 R` : "",
+      this.zadbNum ? `/ZaDb ${this.zadbNum} 0 R` : "",
+    ].filter(Boolean);
+    const dr = fonts.length ? ` /DR << /Font << ${fonts.join(" ")} >> >>` : "";
     const na = this.needAppearances ? " /NeedAppearances true" : "";
     // /SigFlags 3 = SignaturesExist | AppendOnly: the document holds a signature field, and it must be
     // updated incrementally so an existing signature stays verifiable.

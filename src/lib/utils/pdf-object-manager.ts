@@ -235,6 +235,7 @@ export class PDFObjectManager implements FontMetrics {
   // render; finalizeEncryption() encrypts them all in one async pass and adds the /Encrypt object.
   private security?: SecurityHandler;
   private encJobs: Uint8Array[] = [];
+  private strJobs: Uint8Array[] = [];
   private encryptObjNum?: number;
 
   // Accessible (PDF/UA) tagging, off by default (byte-identical output); the API turns it on.
@@ -302,6 +303,34 @@ export class PDFObjectManager implements FontMetrics {
   // A unique, binary-safe placeholder for a stream's bytes, swapped for ciphertext in finalizeEncryption().
   private encToken(id: number): string {
     return ` JENC:${id} `;
+  }
+
+  // The same trick for a literal STRING. A separate marker because the two are swapped differently: a
+  // stream keeps its delimiters and only the payload changes, a string is replaced whole by a hex one.
+  private strToken(id: number): string {
+    return `\x00\x02JSTR:${id}\x02\x00`;
+  }
+
+  /**
+   * The single choke-point every literal string in an OBJECT goes through - a field's `/T` and `/V`, a
+   * bookmark `/Title`, a link `/URI`, an `/Alt` text, a destination name.
+   *
+   * Without a security handler this is the escaped literal we have always written, so output stays
+   * byte-identical. With one, the raw bytes are registered for the finalize pass and a placeholder takes
+   * their place: ISO 32000-1 7.6.2 requires ALL strings and streams to be encrypted, and the ones missed
+   * here were exactly the values a password is supposed to protect (ISSUE-7).
+   *
+   * A string INSIDE a content stream needs none of this - the stream is enciphered as a whole.
+   */
+  pdfString(text: string): string {
+    if (!this.security) {
+      return `(${text.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)")})`;
+    }
+    // Encrypt the bytes the unencrypted path would have written, so a viewer decrypts to the same value.
+    // No escaping is applied: the result is emitted as a HEX string, which has no escapes to get wrong.
+    const bytes = new Uint8Array(getArrayBuffer(text));
+    const id = this.strJobs.push(bytes) - 1;
+    return this.strToken(id);
   }
 
   // The single encryption choke-point every stream emitter routes through (stream(), registerImage). Without
@@ -457,11 +486,9 @@ endstream`;
         data,
       ),
     );
-    const escaped = (s: string) =>
-      s.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
-    const desc = opts.description ? ` /Desc (${escaped(opts.description)})` : "";
+    const desc = opts.description ? ` /Desc ${this.pdfString(opts.description)}` : "";
     const filespec = this.addObject(
-      `<< /Type /Filespec /F (${escaped(name)}) /UF (${escaped(name)}) ` +
+      `<< /Type /Filespec /F ${this.pdfString(name)} /UF ${this.pdfString(name)} ` +
         `/AFRelationship /${opts.relationship ?? "Unspecified"}${desc} ` +
         `/EF << /F ${embedded} 0 R /UF ${embedded} 0 R >> >>`,
     );
@@ -488,8 +515,8 @@ endstream`;
     const profile = this.addObject(this.stream("/N 3", icc));
     this.outputIntent = this.addObject(
       `<< /Type /OutputIntent /S /GTS_PDFA1 ` +
-        `/OutputConditionIdentifier (${opts.identifier ?? "sRGB"}) ` +
-        `/Info (${opts.info ?? "sRGB IEC61966-2.1"}) /DestOutputProfile ${profile} 0 R >>`,
+        `/OutputConditionIdentifier ${this.pdfString(opts.identifier ?? "sRGB")} ` +
+        `/Info ${this.pdfString(opts.info ?? "sRGB IEC61966-2.1")} /DestOutputProfile ${profile} 0 R >>`,
     );
   }
 
@@ -543,6 +570,18 @@ endstream`;
       // Function replacement: a string replacement would interpret `$&`/`$\``/... in the random ciphertext.
       if (idx >= 0) this.objects[idx] = this.objects[idx].replace(token, () => ciphertext);
     }
+    // Strings: the same idea, but a string is replaced WHOLE - `(text)` becomes `<ciphertext>`. Hex,
+    // because the ciphertext is binary and a hex string has no escape rules to get wrong.
+    for (let id = 0; id < this.strJobs.length; id++) {
+      const cipher = await this.security.encrypt(this.strJobs[id]);
+      const hex = Array.from(cipher, (b) => b.toString(16).padStart(2, "0").toUpperCase()).join("");
+      const token = this.strToken(id);
+      const idx = this.objects.findIndex((o) => o.includes(token));
+      if (idx >= 0) this.objects[idx] = this.objects[idx].replace(token, () => `<${hex}>`);
+    }
+
+    // Added LAST on purpose: the /Encrypt dictionary's own strings must stay in the clear (7.6.2), and
+    // they would otherwise be swept up by the pass above.
     this.encryptObjNum = this.addObject(`<< ${this.security.encryptDict()} >>`);
   }
 
@@ -864,7 +903,7 @@ endstream`;
       .join(" ");
     return (
       `<< /Type /Font /Subtype /CIDFontType2 /BaseFont /${pdfName(name)} ` +
-      `/CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> ` +
+      `/CIDSystemInfo << /Registry ${this.pdfString("Adobe")} /Ordering ${this.pdfString("Identity")} /Supplement 0 >> ` +
       `/FontDescriptor ${descriptor} 0 R /CIDToGIDMap /Identity ` +
       `/DW 1000 /W [${w}] >>`
     );

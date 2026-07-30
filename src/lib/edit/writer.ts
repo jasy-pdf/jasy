@@ -1,5 +1,8 @@
 import type { PdfDocument } from "./document.ts";
-import { isDict, isRef, isStream, isString, type PdfObject } from "./objects.ts";
+import { isDict, isRef, isStream, isString, type PdfObject, type PdfString } from "./objects.ts";
+
+/** Strings already enciphered for write-back, keyed by the very object they replace. */
+export type StringCipher = Map<PdfString, string>;
 
 /**
  * Writing changes back into an existing PDF, as an **incremental update**.
@@ -52,22 +55,26 @@ const num = (n: number) => (Number.isInteger(n) ? String(n) : String(Number(n.to
  * A string keeps the spelling it was read with: a name written as `<FEFF…>` stays hex, because that is
  * how the producer encodes unicode and rewriting it as a literal would corrupt it.
  */
-export function serialize(o: PdfObject | undefined): string {
+export function serialize(o: PdfObject | undefined, cipher?: StringCipher): string {
   if (o === undefined || o === null) return "null";
   if (typeof o === "number") return num(o);
   if (typeof o === "boolean") return String(o);
-  if (Array.isArray(o)) return `[${o.map(serialize).join(" ")}]`;
+  if (Array.isArray(o)) return `[${o.map((e) => serialize(e, cipher)).join(" ")}]`;
   if (isRef(o)) return `${o.num} ${o.gen} R`;
   if (isString(o)) {
+    // In an encrypted document every string was deciphered on open, so it is PLAINTEXT here. Writing it
+    // back as-is would leak it; the caller pre-enciphers each one and passes the result in.
+    const enciphered = cipher?.get(o);
+    if (enciphered !== undefined) return enciphered;
     // A string the producer wrote as hex stays hex; the rest is decided by its bytes.
     return o.hex
       ? `<${Array.from(o.bytes, (b) => b.toString(16).padStart(2, "0").toUpperCase()).join("")}>`
       : stringToken(o.bytes);
   }
-  if (isStream(o)) return `${serialize(o.dict)}\nstream\n<<stream data>>\nendstream`;
+  if (isStream(o)) return `${serialize(o.dict, cipher)}\nstream\n<<stream data>>\nendstream`;
   if (isDict(o)) {
     const parts: string[] = [];
-    for (const [k, v] of o.map) parts.push(`/${escNameToken(k)} ${serialize(v)}`);
+    for (const [k, v] of o.map) parts.push(`/${escNameToken(k)} ${serialize(v, cipher)}`);
     return `<< ${parts.join(" ")} >>`;
   }
   return `/${escNameToken(o.name)}`;
@@ -177,6 +184,9 @@ export class IncrementalWriter {
     const rootRef = this.doc.trailer.map.get("Root");
     const idRef = this.doc.trailer.map.get("ID");
     const infoRef = this.doc.trailer.map.get("Info");
+    // /Encrypt MUST be carried over. Dropping it declares the file plaintext while its contents are
+    // still ciphertext, so every reader - including ours - hands back raw bytes as field names.
+    const encryptRef = this.doc.trailer.map.get("Encrypt");
 
     // An xref stream is itself an object and has to appear in its own index, so its number is taken
     // first and its offset is where this whole section begins.
@@ -228,6 +238,7 @@ export class IncrementalWriter {
         entry("/Root", rootRef),
         entry("/Info", infoRef),
         entry("/ID", idRef),
+        entry("/Encrypt", encryptRef),
         prev !== undefined ? `/Prev ${prev}` : "",
         `/Length ${rows.length}`,
       ].filter(Boolean);
@@ -253,6 +264,7 @@ export class IncrementalWriter {
       entry("/Root", rootRef),
       entry("/Info", infoRef),
       entry("/ID", idRef),
+      entry("/Encrypt", encryptRef),
       prev !== undefined ? `/Prev ${prev}` : "",
     ].filter(Boolean);
     return enc(`${table}trailer\n<< ${trailer.join(" ")} >>\nstartxref\n${xrefOffset}\n%%EOF\n`);
