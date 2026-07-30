@@ -11,6 +11,9 @@ export default defineConfig({
   // the TS source so they run against live source without a build step.
   resolve: {
     alias: {
+      // The subpath needs its own entry: an alias matches exactly, so "@jasy/pdf" alone would leave
+      // "@jasy/pdf/edit" to fall through to node resolution, which vitest handles differently.
+      "@jasy/pdf/edit": resolve(rootDir, "src/lib/edit/index.ts"),
       "@jasy/pdf": resolve(rootDir, "src/lib/index.ts"),
       // @jasy/e-invoice has no dist in a fresh CI test job (build runs in a separate job); alias it to
       // source too so the CLI suites resolve it without a build, same as @jasy/pdf above.

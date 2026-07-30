@@ -1,5 +1,6 @@
 import { defineComponent, h, type PropType } from "vue";
 import type {
+  ButtonActionInput,
   ColorInput,
   Insets,
   ImageSource,
@@ -318,4 +319,191 @@ export const PageCount = defineComponent({
   inheritAttrs: false,
   props: pageNumberProps,
   setup: fwd("page-count"),
+});
+
+// ---------------------------------------------------------------------------------------------
+// Form fields
+// ---------------------------------------------------------------------------------------------
+// Two places where the template surface deliberately differs from the TypeScript one, both because a
+// template has no second argument and no way to compose a helper inline:
+//
+//   - the list-like fields take their choices as `:options`, not as a second parameter;
+//   - a field's LABEL is the default slot, so `<JasyCheckbox name="agree">I agree</JasyCheckbox>` writes
+//     itself instead of being assembled from a Row, a Checkbox and a Text.
+//
+// There is deliberately no `v-model`. It would promise two-way binding, and a generated PDF writes
+// nothing back - `:value` says exactly what happens.
+
+/** Shared by every field: what the PDF format lets you say about one, regardless of its kind. */
+const fieldProps = {
+  /** The field name - unique in the document; you read the value back by it. */
+  name: { type: String, required: true as const },
+  /** Tooltip / accessible name shown on hover. */
+  tooltip: String,
+  /** Show the value but do not let the reader change it. */
+  readOnly: { type: Boolean, default: undefined },
+  /** Must be filled in before the form is submitted. */
+  required: { type: Boolean, default: undefined },
+  /** Hide the widget entirely - neither on screen nor in print. */
+  hidden: { type: Boolean, default: undefined },
+  /** Include the widget when printing (default true). */
+  print: { type: Boolean, default: undefined },
+  width: Number,
+  height: Number,
+  color: colorProp,
+  border: colorProp,
+  background: colorProp,
+  borderWidth: Number,
+};
+
+/**
+ * The label a field draws beside itself. Usually the default slot; the prop is there for the cases a slot
+ * cannot cover - a computed string, or a field built in a `v-for`. The slot wins when both exist.
+ *
+ * Split into three sets rather than one, because the factories genuinely differ and a prop the engine
+ * ignores is worse than a missing one: it looks like a knob and does nothing. Only a check box styles its
+ * own label; a push button and a signature field draw theirs inside the widget; a radio group has no
+ * single label at all - `labelSize`/`labelColor` there style the CHOICES.
+ */
+const labelOnly = { label: String };
+const checkboxLabelProps = {
+  ...labelOnly,
+  labelSize: Number,
+  labelColor: colorProp,
+  labelGap: Number,
+};
+const choiceLabelProps = { labelSize: Number, labelColor: colorProp };
+
+/** `["S", "M"]` or `[{ value: "DE", label: "Germany" }]` - both accepted. */
+type ChoiceInput = string | { value: string; label?: string };
+const optionsProp = {
+  options: {
+    type: Array as PropType<ChoiceInput[]>,
+    required: true as const,
+  },
+};
+
+/**
+ * Forwards the default slot as a `label` PROP rather than as children: a field's label is text the
+ * factory draws beside the box, not a child element, and passing it as a child would make it a sibling
+ * the layout knows nothing about.
+ */
+const fwdLabelled =
+  (tag: string) =>
+  (props: any, { slots, attrs }: any) =>
+  () => {
+    const slot = slots.default?.();
+    const fromSlot = slot
+      ?.map((v: any) => (typeof v.children === "string" ? v.children : ""))
+      .join("")
+      .trim();
+    const label = fromSlot || props.label;
+    return h(tag, { ...attrs, ...props, ...(label ? { label } : {}) });
+  };
+
+export const TextField = defineComponent({
+  name: "JasyTextField",
+  inheritAttrs: false,
+  props: {
+    ...fieldProps,
+    /** Initial value written into the document. */
+    value: String,
+    /** Accept several lines (give it a `height` to match). */
+    multiline: { type: Boolean, default: undefined },
+    /** Mask the characters - a password field. */
+    password: { type: Boolean, default: undefined },
+    /** How the value sits in the box. */
+    align: String as PropType<"left" | "center" | "right">,
+    maxLength: Number,
+    fontSize: Number,
+  },
+  setup: fwd("text-field"),
+});
+
+export const Checkbox = defineComponent({
+  name: "JasyCheckbox",
+  inheritAttrs: false,
+  props: {
+    ...fieldProps,
+    ...checkboxLabelProps,
+    /** Whether it starts ticked. */
+    checked: { type: Boolean, default: undefined },
+    /** The value stored when ticked (default "Yes"). */
+    onValue: String,
+    /** Box side length in points. */
+    size: Number,
+  },
+  setup: fwdLabelled("checkbox"),
+});
+
+export const RadioGroup = defineComponent({
+  name: "JasyRadioGroup",
+  inheritAttrs: false,
+  props: {
+    ...fieldProps,
+    ...choiceLabelProps,
+    ...optionsProp,
+    /** Which option starts selected, by its value. */
+    value: String,
+    /** Button diameter in points. */
+    size: Number,
+    /** Space between the buttons. */
+    gap: Number,
+  },
+  setup: fwd("radio-group"),
+});
+
+export const Dropdown = defineComponent({
+  name: "JasyDropdown",
+  inheritAttrs: false,
+  props: {
+    ...fieldProps,
+    ...optionsProp,
+    value: String,
+    /** Let the reader type a value that is not in the list. */
+    editable: { type: Boolean, default: undefined },
+    fontSize: Number,
+  },
+  setup: fwd("dropdown"),
+});
+
+export const ListBox = defineComponent({
+  name: "JasyListBox",
+  inheritAttrs: false,
+  props: {
+    ...fieldProps,
+    ...optionsProp,
+    value: String,
+    /** Several values selectable at once. */
+    multiSelect: { type: Boolean, default: undefined },
+    fontSize: Number,
+  },
+  setup: fwd("list-box"),
+});
+
+export const PushButton = defineComponent({
+  name: "JasyPushButton",
+  inheritAttrs: false,
+  props: {
+    ...fieldProps,
+    ...labelOnly,
+    /**
+     * What pressing it does: `"reset"` clears the form, `{ submit: url }` posts it, `{ open: url }`
+     * follows a link. Viewer support varies and is documented on the factory - reset is the one that
+     * works everywhere.
+     */
+    action: [String, Object] as PropType<ButtonActionInput>,
+    fontSize: Number,
+  },
+  setup: fwdLabelled("push-button"),
+});
+
+export const SignatureField = defineComponent({
+  name: "JasySignatureField",
+  inheritAttrs: false,
+  props: {
+    ...fieldProps,
+    ...labelOnly,
+  },
+  setup: fwdLabelled("signature-field"),
 });

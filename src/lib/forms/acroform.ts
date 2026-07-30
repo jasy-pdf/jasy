@@ -216,6 +216,8 @@ export class AcroFormCollector {
   private zadbNum?: number;
   // Set once a signature field exists; the catalog then needs /SigFlags.
   private hasSignature = false;
+  // Field name -> its kind, so a collision can say WHAT collided.
+  private usedNames = new Map<string, string>();
   // Bake every field's appearance (default). Off = emit no /AP and set /NeedAppearances, i.e. let the
   // viewer draw everything - what react-pdf/pdfkit always does, and what we did before this step.
   private bake = true;
@@ -348,10 +350,31 @@ export class AcroFormCollector {
     ));
   }
 
+  /**
+   * A field name is its identity: two fields sharing one are ONE field to every viewer, showing the same
+   * value in both places and overwriting each other as the reader types. The format allows it and says
+   * nothing, so the mistake surfaces only when someone fills the form. Named here instead.
+   *
+   * A radio GROUP is the exception - its buttons deliberately share a name, which is what makes them
+   * mutually exclusive - so it never comes through here.
+   */
+  private claimName(name: string, kind: string): void {
+    const taken = this.usedNames.get(name);
+    if (taken !== undefined) {
+      throw new Error(
+        `@jasy/pdf: two form fields are called "${name}" (a ${taken} and a ${kind}). A name is a field's ` +
+          "identity - a viewer would treat them as one field and show the same value in both places. " +
+          "Give them different names, or use a RadioGroup if they are meant to belong together.",
+      );
+    }
+    this.usedNames.set(name, kind);
+  }
+
   /** Emit the widget object for one form-field IR node, register it as a field, and return its object
    *  number so the PageRenderer can add it to that page's /Annots. */
   addField(node: FormFieldNode, om: PDFObjectManager): number {
     if (node.field.kind === "radio") return this.addRadio(node, om);
+    this.claimName(node.field.name, node.field.kind);
     let dict: string;
     if (node.field.kind === "checkbox") {
       this.zadb(om); // its /DA names /ZaDb, so /DR has to carry it
@@ -425,6 +448,11 @@ export class AcroFormCollector {
     if (f.kind !== "radio") throw new Error("addRadio: not a radio");
     let g = this.radioGroups.get(f.group);
     if (!g) {
+      // Claimed ONCE, when the group comes into being: its buttons share the name deliberately, but the
+      // group as a whole still has to collide with a text field of the same name like any other field.
+      // A SECOND RadioGroup of the same name therefore joins this one rather than colliding - that is
+      // how the buttons of one question are placed in two different spots and stay exclusive.
+      this.claimName(f.group, "radio group");
       g = { parentNum: om.addObject(""), kids: [], flags: 0 };
       this.radioGroups.set(f.group, g);
       this.fieldRefs.push(g.parentNum);
