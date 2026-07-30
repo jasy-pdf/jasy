@@ -12,7 +12,7 @@
  * Run:  pnpm exec tsx examples/scripts/fill-existing-form.ts
  */
 import { readFileSync, writeFileSync } from "node:fs";
-import { PdfDocument, readAcroForm, fillForm, FillError } from "@jasy/pdf/edit";
+import { PdfDocument, readAcroForm, fillForm, flattenForm, FillError } from "@jasy/pdf/edit";
 
 const source = "tests/fixtures/forms/jasy-form.pdf";
 const target = "examples/out/filled-form.pdf";
@@ -78,7 +78,23 @@ try {
 }
 
 // ---------------------------------------------------------------------------------------------
-// 4. A password-protected document.
+// 4. Flatten it, so the values stop being editable.
+// ---------------------------------------------------------------------------------------------
+// The value becomes part of the page and the field is gone - nothing is re-rendered, so the result looks
+// exactly as it did. Flatten only some of them with `{ fields: [...] }`.
+//
+// What you get is what the FORM said: a field the author gave a border keeps that border, a field
+// without one flattens to plain text. Flattening freezes what is there, it does not add or remove
+// decoration.
+const flat = await flattenForm(bytes);
+writeFileSync("examples/out/flattened-form.pdf", flat.bytes);
+console.log(`\n  flattened: ${flat.flattened.join(", ")}`);
+console.log(
+  `  fields left: ${readAcroForm(await PdfDocument.open(flat.bytes))?.fields.length ?? 0}`,
+);
+
+// ---------------------------------------------------------------------------------------------
+// 5. A password-protected document.
 // ---------------------------------------------------------------------------------------------
 // Pass the password and everything above works the same way. jasy OPENS AES-256 (R6 and Adobe's older
 // R5), AES-128 and RC4; it only ever WRITES AES-256 R6, so filling a legacy-encrypted file is refused

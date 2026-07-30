@@ -1,6 +1,8 @@
 import { PdfDocument } from "./document.ts";
 import { readAcroForm, type ReadField } from "./acroform-reader.ts";
 import { IncrementalWriter, serialize, type StringCipher } from "./writer.ts";
+import { bakeAppearance, bakeButtonStates, readLook } from "./appearance.ts";
+import { getArrayBuffer } from "../utils/utf8-to-windows1252-encoder.ts";
 import {
   get,
   isDict,
@@ -30,6 +32,12 @@ export type FieldValue = string | boolean | string[] | null;
 export interface FillOptions {
   /** The user password, for a document that is encrypted. Wrong or missing gives a named error. */
   password?: string;
+  /**
+   * Draw the new value into the field's appearance (default `true`), the same way jasy bakes one when it
+   * CREATES a field - so the value is visible in any viewer, not only in one that honours
+   * `/NeedAppearances`. Set `false` to leave the drawing to the viewer instead.
+   */
+  fieldAppearances?: boolean;
   /**
    * Leave the drawing of the values to the viewer by setting `/NeedAppearances`, instead of generating
    * appearance streams. Default `true` today - baking them is the next step.
@@ -124,6 +132,58 @@ function stringsIn(o: PdfObject | undefined, out: PdfString[] = [], depth = 0): 
   return out;
 }
 
+/**
+ * Draw the field again for its NEW value and append the XObject, returning its object number. Falls back
+ * to `undefined` when the widget does not say enough about itself to draw it - then the caller drops the
+ * picture and the viewer takes over, which is always safe.
+ */
+async function bakeFor(
+  doc: PdfDocument,
+  writer: IncrementalWriter,
+  field: ReadField,
+  widgetNum: number,
+  change: { v?: string; text?: string; texts?: string[] },
+): Promise<number | undefined> {
+  const look = readLook(doc, doc.getObject(widgetNum), field);
+  if (look === undefined || look.width <= 0 || look.height <= 0) return undefined;
+  const face = bakeAppearance(look, field, change.text, change.texts);
+  if (face === undefined) return undefined;
+  const bbox = face.bbox.map((n: number) => Number(n.toFixed(2))).join(" ");
+  const encoded = new Uint8Array(getArrayBuffer(face.content));
+  const plain = (await doc.encryptForWrite(encoded)) ?? encoded;
+  return writer.add({
+    dict: `/Type /XObject /Subtype /Form /BBox [${bbox}] /Resources << /Font << /Helv ${writer.helv()} 0 R >> >>`,
+    // Windows-1252, NOT UTF-8: the appearance draws with /Helv, a WinAnsiEncoding font, so an "ä" is one
+    // byte 0xE4. Encoding it as UTF-8 puts two bytes in and the viewer faithfully draws two glyphs.
+    // And in an encrypted document the stream is a stream like any other - it has to be enciphered too.
+    data: plain,
+  });
+}
+
+/** The `/AP` dictionary for a button we had to draw ourselves, or `undefined` if we cannot. */
+async function bakeStatesFor(
+  doc: PdfDocument,
+  writer: IncrementalWriter,
+  field: ReadField,
+  widgetNum: number,
+  state: string,
+): Promise<string | undefined> {
+  const look = readLook(doc, doc.getObject(widgetNum), field);
+  if (look === undefined || look.width <= 0 || look.height <= 0) return undefined;
+  const radio = (field.flags & FF_RADIO) !== 0;
+  const on = state === "Off" ? (field.onValues?.[0] ?? "Yes") : state;
+  const faces = bakeButtonStates(look, on, radio);
+  const bbox = faces.bbox.map((n) => Number(n.toFixed(2))).join(" ");
+  const write = async (content: string) => {
+    const encoded = new Uint8Array(getArrayBuffer(content));
+    return writer.add({
+      dict: `/Type /XObject /Subtype /Form /BBox [${bbox}]`,
+      data: (await doc.encryptForWrite(encoded)) ?? encoded,
+    });
+  };
+  return `<< /N << /${escName(on)} ${await write(faces.on)} 0 R /Off ${await write(faces.off)} 0 R >> >>`;
+}
+
 class FillError extends Error {}
 
 /** Check one value against what the field can actually hold, and return it in PDF terms. */
@@ -131,7 +191,7 @@ function plan(
   field: ReadField,
   value: FieldValue,
   enciphered?: Map<string, string>,
-): { v?: string; as?: Map<number, string>; i?: string } {
+): { v?: string; as?: Map<number, string>; i?: string; text?: string; texts?: string[] } {
   const flags = field.flags;
   if (flags & FF_READ_ONLY) {
     throw new FillError(`field "${field.name}" is read-only`);
@@ -177,10 +237,16 @@ function plan(
     }
     // Every widget shows the target when it owns that state, and Off otherwise - that is what makes a
     // radio group mutually exclusive.
+    //
+    // A widget that declares NO states at all (PDFKit and react-pdf ship none) owns nothing, so the test
+    // above would leave every box Off however it was filled. There the target is simply the state, since
+    // it is the one being drawn. Not for a radio group: with no states there is no way to tell its
+    // buttons apart, and turning them all on would be worse than leaving them alone.
+    const declaresNothing = states.length === 0 && (flags & FF_RADIO) === 0;
     const as = new Map<number, string>();
     for (const w of field.widgets) {
       if (w.num === undefined) continue;
-      as.set(w.num, w.onValues.includes(target) ? target : "Off");
+      as.set(w.num, declaresNothing || w.onValues.includes(target) ? target : "Off");
     }
     return { v: `/${escName(target)}`, as };
   }
@@ -220,6 +286,8 @@ function plan(
         ? `[${list.map((x) => pdfText(x, enciphered)).join(" ")}]`
         : pdfText(list[0], enciphered),
       i: indices.length > 0 ? `[${indices.join(" ")}]` : undefined,
+      text: list[0],
+      texts: list,
     };
   }
 
@@ -238,7 +306,7 @@ function plan(
       `"${field.name}" holds at most ${field.maxLen} characters, but the value has ${length}`,
     );
   }
-  return { v: pdfText(value, enciphered) };
+  return { v: pdfText(value, enciphered), text: value };
 }
 
 /**
@@ -302,6 +370,7 @@ export async function fillForm(
   }
 
   const writer = new IncrementalWriter(doc);
+  const bake = options.fieldAppearances !== false;
   const filled: string[] = [];
   // Emission is deferred: the objects we rewrite carry strings we are NOT changing, and in an encrypted
   // document those have to be enciphered again before they go back in.
@@ -335,18 +404,29 @@ export async function fillForm(
 
     // A text or choice appearance IS a picture of the value, so the one drawn for the old value is now
     // wrong. Leaving it behind is what made a filled field look empty: the viewer faithfully shows the
-    // stale drawing. Removing it puts the file in the same state as one that never had an appearance,
-    // where the viewer has to draw from /V and /DA - which is exactly why PDFKit's and react-pdf's
-    // filled forms displayed correctly and ours did not.
-    // A BUTTON is different: its /AP holds the on/off STATES, both still valid, so it is kept and only
-    // /AS moves.
+    // stale drawing.
+    //
+    // So it is DRAWN AGAIN, from the widget's own style - which is what jasy does when it creates a
+    // field, and what makes the value visible without the viewer having to redraw anything. Opt out with
+    // `fieldAppearances: false` and the old behaviour returns: drop the picture, set /NeedAppearances,
+    // let the viewer draw.
+    // A BUTTON is different either way: its /AP holds the on/off STATES, both still valid, so it is kept
+    // and only /AS moves.
     if (field.type === "Tx" || field.type === "Ch") {
       for (const w of field.widgets) {
-        if (w.num !== undefined) editsFor(w.num).AP = undefined;
+        if (w.num === undefined) continue;
+        const baked = bake ? await bakeFor(doc, writer, field, w.num, change) : undefined;
+        editsFor(w.num).AP = baked !== undefined ? `<< /N ${baked} 0 R >>` : undefined;
       }
     }
     for (const [widgetNum, state] of change.as ?? []) {
       editsFor(widgetNum).AS = `/${escName(state)}`;
+      // A button whose widget ships NO state pictures (PDFKit, react-pdf write none) stays an empty box
+      // in anything that does not redraw - and cannot be flattened at all. Draw the two states once.
+      if (bake && !field.widgets.find((w) => w.num === widgetNum)?.hasAppearance) {
+        const ap = await bakeStatesFor(doc, writer, field, widgetNum, state);
+        if (ap !== undefined) editsFor(widgetNum).AP = ap;
+      }
     }
 
     for (const [objNum, changes] of edits) {
@@ -367,7 +447,7 @@ export async function fillForm(
   const rootRef = doc.trailer.map.get("Root");
   const catalog = doc.catalog;
   const alsoRewritten: Array<PdfObject | undefined> =
-    options.needAppearances !== false ? [acro, catalog] : [];
+    bake || options.needAppearances !== false ? [acro, catalog] : [];
 
   // One pass over every string that will be carried over unchanged. Without this a preserved tooltip or
   // a /DA would be written back in the clear, into a file where nothing else is.
@@ -385,16 +465,23 @@ export async function fillForm(
     writer.update(objNum, withEntries(target, changes, carried));
   }
 
-  // Until appearances are generated here, the viewer has to draw the new values.
-  if (options.needAppearances !== false) {
+  // The flag and the pictures are two answers to the same question, so exactly one of them applies.
+  // When we DID draw, the flag has to go: a form that still asks for regeneration gets it, and the
+  // viewer throws our drawing away and redraws from /DA - which is how PDFKit's forms kept asking for a
+  // ZapfDingbats they do not ship.
+  const needAppearances = bake ? "false" : "true";
+  if (bake || options.needAppearances !== false) {
     if (acro !== undefined && isDict(acro)) {
       if (isRef(acroRef)) {
-        writer.update(acroRef.num, withEntries(acro, { NeedAppearances: "true" }, carried));
+        writer.update(
+          acroRef.num,
+          withEntries(acro, { NeedAppearances: needAppearances }, carried),
+        );
       } else {
         // The form dict can also sit INLINE in the catalog (our own hand-written fixtures do). Then the
         // catalog is what has to be rewritten - skipping it left the new values undrawn.
         if (isRef(rootRef) && catalog !== undefined && isDict(catalog)) {
-          const inlined = withEntries(acro, { NeedAppearances: "true" }, carried);
+          const inlined = withEntries(acro, { NeedAppearances: needAppearances }, carried);
           writer.update(rootRef.num, withEntries(catalog, { AcroForm: inlined }, carried));
         }
       }

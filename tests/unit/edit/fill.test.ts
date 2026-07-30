@@ -135,13 +135,33 @@ describe("fillForm - the appearance must not go stale", () => {
     return widget === undefined ? undefined : get(doc.getObject(widget), "AP");
   };
 
-  it("drops a text field's stale drawing when the value changes", async () => {
-    for (const name of ["jasy-form", "pdflib-form"]) {
-      // These two DO draw their fields, so there is something to invalidate.
-      expect(appearanceOf(fixture(name), "notes")).toBeDefined();
+  it("REDRAWS a text field, so the picture shows the new value", async () => {
+    for (const name of ["jasy-form", "pdflib-form", "pdfkit-form", "reactpdf-form"]) {
       const { bytes } = await fillForm(fixture(name), { notes: "new text" });
-      expect(appearanceOf(bytes, "notes")).toBeUndefined();
+      // There IS an appearance afterwards - including for the two producers that ship none at all -
+      // and it draws the value we just wrote.
+      expect(appearanceOf(bytes, "notes")).toBeDefined();
+      const doc = PdfDocument.load(bytes);
+      const form = readAcroForm(doc)!;
+      const widget = form.fields.find((f) => f.name === "notes")!.widgets[0].num!;
+      const ap = get(doc.getObject(widget), "AP");
+      const n = doc.resolve(get(ap, "N"));
+      const drawn = new TextDecoder("latin1").decode(
+        doc.streamData(n as Parameters<typeof doc.streamData>[0]),
+      );
+      expect(drawn).toContain("new text");
     }
+  });
+
+  it("leaves the drawing to the viewer when asked to", async () => {
+    // The opt-out is the old behaviour, and it has to stay reachable: no picture, /NeedAppearances set.
+    const { bytes } = await fillForm(
+      fixture("jasy-form"),
+      { notes: "new text" },
+      { fieldAppearances: false },
+    );
+    expect(appearanceOf(bytes, "notes")).toBeUndefined();
+    expect(new TextDecoder("latin1").decode(bytes)).toContain("/NeedAppearances true");
   });
 
   it("keeps a check box's drawing, because it holds STATES and not a value", async () => {
@@ -152,6 +172,22 @@ describe("fillForm - the appearance must not go stale", () => {
     const { doc, field } = readBack(bytes);
     const widget = doc.getObject(field("agree")!.widgets[0].num!);
     expect(get(widget, "AS")).toBeDefined(); // the visible state was switched
+  });
+
+  it("ticks a check box whose widget declares no states of its own", async () => {
+    // PDFKit and react-pdf write no appearance states, so a widget "owns" nothing and the usual test -
+    // does this widget have the target state? - left every box Off however it was filled. It only became
+    // visible once we started drawing the states ourselves.
+    for (const name of ["pdfkit-form", "reactpdf-form"]) {
+      const { bytes } = await fillForm(fixture(name), { agree: true });
+      const { doc, field } = readBack(bytes);
+      const widget = doc.getObject(field("agree")!.widgets[0].num!);
+      const as = get(widget, "AS");
+      expect(
+        as !== undefined && as !== null && typeof as === "object" && "name" in as ? as.name : "",
+      ).not.toBe("Off");
+      expect(get(widget, "AP")).toBeDefined(); // and the state pictures now exist
+    }
   });
 
   it("switches a radio group so that exactly one button is on", async () => {
@@ -310,8 +346,13 @@ describe("fillForm - awkward shapes a producer is allowed to write", () => {
 
   it("sets /NeedAppearances when the AcroForm sits INLINE in the catalog", async () => {
     // Only a referenced /AcroForm used to be rewritten, so an inline one silently kept its old flag and
-    // the freshly written values were never drawn.
-    const { bytes } = await fillForm(inheritedFieldPdf(), { "group.child": "abc" });
+    // the freshly written values were never drawn. Only reachable with the drawing left to the viewer -
+    // when jasy bakes the picture itself there is nothing for the viewer to regenerate.
+    const { bytes } = await fillForm(
+      inheritedFieldPdf(),
+      { "group.child": "abc" },
+      { fieldAppearances: false },
+    );
     const doc = PdfDocument.load(bytes);
     const acro = doc.lookup(doc.catalog, "AcroForm");
     expect(get(acro, "NeedAppearances")).toBe(true);

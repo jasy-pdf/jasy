@@ -11,8 +11,8 @@ import {
   radioOn,
   signatureFace,
   textFieldFace,
+  wrapFieldValue,
 } from "./appearance.ts";
-import { wrapStringIntoLines } from "../text/line-breaker.ts";
 import type { ButtonAction, ChoiceSpec, FieldAlign, FieldStyle, FormFieldSpec } from "./field.ts";
 
 // AcroForm field flags (/Ff), by 1-based bit position per the PDF spec.
@@ -249,9 +249,15 @@ export class AcroFormCollector {
 
     let lines: FieldLine[] = [];
     if (value) {
-      const texts = f.multiline
-        ? wrapStringIntoLines(value, "Helvetica", size, NORMAL_STYLE, innerWidth, om)
-        : [value];
+      const texts = wrapFieldValue(
+        value,
+        "Helvetica",
+        size,
+        NORMAL_STYLE,
+        innerWidth,
+        om,
+        f.multiline ?? false,
+      );
       lines = texts.map((t) => this.line(om, t, size));
     }
     const face = textFieldFace(

@@ -91,6 +91,7 @@ export class IncrementalWriter {
   private readonly changed = new Map<number, string | NewStream>();
   /** Numbers this writer invented, as opposed to ones it replaces - they have no recorded generation. */
   private readonly added = new Set<number>();
+  private helvNum?: number;
   private nextNum: number;
 
   constructor(private readonly doc: PdfDocument) {
@@ -109,6 +110,13 @@ export class IncrementalWriter {
     this.added.add(n);
     this.changed.set(n, body);
     return n;
+  }
+
+  /** A shared Helvetica for regenerated appearances, added once and only when one is drawn. */
+  helv(): number {
+    return (this.helvNum ??= this.add(
+      "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
+    ));
   }
 
   /** The generation to write for an object: the file's own for one we replace, 0 for one we add. */
