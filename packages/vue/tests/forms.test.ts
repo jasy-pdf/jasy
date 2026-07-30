@@ -147,6 +147,35 @@ describe("a field name is an identity", () => {
     expect(String(err)).toMatch(/two form fields are called "email"/);
   });
 
+  it("catches a radio group colliding with an ordinary field", async () => {
+    // The group's own buttons share a name on purpose, so the check has to fire once per GROUP - not per
+    // button, or the group would collide with itself.
+    const err = await Promise.resolve()
+      .then(() =>
+        renderToPdf(
+          doc(h(TextField, { name: "plan" }), h(RadioGroup, { name: "plan", options: ["a"] })),
+        ),
+      )
+      .then(
+        () => undefined,
+        (e) => e,
+      );
+    expect(String(err)).toMatch(/two form fields are called "plan"/);
+  });
+
+  it("lets a second group of the same name JOIN the first", async () => {
+    // Deliberate: it is how one question's buttons are placed in two different spots and stay mutually
+    // exclusive. They end up as one field with all the widgets.
+    const fields = await fieldsOf(
+      doc(
+        h(RadioGroup, { name: "plan", options: ["a", "b"] }),
+        h(RadioGroup, { name: "plan", options: ["c"] }),
+      ),
+    );
+    expect(fields.map((f) => f.name)).toEqual(["plan"]);
+    expect(fields[0].widgets.length).toBe(3);
+  });
+
   it("still lets a radio group share one name across its buttons", async () => {
     // That is what MAKES a radio group - the shared name is why the buttons are mutually exclusive.
     const fields = await fieldsOf(

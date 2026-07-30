@@ -356,14 +356,23 @@ const fieldProps = {
   borderWidth: Number,
 };
 
-/** The label a field draws beside itself. Usually the default slot; the prop is there for the cases a
- *  slot cannot cover - a computed string, or a field built in a `v-for`. The slot wins when both exist. */
-const labelProps = {
-  label: String,
+/**
+ * The label a field draws beside itself. Usually the default slot; the prop is there for the cases a slot
+ * cannot cover - a computed string, or a field built in a `v-for`. The slot wins when both exist.
+ *
+ * Split into three sets rather than one, because the factories genuinely differ and a prop the engine
+ * ignores is worse than a missing one: it looks like a knob and does nothing. Only a check box styles its
+ * own label; a push button and a signature field draw theirs inside the widget; a radio group has no
+ * single label at all - `labelSize`/`labelColor` there style the CHOICES.
+ */
+const labelOnly = { label: String };
+const checkboxLabelProps = {
+  ...labelOnly,
   labelSize: Number,
   labelColor: colorProp,
   labelGap: Number,
 };
+const choiceLabelProps = { labelSize: Number, labelColor: colorProp };
 
 /** `["S", "M"]` or `[{ value: "DE", label: "Germany" }]` - both accepted. */
 type ChoiceInput = string | { value: string; label?: string };
@@ -416,7 +425,7 @@ export const Checkbox = defineComponent({
   inheritAttrs: false,
   props: {
     ...fieldProps,
-    ...labelProps,
+    ...checkboxLabelProps,
     /** Whether it starts ticked. */
     checked: { type: Boolean, default: undefined },
     /** The value stored when ticked (default "Yes"). */
@@ -432,7 +441,7 @@ export const RadioGroup = defineComponent({
   inheritAttrs: false,
   props: {
     ...fieldProps,
-    ...labelProps,
+    ...choiceLabelProps,
     ...optionsProp,
     /** Which option starts selected, by its value. */
     value: String,
@@ -477,7 +486,7 @@ export const PushButton = defineComponent({
   inheritAttrs: false,
   props: {
     ...fieldProps,
-    ...labelProps,
+    ...labelOnly,
     /**
      * What pressing it does: `"reset"` clears the form, `{ submit: url }` posts it, `{ open: url }`
      * follows a link. Viewer support varies and is documented on the factory - reset is the one that
@@ -494,7 +503,7 @@ export const SignatureField = defineComponent({
   inheritAttrs: false,
   props: {
     ...fieldProps,
-    ...labelProps,
+    ...labelOnly,
   },
   setup: fwdLabelled("signature-field"),
 });

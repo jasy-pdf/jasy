@@ -448,6 +448,11 @@ export class AcroFormCollector {
     if (f.kind !== "radio") throw new Error("addRadio: not a radio");
     let g = this.radioGroups.get(f.group);
     if (!g) {
+      // Claimed ONCE, when the group comes into being: its buttons share the name deliberately, but the
+      // group as a whole still has to collide with a text field of the same name like any other field.
+      // A SECOND RadioGroup of the same name therefore joins this one rather than colliding - that is
+      // how the buttons of one question are placed in two different spots and stay exclusive.
+      this.claimName(f.group, "radio group");
       g = { parentNum: om.addObject(""), kids: [], flags: 0 };
       this.radioGroups.set(f.group, g);
       this.fieldRefs.push(g.parentNum);
