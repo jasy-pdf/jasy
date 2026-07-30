@@ -19,7 +19,7 @@ export interface ModuleOptions {
 }
 
 // @jasy/vue components, registered for client templates.
-const COMPONENTS = [
+export const COMPONENTS = [
   "Document",
   "Page",
   "Column",
@@ -48,10 +48,18 @@ const COMPONENTS = [
   "RotatedBox",
   "PageNumber",
   "PageCount",
+  // Form fields.
+  "TextField",
+  "Checkbox",
+  "RadioGroup",
+  "Dropdown",
+  "ListBox",
+  "PushButton",
+  "SignatureField",
 ];
 
 // @jasy/pdf tree factories for server/, prefixed like the components so `prefix` is consistent both sides.
-const SERVER_FACTORIES = [
+export const SERVER_FACTORIES = [
   "Document",
   "Page",
   "Column",
@@ -79,10 +87,20 @@ const SERVER_FACTORIES = [
   "PageCount",
   // Server code is plain JS, so the closure primitive is usable here (unlike in a client template).
   "PageBuilder",
+  // Form fields. Deliberately the SAME seven as the components above, not every export: `Select` is an
+  // alias of `Dropdown` and `Radio` is a single button that only makes sense inside a group, so
+  // auto-importing them would put two names on one thing and one name on half a thing.
+  "TextField",
+  "Checkbox",
+  "RadioGroup",
+  "Dropdown",
+  "ListBox",
+  "PushButton",
+  "SignatureField",
 ];
 
 // Render + unit helpers for server/ - not prefixed.
-const SERVER_UTILS = ["renderToBytes", "renderPdf", "mm"];
+export const SERVER_UTILS = ["renderToBytes", "renderPdf", "mm"];
 
 export default defineNuxtModule<ModuleOptions>({
   meta: {
