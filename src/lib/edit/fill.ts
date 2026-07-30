@@ -256,6 +256,13 @@ export async function fillForm(
   // because the values written back have to be enciphered again with the same file key.
   const doc = await PdfDocument.open(bytes, { password: options.password });
 
+  if (!doc.canReEncrypt) {
+    throw new FillError(
+      "this PDF is encrypted with RC4 or AES-128; jasy can open it but writes only AES-256, so filling it " +
+        "would have to downgrade its protection - refused",
+    );
+  }
+
   const form = readAcroForm(doc);
   if (!form) throw new FillError("this PDF has no AcroForm to fill");
 

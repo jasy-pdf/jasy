@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { PdfDocument } from "../../../src/lib/edit/document.ts";
 import { readAcroForm } from "../../../src/lib/edit/acroform-reader.ts";
-import { fillForm } from "../../../src/lib/edit/fill.ts";
+import { fillForm, FillError } from "../../../src/lib/edit/fill.ts";
 import {
   Column,
   Document,
@@ -124,11 +124,25 @@ describe("writing stays modern even though reading is permissive", () => {
     expect(readAcroForm(doc)!.fields[0].value).toBe("DE99 1234 äöü");
   });
 
-  it("refuses to WRITE a legacy scheme, even after reading one", async () => {
+  it("refuses to WRITE a legacy scheme, up front and in the caller's terms", async () => {
     // Reading RC4 is a concession to files that already exist. Writing it would hand a user protection
     // we know to be broken, so filling a legacy-encrypted file is refused rather than downgraded.
-    await expect(
-      fillForm(fixture("pdfkit-rc4-40"), { full_name: "Grace" }, { password: PASSWORD }),
-    ).rejects.toThrow(/RC4|obsolete|AES-256/);
+    //
+    // Refused on the DOCUMENT's property, before any field is validated or any value enciphered. It used
+    // to fall out of the first attempt to encrypt something - which worked only because a field object
+    // happens to carry a /T, i.e. a guarantee by accident. These three cover the paths that leave the
+    // write side with no string of its own to trip over.
+    for (const [values, options] of [
+      [{ full_name: "Grace" }, {}],
+      [{ full_name: null }, {}],
+      [{ full_name: null }, { needAppearances: false }],
+    ] as const) {
+      const err = await fillForm(fixture("pdfkit-rc4-40"), values, {
+        password: PASSWORD,
+        ...options,
+      }).catch((e) => e);
+      expect(err).toBeInstanceOf(FillError);
+      expect(String(err.message)).toMatch(/downgrade its protection/);
+    }
   });
 });

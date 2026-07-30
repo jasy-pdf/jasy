@@ -86,6 +86,8 @@ export class StandardLegacy implements SecurityHandler {
     private readonly aes: boolean,
   ) {}
 
+  readonly canEncrypt = false;
+
   encryptDict(): string {
     throw new Error(
       "@jasy/pdf: this handler only READS legacy encryption; jasy writes AES-256 (R6) exclusively",

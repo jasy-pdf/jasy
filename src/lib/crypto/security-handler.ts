@@ -13,6 +13,9 @@ import {
 
 /** A handler encrypts/decrypts the strings + streams of a document and describes itself as an `/Encrypt` dict. */
 export interface SecurityHandler {
+  /** Whether this scheme may be WRITTEN. False for the legacy revisions: we open them as a service to
+   *  files that already exist, but handing a user protection known to be broken is not one. */
+  readonly canEncrypt: boolean;
   /** The `/Encrypt` dictionary body (between `<<` and `>>`). Its own strings are never encrypted. */
   encryptDict(): string;
   /** Encrypt one string/stream. `ref` is unused for V5/R6 (one file key) but kept for future per-object schemes. */
@@ -138,6 +141,8 @@ class StandardAes256 implements SecurityHandler {
       `/U <${toHex(u)}> /UE <${toHex(ue)}> /O <${toHex(o)}> /OE <${toHex(oe)}> /Perms <${toHex(permsEnc)}>`;
     return new StandardAes256(fileKey, dict);
   }
+
+  readonly canEncrypt = true;
 
   encryptDict(): string {
     return this.dict;

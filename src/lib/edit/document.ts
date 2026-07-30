@@ -568,6 +568,17 @@ export class PdfDocument {
     return this.security ? this.security.encrypt(data) : undefined;
   }
 
+  /**
+   * Whether values written back into this document can be enciphered again.
+   *
+   * False for a legacy-encrypted file: we can READ RC4 and AES-128, but writing one would downgrade the
+   * user's document to a broken cipher. Asked BEFORE any work is done - otherwise the refusal depends on
+   * a string happening to be present in whatever we rewrite, which is a guarantee by accident.
+   */
+  get canReEncrypt(): boolean {
+    return !this.isEncrypted || (this.security?.canEncrypt ?? false);
+  }
+
   /** The generation of an object as the file records it. Members of an object stream are always 0. */
   generationOf(num: number): number {
     const entry = this.xref.get(num);
