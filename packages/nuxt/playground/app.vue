@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import Invoice from "./Invoice.vue";
+import Form from "./Form.vue";
 
 // usePdf is auto-imported by @jasy/nuxt. open() renders on demand and reuses the result, so one click is
 // one render. Add `{ immediate: true }` to pre-render on mount - the button still won't render twice.
 const { pending, open } = usePdf(Invoice);
+// A second document, so the form can be rendered on the client and compared with the server route below.
+const { pending: formPending, open: openForm } = usePdf(Form);
 </script>
 
 <template>
@@ -27,6 +30,26 @@ const { pending, open } = usePdf(Invoice);
           request.
         </p>
         <a class="btn" href="/api/hello" target="_blank">Render on server &rarr;</a>
+      </section>
+
+      <section class="card">
+        <h2>Form (client)</h2>
+        <p>
+          A fillable AcroForm built from Vue components - text fields, a check box, radios, a
+          dropdown, a list box, buttons and a signature field. Open it and type into it.
+        </p>
+        <button :disabled="formPending" @click="openForm">
+          {{ formPending ? "Rendering..." : "Render form on client" }}
+        </button>
+      </section>
+
+      <section class="card">
+        <h2>Form (server)</h2>
+        <p>
+          The same form, built with the tree API in a Nitro route. Same fields, same widgets, no
+          Vue.
+        </p>
+        <a class="btn" href="/api/form" target="_blank">Render form on server &rarr;</a>
       </section>
 
       <section class="card">
