@@ -56,9 +56,15 @@ export class Validator {
   }
 
   static validateFlexElement(element: FlexiblePDFElement): void {
-    // Ensure flexible elements have valid flex values
-    if (element.getFlex() <= 0) {
-      throw new Error(`Flexible element ${element.constructor.name} has invalid flex value`);
+    // Ensure flexible elements have valid flex values. The message names what the CALLER wrote, not the
+    // element class: `Spacer` and `Expanded` are what exists in their document, `ExpandedElement` is not.
+    const flex = element.getFlex();
+    if (flex <= 0) {
+      throw new Error(
+        `@jasy/pdf: Spacer/Expanded needs a flex above 0, got ${flex}. Flex is a SHARE of the leftover ` +
+          "space, so 0 would claim none - which is what leaving the element out does. For a fixed gap " +
+          "use the `gap` of the surrounding Column or Row, or a Box with a height.",
+      );
     }
 
     // Ensure a flexible element does not contain another flexible element

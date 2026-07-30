@@ -23,6 +23,15 @@ import { Divider, Image } from "./content.ts";
 import { Page, Document, DefaultTextStyle } from "./structure.ts";
 import { PageNumber, PageCount } from "./page-builder.ts";
 import { Table, Cell } from "./table.ts";
+import {
+  Checkbox,
+  Dropdown,
+  ListBox,
+  PushButton,
+  RadioGroup,
+  SignatureField,
+  TextField,
+} from "./forms.ts";
 
 /**
  * The framework-agnostic contract (the firewall). A binding (Vue/React, or any tree-builder)
@@ -156,7 +165,34 @@ const REGISTRY: Record<string, ElementFactory> = {
   // cannot express. These two cover what the closure exists for.
   "page-number": (props) => PageNumber(props),
   "page-count": (props) => PageCount(props),
+
+  // Form fields. The three list-like ones take their choices as a SECOND argument in TypeScript; a
+  // template has no second argument, so here they arrive as an `options` prop. `choiceList` accepts both
+  // the short spelling and the explicit one, because an export value and its label are usually the same
+  // string and having to write it twice is noise.
+  "text-field": (props) => TextField(props),
+  checkbox: (props) => Checkbox(props),
+  "radio-group": (props) => RadioGroup(props, radioChoices(props.options)),
+  dropdown: (props) => Dropdown(props, choiceList(props.options)),
+  "list-box": (props) => ListBox(props, choiceList(props.options)),
+  "push-button": (props) => PushButton(props),
+  "signature-field": (props) => SignatureField(props),
 };
+
+/** `["S", "M"]` or `[{ value: "DE", label: "Germany" }]` - both mean the same thing to a choice field. */
+function choiceList(raw: unknown): Array<string | { value: string; label?: string }> {
+  if (!Array.isArray(raw)) {
+    throw new Error("jasy: a choice field needs an `options` array (strings or {value, label}).");
+  }
+  return raw as Array<string | { value: string; label?: string }>;
+}
+
+/** A radio button always shows a label, so the short spelling means "label is the value". */
+function radioChoices(raw: unknown): Array<{ value: string; label: string }> {
+  return choiceList(raw).map((o) =>
+    typeof o === "string" ? { value: o, label: o } : { value: o.value, label: o.label ?? o.value },
+  );
+}
 
 /**
  * Registers a custom element type, so a binding (or a user-defined component) can introduce

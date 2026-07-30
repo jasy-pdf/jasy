@@ -76,6 +76,15 @@ export function TextField(opts: TextFieldOptions): TextFieldElement {
 export interface CheckboxOptions {
   /** The field name - unique in the document. */
   name: string;
+  /** Text placed beside the box. Given one, the box and the text become a row - the same shape
+   *  `RadioGroup` builds for its choices, so a lone check box does not have to be assembled by hand. */
+  label?: string;
+  /** Size of the label text (default 12). */
+  labelSize?: number;
+  /** Colour of the label text. */
+  labelColor?: ColorInput;
+  /** Space between the box and its label, in points (default 8). */
+  labelGap?: number;
   /** Whether it starts checked. */
   checked?: boolean;
   /** The "on" export value stored when checked (default `"Yes"`). */
@@ -110,13 +119,19 @@ export interface CheckboxOptions {
  * Row({ gap: 6, align: "center" }, [Checkbox({ name: "agree" }), Text("I agree")])
  * ```
  */
-export function Checkbox(opts: CheckboxOptions): CheckboxElement {
-  return new CheckboxElement({
+export function Checkbox(opts: CheckboxOptions): PDFElement {
+  const box = new CheckboxElement({
     ...opts,
     color: opts.color !== undefined ? toColor(opts.color) : undefined,
     border: opts.border !== undefined ? toColor(opts.border) : undefined,
     background: opts.background !== undefined ? toColor(opts.background) : undefined,
   });
+  // Without a label the box IS the element, so nothing wraps it and the output is unchanged.
+  if (opts.label === undefined) return box;
+  return Row({ gap: opts.labelGap ?? 8, align: "center" }, [
+    box,
+    Text(opts.label, { size: opts.labelSize ?? 12, color: opts.labelColor }),
+  ]);
 }
 
 /** Options for a single `Radio` button. Several sharing a `group` are one mutually-exclusive field. */
