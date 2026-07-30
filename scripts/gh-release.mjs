@@ -49,6 +49,11 @@ if (!tag || !name || !version || !repo) {
 // Package prefix is everything before "-v" in the tag (pdf-v1.2.3 -> pdf). The previous tag of the SAME
 // package (sorted by semver) bounds the changelog range; first release falls back to the root commit.
 const prefix = tag.slice(0, tag.lastIndexOf("-v"));
+// A package that was RENAMED keeps its history under the old tag prefix. Without this the first release
+// under the new name finds no predecessor, falls back to the repo's first commit, and the changelog
+// lists everything that package ever touched.
+const FORMER_PREFIX = { "e-invoice": "zugferd" };
+const prefixes = [prefix, FORMER_PREFIX[prefix]].filter(Boolean);
 // versionsort.suffix makes git treat -alpha/-beta/-rc as prereleases (sorted BELOW the stable release),
 // so the previous-tag lookup is correct across the alpha -> stable boundary, not just between alphas.
 const tags = sh("git", [
@@ -61,7 +66,7 @@ const tags = sh("git", [
   "tag",
   "--sort=-v:refname",
   "--list",
-  `${prefix}-v*`,
+  ...prefixes.map((p) => `${p}-v*`),
 ])
   .split("\n")
   .filter(Boolean);
@@ -75,7 +80,9 @@ const from =
 // which is correct. inScope = the set of full shas in the range that touched the package's path.
 const PATHSPEC = {
   pdf: [".", ":(exclude)packages"],
-  zugferd: ["packages/zugferd"],
+  "e-invoice": ["packages/e-invoice"],
+  // The old prefix stays mapped so a tag pushed before the rename still resolves its changelog.
+  zugferd: ["packages/e-invoice"],
   cli: ["packages/cli"],
   vue: ["packages/vue"],
   nuxt: ["packages/nuxt"],

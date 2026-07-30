@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { toCII, toUBL, computeInvoice } from "@jasy/zugferd";
+import { toCII, toUBL, computeInvoice } from "@jasy/e-invoice";
 import { parseCII, parseUBL, parseInvoice } from "../src/core/parse";
 
 // a rich invoice exercising every field the CII parser handles

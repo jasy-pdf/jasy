@@ -10,11 +10,11 @@ import type {
   InvoiceTypeCode,
   AllowanceCharge,
   VatExemptionReason,
-} from "@jasy/zugferd";
+} from "@jasy/e-invoice";
 import { detectInvoice } from "./detect.js";
 
 // XML → Invoice. Hand-rolled, scope-based extraction of the known EN16931 tags (we emit them in
-// @jasy/zugferd, so we know every path). No XML-parser dependency. CII first; UBL plugs in next.
+// @jasy/e-invoice, so we know every path). No XML-parser dependency. CII first; UBL plugs in next.
 // Round-trip safe: parsing an invoice we generated and re-emitting reproduces the same XML.
 
 const unesc = (s: string): string =>

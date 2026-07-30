@@ -31,7 +31,7 @@
   },
   "dependencies": {
     "@jano-editor/ui": "1.0.0-alpha.8",
-    "@jasy/zugferd": "workspace:*",
+    "@jasy/e-invoice": "workspace:*",
     "saxon-js": "^2.6.0"
   },
   "devDependencies": {

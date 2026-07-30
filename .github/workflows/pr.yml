@@ -92,5 +92,5 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       # Only run tests reachable from files changed since main (the module graph handles dependents:
-      # an engine change re-runs the vue/zugferd suites). A docs-only PR runs nothing.
+      # an engine change re-runs the vue/e-invoice suites). A docs-only PR runs nothing.
       - run: pnpm exec vitest run --changed origin/${{ github.base_ref }} --passWithNoTests

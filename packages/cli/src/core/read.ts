@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { computeInvoice, type Invoice, type ComputedInvoice } from "@jasy/zugferd";
+import { computeInvoice, type Invoice, type ComputedInvoice } from "@jasy/e-invoice";
 import { extractEmbeddedXml } from "./extract.js";
 import { detectInvoice, type InvoiceMeta } from "./detect.js";
 import { parseInvoice } from "./parse.js";

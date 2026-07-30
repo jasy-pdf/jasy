@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { renderZugferd } from "@jasy/zugferd";
+import { renderZugferd } from "@jasy/e-invoice";
 import { extractEmbeddedXml } from "../src/core/extract";
 
 const invoice = {

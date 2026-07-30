@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { renderPdf } from "@jasy/pdf";
 import { toCII, computeInvoice } from "../src/index";
 
-describe("@jasy/zugferd", () => {
+describe("@jasy/e-invoice", () => {
   it("exposes its public API (compute + CII)", () => {
     expect(typeof computeInvoice).toBe("function");
     expect(typeof toCII).toBe("function");

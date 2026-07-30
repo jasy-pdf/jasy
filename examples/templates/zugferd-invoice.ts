@@ -1,8 +1,8 @@
 // A ZUGFeRD / Factur-X e-invoice: a typed EN-16931 Invoice in -> a conformant PDF/A-3 with the
 // CII XML embedded out. Totals + the VAT breakdown are computed by the generator, so the business
-// rules that check the arithmetic hold by construction. Rendered via @jasy/zugferd (not renderToBytes);
+// rules that check the arithmetic hold by construction. Rendered via @jasy/e-invoice (not renderToBytes);
 // the harness writes both the .pdf and the .xml.
-import type { Invoice } from "@jasy/zugferd";
+import type { Invoice } from "@jasy/e-invoice";
 
 const invoice: Invoice = {
   number: "RE-2026-0142",
@@ -10,7 +10,9 @@ const invoice: Invoice = {
   dueDate: "2026-07-04",
   currency: "EUR",
   buyerReference: "PO-99213",
-  notes: ["Thank you for your business. Conformant ZUGFeRD invoice generated with @jasy/zugferd."],
+  notes: [
+    "Thank you for your business. Conformant ZUGFeRD invoice generated with @jasy/e-invoice.",
+  ],
 
   seller: {
     name: "Muster Studio GmbH",

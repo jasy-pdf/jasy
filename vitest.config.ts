@@ -7,14 +7,14 @@ import { fileURLToPath } from "url";
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
 
 export default defineConfig({
-  // Workspace packages (e.g. @jasy/zugferd, @jasy/vue) import the core as "@jasy/pdf"; resolve that to
+  // Workspace packages (e.g. @jasy/e-invoice, @jasy/vue) import the core as "@jasy/pdf"; resolve that to
   // the TS source so they run against live source without a build step.
   resolve: {
     alias: {
       "@jasy/pdf": resolve(rootDir, "src/lib/index.ts"),
-      // @jasy/zugferd has no dist in a fresh CI test job (build runs in a separate job); alias it to
+      // @jasy/e-invoice has no dist in a fresh CI test job (build runs in a separate job); alias it to
       // source too so the CLI suites resolve it without a build, same as @jasy/pdf above.
-      "@jasy/zugferd": resolve(rootDir, "packages/zugferd/src/index.ts"),
+      "@jasy/e-invoice": resolve(rootDir, "packages/e-invoice/src/index.ts"),
     },
   },
   test: {

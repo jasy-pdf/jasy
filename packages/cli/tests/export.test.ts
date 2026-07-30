@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { inflateRawSync } from "node:zlib";
-import { computeInvoice } from "@jasy/zugferd";
+import { computeInvoice } from "@jasy/e-invoice";
 import { exportJson, exportText, exportXlsx, exportInvoice } from "../src/core/export";
 
 /** Minimal ZIP reader: walk the local headers, inflate each part (method 8) - mirrors our writer. */

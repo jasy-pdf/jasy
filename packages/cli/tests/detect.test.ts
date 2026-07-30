@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { toCII, toUBL, computeInvoice } from "@jasy/zugferd";
+import { toCII, toUBL, computeInvoice } from "@jasy/e-invoice";
 import { detectInvoice, describeInvoice } from "../src/core/detect";
 
 const invoice = {

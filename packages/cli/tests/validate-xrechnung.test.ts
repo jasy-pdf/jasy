@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { renderZugferd } from "@jasy/zugferd";
+import { renderZugferd } from "@jasy/e-invoice";
 import { validateInvoiceXml, profileFor } from "../src/core/validate";
 
 // a fully XRechnung-ready invoice (Leitweg-ID, seller contact + e-address, buyer e-address, IBAN …)
