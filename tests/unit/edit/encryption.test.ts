@@ -76,6 +76,40 @@ describe("PdfDocument.open - foreign encrypted files", () => {
   });
 });
 
+describe("PdfDocument.open - the awkward cases", () => {
+  it("opens a file whose USER password is empty (owner password only)", async () => {
+    // Restricted by an owner password alone: every viewer opens it without prompting. Demanding a
+    // password up front refused a file nothing else refuses - so "" is always tried first.
+    const doc = await PdfDocument.open(fixture("pdfkit-owner-only"));
+    const form = readAcroForm(doc)!;
+    expect(form.fields.find((f) => f.name === "full_name")?.value).toBe("Ada Lovelace");
+    expect(form.fields.find((f) => f.name === "notes")?.value).toContain("äöüß");
+  });
+
+  it("still says WRONG password when one was actually supplied", async () => {
+    // The empty-password attempt must not turn a wrong password into "you forgot the password".
+    await expect(
+      PdfDocument.open(fixture("pdfkit-rc4-40"), { password: "falsch" }),
+    ).rejects.toThrow(/wrong password/);
+    // ... and a missing one still reads as missing.
+    await expect(PdfDocument.open(fixture("pdfkit-rc4-40"))).rejects.toThrow(/pass its password/);
+  });
+
+  it("reports a MALFORMED /Encrypt as such, not as a wrong password", async () => {
+    // /UE is unwrapped with AES-CBC and no padding. A length that is not a whole number of blocks is a
+    // broken file; blaming the password would send the user hunting for the wrong thing.
+    const original = fixture("pdfkit-aes-256-r5");
+    const text = new TextDecoder("latin1").decode(original);
+    const at = text.indexOf("/UE <");
+    expect(at).toBeGreaterThan(0);
+    // Drop one hex digit pair from /UE so it is one byte short of a block boundary.
+    const broken = new TextEncoder().encode(text.slice(0, at + 5) + text.slice(at + 7));
+    await expect(PdfDocument.open(broken, { password: PASSWORD })).rejects.toThrow(
+      /Encrypt dictionary|could not be unwrapped/,
+    );
+  });
+});
+
 describe("writing stays modern even though reading is permissive", () => {
   it("our own AES-256 R6 round-trips through our own reader", async () => {
     const bytes = await renderToBytes(

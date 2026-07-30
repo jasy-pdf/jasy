@@ -294,6 +294,19 @@ lineHeight, align, bold, italic }, …)` sets doc-wide text defaults; `DefaultTe
 - ✅ **`onOverflow` safety** (2026-06-24) — over-tall unbreakable content is force-placed (clipped) so
   pagination always terminates (no infinite loop); render option `onOverflow: "error" (default) | "warn"
 | "ignore"` (`fragmentation.ts packChildren`).
+- ✅ **Every string encrypted, and encrypted files can be OPENED** (2026-07-29, branch `fix/encrypt-strings`).
+  The old encryption enciphered **streams only**; a form field's `/T` `/V` `/TU`, every bookmark `/Title`,
+  link `/URI`, `/Alt` and `/DA` sat in the file in plain text - a leak in RELEASED code, and a
+  self-contradiction a conforming reader chokes on. Fixed with ONE choke-point,
+  `PDFObjectManager.pdfString()`, mirroring `streamPayload()`: no handler → the escaped literal (output
+  byte-identical, 22/22 gallery), a handler → the bytes are registered and `finalizeEncryption` swaps in a
+  hex ciphertext. Every emitter routes through it; the escape helpers left dead behind were the proof none
+  was missed. **Reading came with it, symmetric by decision**: `PdfDocument.open(bytes, { password })`
+  decrypts once, eagerly, so `getObject`, `streamData` and the whole form layer stay synchronous;
+  `fillForm` is therefore **async** and takes `{ password }`, and re-enciphers both the new values and the
+  strings it carries over. Building it one-way would have shipped two bugs the round-trip caught: `/DA`
+  and `/CIDSystemInfo` were still plaintext, and the incremental writer DROPPED `/Encrypt` from the new
+  trailer. Errors are named, never generic: no password · wrong password · a revision we do not implement.
 - ✅ **Encryption** (2026-06-28, `@jasy/pdf@alpha.4`) — AES-256, V5/R6 (ISO 32000-2, the newest standard).
   `renderToBytes(doc, { encrypt: { userPassword, ownerPassword?, permissions? } })`. Built on **WebCrypto**
   (`crypto/webcrypto.ts`, isomorphic, zero-dep) behind a pluggable **`SecurityHandler` seam**
@@ -476,19 +489,16 @@ Genuine remaining gaps / deferred:
    place (measured: 152.3 × 96.8 pt where the true AABB is 155.56 × 155.56), and it emits no `/QuadPoints` at
    all. The fix (a matrix stack at the `flipY` seam → `/QuadPoints` + a correct AABB `/Rect`) would make us the
    only one who gets it right; it is a corner case, hence LOW.
-7. 🔴 **An encrypted PDF leaves every STRING in plain text** (`todo.md` ISSUE-7, **PRIORITY: HIGHEST**, found
-   2026-07-28). We encrypt **streams only** — `streamPayload()` (`pdf-object-manager.ts:310`) is the single
-   choke-point and it takes bytes of a stream. There is no counterpart for strings, so a form field's `/T`,
-   `/V` and `/TU`, every bookmark `/Title` and every link `/URI` sit in the file unencrypted. ISO 32000-1
-   §7.6.2 requires ALL strings and streams to be encrypted (exceptions: trailer `/ID`, strings inside the
-   `/Encrypt` dict, strings inside an already-encrypted stream). **Two damages**: a confidentiality leak (an
-   IBAN typed into a field is readable with a hex editor, no password), and outright breakage (a conforming
-   reader decrypts every string, so ours fails to decrypt — measured, AES error; poppler/Evince only LOOK fine
-   because the visible text comes from the appearance stream, which IS encrypted). **Not caused by forms** —
-   bookmarks/links shipped in alpha.6 and leak identically, so this is in RELEASED code. The hard part of the
-   fix is not AES: objects are assembled as finished PDF syntax (`/T (${escPdf(name)})`), so nothing knows
-   "this token is a string". Ship it with a test that scans an encrypted file for known plain-text values.
-   Until then `fillForm` REFUSES an encrypted document by name rather than corrupting it.
+7. **Encryption reads more than it writes, on purpose.** We WRITE only AES-256 **R6** (ISO 32000-2). We
+   OPEN R6 and R5 (`crypto/security-handler.ts`) plus R4 / R3 / R2 (`crypto/legacy-handler.ts`, with RC4
+   written out by hand - WebCrypto has none). Reading old schemes is a service to files that already
+   exist; writing one would hand a user protection known to be broken, so `StandardLegacy.encrypt`
+   throws. Measured while building the foreign corpus (`tests/fixtures/encrypted/`): **PDFKit and
+   react-pdf emit 40-bit RC4 by DEFAULT** and cannot emit R6 at all (`pdfVersion: "1.7ext3"` gets you
+   R5), and Ghostscript 10.06 refuses anything past R3 - which is why "R6 only" had silently meant "our
+   own files only". Remaining gap: **XMP metadata stays unencrypted** (`/EncryptMetadata false`, the
+   industry norm so indexers can read it), so in accessible mode the document TITLE is readable without
+   the password. A switch for people who want everything hidden is not built.
 8. **The test tree is not type-checked** (`todo.md` ISSUE-6, MEDIUM). `tsconfig.json` compiles only `src/**`
    and CI runs vitest, never tsc over `tests/**`; `tsc --noEmit -p tsconfig.test.json` reports ~420 errors.
    Dominant cause: tests import without the `.ts` extension, which `nodenext` rejects — the module then

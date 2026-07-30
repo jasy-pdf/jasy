@@ -256,19 +256,6 @@ export async function fillForm(
   // because the values written back have to be enciphered again with the same file key.
   const doc = await PdfDocument.open(bytes, { password: options.password });
 
-  // Every string we are about to WRITE has to go in enciphered. They are known up front - they are the
-  // values passed in - so they are done in one pass here rather than threading async through planning.
-  const enciphered = new Map<string, string>();
-  if (doc.isEncrypted) {
-    for (const v of Object.values(values)) {
-      for (const text of typeof v === "string" ? [v] : Array.isArray(v) ? v : []) {
-        if (enciphered.has(text)) continue;
-        const cipher = await doc.encryptForWrite(plainBytes(text));
-        if (cipher) enciphered.set(text, hex(cipher));
-      }
-    }
-  }
-
   const form = readAcroForm(doc);
   if (!form) throw new FillError("this PDF has no AcroForm to fill");
 
@@ -292,6 +279,19 @@ export async function fillForm(
       `no such field: ${unknown.map((n) => `"${n}"`).join(", ")}. This form has: ` +
         form.fields.map((f) => `"${f.name}"`).join(", "),
     );
+  }
+
+  // Every string we are about to WRITE has to go in enciphered. They are known up front - they are the
+  // values passed in - so they are done in one pass here rather than threading async through planning.
+  const enciphered = new Map<string, string>();
+  if (doc.isEncrypted) {
+    for (const v of Object.values(values)) {
+      for (const text of typeof v === "string" ? [v] : Array.isArray(v) ? v : []) {
+        if (enciphered.has(text)) continue;
+        const cipher = await doc.encryptForWrite(plainBytes(text));
+        if (cipher) enciphered.set(text, hex(cipher));
+      }
+    }
   }
 
   const writer = new IncrementalWriter(doc);
@@ -350,11 +350,23 @@ export async function fillForm(
     filled.push(name);
   }
 
-  // One pass over every string that will be carried over unchanged. Without this a preserved tooltip
-  // would be written back in the clear, into a file where nothing else is.
+  // The /AcroForm dict - and the catalog, when the form sits inline in it - are rewritten as well, so
+  // their strings are carried over too and belong in the same pass. NOT reachable today and therefore
+  // NOT covered by a test: the only encrypted files we can write into are our own R6 ones, and our
+  // /AcroForm dict holds no strings. It matters the moment either changes (a form-level /DA, or writing
+  // another scheme), which is why it is wired now rather than left as a trap.
+  const acroRef = get(doc.catalog, "AcroForm");
+  const acro = doc.resolve(acroRef);
+  const rootRef = doc.trailer.map.get("Root");
+  const catalog = doc.catalog;
+  const alsoRewritten: Array<PdfObject | undefined> =
+    options.needAppearances !== false ? [acro, catalog] : [];
+
+  // One pass over every string that will be carried over unchanged. Without this a preserved tooltip or
+  // a /DA would be written back in the clear, into a file where nothing else is.
   const carried: StringCipher = new Map();
   if (doc.isEncrypted) {
-    for (const { target } of pending) {
+    for (const target of [...pending.map((p) => p.target), ...alsoRewritten]) {
       for (const str of stringsIn(target)) {
         if (carried.has(str)) continue;
         const cipher = await doc.encryptForWrite(str.bytes);
@@ -368,16 +380,12 @@ export async function fillForm(
 
   // Until appearances are generated here, the viewer has to draw the new values.
   if (options.needAppearances !== false) {
-    const acroRef = get(doc.catalog, "AcroForm");
-    const acro = doc.resolve(acroRef);
     if (acro !== undefined && isDict(acro)) {
       if (isRef(acroRef)) {
         writer.update(acroRef.num, withEntries(acro, { NeedAppearances: "true" }, carried));
       } else {
         // The form dict can also sit INLINE in the catalog (our own hand-written fixtures do). Then the
         // catalog is what has to be rewritten - skipping it left the new values undrawn.
-        const rootRef = doc.trailer.map.get("Root");
-        const catalog = doc.catalog;
         if (isRef(rootRef) && catalog !== undefined && isDict(catalog)) {
           const inlined = withEntries(acro, { NeedAppearances: "true" }, carried);
           writer.update(rootRef.num, withEntries(catalog, { AcroForm: inlined }, carried));

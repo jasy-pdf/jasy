@@ -376,6 +376,28 @@ describe("fillForm - an ENCRYPTED document", () => {
     expect(raw).not.toContain("full_name");
   });
 
+  it("fills an ACCESSIBLE encrypted document, whose metadata stream is deliberately plaintext", async () => {
+    // `/EncryptMetadata false` leaves the XMP stream in the clear on purpose. Deciphering it anyway - as
+    // the first version did - destroyed it, and an accessible+encrypted file could not be opened at all.
+    // Found by writing this test; it is the reason it exists.
+    const original = await renderToBytes(
+      Document([
+        Page({ margin: 56 }, [
+          Column([TextField({ name: "full_name", value: "x", border: "#888" })]),
+        ]),
+      ]),
+      { encrypt: { userPassword: "secret" }, accessible: true, lang: "de-DE", title: "T" },
+    );
+    // /Lang really is in there, and enciphered to begin with.
+    expect(new TextDecoder("latin1").decode(original)).not.toContain("de-DE");
+
+    const { bytes } = await fillForm(original, { full_name: "Ada" }, { password: "secret" });
+    expect(new TextDecoder("latin1").decode(bytes)).not.toContain("de-DE");
+
+    const doc = await PdfDocument.open(bytes, { password: "secret" });
+    expect(readAcroForm(doc)!.fields[0].value).toBe("Ada");
+  });
+
   it("still refuses a wrong value, before any encryption happens", async () => {
     await expect(
       fillForm(await encryptedForm(), { nope: "x" }, { password: "secret" }),

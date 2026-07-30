@@ -1,5 +1,6 @@
 // Generates ENCRYPTED AcroForm PDFs from two independent producers, so our decryption is proved against
-// files we did not write. Both use AES-256 (V5/R6), which is what jasy implements.
+// files we did not write. Both use AES-256 V5/R5 - Adobe's withdrawn revision, and the best either
+// library can emit. Neither can produce the R6 that jasy writes.
 import { writeFileSync } from "node:fs";
 import PDFDocument from "pdfkit";
 import React from "react";
@@ -19,7 +20,7 @@ const out = process.argv[2] ?? ".";
 // ---- 1. PDFKit -----------------------------------------------------------------------------------
 async function pdfkitForm() {
   const doc = new PDFDocument({
-    pdfVersion: "RC4PLACEHOLDER", // PDFKit's name for the V5 / AES-256 handler
+    pdfVersion: "1.7ext3", // PDFKit's name for the V5 / AES-256 handler, which gives R5
     userPassword: PASSWORD,
     ownerPassword: PASSWORD + "-owner",
     permissions: { printing: "highResolution" },

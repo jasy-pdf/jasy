@@ -123,49 +123,71 @@ export class PdfDocument {
         `this PDF uses the ${filter ?? "unknown"} security handler; jasy implements only the standard one`,
       );
     }
-    if (password === undefined) {
-      throw new PdfEncryptedError("this PDF is encrypted; pass its password to open it");
-    }
+
+    // An EMPTY user password is legal and common: a document restricted only by an owner password opens
+    // everywhere without prompting. So always try "" first and only complain about a MISSING password
+    // once that has failed - refusing up front would reject files nothing else refuses.
+    const pw = password ?? "";
+    const rejected = (): never => {
+      throw password === undefined
+        ? new PdfEncryptedError("this PDF is encrypted; pass its password to open it")
+        : new PdfEncryptedError("wrong password for this PDF");
+    };
+    // `recoverFileKey` / `StandardLegacy.open` say "wrong password" by name; anything else that comes out
+    // of them is structural (a malformed /U, /UE, /O) and must not be reported as a bad password.
+    const isWrongPassword = (e: unknown) =>
+      String((e as Error)?.message ?? e).includes("wrong password");
+    const incomplete = (what: string): never => {
+      throw new PdfEncryptedError(`this PDF's /Encrypt dictionary is ${what}; it cannot be opened`);
+    };
 
     // R5 and R6 are AES-256 with one file key; R2 to R4 derive a key per object and may use RC4.
     if (v === 5 && (r === 5 || r === 6)) {
       const u = stringBytes(this.lookup(enc, "U"));
       const ue = stringBytes(this.lookup(enc, "UE"));
-      if (u === undefined || ue === undefined || u.length < 48) {
-        throw new PdfEncryptedError(
-          "this PDF's /Encrypt dictionary is incomplete; it cannot be opened",
-        );
-      }
+      if (u === undefined || ue === undefined || u.length < 48) incomplete("incomplete");
+      // /UE is unwrapped with AES-CBC and no padding, so a length that is not a whole number of blocks
+      // is a broken file, not a wrong password.
+      if (ue!.length === 0 || ue!.length % 16 !== 0)
+        incomplete("/UE is not a whole number of AES blocks");
       try {
-        return await StandardAes256.forReading(password, u, ue, r);
-      } catch {
-        throw new PdfEncryptedError("wrong password for this PDF");
+        return await StandardAes256.forReading(pw, u!, ue!, r);
+      } catch (e) {
+        if (isWrongPassword(e)) rejected();
+        throw new PdfEncryptedError(
+          `this PDF's encryption could not be unwrapped: ${String((e as Error)?.message ?? e)}`,
+        );
       }
     }
 
     if (r >= 2 && r <= 4) {
       const o = stringBytes(this.lookup(enc, "O"));
       const u = stringBytes(this.lookup(enc, "U"));
-      if (o === undefined || u === undefined) {
+      if (o === undefined || u === undefined) incomplete("incomplete");
+      const cipher = this.streamCipher(enc, v);
+      if (cipher.kind === "identity") {
         throw new PdfEncryptedError(
-          "this PDF's /Encrypt dictionary is incomplete; it cannot be opened",
+          "this PDF declares encryption but selects the Identity crypt filter, which jasy does not model",
         );
       }
       const ids = this.trailer.map.get("ID");
       const firstId = Array.isArray(ids) ? stringBytes(this.resolve(ids[0])) : undefined;
       try {
-        return StandardLegacy.open(password, {
+        return StandardLegacy.open(pw, {
           revision: r,
-          keyBits: numberOf(this.lookup(enc, "Length")) ?? 40,
-          o,
-          u,
+          keyBits: cipher.keyBits,
+          o: o!,
+          u: u!,
           permissions: numberOf(this.lookup(enc, "P")) ?? 0,
           id: firstId ?? EMPTY,
           encryptMetadata: this.lookup(enc, "EncryptMetadata") !== false,
-          aes: this.usesAesV2(enc),
+          aes: cipher.kind === "aes",
         });
-      } catch {
-        throw new PdfEncryptedError("wrong password for this PDF");
+      } catch (e) {
+        if (isWrongPassword(e)) rejected();
+        throw new PdfEncryptedError(
+          `this PDF's encryption could not be set up: ${String((e as Error)?.message ?? e)}`,
+        );
       }
     }
 
@@ -174,11 +196,30 @@ export class PdfDocument {
     );
   }
 
-  /** R4 names its cipher in a crypt filter; `/CFM /AESV2` means AES-128, anything else means RC4. */
-  private usesAesV2(enc: PdfObject | undefined): boolean {
+  /**
+   * Which cipher and key length actually apply to the streams.
+   *
+   * For V4 the answer is NOT the top-level `/Length`: the document names a crypt filter in `/StmF` and
+   * that filter carries its own `/CFM` and `/Length` (in BYTES, where the top-level one is in bits).
+   * `/Identity` means the streams are not enciphered at all - decrypting them anyway would destroy them.
+   */
+  private streamCipher(
+    enc: PdfObject | undefined,
+    v: number,
+  ): { kind: "rc4" | "aes" | "identity"; keyBits: number } {
+    const topBits = numberOf(this.lookup(enc, "Length")) ?? 40;
+    if (v < 4) return { kind: "rc4", keyBits: topBits };
+
     const stmf = nameOf(this.lookup(enc, "StmF")) ?? "Identity";
-    const cf = this.lookup(enc, "CF");
-    return nameOf(this.lookup(this.lookup(cf, stmf), "CFM")) === "AESV2";
+    if (stmf === "Identity") return { kind: "identity", keyBits: topBits };
+    const cf = this.lookup(this.lookup(enc, "CF"), stmf);
+    const cfm = nameOf(this.lookup(cf, "CFM"));
+    if (cfm === "None" || cfm === undefined) return { kind: "identity", keyBits: topBits };
+    const cfBytes = numberOf(this.lookup(cf, "Length"));
+    return {
+      kind: cfm === "AESV2" ? "aes" : "rc4",
+      keyBits: cfBytes !== undefined ? cfBytes * 8 : topBits,
+    };
   }
 
   /**
@@ -196,12 +237,20 @@ export class PdfDocument {
       ? (this.trailer.map.get("Encrypt") as { num: number }).num
       : undefined;
 
+    // `/EncryptMetadata false` means the XMP metadata stream was left in the CLEAR on purpose - the
+    // industry norm, so indexers can read a file they cannot open. Deciphering it anyway destroys it,
+    // and it is what made an accessible+encrypted document unopenable.
+    const metadataInClear =
+      this.lookup(this.resolve(this.trailer.map.get("Encrypt")), "EncryptMetadata") === false;
+
     // Streams first: an object stream has to be readable before its members can be served at all.
     for (const [num, entry] of this.xref) {
       if (entry.kind !== "offset" || num === encryptNum) continue;
       const obj = this.getObject(num);
       if (obj === undefined || !isStream(obj)) continue;
-      if (nameOf(get(obj, "Type")) === "XRef") continue; // never encrypted - it holds the index itself
+      const type = nameOf(get(obj, "Type"));
+      if (type === "XRef") continue; // never encrypted - it holds the index itself
+      if (type === "Metadata" && metadataInClear) continue;
       // Keyed by the stream's DATA OFFSET, not its object number: `streamData` receives the stream
       // object and has no number in hand.
       this.plainStreams.set(
@@ -209,6 +258,13 @@ export class PdfDocument {
         await security.decrypt(this.rawStream(obj), { num, gen: entry.gen }),
       );
     }
+
+    // Everything parsed so far came out of ENCIPHERED bytes: `load` already resolved the catalog to check
+    // it, and if that catalog lives in an object stream its members were inflated from ciphertext and
+    // cached as garbage. Drop both caches now that `plainStreams` can serve the real data. The xref index
+    // itself stays - it was never encrypted.
+    this.cache.clear();
+    this.objStmCache.clear();
 
     // Then the strings, in objects that sit directly in the file.
     for (const [num, entry] of this.xref) {
@@ -527,7 +583,6 @@ export class PdfDocument {
   // Stream data
   // -------------------------------------------------------------------------------------------
 
-  /** A stream's DECODED bytes: sliced with the resolved `/Length`, then run through its filters. */
   /** A stream's bytes as they sit in the file: sliced by `/Length`, still filtered and still encrypted. */
   private rawStream(stream: PdfStream): Uint8Array {
     const length = numberOf(this.resolve(get(stream, "Length")));
@@ -540,6 +595,7 @@ export class PdfDocument {
     return this.bytes.subarray(stream.start, end < 0 ? this.bytes.length : end);
   }
 
+  /** A stream's DECODED bytes: deciphered if the document is encrypted, then run through its filters. */
   streamData(stream: PdfStream): Uint8Array {
     // A decrypted payload replaces the bytes from the file; filters then run on the plaintext, which is
     // the order the format prescribes - encryption wraps the already-filtered data.
