@@ -22,13 +22,13 @@ pnpm exec vitest run  # run the full test suite once (CI-style)
 jasy is a pnpm monorepo. `@jasy/pdf` is the **root** package (the engine, in `src/lib/`); the others live
 in `packages/`:
 
-| Package         | What it is                                              |
-| --------------- | ------------------------------------------------------- |
-| `@jasy/pdf`     | the declarative, Flutter-style PDF engine (repo root)   |
-| `@jasy/vue`     | author PDFs as Vue components, rendered in the browser  |
-| `@jasy/nuxt`    | the Nuxt module (client or server, zero-config)         |
-| `@jasy/zugferd` | ZUGFeRD / XRechnung: conformant PDF/A-3 + EN-16931 XML  |
-| `@jasy/cli`     | the `jasy` terminal: read, validate and export invoices |
+| Package           | What it is                                              |
+| ----------------- | ------------------------------------------------------- |
+| `@jasy/pdf`       | the declarative, Flutter-style PDF engine (repo root)   |
+| `@jasy/vue`       | author PDFs as Vue components, rendered in the browser  |
+| `@jasy/nuxt`      | the Nuxt module (client or server, zero-config)         |
+| `@jasy/e-invoice` | ZUGFeRD / XRechnung: conformant PDF/A-3 + EN-16931 XML  |
+| `@jasy/cli`       | the `jasy` terminal: read, validate and export invoices |
 
 `CLAUDE.md` in the repo root is the architecture map - read it before larger changes.
 

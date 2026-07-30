@@ -1,5 +1,5 @@
 import { deflateRawSync } from "node:zlib";
-import type { Invoice, ComputedInvoice } from "@jasy/zugferd";
+import type { Invoice, ComputedInvoice } from "@jasy/e-invoice";
 
 // Export a parsed invoice for humans / downstream systems: JSON (full model + totals), TXT (a readable
 // receipt) and XLSX (a minimal hand-rolled spreadsheet - an .xlsx is just a ZIP of XML parts, so we

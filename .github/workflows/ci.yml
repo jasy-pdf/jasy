@@ -58,5 +58,5 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # Full suite (engine + @jasy/zugferd + @jasy/vue; @jasy/nuxt e2e excluded by the root vitest config).
+      # Full suite (engine + @jasy/e-invoice + @jasy/vue; @jasy/nuxt e2e excluded by the root vitest config).
       - run: pnpm exec vitest run

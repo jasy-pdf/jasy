@@ -5,7 +5,7 @@ on:
   push:
     tags:
       - "pdf-v*"
-      - "zugferd-v*"
+      - "e-invoice-v*"
       - "cli-v*"
       - "vue-v*"
       - "nuxt-v*"
@@ -43,7 +43,7 @@ jobs:
           TAG="${{ github.ref_name }}"
           case "$TAG" in
             pdf-v*)     DIR="."                 ; NAME="@jasy/pdf"     ; VER="${TAG#pdf-v}" ;;
-            zugferd-v*) DIR="packages/zugferd"  ; NAME="@jasy/zugferd" ; VER="${TAG#zugferd-v}" ;;
+            e-invoice-v*) DIR="packages/e-invoice"  ; NAME="@jasy/e-invoice" ; VER="${TAG#e-invoice-v}" ;;
             cli-v*)     DIR="packages/cli"      ; NAME="@jasy/cli"     ; VER="${TAG#cli-v}" ;;
             vue-v*)     DIR="packages/vue"      ; NAME="@jasy/vue"     ; VER="${TAG#vue-v}" ;;
             nuxt-v*)    DIR="packages/nuxt"     ; NAME="@jasy/nuxt"    ; VER="${TAG#nuxt-v}" ;;
@@ -57,9 +57,9 @@ jobs:
           { echo "dir=$DIR"; echo "name=$NAME"; echo "version=$VER"; echo "dist=$DIST"; } >> "$GITHUB_OUTPUT"
 
       # Build ALL packages - the publish needs the target + its deps built, and the full test suite
-      # below imports across packages (cli tests use @jasy/zugferd), so every package needs its dist.
+      # below imports across packages (cli tests use @jasy/e-invoice), so every package needs its dist.
       # --include-workspace-root is essential: @jasy/pdf IS the root package; plain `pnpm -r` skips it,
-      # and then @jasy/zugferd can't resolve @jasy/pdf. Publishing still only ships the tagged package.
+      # and then @jasy/e-invoice can't resolve @jasy/pdf. Publishing still only ships the tagged package.
       - name: Build
         run: pnpm -r --include-workspace-root build
 

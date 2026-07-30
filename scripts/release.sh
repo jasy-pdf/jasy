@@ -5,15 +5,15 @@ set -e
 # "Release" workflow, which builds (the package + its workspace deps) and publishes to npm.
 #
 # Usage:   ./scripts/release.sh <package> <version>
-#   package = pdf | zugferd | cli | vue | nuxt   (pdf is the workspace ROOT)
+#   package = pdf | e-invoice | cli | vue | nuxt   (pdf is the workspace ROOT)
 #   version = semver, e.g. 0.1.0 or 0.1.0-alpha.1
 #
-# Release order matters (dependency chain): release pdf first, then its dependents - zugferd -> cli, vue,
+# Release order matters (dependency chain): release pdf first, then its dependents - e-invoice -> cli, vue,
 # and nuxt (which needs pdf AND vue) - so their `workspace:*` deps resolve to the versions just released.
 
 usage() {
   echo "Usage: ./scripts/release.sh <package> <version>"
-  echo "  package: pdf | zugferd | cli | vue | nuxt"
+  echo "  package: pdf | e-invoice | cli | vue | nuxt"
   echo "  example: ./scripts/release.sh pdf 0.1.0"
   exit 1
 }
@@ -25,11 +25,13 @@ VERSION="$2"
 # package -> directory (pdf is the root package, the others live under packages/)
 case "$PACKAGE" in
   pdf)     DIR="." ;;
-  zugferd) DIR="packages/zugferd" ;;
+  e-invoice) DIR="packages/e-invoice" ;;
   cli)     DIR="packages/cli" ;;
   vue)     DIR="packages/vue" ;;
   nuxt)    DIR="packages/nuxt" ;;
-  *) echo "Error: unknown package '$PACKAGE' (use: pdf, zugferd, cli, vue, nuxt)"; exit 1 ;;
+  # The old key still works so a habit does not become an error - it just points at the new name.
+  zugferd) echo "Note: '@jasy/zugferd' is now '@jasy/e-invoice'; use 'e-invoice'."; DIR="packages/e-invoice" ;;
+  *) echo "Error: unknown package '$PACKAGE' (use: pdf, e-invoice, cli, vue, nuxt)"; exit 1 ;;
 esac
 
 # semver: 1.2.3 or 1.2.3-alpha.1

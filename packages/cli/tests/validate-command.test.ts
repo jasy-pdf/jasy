@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { renderZugferd } from "@jasy/zugferd";
+import { renderZugferd } from "@jasy/e-invoice";
 import { validateCommand } from "../src/commands/validate";
 
 const invoice = {

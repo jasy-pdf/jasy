@@ -64,7 +64,7 @@ structural checks carry the everyday case.
   pure JS). No upload, DSGVO-safe.
 - **Excel by hand** - the `.xlsx` is a ZIP we build ourselves, deflated with our own writer and CRC32.
 - **Reads multi-file PDFs** - pulls the right e-invoice XML out even when a tool embedded its own JSON too.
-- Generates with [`@jasy/zugferd`](https://npmx.dev/@jasy/zugferd) on the hand-rolled
+- Generates with [`@jasy/e-invoice`](https://npmx.dev/@jasy/e-invoice) on the hand-rolled
   [`@jasy/pdf`](https://npmx.dev/@jasy/pdf) engine.
 
 ---

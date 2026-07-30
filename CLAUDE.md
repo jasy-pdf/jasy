@@ -231,7 +231,7 @@ rendering. This is the standing visual check; prefer it over one-off `scripts/ru
   `pnpm run test:coverage` for coverage. Unit tests live in **`tests/unit/`**, mirroring the `src/lib/`
   structure (`tests/unit/{common,elements,renderer,utils}/…`). `src/` is pure production code — the
   build (`tsconfig.json` includes only `src/**`) therefore keeps `dist/` test-free. **512 tests, green**
-  in the core (plus the `@jasy/zugferd` suite).
+  in the core (plus the `@jasy/e-invoice` suite).
 - `pnpm run build` — `tsc` → `dist/`.
 - `pnpm run lint` (oxlint) + `pnpm run fmt:check` (oxfmt `--check`); `pnpm run fmt` formats. **Run `pnpm run fmt`
   before committing** — CI fails on unformatted files.
@@ -244,7 +244,7 @@ rendering. This is the standing visual check; prefer it over one-off `scripts/ru
   self-contained for a fresh clone. To become a polished public example later (committed clean assets).
   For a quick visual check, prefer `claude-data/render.sh` (above).
 - Note: the core package is now named `@jasy/pdf` (npm scope `@jasy`, GitHub org `jasy-pdf`). It is the
-  pnpm-workspace root; the ZUGFeRD work lives in `packages/zugferd` (`@jasy/zugferd`).
+  pnpm-workspace root; the ZUGFeRD work lives in `packages/e-invoice` (`@jasy/e-invoice`).
 
 ## Conventions
 
@@ -515,7 +515,7 @@ unprompted, comments English + sensible, don't break the font math.**
 
 Status: **LAUNCHED 2026-06-27**, still shipping alpha increments (no beta/rc/stable until the feature set is
 complete — see `todo.md`). All five packages live on npm; **current (2026-07-23): `@jasy/pdf`@alpha.7,
-`@jasy/zugferd`@alpha.4, `@jasy/cli`@alpha.6, `@jasy/vue`@alpha.7, `@jasy/nuxt`@alpha.6** (the alpha.7 cascade =
+`@jasy/e-invoice`@alpha.4, `@jasy/cli`@alpha.6, `@jasy/vue`@alpha.7, `@jasy/nuxt`@alpha.6** (the alpha.7 cascade =
 page-break control — the termination guard, `PageBreak`, `breakBefore`/`breakAfter`, `keepTogether` — plus
 kerning turned on by default). Repo public + locked, full CI + changelog +
 bots in place (see Repo facts). The engine is **feature-complete for the alpha** — inheritance, `onOverflow`,
@@ -546,7 +546,7 @@ more e-invoice profiles, framework bindings). See `todo.md` "⭐ Active" + "🔮
 ## Repo facts
 
 - **pnpm monorepo.** `@jasy/pdf` is the root (`src/lib/` is the library); siblings in `packages/`:
-  `@jasy/zugferd` (e-invoicing), `@jasy/cli` (the `jasy` TUI), `@jasy/playground`, **`@jasy/vue`**
+  `@jasy/e-invoice` (e-invoicing), `@jasy/cli` (the `jasy` TUI), `@jasy/playground`, **`@jasy/vue`**
   (`packages/vue`) — author PDFs as Vue components, and **`@jasy/nuxt`** (`packages/nuxt`) — the Nuxt module
   (zero-config PDFs client OR server; shipped 2026-06-26). Barrel exports via
   `index.ts` at each level. GitHub org
@@ -555,7 +555,7 @@ more e-invoice profiles, framework bindings). See `todo.md` "⭐ Active" + "🔮
   Content 3). It has its **own CLAUDE.md + HARD RULES: never start/stop its dev server (Flo runs it),
   only Flo commits.** Package links there use **npmx.dev** (Daniel Roe's registry browser), not npmjs.com.
 - License MIT, author Florian Heuberger. **Launched 2026-06-27** (Bluesky + npm; landed with the Vue/Nuxt core
-  crew). npm current (alpha + latest dist-tags): `@jasy/pdf`@alpha.7, `@jasy/zugferd`@alpha.4, `@jasy/cli`@alpha.6,
+  crew). npm current (alpha + latest dist-tags): `@jasy/pdf`@alpha.7, `@jasy/e-invoice`@alpha.4, `@jasy/cli`@alpha.6,
   `@jasy/vue`@alpha.7, `@jasy/nuxt`@alpha.6 (released via `scripts/release.sh <pkg> <version>` → `<pkg>-v*` tag →
   CI publish; order matters, deps `workspace:*` pin EXACT so dependents re-release when a dep does; the tag also
   builds the GitHub Release notes via `scripts/gh-release.mjs` — changelogen groups + per-commit contributors,

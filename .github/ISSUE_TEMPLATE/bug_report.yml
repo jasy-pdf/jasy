@@ -11,7 +11,7 @@ body:
         - "@jasy/pdf"
         - "@jasy/vue"
         - "@jasy/nuxt"
-        - "@jasy/zugferd"
+        - "@jasy/e-invoice"
         - "@jasy/cli"
         - Not sure
     validations:

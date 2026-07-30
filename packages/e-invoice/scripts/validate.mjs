@@ -1,6 +1,6 @@
 // Reproducible XSD check: generate a sample invoice's CII and validate it against the vendored
 // Factur-X EN16931 schema with xmllint. Used in dev/CI to prove `toCII` stays XSD-conformant.
-// Run: pnpm --filter @jasy/zugferd run validate   (builds first; needs `xmllint` on PATH).
+// Run: pnpm --filter @jasy/e-invoice run validate   (builds first; needs `xmllint` on PATH).
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";

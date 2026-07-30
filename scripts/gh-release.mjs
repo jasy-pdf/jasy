@@ -75,7 +75,9 @@ const from =
 // which is correct. inScope = the set of full shas in the range that touched the package's path.
 const PATHSPEC = {
   pdf: [".", ":(exclude)packages"],
-  zugferd: ["packages/zugferd"],
+  "e-invoice": ["packages/e-invoice"],
+  // The old prefix stays mapped so a tag pushed before the rename still resolves its changelog.
+  zugferd: ["packages/e-invoice"],
   cli: ["packages/cli"],
   vue: ["packages/vue"],
   nuxt: ["packages/nuxt"],

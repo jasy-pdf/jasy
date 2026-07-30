@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <code>npm i @jasy/zugferd</code> &nbsp;·&nbsp; <code>npx @jasy/cli</code> &nbsp;·&nbsp; MIT
+  <code>npm i @jasy/e-invoice</code> &nbsp;·&nbsp; <code>npx @jasy/cli</code> &nbsp;·&nbsp; MIT
 </p>
 
 ---
@@ -42,7 +42,7 @@ invoices validate: the amounts are correct **by construction**, so the single bi
 EN-16931 failures (the BR-CO total checks) simply cannot happen.
 
 ```ts
-import { renderZugferd } from "@jasy/zugferd";
+import { renderZugferd } from "@jasy/e-invoice";
 
 const { bytes, xml } = await renderZugferd({
   number: "RE-2026-001",
@@ -148,11 +148,11 @@ verify all of it:
 
 ## Packages
 
-| Package                                             | What it is                                                                                     |
-| --------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| **[@jasy/zugferd](https://npmx.dev/@jasy/zugferd)** | ZUGFeRD / XRechnung: your data → PDF/A-3 + EN-16931 XML, with local validation. **The prize.** |
-| **[@jasy/cli](https://npmx.dev/@jasy/cli)**         | the `jasy` terminal: read · validate · export, headless **and** interactive                    |
-| **[@jasy/pdf](https://npmx.dev/@jasy/pdf)**         | the declarative, Flutter-style PDF layout engine that powers them                              |
+| Package                                                 | What it is                                                                                     |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| **[@jasy/e-invoice](https://npmx.dev/@jasy/e-invoice)** | ZUGFeRD / XRechnung: your data → PDF/A-3 + EN-16931 XML, with local validation. **The prize.** |
+| **[@jasy/cli](https://npmx.dev/@jasy/cli)**             | the `jasy` terminal: read · validate · export, headless **and** interactive                    |
+| **[@jasy/pdf](https://npmx.dev/@jasy/pdf)**             | the declarative, Flutter-style PDF layout engine that powers them                              |
 
 ---
 

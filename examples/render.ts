@@ -1,8 +1,8 @@
 // Renders every template in examples/templates/ (or one named on the CLI) to a PDF in examples/out/.
 // Most templates `export default` a jasy Document (rendered via @jasy/pdf). A ZUGFeRD template instead
-// `export const zugferd = { invoice, options }` and is rendered via @jasy/zugferd to a PDF/A-3 + XML.
+// `export const zugferd = { invoice, options }` and is rendered via @jasy/e-invoice to a PDF/A-3 + XML.
 import { renderToBytes } from "@jasy/pdf";
-import { renderZugferd } from "@jasy/zugferd";
+import { renderZugferd } from "@jasy/e-invoice";
 import { writeFileSync, mkdirSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 

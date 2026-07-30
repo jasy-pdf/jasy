@@ -2,24 +2,24 @@
   <img src="https://raw.githubusercontent.com/jasy-pdf/jasy/main/docs/logo.png" width="120" alt="jasy">
 </p>
 
-<h1 align="center">@jasy/zugferd</h1>
+<h1 align="center">@jasy/e-invoice</h1>
 
 <p align="center">
   <b>ZUGFeRD &amp; XRechnung e-invoices in pure TypeScript.</b><br>
   One object in - a conformant PDF/A-3 and the EN-16931 XML out. No Java, no headless browser, no upload.
 </p>
 
-<p align="center"><code>npm i @jasy/zugferd</code> &nbsp;·&nbsp; MIT</p>
+<p align="center"><code>npm i @jasy/e-invoice</code> &nbsp;·&nbsp; MIT</p>
 
 ---
 
 ## One call. A complete, conformant invoice.
 
-You bring the line items. `@jasy/zugferd` **derives the totals and the VAT breakdown**, lays out a
+You bring the line items. `@jasy/e-invoice` **derives the totals and the VAT breakdown**, lays out a
 human-readable PDF/A-3, and embeds the EN-16931 XML right inside it.
 
 ```ts
-import { renderZugferd } from "@jasy/zugferd";
+import { renderZugferd } from "@jasy/e-invoice";
 
 const { bytes, xml } = await renderZugferd(
   {
@@ -72,7 +72,7 @@ EN-16931 failures (the BR-CO total checks) simply cannot happen. Discounts, surc
 ## ZUGFeRD and XRechnung. CII and UBL.
 
 ```ts
-import { renderZugferd, toCII, toUBL, computeInvoice } from "@jasy/zugferd";
+import { renderZugferd, toCII, toUBL, computeInvoice } from "@jasy/e-invoice";
 
 await renderZugferd(invoice, { profile: "xrechnung" }); // the German B2G profile (Leitweg-ID, BR-DE)
 toCII(invoice, computeInvoice(invoice)); // the raw UN/CEFACT CII XML

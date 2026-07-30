@@ -6,10 +6,10 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-# Make "@jasy/pdf" + "@jasy/zugferd" resolve to this repo so templates read like real user code.
+# Make "@jasy/pdf" + "@jasy/e-invoice" resolve to this repo so templates read like real user code.
 mkdir -p node_modules/@jasy
 ln -sfn "$PWD" node_modules/@jasy/pdf
-ln -sfn "$PWD/packages/zugferd" node_modules/@jasy/zugferd
+ln -sfn "$PWD/packages/e-invoice" node_modules/@jasy/e-invoice
 
 [ "${SKIP_BUILD:-}" = "1" ] || { echo "==> building @jasy/pdf"; pnpm build >/dev/null; }
 
