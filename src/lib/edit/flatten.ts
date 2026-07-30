@@ -27,9 +27,10 @@ import {
  * `/Contents` array, never into the existing one. So the original bytes are still a literal prefix of the
  * result.
  *
- * **A field with no appearance cannot be flattened** and is refused by name rather than silently dropped
- * or stamped as an empty box. PDFKit and react-pdf write no appearances at all, leaving that to the
- * viewer; drawing them ourselves is a separate piece of work (see `todo.md`).
+ * **A widget that ships no appearance gets one drawn** from its own style and current value, the same
+ * drawing the fill path bakes - PDFKit and react-pdf write none at all and leave every box to the
+ * viewer. Only a widget we cannot draw AT ALL, one without a usable `/Rect` or of a kind that has no
+ * picture of its own, is refused, and then by name.
  */
 
 export interface FlattenOptions {
@@ -51,6 +52,10 @@ export class FlattenError extends Error {
     super(`@jasy/pdf: ${message}`);
   }
 }
+
+// Field flags we have to read here (see `forms/acroform.ts` for the writer's side).
+const FF_PUSHBUTTON = 1 << 16;
+const FF_RADIO = 1 << 15;
 
 /** A widget ready to be stamped: which page it sits on, its appearance, and where it goes. */
 interface Stamp {
@@ -155,9 +160,13 @@ async function planStamps(
   doc: PdfDocument,
   writer: IncrementalWriter,
   fields: ReadField[],
-): Promise<Stamp[]> {
+): Promise<{ stamps: Stamp[]; removeOnly: Map<number, number> }> {
   const pages = widgetPages(doc);
   const stamps: Stamp[] = [];
+  // Widgets that leave the page without leaving a picture: a push button with no face of its own. It
+  // draws nothing and holds no value, and after flattening it could not do anything anyway, so keeping
+  // it would leave a dead control on a document that is no longer a form.
+  const removeOnly = new Map<number, number>();
   const missing: string[] = [];
   const offPage: string[] = [];
 
@@ -169,7 +178,12 @@ async function planStamps(
       if (appearance === undefined) {
         const drawnNum = await drawMissing(doc, writer, field, w.num);
         if (drawnNum === undefined) {
-          if (!missing.includes(field.name)) missing.push(field.name);
+          const page = pages.get(w.num);
+          if ((field.flags & FF_PUSHBUTTON) !== 0 && page !== undefined) {
+            removeOnly.set(w.num, page);
+          } else if (!missing.includes(field.name)) {
+            missing.push(field.name);
+          }
           continue;
         }
         appearance = { kind: "ref", num: drawnNum, gen: 0 };
@@ -214,7 +228,7 @@ async function planStamps(
         offPage.map((n) => `"${n}"`).join(", "),
     );
   }
-  return stamps;
+  return { stamps, removeOnly };
 }
 
 /** The page's existing content, decoded, or undefined when it cannot be read. */
@@ -244,9 +258,12 @@ async function drawMissing(
   let content: string;
   let bbox: [number, number, number, number];
   if (field.type === "Btn") {
+    // A PUSH button has no on/off states and no value - it is a control, not a picture of anything. It
+    // carries whatever face its author drew, and if there is none there is nothing to freeze.
+    if ((field.flags & FF_PUSHBUTTON) !== 0) return undefined;
     // Freeze the state the widget is CURRENTLY showing - flattening captures what the reader sees.
     const as = nameOf(doc.lookup(widget, "AS")) ?? field.value ?? "Off";
-    const radio = (field.flags & (1 << 15)) !== 0;
+    const radio = (field.flags & FF_RADIO) !== 0;
     const faces = bakeButtonStates(look, as === "Off" ? (field.onValues?.[0] ?? "Yes") : as, radio);
     content = as === "Off" ? faces.off : faces.on;
     bbox = faces.bbox;
@@ -328,7 +345,7 @@ export async function flattenInto(
   cipher?: StringCipher,
 ): Promise<string[]> {
   if (fields.length === 0) return [];
-  const stamps = await planStamps(doc, writer, fields);
+  const { stamps, removeOnly } = await planStamps(doc, writer, fields);
 
   // Group by page: one appended content stream per page, not one per widget.
   const byPage = new Map<number, Stamp[]>();
@@ -371,13 +388,17 @@ export async function flattenInto(
       front.push(`${writer.add({ dict: "", data: (await doc.encryptForWrite(q)) ?? q })} 0 R`);
     }
 
-    const body = (wrap ? "Q\n" : "") + ops;
-    const data = new Uint8Array(getArrayBuffer(body));
-    const streamNum = writer.add({ dict: "", data: (await doc.encryptForWrite(data)) ?? data });
-    const newContents = `[${[...front, ...existing, `${streamNum} 0 R`].join(" ")}]`;
+    let newContents: string | undefined;
+    if (ops !== "") {
+      const body = (wrap ? "Q\n" : "") + ops;
+      const data = new Uint8Array(getArrayBuffer(body));
+      const streamNum = writer.add({ dict: "", data: (await doc.encryptForWrite(data)) ?? data });
+      newContents = `[${[...front, ...existing, `${streamNum} 0 R`].join(" ")}]`;
+    }
 
     // The widgets we stamped leave /Annots; anything else on the page stays.
     const flattenedRefs = new Set(pageStamps.map((s) => s.widget.num));
+    for (const [widget, page] of removeOnly) if (page === pageNum) flattenedRefs.add(widget);
     const annots = doc.resolve(get(page, "Annots"));
     const keptAnnots = Array.isArray(annots)
       ? annots.filter((a) => !(isRef(a) && flattenedRefs.has(a.num)))
@@ -394,7 +415,7 @@ export async function flattenInto(
       withEntries(
         page,
         {
-          Contents: newContents,
+          ...(newContents !== undefined ? { Contents: newContents } : {}),
           Annots: `[${keptAnnots.map((a) => serialize(a, cipher)).join(" ")}]`,
           Resources: newResources,
         },
@@ -409,6 +430,9 @@ export async function flattenInto(
   const acro = doc.resolve(acroRef);
   if (acro !== undefined && isDict(acro)) {
     const gone = new Set(fields.map((f) => f.objNum).filter((n): n is number => n !== undefined));
+    // A flattened field may hang in a PARENT's /Kids rather than in the form's /Fields. Dropping it only
+    // from the root leaves it reachable, so `readAcroForm` still reports a field with no widget left.
+    pruneKids(doc, writer, get(acro, "Fields"), gone, cipher);
     const roots = doc.resolve(get(acro, "Fields"));
     const kept = Array.isArray(roots) ? roots.filter((r) => !(isRef(r) && gone.has(r.num))) : [];
     const newAcro = withEntries(
@@ -431,6 +455,43 @@ export async function flattenInto(
   }
 
   return fields.map((f) => f.name);
+}
+
+/**
+ * Walk the field tree and rewrite every `/Kids` that still points at a flattened field. A branch left
+ * with no children at all is added to `gone` so its own owner drops it too.
+ */
+function pruneKids(
+  doc: PdfDocument,
+  writer: IncrementalWriter,
+  list: PdfObject | undefined,
+  gone: Set<number>,
+  cipher?: StringCipher,
+  depth = 0,
+): void {
+  if (depth > 32) return;
+  const entries = doc.resolve(list);
+  if (!Array.isArray(entries)) return;
+  for (const ref of entries) {
+    if (!isRef(ref) || gone.has(ref.num)) continue;
+    const node = doc.resolve(ref);
+    if (node === undefined || !isDict(node)) continue;
+    const kids = get(node, "Kids");
+    if (kids === undefined) continue;
+    pruneKids(doc, writer, kids, gone, cipher, depth + 1);
+    const resolved = doc.resolve(kids);
+    if (!Array.isArray(resolved)) continue;
+    const kept = resolved.filter((k) => !(isRef(k) && gone.has(k.num)));
+    if (kept.length === resolved.length) continue;
+    if (kept.length === 0) {
+      gone.add(ref.num); // an empty branch is a field with nothing left to show
+      continue;
+    }
+    writer.update(
+      ref.num,
+      withEntries(node, { Kids: `[${kept.map((k) => serialize(k, cipher)).join(" ")}]` }, cipher),
+    );
+  }
 }
 
 /** Flatten an existing form: its values become page content and stop being editable. */

@@ -104,6 +104,59 @@ describe("flattenForm - the contract", () => {
     expect(left.fields.length).toBeGreaterThan(0); // the rest is still a form
   });
 
+  it("removes a push button that has no face, rather than refusing the whole form", async () => {
+    // A push button holds no value and draws nothing once the form is gone, so there is nothing to
+    // freeze. Refusing because of it would block flattening a form over a control. PDFKit writes its
+    // buttons without any appearance.
+    const before = readAcroForm(PdfDocument.load(fixture("pdfkit-form")))!;
+    expect(before.fields.some((f) => f.name === "go")).toBe(true);
+
+    const { bytes, flattened } = await flattenForm(fixture("pdfkit-form"));
+    expect(flattened).toContain("go");
+    const doc = PdfDocument.load(bytes);
+    expect(readAcroForm(doc)?.fields.length ?? 0).toBe(0);
+    const annots = doc.lookup(pageOf(doc), "Annots");
+    expect(Array.isArray(annots) ? annots.length : 0).toBe(0);
+
+    // It is REMOVED, not drawn: one stamp per widget EXCEPT the button. Drawing it would put a check
+    // box face where a button used to be, which is worse than an empty spot.
+    const stamps = (pageContent(doc).match(/\/JasyFlat\d+ Do/g) ?? []).length;
+    const widgets = before.fields.reduce((n, f) => n + f.widgets.length, 0);
+    expect(stamps).toBe(widgets - 1);
+  });
+
+  it("takes a flattened field out of its PARENT's /Kids too", async () => {
+    // A nested field hangs in a parent's /Kids, not in the form's /Fields. Dropping it only from the
+    // root leaves it reachable, and the form still reports a field whose widget is gone.
+    const pdf = new TextEncoder().encode(
+      (() => {
+        const objects = [
+          "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [4 0 R] >> >>",
+          "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+          "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] /Annots [5 0 R] >>",
+          "<< /T (group) /Kids [5 0 R] >>",
+          "<< /Type /Annot /Subtype /Widget /Parent 4 0 R /T (child) /FT /Tx /V (hi) " +
+            "/Rect [10 150 200 172] /DA (/Helv 10 Tf 0 g) >>",
+        ];
+        let body = "%PDF-1.7\n";
+        const offsets: number[] = [];
+        objects.forEach((o, i) => {
+          offsets.push(body.length);
+          body += `${i + 1} 0 obj\n${o}\nendobj\n`;
+        });
+        const startxref = body.length;
+        body += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+        for (const off of offsets) body += `${String(off).padStart(10, "0")} 00000 n \n`;
+        body += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${startxref}\n%%EOF\n`;
+        return body;
+      })(),
+    );
+    expect(readAcroForm(PdfDocument.load(pdf))!.fields[0].name).toBe("group.child");
+
+    const { bytes } = await flattenForm(pdf);
+    expect(readAcroForm(PdfDocument.load(bytes))?.fields.length ?? 0).toBe(0);
+  });
+
   it("names an unknown field instead of quietly doing nothing", async () => {
     await expect(flattenForm(fixture("jasy-form"), { fields: ["nope"] })).rejects.toThrow(
       /no such field: "nope"/,

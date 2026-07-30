@@ -1,7 +1,8 @@
 import { PdfDocument } from "./document.ts";
 import { readAcroForm, type ReadField } from "./acroform-reader.ts";
 import { IncrementalWriter, serialize, type StringCipher } from "./writer.ts";
-import { bakeAppearance, bakeButtonStates, readLook } from "./appearance.ts";
+import { bakeAppearance, bakeButtonStates, fontMetrics, readLook } from "./appearance.ts";
+import type { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 import { getArrayBuffer } from "../utils/utf8-to-windows1252-encoder.ts";
 import {
   get,
@@ -143,10 +144,11 @@ async function bakeFor(
   field: ReadField,
   widgetNum: number,
   change: { v?: string; text?: string; texts?: string[] },
+  metrics: PDFObjectManager,
 ): Promise<number | undefined> {
   const look = readLook(doc, doc.getObject(widgetNum), field);
   if (look === undefined || look.width <= 0 || look.height <= 0) return undefined;
-  const face = bakeAppearance(look, field, change.text, change.texts);
+  const face = bakeAppearance(look, field, change.text, change.texts, metrics);
   if (face === undefined) return undefined;
   const bbox = face.bbox.map((n: number) => Number(n.toFixed(2))).join(" ");
   const encoded = new Uint8Array(getArrayBuffer(face.content));
@@ -371,6 +373,10 @@ export async function fillForm(
 
   const writer = new IncrementalWriter(doc);
   const bake = options.fieldAppearances !== false;
+  // One metrics instance for the whole fill, not one per field and not one at module scope.
+  const metrics = bake ? fontMetrics() : undefined;
+  // A widget we could not draw has no picture at all, so the viewer must be asked after all.
+  let someBakeFailed = false;
   const filled: string[] = [];
   // Emission is deferred: the objects we rewrite carry strings we are NOT changing, and in an encrypted
   // document those have to be enciphered again before they go back in.
@@ -415,7 +421,9 @@ export async function fillForm(
     if (field.type === "Tx" || field.type === "Ch") {
       for (const w of field.widgets) {
         if (w.num === undefined) continue;
-        const baked = bake ? await bakeFor(doc, writer, field, w.num, change) : undefined;
+        const baked =
+          bake && metrics ? await bakeFor(doc, writer, field, w.num, change, metrics) : undefined;
+        if (bake && baked === undefined) someBakeFailed = true;
         editsFor(w.num).AP = baked !== undefined ? `<< /N ${baked} 0 R >>` : undefined;
       }
     }
@@ -469,7 +477,7 @@ export async function fillForm(
   // When we DID draw, the flag has to go: a form that still asks for regeneration gets it, and the
   // viewer throws our drawing away and redraws from /DA - which is how PDFKit's forms kept asking for a
   // ZapfDingbats they do not ship.
-  const needAppearances = bake ? "false" : "true";
+  const needAppearances = bake && !someBakeFailed ? "false" : "true";
   if (bake || options.needAppearances !== false) {
     if (acro !== undefined && isDict(acro)) {
       if (isRef(acroRef)) {

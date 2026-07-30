@@ -207,6 +207,94 @@ describe("fillForm - the appearance must not go stale", () => {
   });
 });
 
+describe("fillForm - what the drawn appearance shows", () => {
+  it("draws a choice field's LABEL, while /V keeps the export value", async () => {
+    // A dropdown stores "DE" and shows "Germany". Drawing the export value would put a code on the page
+    // where the reader expects a country. No fixture has the two differ, so the form is built here.
+    const pdf = buildPdf([
+      "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [4 0 R] >> >>",
+      "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+      "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] /Annots [4 0 R] >>",
+      "<< /Type /Annot /Subtype /Widget /FT /Ch /T (country) /Rect [10 150 200 166] " +
+        "/Opt [[(DE) (Germany)] [(FR) (France)]] /DA (/Helv 10 Tf 0 g) >>",
+    ]);
+    const { bytes } = await fillForm(pdf, { country: "DE" });
+    const doc = PdfDocument.load(bytes);
+    const field = readAcroForm(doc)!.fields[0];
+    expect(field.value).toBe("DE"); // the file still stores the export value
+
+    const ap = get(doc.getObject(field.widgets[0].num!), "AP");
+    const drawn = new TextDecoder("latin1").decode(
+      doc.streamData(doc.resolve(get(ap, "N")) as Parameters<typeof doc.streamData>[0]),
+    );
+    expect(drawn).toContain("Germany");
+    expect(drawn).not.toContain("(DE)");
+  });
+
+  it("takes /Q from the field when the widget does not state it", async () => {
+    // Alignment is inheritable in the same chain as /DA. Reading it off the widget alone left a
+    // right-aligned form drawing left-aligned.
+    const build = (onField: string, onWidget: string) =>
+      buildPdf([
+        "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [4 0 R] >> >>",
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] /Annots [5 0 R] >>",
+        `<< /T (v) /FT /Tx /Kids [5 0 R] ${onField} >>`,
+        "<< /Type /Annot /Subtype /Widget /Parent 4 0 R /Rect [10 150 200 172] " +
+          `/DA (/Helv 10 Tf 0 g) ${onWidget} >>`,
+      ]);
+    const drawnX = async (pdf: Uint8Array) => {
+      const { bytes } = await fillForm(pdf, { v: "x" });
+      const doc = PdfDocument.load(bytes);
+      const f = readAcroForm(doc)!.fields[0];
+      const ap = get(doc.getObject(f.widgets[0].num!), "AP");
+      const drawn = new TextDecoder("latin1").decode(
+        doc.streamData(doc.resolve(get(ap, "N")) as Parameters<typeof doc.streamData>[0]),
+      );
+      return Number(/1 0 0 1 ([\d.]+) [\d.]+ Tm/.exec(drawn)?.[1] ?? 0);
+    };
+    // /Q 2 = right. Stated on the FIELD it has to reach the widget's drawing all the same.
+    expect(await drawnX(build("/Q 2", ""))).toBeGreaterThan(await drawnX(build("", "")));
+  });
+
+  it("asks the viewer to draw after all when one widget could not be drawn", async () => {
+    // Baking and /NeedAppearances are two answers to the same question, and exactly one applies - but a
+    // widget we failed to draw has NO picture, so claiming none is needed would leave it invisible.
+    const pdf = buildPdf([
+      "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [4 0 R] >> >>",
+      "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+      "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] /Annots [4 0 R] >>",
+      // No /Rect at all: nothing to draw into.
+      "<< /Type /Annot /Subtype /Widget /FT /Tx /T (nowhere) >>",
+    ]);
+    const { bytes } = await fillForm(pdf, { nowhere: "x" });
+    expect(new TextDecoder("latin1").decode(bytes)).toContain("/NeedAppearances true");
+  });
+
+  it("resolves the auto font size the same way the writer does", async () => {
+    // `/DA … 0 Tf` means "fit the box". Creating a field and filling one used different formulas, so the
+    // same field came out ~11% smaller after a fill than it was drawn at creation.
+    const created = await renderToBytes(
+      Document([
+        Page({ margin: 20 }, [
+          Column([TextField({ name: "a", value: "Hg", height: 30, fontSize: 0 })]),
+        ]),
+      ]),
+    );
+    const sizeIn = (bytes: Uint8Array, name: string) => {
+      const doc = PdfDocument.load(bytes);
+      const f = readAcroForm(doc)!.fields.find((x) => x.name === name)!;
+      const ap = get(doc.getObject(f.widgets[0].num!), "AP");
+      const drawn = new TextDecoder("latin1").decode(
+        doc.streamData(doc.resolve(get(ap, "N")) as Parameters<typeof doc.streamData>[0]),
+      );
+      return /\/Helv\s+([\d.]+)\s+Tf/.exec(drawn)?.[1];
+    };
+    const filled = (await fillForm(created, { a: "Hg" })).bytes;
+    expect(sizeIn(filled, "a")).toBe(sizeIn(created, "a"));
+  });
+});
+
 describe("fillForm - the form is a contract", () => {
   it("names an unknown field instead of quietly doing nothing", async () => {
     await expect(fillForm(fixture("jasy-form"), { nope: "x" })).rejects.toThrow(FillError);

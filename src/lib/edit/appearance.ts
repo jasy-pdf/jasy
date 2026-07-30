@@ -2,6 +2,7 @@ import { PDFObjectManager, FontStyle } from "../utils/pdf-object-manager.ts";
 import {
   checkboxOff,
   checkboxOn,
+  fieldDrawSize,
   listBoxFace,
   radioOff,
   radioOn,
@@ -34,14 +35,15 @@ import { latin1FromBytes } from "../utils/bytes.ts";
 const FF_MULTILINE = 1 << 12;
 const FF_PASSWORD = 1 << 13;
 
-/** Font metrics for measuring, with the standard 14 registered. Built once and reused. */
-let metrics: PDFObjectManager | undefined;
-function fontMetrics(): PDFObjectManager {
-  if (!metrics) {
-    metrics = new PDFObjectManager();
-    metrics.registerFont("Helvetica", FontStyle.Normal, "Helvetica");
-  }
-  return metrics;
+/**
+ * Font metrics for measuring. Created per call rather than kept in a module-level variable: jasy has no
+ * global object manager by design (a shared one caused the mixed-page-size bug), and a reader that holds
+ * mutable state at module scope would quietly reintroduce it.
+ */
+export function fontMetrics(): PDFObjectManager {
+  const om = new PDFObjectManager();
+  om.registerFont("Helvetica", FontStyle.Normal, "Helvetica");
+  return om;
 }
 
 /** `[r g b]` in 0..1, as `/MK` writes colours. An empty array means "none". */
@@ -114,7 +116,14 @@ export function readLook(
   const bs = doc.resolve(get(widget, "BS"));
   const borderWidth = border ? (numberOf(isDict(bs) ? doc.lookup(bs, "W") : undefined) ?? 1) : 0;
 
-  const q = numberOf(doc.lookup(widget, "Q")) ?? 0;
+  // /Q is inheritable in the same chain as /DA: widget, then field, then the form.
+  const q =
+    numberOf(doc.lookup(widget, "Q")) ??
+    (field.objNum !== undefined
+      ? numberOf(doc.lookup(doc.getObject(field.objNum), "Q"))
+      : undefined) ??
+    numberOf(doc.lookup(acro, "Q")) ??
+    0;
   return {
     width,
     height,
@@ -127,9 +136,7 @@ export function readLook(
 
 /** The auto-size a viewer would pick: fit the cap height into the box, clamped to something readable. */
 function drawSize(look: WidgetLook, capHeight: number): number {
-  if (look.style.fontSize > 0) return look.style.fontSize;
-  const inner = look.height - 2 * (2 + look.style.borderWidth);
-  return Math.max(4, Math.min(12, inner / (capHeight * 1.6)));
+  return fieldDrawSize(look.style.fontSize, look.height, look.style.borderWidth, capHeight);
 }
 
 /**
@@ -141,9 +148,10 @@ export function bakeAppearance(
   field: ReadField,
   value: string | undefined,
   values: string[] | undefined,
+  metrics?: PDFObjectManager,
 ): { content: string; bbox: [number, number, number, number] } | undefined {
   if (field.type !== "Tx" && field.type !== "Ch") return undefined;
-  const om = fontMetrics();
+  const om = metrics ?? fontMetrics();
   const { capHeight } = om.getFontDecoration("Helvetica", FontStyle.Normal);
   const size = drawSize(look, capHeight);
   const innerWidth = Math.max(1, look.width - 2 * (2 + look.style.borderWidth));
@@ -162,7 +170,10 @@ export function bakeAppearance(
     }));
     content = listBoxFace(look.width, look.height, look.style, rows, capHeight, size, "Helv");
   } else {
-    const shown = look.password ? "•".repeat([...(value ?? "")].length) : (value ?? "");
+    // A choice stores an EXPORT value but shows its label - "DE" in /V, "Germany" on screen.
+    const display =
+      field.type === "Ch" ? (field.options?.find((o) => o.value === value)?.label ?? value) : value;
+    const shown = look.password ? "•".repeat([...(display ?? "")].length) : (display ?? "");
     const lines = shown
       ? wrapFieldValue(
           shown,

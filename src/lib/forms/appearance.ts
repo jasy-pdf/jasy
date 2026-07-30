@@ -178,6 +178,22 @@ export function wrapFieldValue(
     );
 }
 
+/**
+ * The size a field draws its value at. `0` in `/DA` is the PDF convention for "auto, fit the box", and
+ * both paths - creating a field and filling one - have to resolve it the SAME way, or the same field
+ * comes out at two different sizes depending on which one touched it last.
+ */
+export function fieldDrawSize(
+  fontSize: number,
+  height: number,
+  borderWidth: number,
+  capHeight: number,
+): number {
+  if (fontSize > 0) return fontSize;
+  const available = height - 2 * (2 + borderWidth);
+  return Math.max(4, Math.min(12, (available * 0.7) / (capHeight || 0.7)));
+}
+
 export interface FieldLine {
   text: string;
   width: number;

@@ -10,6 +10,7 @@ import {
   radioOff,
   radioOn,
   signatureFace,
+  fieldDrawSize,
   textFieldFace,
   wrapFieldValue,
 } from "./appearance.ts";
@@ -227,9 +228,7 @@ export class AcroFormCollector {
   /** The size to draw a value at. A field may ask for `0` - the PDF convention for "auto-size"; we then
    *  fit the capitals comfortably inside the box, which is what a viewer's auto-size does. */
   private drawSize(style: FieldStyle, height: number, capHeight: number): number {
-    if (style.fontSize > 0) return style.fontSize;
-    const available = height - 2 * (2 + style.borderWidth);
-    return Math.max(4, Math.min(12, (available * 0.7) / (capHeight || 0.7)));
+    return fieldDrawSize(style.fontSize, height, style.borderWidth, capHeight);
   }
 
   /** Measure one line for the appearance generator. */
