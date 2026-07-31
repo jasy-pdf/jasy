@@ -213,8 +213,20 @@ export function resolveSize(
     ),
   );
 
-  let w = resolveExtent(width.fixed, width.factor, bounds.maxWidth, bounds.hasBoundedWidth);
-  let h = resolveExtent(height.fixed, height.factor, bounds.maxHeight, bounds.hasBoundedHeight);
+  // Against the OFFERED box, not the narrowed one: `width: "50%"` with `maxWidth: 100` in a 400pt
+  // region is 200 capped to 100, not 50% of 100. The clamp below applies the bound.
+  let w = resolveExtent(
+    width.fixed,
+    width.factor,
+    constraints.maxWidth,
+    constraints.hasBoundedWidth,
+  );
+  let h = resolveExtent(
+    height.fixed,
+    height.factor,
+    constraints.maxHeight,
+    constraints.hasBoundedHeight,
+  );
 
   if (aspectRatio !== undefined && aspectRatio > 0) {
     if (w !== undefined && h === undefined) h = w / aspectRatio;

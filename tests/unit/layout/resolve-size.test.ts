@@ -56,6 +56,18 @@ describe("min / max", () => {
     expect(r.constraints.maxWidth).toBe(250); // ... but no further than this
   });
 
+  it("caps a percentage instead of resolving it against the cap", () => {
+    // CSS order: `width: 50%` is 50% of the OFFERED box, and `max-width` clamps the result. Resolving
+    // the percentage against the capped width instead gives 50 here, which is half of the right answer.
+    expect(resolveSize({ factor: 0.5, max: 100 }, none, undefined, box(400)).width).toBe(100);
+    // ... and below the cap it is untouched.
+    expect(resolveSize({ factor: 0.5, max: 300 }, none, undefined, box(400)).width).toBe(200);
+  });
+
+  it("still applies a min to a percentage", () => {
+    expect(resolveSize({ factor: 0.5, min: 300 }, none, undefined, box(400)).width).toBe(300);
+  });
+
   it("takes min and max as percentages too", () => {
     expect(resolveSize({ fixed: 400, maxFactor: 0.5 }, none, undefined, box(400)).width).toBe(200);
   });

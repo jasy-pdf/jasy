@@ -185,16 +185,17 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
       constraints,
     );
     const { width: explicitWidth, height: explicitHeight, constraints: bounds } = resolved;
+    // Fill-or-shrink-wrap is decided by the constraints we were GIVEN; a min/max only caps the result.
     const boundedWidth =
       explicitWidth !== undefined
         ? bounds.constrainWidth(explicitWidth)
-        : bounds.hasBoundedWidth
+        : constraints.hasBoundedWidth
           ? bounds.maxWidth
           : undefined;
     const boundedHeight =
       explicitHeight !== undefined
         ? bounds.constrainHeight(explicitHeight)
-        : bounds.hasBoundedHeight
+        : constraints.hasBoundedHeight
           ? bounds.maxHeight
           : undefined;
 

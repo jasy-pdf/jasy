@@ -236,23 +236,25 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
 
     // Width: an explicit size wins (clamped), else fill the offered box. (Without this a
     // fixed box would balloon to the parent's size.)
+    // Whether there is a region to fill is decided by the constraints we were GIVEN: a `maxWidth` caps
+    // a box, it does not turn a shrink-wrapping one into a filling one (CSS `max-width` does not either).
     this.width =
       explicitWidth !== undefined
         ? bounds.constrainWidth(explicitWidth)
-        : bounds.hasBoundedWidth
+        : constraints.hasBoundedWidth
           ? bounds.maxWidth
           : this.width;
     // Width shrink-wrap: no explicit width AND an unbounded region (e.g. a `Box` badge inside a
     // `Positioned`). Resolved after the children are measured, just below.
-    const shrinkWrapWidth = explicitWidth === undefined && !bounds.hasBoundedWidth;
+    const shrinkWrapWidth = explicitWidth === undefined && !constraints.hasBoundedWidth;
     // Height: explicit wins; otherwise FILL a bounded region (e.g. inside an Expanded) but
     // SHRINK-WRAP the content in an unbounded one (a note box in a stack). Shrink-wrap is
     // resolved after the children are measured, just below.
-    const shrinkWrapHeight = explicitHeight === undefined && !bounds.hasBoundedHeight;
+    const shrinkWrapHeight = explicitHeight === undefined && !constraints.hasBoundedHeight;
     this.height =
       explicitHeight !== undefined
         ? bounds.constrainHeight(explicitHeight)
-        : bounds.hasBoundedHeight
+        : constraints.hasBoundedHeight
           ? bounds.maxHeight
           : this.height;
     this.x = this.sizeMemory.x + offset.x;

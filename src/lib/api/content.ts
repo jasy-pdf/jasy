@@ -63,7 +63,8 @@ export interface ImageOptions extends BoundsInput {
    *  space). Pin exactly ONE axis and the other follows the image's aspect ratio (CSS `height: auto`). */
   width?: SizeInput;
   height?: SizeInput;
-  /** Fit within the box (default `none`; `fill` when exactly one axis is pinned so it scales to fit). */
+  /** Fit within the box. Default `none`, except where the box was DERIVED rather than given outright -
+   *  exactly one axis pinned, or an `aspectRatio` - which defaults to `fill` so the image scales into it. */
   fit?: ImageFit;
   /** Corner radius in points (rounds the image box). */
   radius?: number;

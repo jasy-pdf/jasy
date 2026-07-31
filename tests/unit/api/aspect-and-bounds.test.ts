@@ -62,6 +62,18 @@ describe("min / max through the factories", () => {
     expect(el.calculateLayout(new BoxConstraints(), { x: 0, y: 0 }, ctx).width).toBe(60);
   });
 
+  it("does NOT turn a shrink-wrapping box into a filling one", () => {
+    // The case the test above cannot see, because there the content is wider than the cap either way.
+    // A `max-width` caps a box; it never makes one grow. Deciding fill-vs-shrink-wrap from the NARROWED
+    // constraints got this wrong: an unsized box in an unbounded region expanded to exactly maxWidth.
+    const el = Box({ borderWidth: 0, maxWidth: 200 }, [Box({ borderWidth: 0, width: 50 }, [])]);
+    expect(el.calculateLayout(new BoxConstraints(), { x: 0, y: 0 }, ctx).width).toBe(50);
+  });
+
+  it("resolves a percentage against the offered box, then caps it", () => {
+    expect(lay(box({ width: "50%", maxWidth: 100 }), 400).width).toBe(100);
+  });
+
   it("accepts percentages", () => {
     expect(lay(box({ width: 400, maxWidth: "25%" }), 400).width).toBe(100);
   });
