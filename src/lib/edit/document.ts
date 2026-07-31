@@ -8,10 +8,10 @@ import {
   isString,
   nameOf,
   numberOf,
+  stringsIn,
   type PdfDict,
   type PdfObject,
   type PdfStream,
-  type PdfString,
 } from "./objects.ts";
 import { StandardAes256, type SecurityHandler } from "../crypto/security-handler.ts";
 import { StandardLegacy } from "../crypto/legacy-handler.ts";
@@ -48,15 +48,9 @@ export class PdfEncryptedError extends Error {
 const stringBytes = (o: PdfObject | undefined): Uint8Array | undefined =>
   isString(o) ? o.bytes : undefined;
 
-/** Every string reachable inside an object, so the whole tree can be decrypted in one walk. */
-function stringsIn(o: PdfObject | undefined, out: PdfString[] = [], depth = 0): PdfString[] {
-  if (o === undefined || o === null || depth > 64) return out;
-  if (isString(o)) out.push(o);
-  else if (Array.isArray(o)) for (const e of o) stringsIn(e, out, depth + 1);
-  else if (isStream(o)) stringsIn(o.dict, out, depth + 1);
-  else if (isDict(o)) for (const v of o.map.values()) stringsIn(v, out, depth + 1);
-  return out;
-}
+// `stringsIn` lives in objects.ts: the read side walks a tree to DECIPHER every string, the write side
+// to ENCIPHER every string, and the two must agree on what "every string" means. Two copies of that
+// walk is exactly how one of them ends up missing a case.
 
 export class PdfDocument {
   private readonly xref = new Map<number, XrefEntry>();

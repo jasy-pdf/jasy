@@ -126,9 +126,22 @@ export function textOf(o: PdfObject | undefined): string | undefined {
  * goes back into the file in the clear - which is ISSUE-7 all over again, one object at a time.
  */
 export function stringsIn(o: PdfObject | undefined, out: PdfString[] = [], depth = 0): PdfString[] {
-  if (o === undefined || o === null || depth > 64) return out;
+  if (o === undefined || o === null) return out;
+  // Depth is bounded because the walk does NOT follow references - only containers written inline. Past
+  // the limit we THROW rather than return what we have: both callers use the result to decide which
+  // strings get enciphered or deciphered, so a silently short list is a string written in the clear.
+  if (depth > MAX_NESTING) {
+    throw new Error(
+      `@jasy/pdf: this PDF nests objects more than ${MAX_NESTING} deep, which no legitimate producer ` +
+        `does; refusing to walk it`,
+    );
+  }
   if (isString(o)) out.push(o);
   else if (Array.isArray(o)) for (const e of o) stringsIn(e, out, depth + 1);
+  // A stream's own dictionary holds strings too; its DATA is covered by the stream's own encryption.
+  else if (isStream(o)) stringsIn(o.dict, out, depth + 1);
   else if (isDict(o)) for (const v of o.map.values()) stringsIn(v, out, depth + 1);
   return out;
 }
+
+const MAX_NESTING = 64;

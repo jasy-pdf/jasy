@@ -467,7 +467,26 @@ export async function flattenInto(
     const gone = new Set(fields.map((f) => f.objNum).filter((n): n is number => n !== undefined));
     // A flattened field may hang in a PARENT's /Kids rather than in the form's /Fields. Dropping it only
     // from the root leaves it reachable, so `readAcroForm` still reports a field with no widget left.
-    pruneKids(doc, writer, get(acro, "Fields"), gone, cipher);
+    //
+    // Planned first, written after: a surviving parent is rewritten WHOLE, so it carries its own /T,
+    // /TU and /DA along - and those are strings that have to be enciphered like any other. Collecting
+    // them needs an await, which is why the walk itself stays synchronous and only plans.
+    const prunes = pruneKids(doc, get(acro, "Fields"), gone);
+    await carryStrings(
+      doc,
+      prunes.map((p) => p.node),
+      cipher,
+    );
+    for (const p of prunes) {
+      writer.update(
+        p.num,
+        withEntries(
+          p.node,
+          { Kids: `[${p.kept.map((k) => serialize(k, cipher)).join(" ")}]` },
+          cipher,
+        ),
+      );
+    }
     const roots = doc.resolve(get(acro, "Fields"));
     const kept = Array.isArray(roots) ? roots.filter((r) => !(isRef(r) && gone.has(r.num))) : [];
     const newAcro = withEntries(
@@ -503,22 +522,21 @@ export async function flattenInto(
  */
 function pruneKids(
   doc: PdfDocument,
-  writer: IncrementalWriter,
   list: PdfObject | undefined,
   gone: Set<number>,
-  cipher?: StringCipher,
+  out: Array<{ num: number; node: PdfDict; kept: PdfObject[] }> = [],
   depth = 0,
-): void {
-  if (depth > 32) return;
+): Array<{ num: number; node: PdfDict; kept: PdfObject[] }> {
+  if (depth > 32) return out;
   const entries = doc.resolve(list);
-  if (!Array.isArray(entries)) return;
+  if (!Array.isArray(entries)) return out;
   for (const ref of entries) {
     if (!isRef(ref) || gone.has(ref.num)) continue;
     const node = doc.resolve(ref);
     if (node === undefined || !isDict(node)) continue;
     const kids = get(node, "Kids");
     if (kids === undefined) continue;
-    pruneKids(doc, writer, kids, gone, cipher, depth + 1);
+    pruneKids(doc, kids, gone, out, depth + 1);
     const resolved = doc.resolve(kids);
     if (!Array.isArray(resolved)) continue;
     const kept = resolved.filter((k) => !(isRef(k) && gone.has(k.num)));
@@ -527,11 +545,9 @@ function pruneKids(
       gone.add(ref.num); // an empty branch is a field with nothing left to show
       continue;
     }
-    writer.update(
-      ref.num,
-      withEntries(node, { Kids: `[${kept.map((k) => serialize(k, cipher)).join(" ")}]` }, cipher),
-    );
+    out.push({ num: ref.num, node, kept });
   }
+  return out;
 }
 
 /** Flatten an existing form: its values become page content and stop being editable. */

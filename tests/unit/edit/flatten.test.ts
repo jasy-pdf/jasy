@@ -249,15 +249,45 @@ describe("fillForm(..., { flatten: true })", () => {
 
   it("drops /NeedAppearances with the last field", async () => {
     // A form with nothing left in it asking a viewer to regenerate appearances contradicts itself.
-    const { bytes } = await fillForm(fixture("jasy-form"), values, { flatten: true });
-    const doc = PdfDocument.load(bytes);
-    const acro = doc.resolve(get(doc.catalog, "AcroForm"));
-    expect(get(acro, "NeedAppearances")).toBeUndefined();
+    //
+    // The flag has to be PRESENT first or this proves nothing: the fixture as built carries no
+    // /NeedAppearances at all, so asserting its absence afterwards passed even with the code removed.
+    // An ordinary fill is what puts it there, so that is the starting point.
+    const needing = (await fillForm(fixture("jasy-form"), values)).bytes;
+    const acroOf = (bytes: Uint8Array) =>
+      PdfDocument.load(bytes).resolve(get(PdfDocument.load(bytes).catalog, "AcroForm"));
+    expect(get(acroOf(needing), "NeedAppearances")).toBeDefined();
+
+    const { bytes } = await fillForm(needing, values, { flatten: true });
+    expect(get(acroOf(bytes), "NeedAppearances")).toBeUndefined();
   });
 
   it("leaves the form alone when flatten is not asked for", async () => {
     const { bytes, flattened } = await fillForm(fixture("jasy-form"), values);
     expect(flattened).toEqual([]);
     expect(readAcroForm(PdfDocument.load(bytes))?.fields.length ?? 0).toBeGreaterThan(0);
+  });
+});
+
+describe("partial flatten with nested fields", () => {
+  // The W-9 is the only fixture with a real field HIERARCHY (23 dotted names under shared parents), so
+  // it is the one that exercises pruneKids: flatten some leaves and a parent survives with fewer /Kids,
+  // which means the parent is rewritten WHOLE - carrying its own /T, /TU and /DA along.
+  const w9 = () => fixture("gov-w9");
+
+  it("keeps the surviving siblings of a flattened field", async () => {
+    const before = readAcroForm(PdfDocument.load(w9()))!.fields;
+    const nested = before.filter((f) => f.name.includes("."));
+    expect(nested.length).toBeGreaterThan(1);
+
+    // One leaf out of a shared parent, so the parent has to be rewritten rather than dropped.
+    const victim = nested[0].name;
+    const { bytes, flattened } = await flattenForm(w9(), { fields: [victim] });
+    expect(flattened).toEqual([victim]);
+
+    const after = readAcroForm(PdfDocument.load(bytes))!.fields.map((f) => f.name);
+    expect(after).not.toContain(victim);
+    // Every other field survived, names intact - a parent rewritten badly loses its whole branch.
+    for (const f of before) if (f.name !== victim) expect(after).toContain(f.name);
   });
 });
