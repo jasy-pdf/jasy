@@ -15,11 +15,11 @@ import { PDFElement } from "../elements/pdf-element.ts";
 import { MainAlign, CrossAlign } from "../utils/flex-layout.ts";
 import { ColorInput, toColor } from "./color.ts";
 import { Insets, toEdges } from "./insets.ts";
-import { SizeInput, toDimension } from "./dimension.ts";
+import { BoundsInput, SizeInput, toBounds, toDimension } from "./dimension.ts";
 import { splitArgs } from "./args.ts";
 
 /** Options shared by the `Column` and `Row` stacks (locked §4). */
-export interface StackOptions {
+export interface StackOptions extends BoundsInput {
   /** Space inserted between children, in points. */
   gap?: number;
   /** Distribution along the main axis (CSS `justify-content`): start (default) · center · end ·
@@ -46,7 +46,13 @@ export interface StackOptions {
 function stackSize(opts: StackOptions) {
   const w = opts.width !== undefined ? toDimension(opts.width) : undefined;
   const h = opts.height !== undefined ? toDimension(opts.height) : undefined;
-  return { width: w?.points, height: h?.points, widthFactor: w?.factor, heightFactor: h?.factor };
+  return {
+    width: w?.points,
+    height: h?.points,
+    widthFactor: w?.factor,
+    heightFactor: h?.factor,
+    ...toBounds(opts),
+  };
 }
 
 // The public default for `cross` is `start` (locked §5) - i.e. don't stretch a child unless
@@ -111,7 +117,7 @@ export function keepTogether(children: PDFElement[]): KeepTogetherElement {
 }
 
 /** A bordered / filled box that wraps its children (locked §4). */
-export interface BoxOptions {
+export interface BoxOptions extends BoundsInput {
   /** Border (stroke) color. A box has a border only when `border` or `borderWidth` is set. */
   border?: ColorInput;
   /** Per-side border colors - override/add to `border`. Any of these makes the box draw
@@ -198,6 +204,7 @@ export function Box(a: BoxOptions | PDFElement[], b?: PDFElement[]): PDFElement 
       height: h?.points,
       widthFactor: w?.factor,
       heightFactor: h?.factor,
+      ...toBounds(opts),
       radius: opts.radius,
       sideBorders: hasPerSide
         ? {

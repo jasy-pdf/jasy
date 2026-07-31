@@ -1,5 +1,12 @@
 import { FlexLayoutHelper, VERTICAL_AXIS, MainAlign, CrossAlign } from "../utils/flex-layout.ts";
-import { BoxConstraints, Offset, Size, resolveExtent } from "../layout/box-constraints.ts";
+import {
+  BoxConstraints,
+  Offset,
+  Size,
+  SizingParams,
+  extentSpecs,
+  resolveSize,
+} from "../layout/box-constraints.ts";
 import {
   Fragmentable,
   FragmentResult,
@@ -25,6 +32,17 @@ interface ContainerElementParams extends SizedElement, WithChildren {
   /** Width/height as a fraction (0..1) of the offered box instead of `width`/`height` (relative sizing). */
   widthFactor?: number;
   heightFactor?: number;
+  /** Lower / upper bounds per axis, in points or as a fraction; see `SizingParams`. */
+  minWidth?: number;
+  maxWidth?: number;
+  minHeight?: number;
+  maxHeight?: number;
+  minWidthFactor?: number;
+  maxWidthFactor?: number;
+  minHeightFactor?: number;
+  maxHeightFactor?: number;
+  /** width / height; derives whichever axis is left open (CSS `aspect-ratio`). */
+  aspectRatio?: number;
   /** Start this stack on a fresh page (CSS `break-before: page`). */
   breakBefore?: boolean;
   /** Start everything after this stack on a fresh page (CSS `break-after: page`). */
@@ -40,12 +58,7 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
   private breakAfter: boolean;
   // The requested size, snapshot at construction so re-layouts (fragmentation measuring, which
   // mutate this.width/height) still see what the user asked for. `undefined` = fill / shrink-wrap.
-  private requested: {
-    width?: number;
-    height?: number;
-    widthFactor?: number;
-    heightFactor?: number;
-  };
+  private requested!: SizingParams;
 
   constructor({
     x,
@@ -56,10 +69,9 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
     gap,
     main,
     cross,
-    widthFactor,
-    heightFactor,
     breakBefore,
     breakAfter,
+    ...sizing
   }: ContainerElementParams) {
     super({ x, y, width, height });
 
@@ -67,7 +79,7 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
     this.gap = gap ?? 0;
     this.main = main ?? "start";
     this.cross = cross ?? "stretch";
-    this.requested = { width, height, widthFactor, heightFactor };
+    this.requested = { ...sizing, width, height };
     this.breakBefore = breakBefore ?? false;
     this.breakAfter = breakAfter ?? false;
   }
@@ -165,29 +177,26 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
     // Relative sizing: a pinned extent (fixed points or a fraction of the offered box, clamped into
     // the constraints) wins; else fill a bounded axis; else stay `undefined` and shrink-wrap below.
     // A Column nested in a Row gets unbounded width - passing 0 there would collapse children to 0.
-    const explicitWidth = resolveExtent(
-      this.requested.width,
-      this.requested.widthFactor,
-      constraints.maxWidth,
-      constraints.hasBoundedWidth,
+    const specs = extentSpecs(this.requested);
+    const resolved = resolveSize(
+      specs.width,
+      specs.height,
+      this.requested.aspectRatio,
+      constraints,
     );
-    const explicitHeight = resolveExtent(
-      this.requested.height,
-      this.requested.heightFactor,
-      constraints.maxHeight,
-      constraints.hasBoundedHeight,
-    );
+    const { width: explicitWidth, height: explicitHeight, constraints: bounds } = resolved;
+    // Fill-or-shrink-wrap is decided by the constraints we were GIVEN; a min/max only caps the result.
     const boundedWidth =
       explicitWidth !== undefined
-        ? constraints.constrainWidth(explicitWidth)
+        ? bounds.constrainWidth(explicitWidth)
         : constraints.hasBoundedWidth
-          ? constraints.maxWidth
+          ? bounds.maxWidth
           : undefined;
     const boundedHeight =
       explicitHeight !== undefined
-        ? constraints.constrainHeight(explicitHeight)
+        ? bounds.constrainHeight(explicitHeight)
         : constraints.hasBoundedHeight
-          ? constraints.maxHeight
+          ? bounds.maxHeight
           : undefined;
 
     // Vertical stack: cross = width (children fill it), main = height (the stacking extent).
