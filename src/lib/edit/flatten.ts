@@ -3,7 +3,7 @@ import { readAcroForm, type ReadField } from "./acroform-reader.ts";
 import { bakeAppearance, bakeButtonStates, readLook } from "./appearance.ts";
 import { getArrayBuffer } from "../utils/utf8-to-windows1252-encoder.ts";
 import { latin1FromBytes } from "../utils/bytes.ts";
-import { IncrementalWriter, serialize, type StringCipher } from "./writer.ts";
+import { carryStrings, IncrementalWriter, serialize, type StringCipher } from "./writer.ts";
 import {
   get,
   isDict,
@@ -155,11 +155,15 @@ function appearanceOf(doc: PdfDocument, widget: PdfObject | undefined): PdfRef |
  * Collect what has to happen. A widget that ships NO appearance gets one drawn now, from its own style
  * and current value - the same drawing the fill path bakes. Without that, flattening a form from a
  * producer that writes no appearances (PDFKit, react-pdf) could only ever refuse.
+ *
+ * `fresh` overrides where a widget's picture comes from. It is empty for a plain `flattenForm`, and
+ * carries the just-baked appearances when a fill flattens in the same pass - see `FreshAppearances`.
  */
 async function planStamps(
   doc: PdfDocument,
   writer: IncrementalWriter,
   fields: ReadField[],
+  fresh?: FreshAppearances,
 ): Promise<{ stamps: Stamp[]; removeOnly: Map<number, number> }> {
   const pages = widgetPages(doc);
   const stamps: Stamp[] = [];
@@ -174,7 +178,9 @@ async function planStamps(
     for (const w of field.widgets) {
       if (w.num === undefined) continue;
       const widget = doc.getObject(w.num);
-      let appearance = appearanceOf(doc, widget);
+      // A picture written during THIS pass wins: it lives in the writer, not in `doc`, so reading the
+      // document would freeze the value the field had BEFORE the fill.
+      let appearance = fresh?.get(w.num) ?? appearanceOf(doc, widget);
       if (appearance === undefined) {
         const drawnNum = await drawMissing(doc, writer, field, w.num);
         if (drawnNum === undefined) {
@@ -335,6 +341,18 @@ function withEntries(
 }
 
 /**
+ * The appearance streams a fill has just written, keyed by widget object number.
+ *
+ * Flattening freezes the picture a widget currently shows, and it reads that picture out of the
+ * document. In the same pass as a fill the new picture is not in the document yet - it is in the
+ * writer, appended but not saved - so without this map a filled-and-flattened form would stamp the
+ * value the field had BEFORE the fill. It applies to both kinds of widget, which go stale for two
+ * different reasons: a text field's `/AP` is replaced outright, and a button's `/AP` keeps all its
+ * states while `/AS` moves to pick a different one.
+ */
+export type FreshAppearances = ReadonlyMap<number, PdfRef>;
+
+/**
  * Stamp the fields into their pages and take the widgets away. Shared by `flattenForm` and
  * `fillForm(..., { flatten: true })`, so filling and flattening produce ONE incremental update.
  */
@@ -342,15 +360,32 @@ export async function flattenInto(
   doc: PdfDocument,
   writer: IncrementalWriter,
   fields: ReadField[],
-  cipher?: StringCipher,
+  carriedIn?: StringCipher,
+  fresh?: FreshAppearances,
 ): Promise<string[]> {
   if (fields.length === 0) return [];
-  const { stamps, removeOnly } = await planStamps(doc, writer, fields);
+  const { stamps, removeOnly } = await planStamps(doc, writer, fields, fresh);
 
   // Group by page: one appended content stream per page, not one per widget.
   const byPage = new Map<number, Stamp[]>();
   for (const s of stamps)
     (byPage.get(s.pageNum) ?? byPage.set(s.pageNum, []).get(s.pageNum)!).push(s);
+
+  // In an encrypted document every string in a rewritten object has to be enciphered again, or
+  // `serialize` writes it back in the clear - ISSUE-7, one object at a time. The caller's map (a fill
+  // flattening in the same pass) is the seed; the pages are what only this pass touches.
+  //
+  // NOT reachable today, and therefore not covered by a test: we can only write R6, so the only
+  // encrypted files we can flatten are our own, and ours reference every annotation as its own object -
+  // a page dictionary of ours holds no string at all. It matters the moment a producer inlines an
+  // annotation (its /Contents and /URI are strings), which is why it is wired rather than left as a
+  // trap. Same reasoning as the `alsoRewritten` pass in `fill.ts`.
+  const acroDict = doc.resolve(get(doc.catalog, "AcroForm"));
+  const cipher = await carryStrings(
+    doc,
+    [...[...byPage.keys()].map((n) => doc.getObject(n)), acroDict, doc.catalog],
+    new Map(carriedIn ?? []),
+  );
 
   for (const [pageNum, pageStamps] of byPage) {
     const page = doc.getObject(pageNum);
@@ -437,7 +472,12 @@ export async function flattenInto(
     const kept = Array.isArray(roots) ? roots.filter((r) => !(isRef(r) && gone.has(r.num))) : [];
     const newAcro = withEntries(
       acro,
-      { Fields: `[${kept.map((r) => serialize(r, cipher)).join(" ")}]` },
+      {
+        Fields: `[${kept.map((r) => serialize(r, cipher)).join(" ")}]`,
+        // A form with nothing left in it asking a viewer to regenerate appearances is a document
+        // contradicting itself, so the flag goes with the last field.
+        ...(kept.length === 0 ? { NeedAppearances: undefined } : {}),
+      },
       cipher,
     );
     if (isRef(acroRef)) {

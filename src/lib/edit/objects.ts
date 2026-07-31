@@ -119,3 +119,16 @@ export function textOf(o: PdfObject | undefined): string | undefined {
   // value round-trippable, which is what a reader that may write the string back needs.
   return latin1FromBytes(b);
 }
+
+/**
+ * Every string inside an object, however deep. Used before rewriting one into an ENCRYPTED document:
+ * the strings carried over unchanged were deciphered on open, so each has to be enciphered again or it
+ * goes back into the file in the clear - which is ISSUE-7 all over again, one object at a time.
+ */
+export function stringsIn(o: PdfObject | undefined, out: PdfString[] = [], depth = 0): PdfString[] {
+  if (o === undefined || o === null || depth > 64) return out;
+  if (isString(o)) out.push(o);
+  else if (Array.isArray(o)) for (const e of o) stringsIn(e, out, depth + 1);
+  else if (isDict(o)) for (const v of o.map.values()) stringsIn(v, out, depth + 1);
+  return out;
+}

@@ -579,3 +579,38 @@ describe("fillForm - the file stays valid", () => {
     expect(readAcroForm(doc)!.fields.length).toBe(6);
   });
 });
+
+describe("options that describe a document nobody wants", () => {
+  // Both switches answer the same question - "who draws the value?" - so turning both off answers it
+  // with "nobody". The file comes back looking filled and shows nothing. Named, not silently produced.
+  it("refuses to make the values invisible", async () => {
+    const err = await fillForm(
+      fixture("jasy-form"),
+      { full_name: "Grace" },
+      { fieldAppearances: false, needAppearances: false },
+    ).catch((e) => e);
+    expect(err).toBeInstanceOf(FillError);
+    expect(String(err.message)).toMatch(/both false|invisible/);
+  });
+
+  it("refuses to flatten a picture it was told not to draw", async () => {
+    // Flattening freezes what a field shows. With fieldAppearances off there is no picture of the NEW
+    // value to freeze, so it would silently stamp the old one.
+    const err = await fillForm(
+      fixture("jasy-form"),
+      { full_name: "Grace" },
+      { flatten: true, fieldAppearances: false },
+    ).catch((e) => e);
+    expect(err).toBeInstanceOf(FillError);
+    expect(String(err.message)).toMatch(/flatten needs fieldAppearances/);
+  });
+
+  it("still allows either one on its own", async () => {
+    await expect(
+      fillForm(fixture("jasy-form"), { full_name: "Grace" }, { fieldAppearances: false }),
+    ).resolves.toBeDefined();
+    await expect(
+      fillForm(fixture("jasy-form"), { full_name: "Grace" }, { needAppearances: false }),
+    ).resolves.toBeDefined();
+  });
+});

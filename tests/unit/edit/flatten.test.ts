@@ -4,7 +4,7 @@ import { flattenForm, FlattenError } from "../../../src/lib/edit/flatten.ts";
 import { fillForm } from "../../../src/lib/edit/fill.ts";
 import { PdfDocument } from "../../../src/lib/edit/document.ts";
 import { readAcroForm } from "../../../src/lib/edit/acroform-reader.ts";
-import { get, isStream } from "../../../src/lib/edit/objects.ts";
+import { get, isDict, isStream } from "../../../src/lib/edit/objects.ts";
 
 // Flattening: the values become page content and stop being fields.
 //
@@ -177,5 +177,87 @@ describe("flattenForm - the contract", () => {
     const doc = PdfDocument.load(flat);
     const xobjects = doc.lookup(doc.lookup(pageOf(doc), "Resources"), "XObject");
     expect(xobjects).toBeDefined();
+  });
+});
+
+/**
+ * What is actually stamped on the page, in page order: each `... cm /JasyFlatN Do` resolved to the
+ * drawing it invokes, prefixed by where it lands.
+ *
+ * Deliberately NOT a set of the page's XObjects. A radio group's two states are the same two pictures
+ * whichever button is on, so comparing the SET cannot tell "basic is checked" from "pro is checked" -
+ * the first version of this helper did exactly that and a broken button bridge passed it.
+ */
+const stampedDrawings = (doc: PdfDocument): string[] => {
+  const xobjects = doc.lookup(doc.lookup(pageOf(doc), "Resources"), "XObject");
+  if (!isDict(xobjects)) return [];
+  const content = pageContent(doc);
+  const out: string[] = [];
+  for (const m of content.matchAll(/([\d.\-\s]*?)cm\s*\/(\S+)\s+Do/g)) {
+    const target = doc.resolve(xobjects.map.get(m[2]));
+    const drawing = isStream(target)
+      ? new TextDecoder("latin1").decode(doc.streamData(target))
+      : "";
+    out.push(`${m[1].trim()} | ${drawing}`);
+  }
+  return out;
+};
+
+describe("fillForm(..., { flatten: true })", () => {
+  const values = { full_name: "Grace Hopper", plan: "basic" };
+
+  it("stamps the value it just wrote, not the one in the file", async () => {
+    // The whole point of the option, and the one thing it can plausibly get wrong: flattening freezes
+    // the picture a widget shows, and it reads that picture out of the DOCUMENT - where, mid-pass, the
+    // old one still sits. The new appearance exists only in the writer.
+    const { bytes, filled, flattened } = await fillForm(fixture("jasy-form"), values, {
+      flatten: true,
+    });
+    expect(filled).toEqual(["full_name", "plan"]);
+    expect(flattened).toContain("full_name");
+
+    const doc = PdfDocument.load(bytes);
+    expect(readAcroForm(doc)?.fields.length ?? 0).toBe(0);
+    const drawn = stampedDrawings(doc).join("\n");
+    expect(drawn).toContain("Grace Hopper");
+    // "Ada Lovelace" is what the fixture holds, so its presence would mean the stale picture was frozen.
+    expect(drawn).not.toContain("Ada Lovelace");
+  });
+
+  it("produces the same document as filling and flattening in two calls", async () => {
+    // The option is a convenience, so it has to be exactly that: doing it by hand must not be better.
+    // This is also what catches the button half of the staleness problem - a radio keeps all its state
+    // pictures and only /AS moves, so reading the document gives the state BEFORE the fill.
+    const original = fixture("jasy-form");
+    const oneCall = (await fillForm(original, values, { flatten: true })).bytes;
+    const twoCalls = (await flattenForm((await fillForm(original, values)).bytes)).bytes;
+
+    expect(stampedDrawings(PdfDocument.load(oneCall))).toEqual(
+      stampedDrawings(PdfDocument.load(twoCalls)),
+    );
+  });
+
+  it("is one incremental update, so it stays smaller than the two-call route", async () => {
+    const original = fixture("jasy-form");
+    const oneCall = (await fillForm(original, values, { flatten: true })).bytes;
+    const twoCalls = (await flattenForm((await fillForm(original, values)).bytes)).bytes;
+
+    expect(oneCall.length).toBeLessThan(twoCalls.length);
+    // ... and the original is still a literal prefix, the invariant the whole edit path keeps.
+    expect(Array.from(oneCall.subarray(0, original.length))).toEqual(Array.from(original));
+  });
+
+  it("drops /NeedAppearances with the last field", async () => {
+    // A form with nothing left in it asking a viewer to regenerate appearances contradicts itself.
+    const { bytes } = await fillForm(fixture("jasy-form"), values, { flatten: true });
+    const doc = PdfDocument.load(bytes);
+    const acro = doc.resolve(get(doc.catalog, "AcroForm"));
+    expect(get(acro, "NeedAppearances")).toBeUndefined();
+  });
+
+  it("leaves the form alone when flatten is not asked for", async () => {
+    const { bytes, flattened } = await fillForm(fixture("jasy-form"), values);
+    expect(flattened).toEqual([]);
+    expect(readAcroForm(PdfDocument.load(bytes))?.fields.length ?? 0).toBeGreaterThan(0);
   });
 });
