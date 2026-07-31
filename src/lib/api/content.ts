@@ -10,7 +10,7 @@ import {
 import { PDFElement } from "../elements/pdf-element.ts";
 import { ColorInput, toColor } from "./color.ts";
 import { Insets, toEdges } from "./insets.ts";
-import { SizeInput, toDimension } from "./dimension.ts";
+import { BoundsInput, SizeInput, toBounds, toDimension } from "./dimension.ts";
 
 /** A horizontal rule (locked §4). */
 export interface DividerOptions {
@@ -58,7 +58,7 @@ const FIT: Record<ImageFit, BoxFit> = {
   fill: BoxFit.fill,
 };
 
-export interface ImageOptions {
+export interface ImageOptions extends BoundsInput {
   /** Size on each axis: points (fixed) or a percentage string like `"50%"` (a fraction of the offered
    *  space). Pin exactly ONE axis and the other follows the image's aspect ratio (CSS `height: auto`). */
   width?: SizeInput;
@@ -79,9 +79,11 @@ export interface ImageOptions {
 export function Image(src: ImageSource, opts: ImageOptions = {}): ImageElement {
   const w = opts.width !== undefined ? toDimension(opts.width) : undefined;
   const h = opts.height !== undefined ? toDimension(opts.height) : undefined;
-  // Exactly one axis pinned -> the other is derived from the aspect ratio, so scale the image to the
-  // resulting box (fit: fill). Both or neither pinned keeps the default fit (none).
-  const autoScale = (opts.width !== undefined) !== (opts.height !== undefined);
+  // The box was derived rather than given outright - from the image's own ratio (exactly one axis
+  // pinned) or from an explicit `aspectRatio` - so scale the image into it (fit: fill). Two pinned axes
+  // and no ratio keep the default fit (none).
+  const autoScale =
+    (opts.width !== undefined) !== (opts.height !== undefined) || opts.aspectRatio !== undefined;
   const fit = opts.fit ? FIT[opts.fit] : autoScale ? BoxFit.fill : undefined;
 
   return new ImageElement({
@@ -95,6 +97,7 @@ export function Image(src: ImageSource, opts: ImageOptions = {}): ImageElement {
     height: h?.points,
     widthFactor: w?.factor,
     heightFactor: h?.factor,
+    ...toBounds(opts),
     fit,
     radius: opts.radius,
     alt: opts.alt,

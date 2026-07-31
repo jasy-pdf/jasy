@@ -30,3 +30,38 @@ export function toDimension(value: SizeInput): Dimension {
   if (m) return { factor: parseFloat(m[1]) / 100 };
   throw new Error(`Invalid size "${value}": use a number of points or a percentage like "50%".`);
 }
+
+/** The bound and ratio options every sized factory accepts, in the public `SizeInput` form. */
+export interface BoundsInput {
+  minWidth?: SizeInput;
+  maxWidth?: SizeInput;
+  minHeight?: SizeInput;
+  maxHeight?: SizeInput;
+  /**
+   * width / height (CSS `aspect-ratio`). Fills in whichever axis you leave open, and sizes the box
+   * from the offered width when you leave both open. An explicit `min`/`max` still wins over it.
+   */
+  aspectRatio?: number;
+}
+
+/** Split `BoundsInput` into the points-and-factors form the elements take. */
+export function toBounds(o: BoundsInput) {
+  const d = (v: SizeInput | undefined) => (v !== undefined ? toDimension(v) : undefined);
+  const [minW, maxW, minH, maxH] = [d(o.minWidth), d(o.maxWidth), d(o.minHeight), d(o.maxHeight)];
+  if (o.aspectRatio !== undefined && !(o.aspectRatio > 0)) {
+    throw new Error(
+      `Invalid aspectRatio ${o.aspectRatio}: it is width / height and must be above 0.`,
+    );
+  }
+  return {
+    minWidth: minW?.points,
+    maxWidth: maxW?.points,
+    minHeight: minH?.points,
+    maxHeight: maxH?.points,
+    minWidthFactor: minW?.factor,
+    maxWidthFactor: maxW?.factor,
+    minHeightFactor: minH?.factor,
+    maxHeightFactor: maxH?.factor,
+    aspectRatio: o.aspectRatio,
+  };
+}

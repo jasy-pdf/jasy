@@ -1,7 +1,14 @@
 import { getImageDimensions } from "../utils/image-helper.ts";
 import { latin1FromBytes } from "../utils/bytes.ts";
 import { readFileBytesAsync } from "../platform/node-fs.ts";
-import { BoxConstraints, Offset, Size, resolveExtent } from "../layout/box-constraints.ts";
+import {
+  BoxConstraints,
+  Offset,
+  Size,
+  SizingParams,
+  extentSpecs,
+  resolveSize,
+} from "../layout/box-constraints.ts";
 import { LayoutContext, SizedPDFElement } from "./pdf-element.ts";
 
 // path.extname without node:path (browser-safe): the substring from the last dot, if it sits after the
@@ -127,6 +134,17 @@ interface ImageElementParams {
   widthFactor?: number;
   /** Height as a fraction (0..1) of the offered height; see `widthFactor`. */
   heightFactor?: number;
+  /** Lower / upper bounds per axis, in points or as a fraction; see `SizingParams`. */
+  minWidth?: number;
+  maxWidth?: number;
+  minHeight?: number;
+  maxHeight?: number;
+  minWidthFactor?: number;
+  maxWidthFactor?: number;
+  minHeightFactor?: number;
+  maxHeightFactor?: number;
+  /** width / height; overrides the image's OWN ratio (CSS `aspect-ratio`), `fit` then places it. */
+  aspectRatio?: number;
   fit?: BoxFit;
   /** Corner radius in points; rounds the image box (0 = sharp, default). */
   radius?: number;
@@ -145,6 +163,8 @@ export class ImageElement extends SizedPDFElement {
   // re-layout (fragmentation measures more than once) still resolves the factor, instead of
   // freezing to the first pass's result. Mirrors ContainerElement / RowElement.
   private requested: { width?: number; height?: number };
+  /** min/max/aspectRatio, kept as given so every layout pass re-resolves them. */
+  private sizing: SizingParams;
   // Intrinsic pixel size, resolved asynchronously before layout (see resolveIntrinsicSize). Layout
   // reads it to derive a proportional height for a width-only image (and vice versa).
   private intrinsic?: { width: number; height: number };
@@ -158,6 +178,7 @@ export class ImageElement extends SizedPDFElement {
     fit = BoxFit.none,
     radius,
     alt,
+    ...sizing
   }: ImageElementParams) {
     // Seed this.width/height from the request so getProps() reflects it before layout; calculateLayout
     // then reads `requested` (never the mutated fields) and overwrites these with the laid-out size.
@@ -168,6 +189,7 @@ export class ImageElement extends SizedPDFElement {
     this.requested = { width, height };
     this.widthFactor = widthFactor;
     this.heightFactor = heightFactor;
+    this.sizing = sizing;
     this.fit = fit;
     this.radius = radius ?? 0;
     this.alt = alt;
@@ -198,32 +220,38 @@ export class ImageElement extends SizedPDFElement {
 
     // Relative sizing: a fixed size or a fraction of the offered box (fraction only in a bounded axis).
     // Read from `requested` (not this.width/height, which we overwrite below) so every pass re-resolves.
-    let w = resolveExtent(
-      this.requested.width,
-      this.widthFactor,
-      constraints.maxWidth,
-      constraints.hasBoundedWidth,
-    );
-    let h = resolveExtent(
-      this.requested.height,
-      this.heightFactor,
-      constraints.maxHeight,
-      constraints.hasBoundedHeight,
-    );
+    const specs = extentSpecs({
+      ...this.sizing,
+      width: this.requested.width,
+      height: this.requested.height,
+      widthFactor: this.widthFactor,
+      heightFactor: this.heightFactor,
+    });
+    // An explicit `aspectRatio` wins over the image's own, as it does in CSS - and only it may size a
+    // box with NEITHER axis pinned. Left to the intrinsic ratio that would change what an unsized image
+    // has always done here (fill both axes and let `fit` sort it out).
+    const resolved = resolveSize(specs.width, specs.height, this.sizing.aspectRatio, constraints);
+    let w = resolved.width;
+    let h = resolved.height;
+    const bounds = resolved.constraints;
 
-    // Aspect auto-size: when the user pinned exactly ONE axis, derive the other from the intrinsic
-    // ratio (CSS `width: 50%; height: auto`). Only fires once the pre-pass resolved the pixel size.
-    if (this.intrinsic && this.intrinsic.width > 0 && this.intrinsic.height > 0) {
+    // Aspect auto-size: when exactly ONE axis is pinned, derive the other from the intrinsic ratio
+    // (CSS `width: 50%; height: auto`). Only fires once the pre-pass resolved the pixel size.
+    if (
+      this.sizing.aspectRatio === undefined &&
+      this.intrinsic &&
+      this.intrinsic.width > 0 &&
+      this.intrinsic.height > 0
+    ) {
       const ratio = this.intrinsic.width / this.intrinsic.height;
-      if (w !== undefined && h === undefined) h = w / ratio;
-      else if (h !== undefined && w === undefined) w = h * ratio;
+      if (w !== undefined && h === undefined) h = bounds.constrainHeight(w / ratio);
+      else if (h !== undefined && w === undefined) w = bounds.constrainWidth(h * ratio);
     }
 
     // Fall back to the prior behavior for an unpinned axis: a bounded axis fills, otherwise keep the
     // requested fixed size (or undefined). Read from `requested`, never the mutated this.width/height.
-    this.width = w ?? (constraints.hasBoundedWidth ? constraints.maxWidth : this.requested.width);
-    this.height =
-      h ?? (constraints.hasBoundedHeight ? constraints.maxHeight : this.requested.height);
+    this.width = w ?? (bounds.hasBoundedWidth ? bounds.maxWidth : this.requested.width);
+    this.height = h ?? (bounds.hasBoundedHeight ? bounds.maxHeight : this.requested.height);
 
     // Top-left coordinates; the fit logic (renderer) and the Y-flip (seam) run later.
     return { width: this.width ?? 0, height: this.height ?? 0 };

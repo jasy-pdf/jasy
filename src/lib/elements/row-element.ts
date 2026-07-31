@@ -1,4 +1,11 @@
-import { BoxConstraints, Offset, Size, resolveExtent } from "../layout/box-constraints.ts";
+import {
+  BoxConstraints,
+  Offset,
+  Size,
+  SizingParams,
+  extentSpecs,
+  resolveSize,
+} from "../layout/box-constraints.ts";
 import { FlexLayoutHelper, HORIZONTAL_AXIS, MainAlign, CrossAlign } from "../utils/flex-layout.ts";
 import {
   FlexiblePDFElement,
@@ -20,6 +27,17 @@ interface RowElementParams extends WithChildren {
   height?: number;
   widthFactor?: number;
   heightFactor?: number;
+  /** Lower / upper bounds per axis, in points or as a fraction; see `SizingParams`. */
+  minWidth?: number;
+  maxWidth?: number;
+  minHeight?: number;
+  maxHeight?: number;
+  minWidthFactor?: number;
+  maxWidthFactor?: number;
+  minHeightFactor?: number;
+  maxHeightFactor?: number;
+  /** width / height; derives whichever axis is left open (CSS `aspect-ratio`). */
+  aspectRatio?: number;
   /** Start this row on a fresh page (CSS `break-before: page`). */
   breakBefore?: boolean;
   /** Start everything after this row on a fresh page (CSS `break-after: page`). */
@@ -46,12 +64,7 @@ export class RowElement extends SizedPDFElement {
   private breakBefore: boolean;
   private breakAfter: boolean;
   // The requested size (fixed points or a fraction), kept separate from the laid-out this.width/height.
-  private requested: {
-    width?: number;
-    height?: number;
-    widthFactor?: number;
-    heightFactor?: number;
-  };
+  private requested!: SizingParams;
 
   constructor({
     children,
@@ -60,17 +73,16 @@ export class RowElement extends SizedPDFElement {
     cross,
     width,
     height,
-    widthFactor,
-    heightFactor,
     breakBefore,
     breakAfter,
+    ...sizing
   }: RowElementParams) {
     super({ x: 0, y: 0 });
     this.children = children;
     this.gap = gap ?? 0;
     this.main = main ?? "start";
     this.cross = cross ?? "stretch";
-    this.requested = { width, height, widthFactor, heightFactor };
+    this.requested = { ...sizing, width, height };
     this.breakBefore = breakBefore ?? false;
     this.breakAfter = breakAfter ?? false;
   }
@@ -104,29 +116,25 @@ export class RowElement extends SizedPDFElement {
 
     // Relative sizing: a pinned extent (fixed or a fraction of the offered box, clamped) wins; else
     // width fills the offered space (flex children split the leftover) and height is the tallest child.
-    const explicitWidth = resolveExtent(
-      this.requested.width,
-      this.requested.widthFactor,
-      constraints.maxWidth,
-      constraints.hasBoundedWidth,
+    const specs = extentSpecs(this.requested);
+    const resolved = resolveSize(
+      specs.width,
+      specs.height,
+      this.requested.aspectRatio,
+      constraints,
     );
-    const explicitHeight = resolveExtent(
-      this.requested.height,
-      this.requested.heightFactor,
-      constraints.maxHeight,
-      constraints.hasBoundedHeight,
-    );
+    const { width: explicitWidth, height: explicitHeight, constraints: bounds } = resolved;
     const boundedWidth =
       explicitWidth !== undefined
-        ? constraints.constrainWidth(explicitWidth)
-        : constraints.hasBoundedWidth
-          ? constraints.maxWidth
+        ? bounds.constrainWidth(explicitWidth)
+        : bounds.hasBoundedWidth
+          ? bounds.maxWidth
           : undefined;
     const boundedHeight =
       explicitHeight !== undefined
-        ? constraints.constrainHeight(explicitHeight)
-        : constraints.hasBoundedHeight
-          ? constraints.maxHeight
+        ? bounds.constrainHeight(explicitHeight)
+        : bounds.hasBoundedHeight
+          ? bounds.maxHeight
           : undefined;
 
     // Horizontal stack: main = width (children fill it), cross = height (children can stretch to it).
