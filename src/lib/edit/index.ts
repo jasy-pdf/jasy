@@ -18,6 +18,9 @@ export type { FlattenOptions, FlattenResult } from "./flatten.ts";
 export type { FieldValue, FillOptions, FillResult } from "./fill.ts";
 
 // The document itself, for callers who want to look further than the form.
-// PdfEncryptedError is what a caller catches to tell "wrong password" apart from a broken file.
+// PdfEncryptedError is what a caller catches to tell "wrong password" apart from a broken file;
+// PdfStreamTooLargeError tells "this file is attacking me" apart from both.
 export { PdfDocument, PdfEncryptedError } from "./document.ts";
+export type { LoadOptions, OpenOptions } from "./document.ts";
+export { DEFAULT_MAX_STREAM_SIZE, PdfStreamTooLargeError } from "./inflate.ts";
 export type { PdfDict, PdfName, PdfObject, PdfRef, PdfStream, PdfString } from "./objects.ts";

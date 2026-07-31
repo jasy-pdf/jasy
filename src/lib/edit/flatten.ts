@@ -36,6 +36,8 @@ import {
 export interface FlattenOptions {
   /** The user password, for a document that is encrypted. */
   password?: string;
+  /** Ceiling on what ONE stream may inflate to, in bytes (default 64 MB) - the zip-bomb guard. */
+  maxStreamSize?: number;
   /** Flatten only these fields (fully qualified names). Omit for all of them. */
   fields?: string[];
 }
@@ -343,12 +345,10 @@ function withEntries(
 /**
  * The appearance streams a fill has just written, keyed by widget object number.
  *
- * Flattening freezes the picture a widget currently shows, and it reads that picture out of the
- * document. In the same pass as a fill the new picture is not in the document yet - it is in the
- * writer, appended but not saved - so without this map a filled-and-flattened form would stamp the
- * value the field had BEFORE the fill. It applies to both kinds of widget, which go stale for two
- * different reasons: a text field's `/AP` is replaced outright, and a button's `/AP` keeps all its
- * states while `/AS` moves to pick a different one.
+ * Flattening reads the picture a widget shows out of the DOCUMENT, but mid-pass the new one is still in
+ * the writer - without this map a filled-and-flattened form freezes the value from before the fill.
+ * Both widget kinds go stale, for different reasons: a text field's `/AP` is replaced, a button's `/AP`
+ * keeps every state and only `/AS` moves.
  */
 export type FreshAppearances = ReadonlyMap<number, PdfRef>;
 
@@ -371,15 +371,9 @@ export async function flattenInto(
   for (const s of stamps)
     (byPage.get(s.pageNum) ?? byPage.set(s.pageNum, []).get(s.pageNum)!).push(s);
 
-  // In an encrypted document every string in a rewritten object has to be enciphered again, or
-  // `serialize` writes it back in the clear - ISSUE-7, one object at a time. The caller's map (a fill
-  // flattening in the same pass) is the seed; the pages are what only this pass touches.
-  //
-  // NOT reachable today, and therefore not covered by a test: we can only write R6, so the only
-  // encrypted files we can flatten are our own, and ours reference every annotation as its own object -
-  // a page dictionary of ours holds no string at all. It matters the moment a producer inlines an
-  // annotation (its /Contents and /URI are strings), which is why it is wired rather than left as a
-  // trap. Same reasoning as the `alsoRewritten` pass in `fill.ts`.
+  // Strings in the objects rewritten below have to be enciphered again; the caller's map is the seed.
+  // Untested because unreachable today: we can only flatten our own R6 files, and our page dictionaries
+  // hold no strings. It bites the moment a producer inlines an annotation (/Contents, /URI).
   const acroDict = doc.resolve(get(doc.catalog, "AcroForm"));
   const cipher = await carryStrings(
     doc,
@@ -467,10 +461,8 @@ export async function flattenInto(
     const gone = new Set(fields.map((f) => f.objNum).filter((n): n is number => n !== undefined));
     // A flattened field may hang in a PARENT's /Kids rather than in the form's /Fields. Dropping it only
     // from the root leaves it reachable, so `readAcroForm` still reports a field with no widget left.
-    //
-    // Planned first, written after: a surviving parent is rewritten WHOLE, so it carries its own /T,
-    // /TU and /DA along - and those are strings that have to be enciphered like any other. Collecting
-    // them needs an await, which is why the walk itself stays synchronous and only plans.
+    // Planned first, written after: a surviving parent is rewritten whole, carrying its own /T, /TU
+    // and /DA, and enciphering those needs an await the sync walk cannot do.
     const prunes = pruneKids(doc, get(acro, "Fields"), gone);
     await carryStrings(
       doc,
@@ -555,7 +547,10 @@ export async function flattenForm(
   bytes: Uint8Array,
   options: FlattenOptions = {},
 ): Promise<FlattenResult> {
-  const doc = await PdfDocument.open(bytes, { password: options.password });
+  const doc = await PdfDocument.open(bytes, {
+    password: options.password,
+    maxStreamSize: options.maxStreamSize,
+  });
   if (!doc.canReEncrypt) {
     throw new FlattenError(
       "this PDF is encrypted with RC4 or AES-128; jasy can open it but writes only AES-256, so " +

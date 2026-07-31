@@ -303,11 +303,10 @@ const hexString = (b: Uint8Array): string =>
   `<${Array.from(b, (x) => x.toString(16).padStart(2, "0").toUpperCase()).join("")}>`;
 
 /**
- * Encipher every string the given objects carry, into a cipher map `serialize` then consults.
+ * Encipher every string the given objects carry, into the cipher map `serialize` consults.
  *
- * A no-op on an unencrypted document. On an encrypted one it is not optional: `serialize` writes any
- * string it cannot find in the map as PLAINTEXT, so an object rewritten without this pass leaks
- * whatever it holds - a link URL, an annotation's note, a form-level /DA.
+ * Not optional on an encrypted document: `serialize` writes any string missing from the map as
+ * PLAINTEXT, so an object rewritten without this pass leaks whatever it holds.
  */
 export async function carryStrings(
   doc: PdfDocument,

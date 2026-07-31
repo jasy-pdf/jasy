@@ -1,5 +1,5 @@
-import { unzlibSync } from "fflate";
 import { Lexer } from "./lexer.ts";
+import { DEFAULT_MAX_STREAM_SIZE, inflateBounded, PdfStreamTooLargeError } from "./inflate.ts";
 import {
   get,
   isDict,
@@ -36,6 +36,18 @@ type XrefEntry =
 
 const EMPTY = new Uint8Array(0);
 
+/** What `PdfDocument.load` accepts. */
+export interface LoadOptions {
+  /** Ceiling on what ONE stream may inflate to, in bytes (default 64 MB). Raise it for a document that
+   *  is genuinely enormous; a stream past it throws `PdfStreamTooLargeError` rather than being read. */
+  maxStreamSize?: number;
+}
+
+/** What `PdfDocument.open` accepts - everything `load` takes, plus the password. */
+export interface OpenOptions extends LoadOptions {
+  password?: string;
+}
+
 /** Thrown when a file cannot be opened because of its encryption - always saying which of the reasons it
  *  is: no password, wrong password, or a revision we do not implement. */
 export class PdfEncryptedError extends Error {
@@ -47,10 +59,6 @@ export class PdfEncryptedError extends Error {
 /** The raw bytes of a `/Encrypt` entry that must be a string (`/U`, `/UE`). */
 const stringBytes = (o: PdfObject | undefined): Uint8Array | undefined =>
   isString(o) ? o.bytes : undefined;
-
-// `stringsIn` lives in objects.ts: the read side walks a tree to DECIPHER every string, the write side
-// to ENCIPHER every string, and the two must agree on what "every string" means. Two copies of that
-// walk is exactly how one of them ends up missing a case.
 
 export class PdfDocument {
   private readonly xref = new Map<number, XrefEntry>();
@@ -70,10 +78,14 @@ export class PdfDocument {
    *  walk the chain back. */
   usesXrefStream = false;
 
+  /** Ceiling on what one stream may inflate to; see `inflate.ts`. */
+  private maxStreamSize = DEFAULT_MAX_STREAM_SIZE;
+
   private constructor(readonly bytes: Uint8Array) {}
 
-  static load(bytes: Uint8Array): PdfDocument {
+  static load(bytes: Uint8Array, opts: LoadOptions = {}): PdfDocument {
     const doc = new PdfDocument(bytes);
+    if (opts.maxStreamSize !== undefined) doc.maxStreamSize = opts.maxStreamSize;
     try {
       doc.readXrefChain();
     } catch {
@@ -93,8 +105,8 @@ export class PdfDocument {
    * above them synchronous, which is the same trade the writer makes (`structure.ts` builds the handler
    * before the synchronous constructor).
    */
-  static async open(bytes: Uint8Array, opts: { password?: string } = {}): Promise<PdfDocument> {
-    const doc = PdfDocument.load(bytes);
+  static async open(bytes: Uint8Array, opts: OpenOptions = {}): Promise<PdfDocument> {
+    const doc = PdfDocument.load(bytes, opts);
     if (!doc.isEncrypted) return doc;
     doc.security = await doc.securityHandlerFor(opts.password);
     await doc.decryptEverything();
@@ -617,8 +629,12 @@ export class PdfDocument {
     filters.forEach((filter, i) => {
       if (filter === "FlateDecode") {
         try {
-          data = unzlibSync(data);
-        } catch {
+          // Per pass, because /Filter is a list and [/FlateDecode /FlateDecode] is a legal nested bomb.
+          data = inflateBounded(data, this.maxStreamSize);
+        } catch (e) {
+          // A stream that blew the ceiling is an attack, not a stream we failed to decode - swallowing
+          // it here would hand back silent garbage.
+          if (e instanceof PdfStreamTooLargeError) throw e;
           return; // not our data to repair; hand back what we have
         }
         data = this.undoPredictor(data, this.resolve(parms[i]));

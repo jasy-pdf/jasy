@@ -26,6 +26,8 @@ export type FieldValue = string | boolean | string[] | null;
 export interface FillOptions {
   /** The user password, for a document that is encrypted. Wrong or missing gives a named error. */
   password?: string;
+  /** Ceiling on what ONE stream may inflate to, in bytes (default 64 MB) - the zip-bomb guard. */
+  maxStreamSize?: number;
   /**
    * Draw the new value into the field's appearance (default `true`), the same way jasy bakes one when it
    * CREATES a field - so the value is visible in any viewer, not only in one that honours
@@ -183,8 +185,7 @@ async function bakeStatesFor(
       data: (await doc.encryptForWrite(encoded)) ?? encoded,
     });
   };
-  // The object numbers come back too, not just the dictionary text: a flatten in the same pass has to
-  // stamp ONE of these two states, and picking it out of a serialized string again would be silly.
+  // The object numbers come back too: a flatten in the same pass stamps one of these two states.
   const onNum = await write(faces.on);
   const offNum = await write(faces.off);
   return {
@@ -340,9 +341,8 @@ export async function fillForm(
   values: Record<string, FieldValue>,
   options: FillOptions = {},
 ): Promise<FillResult> {
-  // Two combinations of options describe a document nobody wants. Both are refused here, before the
-  // file is even opened, because the answer does not depend on it - and a silent nonsense result is the
-  // one outcome this module does not ship.
+  // Two option combinations describe a document nobody wants. Refused before the file is opened, since
+  // the answer does not depend on it.
   if (options.fieldAppearances === false && options.needAppearances === false) {
     throw new FillError(
       "fieldAppearances and needAppearances are both false, which leaves the values invisible: nothing " +
@@ -358,7 +358,10 @@ export async function fillForm(
 
   // Async because an encrypted document has to be deciphered before its field names mean anything, and
   // because the values written back have to be enciphered again with the same file key.
-  const doc = await PdfDocument.open(bytes, { password: options.password });
+  const doc = await PdfDocument.open(bytes, {
+    password: options.password,
+    maxStreamSize: options.maxStreamSize,
+  });
 
   if (!doc.canReEncrypt) {
     throw new FillError(
@@ -514,10 +517,8 @@ export async function fillForm(
   // When we DID draw, the flag has to go: a form that still asks for regeneration gets it, and the
   // viewer throws our drawing away and redraws from /DA - which is how PDFKit's forms kept asking for a
   // ZapfDingbats they do not ship.
-  //
-  // With a flatten following there is nothing to answer it FOR: the form loses its fields, and the
-  // flatten pass rewrites the same /AcroForm dictionary anyway - writing the flag here would only be
-  // overwritten a moment later.
+  // With a flatten following there is nothing left to answer it for, and that pass rewrites the same
+  // /AcroForm dictionary anyway.
   const needAppearances = bake && !someBakeFailed ? "false" : "true";
   if (!options.flatten && (bake || options.needAppearances !== false)) {
     if (acro !== undefined && isDict(acro)) {
@@ -537,8 +538,8 @@ export async function fillForm(
     }
   }
 
-  // Flattening rides on the SAME writer, so the whole operation stays one incremental update. It goes
-  // last because it freezes the pictures the pass above has just drawn.
+  // Same writer, so the whole operation stays one incremental update. Last, because it freezes the
+  // pictures drawn above.
   const flattened = options.flatten
     ? await flattenInto(doc, writer, form.fields, carried, fresh)
     : [];
