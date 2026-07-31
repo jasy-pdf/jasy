@@ -1,5 +1,13 @@
 import type { PdfDocument } from "./document.ts";
-import { isDict, isRef, isStream, isString, type PdfObject, type PdfString } from "./objects.ts";
+import {
+  isDict,
+  isRef,
+  isStream,
+  isString,
+  stringsIn,
+  type PdfObject,
+  type PdfString,
+} from "./objects.ts";
 
 /** Strings already enciphered for write-back, keyed by the very object they replace. */
 export type StringCipher = Map<PdfString, string>;
@@ -288,4 +296,31 @@ export class IncrementalWriter {
     const m = /startxref\s+(\d+)/.exec(tail.slice(at));
     return m ? Number(m[1]) : undefined;
   }
+}
+
+/** Bytes as an enciphered PDF hex string, the form every rewritten string takes in an encrypted file. */
+const hexString = (b: Uint8Array): string =>
+  `<${Array.from(b, (x) => x.toString(16).padStart(2, "0").toUpperCase()).join("")}>`;
+
+/**
+ * Encipher every string the given objects carry, into a cipher map `serialize` then consults.
+ *
+ * A no-op on an unencrypted document. On an encrypted one it is not optional: `serialize` writes any
+ * string it cannot find in the map as PLAINTEXT, so an object rewritten without this pass leaks
+ * whatever it holds - a link URL, an annotation's note, a form-level /DA.
+ */
+export async function carryStrings(
+  doc: PdfDocument,
+  objects: Array<PdfObject | undefined>,
+  into: Map<PdfString, string> = new Map(),
+): Promise<StringCipher> {
+  if (!doc.isEncrypted) return into;
+  for (const o of objects) {
+    for (const str of stringsIn(o)) {
+      if (into.has(str)) continue;
+      const cipher = await doc.encryptForWrite(str.bytes);
+      if (cipher) into.set(str, hexString(cipher));
+    }
+  }
+  return into;
 }

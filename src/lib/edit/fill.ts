@@ -1,18 +1,11 @@
 import { PdfDocument } from "./document.ts";
 import { readAcroForm, type ReadField } from "./acroform-reader.ts";
-import { IncrementalWriter, serialize, type StringCipher } from "./writer.ts";
+import { carryStrings, IncrementalWriter, serialize, type StringCipher } from "./writer.ts";
 import { bakeAppearance, bakeButtonStates, fontMetrics, readLook } from "./appearance.ts";
+import { flattenInto } from "./flatten.ts";
 import type { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 import { getArrayBuffer } from "../utils/utf8-to-windows1252-encoder.ts";
-import {
-  get,
-  isDict,
-  isRef,
-  isString,
-  type PdfDict,
-  type PdfObject,
-  type PdfString,
-} from "./objects.ts";
+import { get, isDict, isRef, type PdfDict, type PdfObject, type PdfRef } from "./objects.ts";
 
 /**
  * Filling the form of an EXISTING PDF.
@@ -40,10 +33,23 @@ export interface FillOptions {
    */
   fieldAppearances?: boolean;
   /**
-   * Leave the drawing of the values to the viewer by setting `/NeedAppearances`, instead of generating
-   * appearance streams. Default `true` today - baking them is the next step.
+   * Ask the viewer to draw the values itself, by setting `/NeedAppearances true` (default `true`).
+   *
+   * The two options answer the same question and exactly one of them ends up applying: when we DID
+   * bake, the flag is written as `false`, because a form that still asks for regeneration gets it and
+   * the viewer throws our drawing away. Turning BOTH off is refused - see `fillForm`.
    */
   needAppearances?: boolean;
+  /**
+   * Flatten the form after filling it (default `false`): the values become ordinary page content and
+   * the fields stop being editable. The whole form is flattened, not only the names in `values` - a
+   * document where some fields are frozen and others are not is the surprising outcome, and
+   * `flattenForm(bytes, { fields })` is there for anyone who wants that on purpose.
+   *
+   * Filling and flattening in one call produces ONE incremental update rather than two, so the file
+   * stays smaller than calling them in sequence - and the result is identical either way.
+   */
+  flatten?: boolean;
 }
 
 export interface FillResult {
@@ -52,6 +58,8 @@ export interface FillResult {
   warnings: string[];
   /** The names actually written. */
   filled: string[];
+  /** The names turned into page content, when `flatten` was asked for. Empty otherwise. */
+  flattened: string[];
 }
 
 /** Field flags we have to honour when filling (see `forms/acroform.ts` for the writer's side). */
@@ -125,14 +133,6 @@ function withEntries(
 }
 
 /** Every string reachable inside an object, so a dictionary can be re-enciphered in one walk. */
-function stringsIn(o: PdfObject | undefined, out: PdfString[] = [], depth = 0): PdfString[] {
-  if (o === undefined || o === null || depth > 64) return out;
-  if (isString(o)) out.push(o);
-  else if (Array.isArray(o)) for (const e of o) stringsIn(e, out, depth + 1);
-  else if (isDict(o)) for (const v of o.map.values()) stringsIn(v, out, depth + 1);
-  return out;
-}
-
 /**
  * Draw the field again for its NEW value and append the XObject, returning its object number. Falls back
  * to `undefined` when the widget does not say enough about itself to draw it - then the caller drops the
@@ -169,7 +169,7 @@ async function bakeStatesFor(
   field: ReadField,
   widgetNum: number,
   state: string,
-): Promise<string | undefined> {
+): Promise<{ ap: string; states: Map<string, number> } | undefined> {
   const look = readLook(doc, doc.getObject(widgetNum), field);
   if (look === undefined || look.width <= 0 || look.height <= 0) return undefined;
   const radio = (field.flags & FF_RADIO) !== 0;
@@ -183,7 +183,25 @@ async function bakeStatesFor(
       data: (await doc.encryptForWrite(encoded)) ?? encoded,
     });
   };
-  return `<< /N << /${escName(on)} ${await write(faces.on)} 0 R /Off ${await write(faces.off)} 0 R >> >>`;
+  // The object numbers come back too, not just the dictionary text: a flatten in the same pass has to
+  // stamp ONE of these two states, and picking it out of a serialized string again would be silly.
+  const onNum = await write(faces.on);
+  const offNum = await write(faces.off);
+  return {
+    ap: `<< /N << /${escName(on)} ${onNum} 0 R /Off ${offNum} 0 R >> >>`,
+    states: new Map([
+      [on, onNum],
+      ["Off", offNum],
+    ]),
+  };
+}
+
+/** The appearance a widget ALREADY carries for one of its states, from `/AP /N /<state>`. */
+function stateAppearance(doc: PdfDocument, widgetNum: number, state: string): PdfRef | undefined {
+  const states = doc.resolve(get(doc.resolve(get(doc.getObject(widgetNum), "AP")), "N"));
+  if (states === undefined || !isDict(states)) return undefined;
+  const chosen = states.map.get(state);
+  return isRef(chosen) ? chosen : undefined;
 }
 
 class FillError extends Error {}
@@ -322,6 +340,22 @@ export async function fillForm(
   values: Record<string, FieldValue>,
   options: FillOptions = {},
 ): Promise<FillResult> {
+  // Two combinations of options describe a document nobody wants. Both are refused here, before the
+  // file is even opened, because the answer does not depend on it - and a silent nonsense result is the
+  // one outcome this module does not ship.
+  if (options.fieldAppearances === false && options.needAppearances === false) {
+    throw new FillError(
+      "fieldAppearances and needAppearances are both false, which leaves the values invisible: nothing " +
+        "is drawn by jasy and the viewer is not asked to draw anything either. Turn one of them on",
+    );
+  }
+  if (options.flatten === true && options.fieldAppearances === false) {
+    throw new FillError(
+      "flatten needs fieldAppearances: flattening freezes the picture a field shows, and with " +
+        "fieldAppearances false there is no picture of the new value to freeze",
+    );
+  }
+
   // Async because an encrypted document has to be deciphered before its field names mean anything, and
   // because the values written back have to be enciphered again with the same file key.
   const doc = await PdfDocument.open(bytes, { password: options.password });
@@ -375,6 +409,8 @@ export async function fillForm(
   const bake = options.fieldAppearances !== false;
   // One metrics instance for the whole fill, not one per field and not one at module scope.
   const metrics = bake ? fontMetrics() : undefined;
+  // Only collected when a flatten follows in this same pass; see `FreshAppearances` for why it exists.
+  const fresh = options.flatten ? new Map<number, PdfRef>() : undefined;
   // A widget we could not draw has no picture at all, so the viewer must be asked after all.
   let someBakeFailed = false;
   const filled: string[] = [];
@@ -425,6 +461,7 @@ export async function fillForm(
           bake && metrics ? await bakeFor(doc, writer, field, w.num, change, metrics) : undefined;
         if (bake && baked === undefined) someBakeFailed = true;
         editsFor(w.num).AP = baked !== undefined ? `<< /N ${baked} 0 R >>` : undefined;
+        if (baked !== undefined) fresh?.set(w.num, { kind: "ref", num: baked, gen: 0 });
       }
     }
     for (const [widgetNum, state] of change.as ?? []) {
@@ -432,8 +469,17 @@ export async function fillForm(
       // A button whose widget ships NO state pictures (PDFKit, react-pdf write none) stays an empty box
       // in anything that does not redraw - and cannot be flattened at all. Draw the two states once.
       if (bake && !field.widgets.find((w) => w.num === widgetNum)?.hasAppearance) {
-        const ap = await bakeStatesFor(doc, writer, field, widgetNum, state);
-        if (ap !== undefined) editsFor(widgetNum).AP = ap;
+        const drawn = await bakeStatesFor(doc, writer, field, widgetNum, state);
+        if (drawn !== undefined) {
+          editsFor(widgetNum).AP = drawn.ap;
+          const num = drawn.states.get(state);
+          if (num !== undefined) fresh?.set(widgetNum, { kind: "ref", num, gen: 0 });
+        }
+      } else {
+        // The widget keeps its own pictures and only /AS moves, so the state to stamp is the NEW one -
+        // reading /AS back out of the document would give the state before this fill.
+        const ref = stateAppearance(doc, widgetNum, state);
+        if (ref !== undefined) fresh?.set(widgetNum, ref);
       }
     }
 
@@ -459,16 +505,7 @@ export async function fillForm(
 
   // One pass over every string that will be carried over unchanged. Without this a preserved tooltip or
   // a /DA would be written back in the clear, into a file where nothing else is.
-  const carried: StringCipher = new Map();
-  if (doc.isEncrypted) {
-    for (const target of [...pending.map((p) => p.target), ...alsoRewritten]) {
-      for (const str of stringsIn(target)) {
-        if (carried.has(str)) continue;
-        const cipher = await doc.encryptForWrite(str.bytes);
-        if (cipher) carried.set(str, hex(cipher));
-      }
-    }
-  }
+  const carried = await carryStrings(doc, [...pending.map((p) => p.target), ...alsoRewritten]);
   for (const { objNum, target, changes } of pending) {
     writer.update(objNum, withEntries(target, changes, carried));
   }
@@ -477,8 +514,12 @@ export async function fillForm(
   // When we DID draw, the flag has to go: a form that still asks for regeneration gets it, and the
   // viewer throws our drawing away and redraws from /DA - which is how PDFKit's forms kept asking for a
   // ZapfDingbats they do not ship.
+  //
+  // With a flatten following there is nothing to answer it FOR: the form loses its fields, and the
+  // flatten pass rewrites the same /AcroForm dictionary anyway - writing the flag here would only be
+  // overwritten a moment later.
   const needAppearances = bake && !someBakeFailed ? "false" : "true";
-  if (bake || options.needAppearances !== false) {
+  if (!options.flatten && (bake || options.needAppearances !== false)) {
     if (acro !== undefined && isDict(acro)) {
       if (isRef(acroRef)) {
         writer.update(
@@ -496,7 +537,13 @@ export async function fillForm(
     }
   }
 
-  return { bytes: writer.save(), warnings, filled };
+  // Flattening rides on the SAME writer, so the whole operation stays one incremental update. It goes
+  // last because it freezes the pictures the pass above has just drawn.
+  const flattened = options.flatten
+    ? await flattenInto(doc, writer, form.fields, carried, fresh)
+    : [];
+
+  return { bytes: writer.save(), warnings, filled, flattened };
 }
 
 export { FillError };
