@@ -139,22 +139,36 @@ clockwise) and resolved against the box by the renderer.
 
 ### Content
 
-| Factory                            | Purpose                              | Key options                                                      | Maps to                   |
-| ---------------------------------- | ------------------------------------ | ---------------------------------------------------------------- | ------------------------- |
-| `Text(content, opts)`              | `content` = string OR `Span[]`       | `size`, `font`, `bold`, `italic`, `color`, `align`, break‡       | `TextElement`             |
-| `span(text, opts)`                 | inline run for mixed `Text`          | `size`, `font`, `bold`, `italic`, `color`                        | `TextSegment`             |
-| `Paragraph(content, opts)`         | `Text` with body defaults            | as `Text`                                                        | `TextElement`             |
-| `DefaultTextStyle(opts, children)` | cascaded text defaults for a subtree | `size`, `font`, `bold`, `italic`, `color`, `align`, `lineHeight` | `DefaultTextStyleElement` |
-| `Image(src, opts)`                 | image                                | `fit`, **`radius`**, sizing†                                     | `ImageElement`            |
-| `Divider(opts?)`                   | horizontal rule                      | `color`, `thickness`, `margin`                                   | `LineElement`             |
-| `Line(opts)`                       | explicit line                        | `from`, `to`, `color`, `thickness`                               | `LineElement`             |
+| Factory                            | Purpose                              | Key options                                                              | Maps to                   |
+| ---------------------------------- | ------------------------------------ | ------------------------------------------------------------------------ | ------------------------- |
+| `Text(content, opts)`              | `content` = string OR `Span[]`       | `size`, `font`, `bold`, `italic`, `color`, `align`, `orphans`, `widows`‡ | `TextElement`             |
+| `span(text, opts)`                 | inline run for mixed `Text`          | `size`, `font`, `bold`, `italic`, `color`                                | `TextSegment`             |
+| `Paragraph(content, opts)`         | `Text` with body defaults            | as `Text` (the same `TextOptions`, forwarded verbatim)                   | `TextElement`             |
+| `DefaultTextStyle(opts, children)` | cascaded text defaults for a subtree | `size`, `font`, `bold`, `italic`, `color`, `align`, `lineHeight`         | `DefaultTextStyleElement` |
+| `Image(src, opts)`                 | image                                | `fit`, **`radius`**, sizing†                                             | `ImageElement`            |
+| `Divider(opts?)`                   | horizontal rule                      | `color`, `thickness`, `margin`                                           | `LineElement`             |
+| `Line(opts)`                       | explicit line                        | `from`, `to`, `color`, `thickness`                                       | `LineElement`             |
 
-‡ **Page-break behaviour of a paragraph** - `orphans` and `widows`, both defaulting to **2**, the CSS
-initial value. (Support in browsers is uneven - Chrome honours them in paged media, Firefox has never
-implemented them - which is exactly why a PDF engine has to do it itself.) An orphan is the first line left alone at the foot of a page; a widow is the last line
-pushed alone to the top of the next. Splitting at line boxes prevents neither, so the fragmenter's split
-index is corrected: too few lines would stay, or too few would carry over, and the paragraph moves whole
-instead. Set both to `1` to switch the protection off and break wherever the page ends.
+‡ **Page-break behaviour of a paragraph.**
+
+```ts
+Text(content, { orphans?: number; widows?: number })
+Paragraph(content, { orphans?: number; widows?: number }) // Paragraph forwards TextOptions verbatim
+```
+
+Each is a **whole number of LINES, at least 1** - anything else (a fraction, 0, a negative) is refused
+by name, because both end up as a slice index and a bad one would be truncated silently somewhere
+downstream. `1` is the documented way to switch that end off. Both default to **2**, the CSS initial
+value. (Browser support is uneven - Chrome honours them in paged media, Firefox has never implemented
+them - which is exactly why a PDF engine has to do it itself.)
+
+An orphan is the first line left alone at the foot of a page; a widow is the last line pushed alone to
+the top of the next. Splitting at line boxes prevents neither, so the fragmenter's split index is
+corrected: too few lines would stay, or too few would carry over, and the paragraph moves whole instead.
+
+> **They do NOT inherit**, unlike in CSS. `Document(...)` and `DefaultTextStyle(...)` cascade the text
+> STYLE properties (see the note below); a break rule is set per paragraph. Worth knowing if you come
+> from CSS, where `orphans` is an inherited property.
 
 An `Image` with an explicit `aspectRatio` uses it INSTEAD of the image's own; with one axis pinned and
 no ratio given, the image's intrinsic ratio still fills in the other. Either way the box was derived
