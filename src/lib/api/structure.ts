@@ -15,6 +15,7 @@ import { createSecurityHandler, type EncryptOptions } from "../crypto/security-h
 export type { EncryptOptions, Permissions } from "../crypto/security-handler.ts";
 import { uaXmp } from "../utils/ua-xmp.ts";
 import { Column, StackOptions } from "./layout.ts";
+import { loadFontFromUrl, type UrlFontSource } from "./font-url.ts";
 import { Insets, toEdges } from "./insets.ts";
 import { TextDefaults, toTextStyleOverride } from "./text.ts";
 
@@ -144,6 +145,10 @@ export interface JasyDocument extends PDFDocumentElement {
    *  path (read now, on Node), raw bytes, or a styled family. Re-adding a name overwrites it.
    *  A registered font that no `Text` actually uses is dropped at render and costs nothing. */
   addFont(name: string, source: FontSource): this;
+  /** The same, from a URL. Async because the fetch happens NOW, exactly as `addFont` reads a path
+   *  now - so a broken link fails where you asked for the font, not inside a later render.
+   *  `await doc.addFontFromUrl("Inter", "https://…/Inter-Regular.ttf")`, or a styled family of URLs. */
+  addFontFromUrl(name: string, source: UrlFontSource): Promise<this>;
   /** The names of the registered fonts. */
   getFonts(): string[];
   /** Whether a font is registered under `name`. */
@@ -194,6 +199,10 @@ export function Document(a: DocumentOptions | PageElement[], b?: PageElement[]):
   docFonts.set(doc, registry);
   doc.addFont = (name, source) => {
     registry.set(name, resolveFontSource(source));
+    return doc;
+  };
+  doc.addFontFromUrl = async (name, source) => {
+    registry.set(name, await loadFontFromUrl(source));
     return doc;
   };
   doc.getFonts = () => [...registry.keys()];
