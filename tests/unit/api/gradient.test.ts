@@ -70,6 +70,51 @@ describe("stops", () => {
   it("refuses a gradient with fewer than two colours", () => {
     expect(() => box(linearGradient("#000"))).toThrow(/two colour stops/);
   });
+
+  it("refuses a position outside 0..1, or one that is not a number", () => {
+    // These end up in a PDF stitching function's /Bounds, which the format requires to sit strictly
+    // inside the domain. A bad one is a MALFORMED FILE, not a wrong-looking gradient.
+    for (const at of [2, -0.5, NaN, Infinity]) {
+      expect(() => box(linearGradient({ stops: ["#000", { color: "#fff", at }, "#111"] }))).toThrow(
+        /between 0 and 1/,
+      );
+    }
+  });
+
+  it("refuses stops that do not move forward", () => {
+    // /Bounds must be STRICTLY increasing. Equal offsets are a hard colour edge in CSS and cannot be
+    // expressed in one PDF shading, so they are named rather than drawn wrongly.
+    expect(() =>
+      box(
+        linearGradient({
+          stops: ["#000", { color: "#f00", at: 0.5 }, { color: "#0f0", at: 0.5 }, "#fff"],
+        }),
+      ),
+    ).toThrow(/must move forward/);
+    expect(() =>
+      box(
+        linearGradient({
+          stops: ["#000", { color: "#f00", at: 0.8 }, { color: "#0f0", at: 0.3 }, "#fff"],
+        }),
+      ),
+    ).toThrow(/must move forward/);
+  });
+
+  it("carries the edge colour outwards when the first or last stop is pinned inside", () => {
+    // Only the INTERIOR offsets reach /Bounds - the domain is always 0..1 - so a first stop pinned at
+    // 0.3 would silently do nothing. CSS extends the edge colour instead, and so do we.
+    const g = box(
+      linearGradient({
+        stops: [
+          { color: "#000000", at: 0.3 },
+          { color: "#ffffff", at: 0.7 },
+        ],
+      }),
+    );
+    expect(g.stops.map((s) => s.offset)).toEqual([0, 0.3, 0.7, 1]);
+    expect(g.stops[0].color.toPDFColorString()).toBe(g.stops[1].color.toPDFColorString());
+    expect(g.stops[3].color.toPDFColorString()).toBe(g.stops[2].color.toPDFColorString());
+  });
 });
 
 describe("radial", () => {

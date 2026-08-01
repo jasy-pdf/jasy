@@ -63,19 +63,44 @@ export function radialGradient(
   return { kind: "radial", center: [0.5, 0.5], radius: 0.5, stops: args as StopInput[] };
 }
 
-/** Spread the stops that carry no `at` evenly, first to last, the way CSS does. */
+/**
+ * Spread the stops that carry no `at` evenly, first to last, the way CSS does - and check the pinned
+ * ones, because they end up in a PDF stitching function's `/Bounds`, which the format requires to be
+ * strictly increasing inside the domain. A bad offset there is not a wrong-looking gradient, it is a
+ * malformed file, so it is refused by name here rather than emitted.
+ */
 function toStops(stops: StopInput[]): GradientStop[] {
   if (stops.length < 2) {
     throw new Error("A gradient needs at least two colour stops.");
   }
   const last = stops.length - 1;
-  return stops.map((s, i) => {
+  const out: GradientStop[] = stops.map((s, i) => {
     const pinned = typeof s === "object" && s !== null && "at" in s;
+    const at = pinned ? (s as { at: number }).at : i / last;
+    if (!Number.isFinite(at) || at < 0 || at > 1) {
+      throw new Error(`Invalid gradient stop position ${at}: it must be a number between 0 and 1.`);
+    }
     return {
-      offset: pinned ? (s as { at: number }).at : i / last,
+      offset: at,
       color: toColor(pinned ? (s as { color: ColorInput }).color : (s as ColorInput)),
     };
   });
+
+  for (let i = 1; i < out.length; i++) {
+    if (out[i].offset <= out[i - 1].offset) {
+      throw new Error(
+        `Gradient stops must move forward: stop ${i} sits at ${out[i].offset}, which is not after ` +
+          `${out[i - 1].offset}. (Two stops at the SAME position would be a hard colour edge in CSS; ` +
+          `PDF cannot express that in one shading, so it is refused rather than drawn wrongly.)`,
+      );
+    }
+  }
+
+  // A pinned first or last stop would otherwise be IGNORED - the shading's domain is always 0..1 and
+  // only the INTERIOR offsets reach /Bounds. Carrying the edge colour outwards is what CSS does.
+  if (out[0].offset > 0) out.unshift({ offset: 0, color: out[0].color });
+  if (out[out.length - 1].offset < 1) out.push({ offset: 1, color: out[out.length - 1].color });
+  return out;
 }
 
 /**
