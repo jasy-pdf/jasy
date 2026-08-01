@@ -1,3 +1,5 @@
+import type { CrossAlign } from "../layout/alignment.ts";
+
 /**
  * Size input for a Box's `width` / `height` (relative sizing). Either a number of PDF points (a
  * fixed size) or a percentage string like `"50%"` - a fraction of the space the parent offers on
@@ -33,6 +35,12 @@ export function toDimension(value: SizeInput): Dimension {
 
 /** The bound and ratio options every sized factory accepts, in the public `SizeInput` form. */
 export interface BoundsInput {
+  /**
+   * This element's own cross-axis alignment inside its Column / Row (CSS `align-self`), overriding the
+   * container's `align`. On a `Spacer` / `Expanded` it is a no-op - a flex child fills the main axis and
+   * has no natural cross size to align.
+   */
+  alignSelf?: CrossAlign;
   minWidth?: SizeInput;
   maxWidth?: SizeInput;
   minHeight?: SizeInput;

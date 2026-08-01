@@ -102,5 +102,5 @@ export function Image(src: ImageSource, opts: ImageOptions = {}): ImageElement {
     fit,
     radius: opts.radius,
     alt: opts.alt,
-  });
+  }).withAlignSelf(opts.alignSelf);
 }
