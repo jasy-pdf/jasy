@@ -18,6 +18,10 @@ export type { PageInfo };
  * `pageNumber` is 1-based and counts PHYSICAL pages (an overflowing `Page` contributes several);
  * `pageCount` is the document total; `pageSize` is the media box in points.
  *
+ * `subPageNumber` / `subPageTotalPages` are the same counts WITHIN one logical `Page` element - what you
+ * want when a document is several sections and the footer should say "Attachment, page 1 of 4" beside
+ * "sheet 4 of 7". With a single `Page` they are identical to the document counts.
+ *
  * The numbers themselves are always exact. Two sizing caveats, both from the same chicken-and-egg (the
  * content decides the count that the content displays): in the flowing BODY the box is reserved before the
  * total is known, so a much wider final string can paint slightly past it; and a conditional header may
@@ -40,4 +44,17 @@ export function PageNumber({ offset = 0, ...style }: PageNumberOptions = {}): Pa
 /** The document's total page count as text. Sugar for `PageBuilder`. */
 export function PageCount({ offset = 0, ...style }: PageNumberOptions = {}): PageBuilderElement {
   return PageBuilder(({ pageCount }) => Text(String(pageCount + offset), style));
+}
+
+/** The page number WITHIN its logical `Page` (a section), as text. Sugar for `PageBuilder`. */
+export function SubPageNumber({
+  offset = 0,
+  ...style
+}: PageNumberOptions = {}): PageBuilderElement {
+  return PageBuilder(({ subPageNumber }) => Text(String(subPageNumber + offset), style));
+}
+
+/** How many pages the surrounding logical `Page` produced, as text. Sugar for `PageBuilder`. */
+export function SubPageCount({ offset = 0, ...style }: PageNumberOptions = {}): PageBuilderElement {
+  return PageBuilder(({ subPageTotalPages }) => Text(String(subPageTotalPages + offset), style));
 }
