@@ -164,36 +164,41 @@ export class FlexLayoutHelper {
 
     // Which children share a line. A child is measured at its natural main extent; a flex child
     // contributes its BASIS, which is 0 unless it asked for one - so it never forces a break by itself.
+    // A child's natural main extent. A PERCENTAGE child has no fixed answer: its size depends on how
+    // many gaps the line ends up with, which depends on who is on it. So it is asked again for every
+    // candidate membership below rather than measured once.
+    const naturalMain = (child: PDFElement, base: number): number => {
+      if (child instanceof FlexiblePDFElement) return child.getBasis(base);
+      const factor = child.relativeSizeFactor(axis.mainHorizontal);
+      if (factor !== undefined) return base * factor;
+      // Measured UNCAPPED, the same way the single-line engine measures a plain child. Handing the
+      // line width in as a cap would silently squash a child wider than the line - CSS lets such a
+      // child overflow, and so does our own non-wrapping path.
+      const needsBound = child.needsBoundedMain(axis.mainHorizontal);
+      return axis.mainOf(
+        child.calculateLayout(
+          axis.measureConstraints(crossAvail, needsBound ? mainAvail : Infinity),
+          axis.offsetAt(mainStart, crossOrigin),
+          ctx,
+        ),
+      );
+    };
+
+    /** What a line of these children would occupy, resolving every `%` against ITS gap count. */
+    const lineExtent = (members: PDFElement[]): number => {
+      const gaps = Math.max(0, members.length - 1) * gap;
+      const base = Math.max(0, mainAvail - gaps);
+      return members.reduce((n, c) => n + naturalMain(c, base), 0) + gaps;
+    };
+
     const lines: PDFElement[][] = [[]];
-    let used = 0;
     for (const child of ordered) {
-      // Measured UNCAPPED on the main axis, the same way the single-line engine measures a plain
-      // child. Handing the line width in as a cap would silently squash a child that is wider than the
-      // line - CSS lets such a child overflow, and so does our own non-wrapping path. Only a child that
-      // cannot lay itself out without a bound (a percentage, or a nested stack holding a flex child)
-      // gets one, exactly as `mainCapFor` decides inside the engine.
-      const needsBound =
-        child.relativeSizeFactor(axis.mainHorizontal) !== undefined ||
-        child.needsBoundedMain(axis.mainHorizontal);
-      const size =
-        child instanceof FlexiblePDFElement
-          ? child.getBasis(mainAvail)
-          : axis.mainOf(
-              child.calculateLayout(
-                axis.measureConstraints(crossAvail, needsBound ? mainAvail : Infinity),
-                axis.offsetAt(mainStart, crossOrigin),
-                ctx,
-              ),
-            );
       const current = lines[lines.length - 1];
-      const wouldBe = used + (current.length > 0 ? gap : 0) + size;
       // A child wider than a whole line still gets one of its own rather than an empty line before it.
-      if (current.length > 0 && wouldBe > mainAvail) {
+      if (current.length > 0 && lineExtent([...current, child]) > mainAvail) {
         lines.push([child]);
-        used = size;
       } else {
         current.push(child);
-        used = wouldBe;
       }
     }
 

@@ -4,7 +4,7 @@ import { BoxConstraints } from "../../../src/lib/layout/box-constraints";
 import { LayoutContext } from "../../../src/lib/elements/pdf-element";
 import { FontMetrics } from "../../../src/lib/utils/font-metrics";
 import { Text } from "../../../src/lib/api";
-import { unitVerticals } from "../support/metrics";
+import { unitVerticals } from "../support/metrics.ts";
 
 // Every glyph (and the space) is 10pt wide -> "alfa" = 40pt; at width 50 each word lands on its line.
 const metrics = {

@@ -6,7 +6,7 @@ import { LayoutContext } from "../../../src/lib/elements/pdf-element";
 import { FontStyle } from "../../../src/lib/utils/pdf-object-manager";
 import { FontMetrics } from "../../../src/lib/utils/font-metrics";
 import { Text } from "../../../src/lib/api";
-import { unitVerticals } from "../support/metrics";
+import { unitVerticals } from "../support/metrics.ts";
 
 // Every glyph (and the space) is 10pt wide, no kerning -> "alfa" = 40pt. Deterministic wrapping.
 const metrics = {

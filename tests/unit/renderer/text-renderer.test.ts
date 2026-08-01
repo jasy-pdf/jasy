@@ -5,7 +5,7 @@ import { describe, it, vi, expect } from "vitest";
 import { TextElement } from "../../../src/lib/elements";
 import { HorizontalAlignment } from "../../../src/lib/elements/pdf-element";
 import { Color } from "../../../src/lib/common/color";
-import { unitVerticals } from "../support/metrics";
+import { unitVerticals } from "../support/metrics.ts";
 
 describe("TextRenderer - calculateTextHeight", () => {
   it("should calculate the correct text height for a simple string", () => {
