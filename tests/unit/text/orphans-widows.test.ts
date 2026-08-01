@@ -22,6 +22,31 @@ describe("the defaults match CSS and every browser", () => {
   });
 });
 
+describe("the limits themselves are checked", () => {
+  // Both are LINE COUNTS and end up as a slice index. A fraction would be truncated somewhere
+  // downstream instead of here, and anything below 1 silently disables the rule it belongs to - so
+  // they are named at the boundary rather than quietly tolerated.
+  it("refuses a fraction", () => {
+    expect(() => cut(3, 10, { orphans: 2.5, widows: 2 })).toThrow(/orphans/);
+    expect(() => cut(3, 10, { orphans: 2, widows: 1.5 })).toThrow(/widows/);
+  });
+
+  it("refuses zero and negatives", () => {
+    for (const bad of [0, -1]) {
+      expect(() => cut(3, 10, { orphans: bad, widows: 2 })).toThrow(/whole number of at least 1/);
+      expect(() => cut(3, 10, { orphans: 2, widows: bad })).toThrow(/whole number of at least 1/);
+    }
+  });
+
+  it("says what the value MEANS, so 1 reads as the way to switch it off", () => {
+    expect(() => cut(3, 10, { orphans: 0, widows: 2 })).toThrow(/1 means no protection/);
+  });
+
+  it("takes 1 - the documented way to switch the protection off", () => {
+    expect(() => cut(3, 10, { orphans: 1, widows: 1 })).not.toThrow();
+  });
+});
+
 describe("nothing to protect", () => {
   it("passes a split that already leaves enough on both sides", () => {
     expect(cut(5, 10)).toBe(5);

@@ -32,6 +32,12 @@ export function adjustForOrphansWidows(
   total: number,
   { orphans, widows }: OrphanWidowRule,
 ): number {
+  // Both are LINE COUNTS and end up as a slice index, so anything but a positive whole number is
+  // meaningless: 0 or less silently disables the rule it belongs to, and a fraction would be truncated
+  // somewhere downstream rather than here. Named at the boundary instead.
+  check(orphans, "orphans");
+  check(widows, "widows");
+
   if (fitted <= 0) return 0; // nothing fits; the caller decides
   if (fitted >= total) return total; // no split needed, nothing to protect
 
@@ -51,4 +57,13 @@ export function adjustForOrphansWidows(
   }
 
   return fitted;
+}
+
+function check(value: number, name: string): void {
+  if (!Number.isInteger(value) || value < 1) {
+    throw new Error(
+      `Invalid ${name}: ${value}. It is a number of LINES, so it must be a whole number of at least 1 ` +
+        `(1 means no protection at that end).`,
+    );
+  }
 }
