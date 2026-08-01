@@ -2,15 +2,17 @@ import { Validator } from "../../validators/element-validator.ts";
 import { PDFElement, LayoutContext, WithChild, SizedPDFElement } from "../pdf-element.ts";
 import { BoxConstraints, Offset, Size } from "../../layout/box-constraints.ts";
 import { Fragmentable, FragmentResult, isFragmentable } from "../../layout/fragmentation.ts";
+import { resolveEdges, type EdgeSpecs } from "../../layout/insets.ts";
 
 // Padding sizes itself from its child + margin, so it takes no x/y of its own.
 interface PaddingElementParams extends WithChild {
-  margin: [number, number, number, number];
+  /** Still unresolved: a side may be a percentage of the offered WIDTH (see `Insets`). */
+  margin: EdgeSpecs;
 }
 
 export class PaddingElement extends SizedPDFElement implements Fragmentable {
   private child: PDFElement;
-  private margin: [number, number, number, number];
+  private margin: EdgeSpecs;
 
   constructor({ margin, child }: PaddingElementParams) {
     super({ x: 0, y: 0 });
@@ -30,7 +32,7 @@ export class PaddingElement extends SizedPDFElement implements Fragmentable {
       return { fitted: null, remainder: this };
     }
 
-    const [marginTop, marginRight, marginBottom, marginLeft] = this.margin;
+    const [marginTop, marginRight, marginBottom, marginLeft] = resolveEdges(this.margin, width);
     const childWidth = width - marginLeft - marginRight;
     const childMaxHeight = maxHeight - marginTop - marginBottom;
 
@@ -66,7 +68,11 @@ export class PaddingElement extends SizedPDFElement implements Fragmentable {
     this.x = offset.x;
     this.y = offset.y;
 
-    const [marginTop, marginRight, marginBottom, marginLeft] = this.margin;
+    // Percentages resolve against the width we were OFFERED, so every pass gets the same answer.
+    const [marginTop, marginRight, marginBottom, marginLeft] = resolveEdges(
+      this.margin,
+      constraints.maxWidth,
+    );
 
     // The child is inset by the margins: shifted down/right, narrowed by the
     // horizontal margins, and left height-unbounded so it sizes to its own content.
