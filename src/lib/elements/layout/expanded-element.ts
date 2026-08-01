@@ -18,8 +18,8 @@ export class ExpandedElement extends FlexiblePDFElement implements Fragmentable 
   private width: number = 0;
   private height: number = 0;
 
-  constructor({ flex, child }: ExpandedElementParams) {
-    super({ flex });
+  constructor({ flex, basis, basisFactor, child }: ExpandedElementParams) {
+    super({ flex, basis, basisFactor });
 
     this.child = child;
   }

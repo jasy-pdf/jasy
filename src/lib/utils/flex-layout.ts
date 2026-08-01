@@ -130,13 +130,17 @@ export class FlexLayoutHelper {
     };
 
     // Pass 1: measure the fixed children (main extent + cross size) and total the flex.
+    // A flex child's BASIS is reserved here too: it is main extent the leftover no longer contains,
+    // exactly like a fixed child's size. With the default basis of 0 this line adds nothing.
     let fixedMain = 0;
     let totalFlex = 0;
+    let totalBasis = 0;
     let crossUsed = 0;
     const fixedSize = new Map<PDFElement, Size>();
     for (const child of children) {
       if (child instanceof FlexiblePDFElement) {
         totalFlex += child.getFlex();
+        totalBasis += child.getBasis(percentBase);
       } else {
         const size = child.calculateLayout(
           axis.measureConstraints(crossAvail, mainCapFor(child)),
@@ -149,7 +153,7 @@ export class FlexLayoutHelper {
       }
     }
 
-    const leftover = mainAvail - fixedMain - totalGap;
+    const leftover = mainAvail - fixedMain - totalBasis - totalGap;
     // A flex child on an UNBOUNDED main axis has no leftover space to claim. It must collapse to zero,
     // never to `Infinity`: an infinite extent would become the offset of every following sibling and get
     // written into the content stream verbatim, silently corrupting the page from that point on.
@@ -174,7 +178,8 @@ export class FlexLayoutHelper {
     if (totalFlex > 0) {
       for (const child of children) {
         if (child instanceof FlexiblePDFElement) {
-          const mainExtent = (child.getFlex() / totalFlex) * remaining;
+          const mainExtent =
+            child.getBasis(percentBase) + (child.getFlex() / totalFlex) * remaining;
           const size = child.calculateLayout(
             axis.flexConstraints(mainExtent, crossAvail),
             axis.offsetAt(mainStart, crossOrigin),
@@ -202,7 +207,7 @@ export class FlexLayoutHelper {
       const stretch = align === "stretch";
       let mainExtent: number;
       if (child instanceof FlexiblePDFElement) {
-        mainExtent = (child.getFlex() / totalFlex) * remaining;
+        mainExtent = child.getBasis(percentBase) + (child.getFlex() / totalFlex) * remaining;
         // A flex child fills the MAIN axis, and its cross size is only known after layout - there is
         // nothing to align against. So alignSelf is a no-op here, and that has to hold for the CROSS
         // CONSTRAINT too: reading the per-child alignment would hand an `alignSelf: "start"` flex child

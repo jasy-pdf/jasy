@@ -59,11 +59,15 @@ export class Validator {
     // Ensure flexible elements have valid flex values. The message names what the CALLER wrote, not the
     // element class: `Spacer` and `Expanded` are what exists in their document, `ExpandedElement` is not.
     const flex = element.getFlex();
-    if (flex <= 0) {
+    // `flex: 0` used to be meaningless - claiming no share is what leaving the element out does. With a
+    // `flexBasis` it is not: the child is then exactly its basis, a fixed slot that still participates
+    // in the line. So the rule now reads "claim SOMETHING": a share, a basis, or both.
+    if (flex < 0 || (flex === 0 && element.getBasis(Infinity) <= 0 && !element.hasBasisFactor())) {
       throw new Error(
         `@jasy/pdf: Spacer/Expanded needs a flex above 0, got ${flex}. Flex is a SHARE of the leftover ` +
           "space, so 0 would claim none - which is what leaving the element out does. For a fixed gap " +
-          "use the `gap` of the surrounding Column or Row, or a Box with a height.",
+          "use the `gap` of the surrounding Column or Row, or a Box with a height. (A `flexBasis` " +
+          "makes `flex: 0` meaningful: the child is then exactly its basis.)",
       );
     }
 

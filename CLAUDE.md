@@ -484,6 +484,27 @@ agree: true })` → declarative values, not object mutation. Save is an **increm
   it grows. It costs nothing because a stream too small to reach the ceiling at DEFLATE's maximum expansion
   (1032:1) skips the check - which is nearly every stream in a real PDF.
 
+- ✅ **Fonts from a URL, and WOFF1** (2026-08-01) — `await doc.addFontFromUrl("Inter", url)`, one file or
+  a styled family (fetched in parallel). It resolves AT REGISTRATION, exactly as `addFont` reads a path
+  there and then, so a dead link fails on the line that asked for the font rather than inside a later
+  render. Guarded like any other network read: a 15 s timeout, a 32 MB ceiling enforced WHILE the body
+  arrives (`Content-Length` is only a hint), and every failure wrapped as `FontUrlError`.
+  It also names what a file actually IS - `TTFParser` never looks at the sfnt signature, so a 404 HTML
+  page used to fail deep inside as `missing required table "head"`.
+  **WOFF1** is unpacked at the ONE point every font path meets, `PDFObjectManager.registerCustomFont`'s
+  `new TTFParser(...)` - so a file, raw bytes, a URL and a browser upload all get it, and nothing
+  downstream learns a second container format (`utils/woff.ts`). A WOFF is not a different font, it is
+  the same sfnt tables optionally zlib-compressed behind a 44-byte header. Verified by wrapping a real
+  Lato `.ttf` into a WOFF and rendering both: identical glyph output, identical subset size (41,540 B),
+  identical PDF. `utils/inflate.ts` moved out of `edit/` for this - the generate path must not import
+  from the edit path, and the zip-bomb ceiling now guards a WOFF table too.
+- ✅ **Section page numbers** (2026-08-01) — `subPageNumber` / `subPageTotalPages` on `PageInfo`, plus
+  `SubPageNumber()` / `SubPageCount()` sugar. The count WITHIN one logical `Page` element, beside the
+  document-wide one: an invoice plus its attachment can foot "Attachment, page 1 of 2" next to "sheet 3
+  of 4". Nearly free because Pass A of the page driver already walks one logical page at a time - the
+  length of each run IS that section's total. The provisional `PageInfo` used during pagination carries
+  them too, or a `PageBuilder` would measure against a half-filled object.
+
 Genuine remaining gaps / deferred:
 
 1. **Absolute positioning — Stages 1+2 built** (2026-06-21). CSS-style: `Box({ relative: true })` is a
@@ -511,8 +532,10 @@ Genuine remaining gaps / deferred:
    DONE too: `platform/browser-image.ts` decodes via OffscreenCanvas (transparency → `/SMask`), swapped for the
    jimp path by the `browser` field. Nice-to-haves left: compact-AFM (size), `addFontFromUrl()`. See todo.md.
 4. `manual-test` has hard-coded machine-specific paths.
-5. Font gaps: only TTF / TrueType-flavoured OTF parsed (OTF/CFF, WOFF2 not yet). (TrueType kerning is DONE -
-   `kern` table + GPOS, on by default since 2026-07-11; this line used to claim otherwise.)
+5. Font gaps: TTF / TrueType-flavoured OTF **and WOFF1** are parsed; OTF/CFF and **WOFF2** are not.
+   WOFF2 needs Brotli (which `fflate` does not do) and additionally TRANSFORMS `glyf`/`loca` rather than
+   merely deflating them - a different piece of work, not a bigger version of WOFF1. (TrueType kerning is
+   DONE - `kern` table + GPOS, on by default since 2026-07-11; this line used to claim otherwise.)
    Bold/italic resolve via registered family variants with a clean fallback to `normal` (no faux styles).
    Color-emoji deferred (none blocking): COLR v1 **rotate/skew** transforms (24-31 —
    Noto doesn't use them; not built without a test font), variable-font paint variants, **sweep** gradient,

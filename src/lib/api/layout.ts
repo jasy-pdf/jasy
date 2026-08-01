@@ -341,6 +341,12 @@ export function PageBreak(): PageBreakElement {
 export interface ExpandedOptions {
   /** Share of the leftover space vs other flex children (default 1). */
   flex?: number;
+  /**
+   * Main-axis size reserved BEFORE the leftover is shared out (CSS `flex-basis`): points, or a
+   * percentage of what the line offers its items. The child ends up with `basis + its share of the
+   * rest`, so `flexBasis: 120` with `flex: 0` is simply a fixed 120pt slot. Default 0.
+   */
+  flexBasis?: SizeInput;
 }
 
 /**
@@ -353,5 +359,11 @@ export function Expanded(a: ExpandedOptions | PDFElement, b?: PDFElement): Expan
   const isOptsForm = b !== undefined;
   const opts = (isOptsForm ? a : {}) as ExpandedOptions;
   const child = (isOptsForm ? b : a) as PDFElement;
-  return new ExpandedElement({ flex: opts.flex ?? 1, child });
+  const basis = opts.flexBasis !== undefined ? toDimension(opts.flexBasis) : undefined;
+  return new ExpandedElement({
+    flex: opts.flex ?? 1,
+    basis: basis?.points,
+    basisFactor: basis?.factor,
+    child,
+  });
 }

@@ -202,15 +202,40 @@ export abstract class SizedPDFElement extends PDFElement {
 export abstract class FlexiblePDFElement extends PDFElement {
   protected flex: number;
   protected verticalChildAlignment: VerticalAlignment;
+  /** Points reserved before any leftover is shared out (CSS `flex-basis`); default 0. */
+  protected basis: number;
+  /** The same as a fraction of the line, for `flexBasis: "25%"`. */
+  protected basisFactor?: number;
 
   constructor(data: FlexibleElement) {
     super();
     this.flex = data.flex;
     this.verticalChildAlignment = data.verticalChildAlignment || VerticalAlignment.middle;
+    this.basis = data.basis ?? 0;
+    this.basisFactor = data.basisFactor;
   }
 
   getFlex(): number {
     return this.flex;
+  }
+
+  /**
+   * The main extent this child starts from, before the leftover is shared out. `lineMain` is what the
+   * line offers its items (its extent minus the gaps), so a percentage basis resolves against the same
+   * base a percentage WIDTH already does - and falls back to 0 on an unbounded axis, where a fraction
+   * has no meaning.
+   */
+  /** Whether a PERCENTAGE basis was given - it resolves to 0 on an unbounded axis, so asking for the
+   *  number alone cannot tell "no basis" from "a basis that does not apply here". */
+  hasBasisFactor(): boolean {
+    return this.basisFactor !== undefined;
+  }
+
+  getBasis(lineMain: number): number {
+    if (this.basisFactor !== undefined) {
+      return Number.isFinite(lineMain) ? lineMain * this.basisFactor : 0;
+    }
+    return this.basis;
   }
 }
 
@@ -237,6 +262,10 @@ export interface WithChild {
 
 export interface FlexibleElement {
   flex: number;
+  /** Points reserved before the leftover is shared out (CSS `flex-basis`). */
+  basis?: number;
+  /** The same as a fraction of the line, for `flexBasis: "25%"`. */
+  basisFactor?: number;
   verticalChildAlignment?: VerticalAlignment;
 }
 
