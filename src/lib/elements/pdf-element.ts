@@ -3,6 +3,7 @@ import type { PDFPageConfig } from "./page-element.ts";
 import type { ResolvedTextStyle } from "../text/text-style.ts";
 import type { OverflowPolicy } from "../layout/fragmentation.ts";
 import type { BoxConstraints, Offset, Size } from "../layout/box-constraints.ts";
+import type { CrossAlign } from "../layout/alignment.ts";
 
 /**
  * Everything the layout pass needs, threaded explicitly (no global singleton):
@@ -137,6 +138,19 @@ export abstract class PDFElement {
    */
   breaksAfter(): boolean {
     return false;
+  }
+
+  /**
+   * This child's own cross-axis alignment inside its Column / Row (CSS `align-self`), overriding the
+   * container's `align`. Lives on the base element because any child of a stack may set it, not just
+   * the sized ones. `undefined` means "follow the container".
+   */
+  alignSelf?: CrossAlign;
+
+  /** Sets `alignSelf` and returns the element, so a factory can thread it through in one expression. */
+  withAlignSelf(align: CrossAlign | undefined): this {
+    if (align !== undefined) this.alignSelf = align;
+    return this;
   }
 }
 

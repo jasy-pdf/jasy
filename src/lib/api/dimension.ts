@@ -1,3 +1,6 @@
+import type { Radii } from "../ir/display-list.ts";
+import type { CrossAlign } from "../layout/alignment.ts";
+
 /**
  * Size input for a Box's `width` / `height` (relative sizing). Either a number of PDF points (a
  * fixed size) or a percentage string like `"50%"` - a fraction of the space the parent offers on
@@ -33,6 +36,12 @@ export function toDimension(value: SizeInput): Dimension {
 
 /** The bound and ratio options every sized factory accepts, in the public `SizeInput` form. */
 export interface BoundsInput {
+  /**
+   * This element's own cross-axis alignment inside its Column / Row (CSS `align-self`), overriding the
+   * container's `align`. On a `Spacer` / `Expanded` it is a no-op - a flex child fills the main axis and
+   * has no natural cross size to align.
+   */
+  alignSelf?: CrossAlign;
   minWidth?: SizeInput;
   maxWidth?: SizeInput;
   minHeight?: SizeInput;
@@ -64,4 +73,20 @@ export function toBounds(o: BoundsInput) {
     maxHeightFactor: maxH?.factor,
     aspectRatio: o.aspectRatio,
   };
+}
+
+/**
+ * Corner radius input. A single number rounds all four corners; the object names them; the tuple is
+ * CSS order - `[topLeft, topRight, bottomRight, bottomLeft]`, clockwise from the top left.
+ */
+export type RadiusInput =
+  | number
+  | { topLeft?: number; topRight?: number; bottomRight?: number; bottomLeft?: number }
+  | [number, number, number, number];
+
+/** Normalizes a `RadiusInput` to the engine's short corner names. */
+export function toRadius(r: RadiusInput): number | Radii {
+  if (typeof r === "number") return r;
+  if (Array.isArray(r)) return { tl: r[0], tr: r[1], br: r[2], bl: r[3] };
+  return { tl: r.topLeft, tr: r.topRight, br: r.bottomRight, bl: r.bottomLeft };
 }

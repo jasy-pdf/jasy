@@ -4,7 +4,8 @@ import { PageElement, PDFPageConfig } from "../elements/page-element.ts";
 import { PDFElement } from "../elements/pdf-element.ts";
 import { DefaultTextStyleElement } from "../elements/layout/default-text-style-element.ts";
 import type { OverflowPolicy } from "../layout/fragmentation.ts";
-import { PageSize } from "../constants/page-sizes.ts";
+import { PageSize, pageFormats } from "../constants/page-sizes.ts";
+import { resolveEdges } from "../layout/insets.ts";
 import { Orientation } from "../renderer/pdf-config.ts";
 import { PDFDocument, PDFConfig } from "../renderer/pdf-document-class.ts";
 import { FontStyle } from "../utils/pdf-object-manager.ts";
@@ -81,10 +82,19 @@ export function Page(a: PageOptions | PDFElement[], b?: PDFElement[]): PageEleme
   const opts = (isOpts ? a : {}) as PageOptions;
   const children = (isOpts ? (b ?? []) : a) as PDFElement[];
 
-  const [top, right, bottom, left] = toEdges(opts.margin ?? DEFAULT_MARGIN);
+  const size = resolveSize(opts.size);
+  const landscape = opts.orientation === "landscape";
+  // A percentage margin resolves against the page WIDTH (see `Insets`), which is known right here -
+  // the page is the one box whose geometry does not depend on a parent.
+  const [w, h] = size.customSize ?? pageFormats[size.pageSize ?? PageSize.A4];
+  const pageWidth = landscape ? h : w;
+  const [top, right, bottom, left] = resolveEdges(
+    toEdges(opts.margin ?? DEFAULT_MARGIN),
+    pageWidth,
+  );
   const config: PDFPageConfig = {
-    ...resolveSize(opts.size),
-    orientation: opts.orientation === "landscape" ? Orientation.landscape : Orientation.portrait,
+    ...size,
+    orientation: landscape ? Orientation.landscape : Orientation.portrait,
     margin: { top, right, bottom, left },
   };
 

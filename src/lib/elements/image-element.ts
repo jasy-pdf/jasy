@@ -1,3 +1,4 @@
+import type { Radii } from "../ir/display-list.ts";
 import { getImageDimensions } from "../utils/image-helper.ts";
 import { latin1FromBytes } from "../utils/bytes.ts";
 import { readFileBytesAsync } from "../platform/node-fs.ts";
@@ -146,8 +147,8 @@ interface ImageElementParams {
   /** width / height; overrides the image's OWN ratio (CSS `aspect-ratio`), `fit` then places it. */
   aspectRatio?: number;
   fit?: BoxFit;
-  /** Corner radius in points; rounds the image box (0 = sharp, default). */
-  radius?: number;
+  /** Corner radius in points - one number or per corner; rounds the image box (0 = sharp, default). */
+  radius?: number | Radii;
   /** Alternate text for accessibility (tagged PDF). With `alt` the image is a Figure; without, decoration. */
   alt?: string;
 }
@@ -157,7 +158,7 @@ export class ImageElement extends SizedPDFElement {
   private widthFactor?: number;
   private heightFactor?: number;
   private fit: BoxFit;
-  private radius: number;
+  private radius: number | Radii;
   private readonly alt?: string;
   // The requested size (fixed points), kept separate from the laid-out this.width/height so a
   // re-layout (fragmentation measures more than once) still resolves the factor, instead of

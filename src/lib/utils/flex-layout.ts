@@ -3,11 +3,9 @@ import { BoxConstraints, Offset, Size } from "../layout/box-constraints.ts";
 
 /** Distribution of the children ALONG the stacking (main) axis when there is leftover
  *  space and no flex child to absorb it. */
-export type MainAlign = "start" | "center" | "end" | "between" | "around";
-
-/** Position/size of each child ACROSS the cross axis. `stretch` fills the cross extent;
- *  the others place the child at its natural cross size. */
-export type CrossAlign = "start" | "center" | "end" | "stretch";
+// Re-exported so every existing import keeps working; the definitions live in layout/alignment.ts.
+export type { MainAlign, CrossAlign } from "../layout/alignment.ts";
+import type { CrossAlign, MainAlign } from "../layout/alignment.ts";
 
 /**
  * Maps the abstract MAIN/CROSS axes onto concrete width/height + x/y, so one flex
@@ -175,17 +173,25 @@ export class FlexLayoutHelper {
     // `stretch` caps a child's cross to `crossExtent` (not `crossAvail`) so siblings end up
     // equal across the axis. Bounded lines have crossExtent == crossAvail (byte-identical);
     // only an unbounded line (a shrink-wrap Row) now equalises instead of staying natural.
-    const stretch = cross === "stretch";
+    // A child may override the container with its own `alignSelf` (CSS), so the decision is per child.
+    const alignFor = (child: PDFElement): CrossAlign => child.alignSelf ?? cross;
 
-    // Pass 2: place each child at the running main position, offset across by `cross`.
+    // Pass 2: place each child at the running main position, offset across by its alignment.
     let mainPos = mainStart + leadingSpace;
     let placedCross = 0;
     children.forEach((child, index) => {
+      const align = alignFor(child);
+      const stretch = align === "stretch";
       let mainExtent: number;
       if (child instanceof FlexiblePDFElement) {
         mainExtent = (child.getFlex() / totalFlex) * remaining;
+        // A flex child fills the MAIN axis, and its cross size is only known after layout - there is
+        // nothing to align against. So alignSelf is a no-op here, and that has to hold for the CROSS
+        // CONSTRAINT too: reading the per-child alignment would hand an `alignSelf: "start"` flex child
+        // an unbounded cross axis on a shrink-wrapping line, where the container's own rule gives it
+        // the line's extent. A no-op that changes the constraints is not a no-op.
         const size = child.calculateLayout(
-          axis.flexConstraints(mainExtent, stretch ? crossExtent : crossAvail),
+          axis.flexConstraints(mainExtent, cross === "stretch" ? crossExtent : crossAvail),
           axis.offsetAt(mainPos, crossOrigin),
           ctx,
         );
@@ -194,7 +200,7 @@ export class FlexLayoutHelper {
         const childCross = axis.crossOf(fixedSize.get(child)!);
         const size = child.calculateLayout(
           axis.measureConstraints(stretch ? crossExtent : crossAvail, mainCapFor(child)),
-          axis.offsetAt(mainPos, crossOrigin + crossOffset(cross, crossExtent, childCross)),
+          axis.offsetAt(mainPos, crossOrigin + crossOffset(align, crossExtent, childCross)),
           ctx,
         );
         mainExtent = axis.mainOf(size);
