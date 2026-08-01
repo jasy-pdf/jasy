@@ -9,7 +9,9 @@
  * A signature over the original therefore stays intact, and the original file is a literal byte prefix
  * of the result.
  *
- * Run:  pnpm exec tsx examples/scripts/fill-existing-form.ts
+ * Run (the same way examples/render.sh does it - `@jasy/pdf` resolves to this repo):
+ *   mkdir -p node_modules/@jasy && ln -sfn "$PWD" node_modules/@jasy/pdf
+ *   pnpm build && node examples/scripts/fill-existing-form.ts
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { PdfDocument, readAcroForm, fillForm, flattenForm, FillError } from "@jasy/pdf/edit";

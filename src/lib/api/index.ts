@@ -4,6 +4,7 @@
 export * from "./color.ts";
 export * from "./insets.ts";
 export * from "./gradient.ts";
+export * from "./font-url.ts";
 export * from "./dimension.ts";
 export * from "./text.ts";
 export * from "./layout.ts";

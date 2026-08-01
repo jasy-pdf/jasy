@@ -287,6 +287,10 @@ doc.addFont("Inter", "Inter-Regular.ttf"); // a path (Node reads it)
 doc.addFont("Brand", { normal: "B.ttf", bold: "B-Bold.ttf" }); // a styled family
 
 doc.getFonts(); // ["Inter", "Brand"]
+
+// From a URL - async, because the fetch happens NOW, exactly as a path is read now:
+await doc.addFontFromUrl("Inter", "https://cdn.example/Inter-Regular.ttf");
+await doc.addFontFromUrl("Brand", { normal: ".../B.ttf", bold: ".../B-Bold.ttf" });
 doc.hasFont("Inter"); // true
 
 await renderToBytes(doc); // pure output - the fonts are already in the document
