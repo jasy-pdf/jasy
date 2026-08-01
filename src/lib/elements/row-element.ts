@@ -24,6 +24,10 @@ interface RowElementParams extends WithChildren {
   cross?: CrossAlign;
   /** Lay the children out backwards along the main axis (CSS `row-reverse`). */
   reverse?: boolean;
+  /** Let the children flow onto further lines when they do not fit (CSS `flex-wrap`). */
+  wrap?: boolean;
+  /** How the block of wrapped lines sits across the axis (CSS `align-content`). */
+  alignContent?: MainAlign;
   /** Width/height as points (fixed) or a fraction (0..1) of the offered box (relative sizing). */
   width?: number;
   height?: number;
@@ -64,6 +68,8 @@ export class RowElement extends SizedPDFElement {
   private main: MainAlign;
   private cross: CrossAlign;
   private reverse: boolean;
+  private wrap: boolean;
+  private alignContent?: MainAlign;
   private breakBefore: boolean;
   private breakAfter: boolean;
   // The requested size (fixed points or a fraction), kept separate from the laid-out this.width/height.
@@ -75,6 +81,8 @@ export class RowElement extends SizedPDFElement {
     main,
     cross,
     reverse,
+    wrap,
+    alignContent,
     width,
     height,
     breakBefore,
@@ -87,6 +95,8 @@ export class RowElement extends SizedPDFElement {
     this.main = main ?? "start";
     this.cross = cross ?? "stretch";
     this.reverse = reverse ?? false;
+    this.wrap = wrap ?? false;
+    this.alignContent = alignContent;
     this.requested = { ...sizing, width, height };
     this.breakBefore = breakBefore ?? false;
     this.breakAfter = breakAfter ?? false;
@@ -156,7 +166,14 @@ export class RowElement extends SizedPDFElement {
         crossAvail,
         this.x,
         this.y,
-        { gap: this.gap, main: this.main, cross: this.cross, reverse: this.reverse },
+        {
+          gap: this.gap,
+          main: this.main,
+          cross: this.cross,
+          reverse: this.reverse,
+          wrap: this.wrap,
+          alignContent: this.alignContent,
+        },
         ctx,
       );
     }
@@ -178,6 +195,8 @@ export class RowElement extends SizedPDFElement {
       main: this.main,
       cross: this.cross,
       reverse: this.reverse,
+      wrap: this.wrap,
+      alignContent: this.alignContent,
     };
   }
 }

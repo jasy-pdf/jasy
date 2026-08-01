@@ -50,6 +50,11 @@ export interface StackOptions extends BoundsInput {
   keepTogether?: boolean;
   /** Lay the children out backwards along the axis (CSS `row-reverse` / `column-reverse`). */
   reverse?: boolean;
+  /** Let the children flow onto further lines when they do not fit (CSS `flex-wrap: wrap`). The `gap`
+   *  is used BETWEEN the lines as well as between the items. */
+  wrap?: boolean;
+  /** How the block of wrapped lines sits across the axis (CSS `align-content`). Default `start`. */
+  alignContent?: MainAlign;
 }
 
 /** Splits `StackOptions` width/height into the fixed points + fraction the stack elements expect. */
@@ -84,6 +89,8 @@ export function Column(a: StackOptions | PDFElement[], b?: PDFElement[]): PDFEle
       main: opts.justify, // undefined → engine default `start` (matches §5)
       cross: opts.align ?? DEFAULT_CROSS,
       reverse: opts.reverse,
+      wrap: opts.wrap,
+      alignContent: opts.alignContent,
       breakBefore: opts.breakBefore,
       breakAfter: opts.breakAfter,
       ...stackSize(opts),
@@ -104,6 +111,8 @@ export function Row(a: StackOptions | PDFElement[], b?: PDFElement[]): PDFElemen
       main: opts.justify,
       cross: opts.align ?? DEFAULT_CROSS,
       reverse: opts.reverse,
+      wrap: opts.wrap,
+      alignContent: opts.alignContent,
       breakBefore: opts.breakBefore,
       breakAfter: opts.breakAfter,
       ...stackSize(opts),

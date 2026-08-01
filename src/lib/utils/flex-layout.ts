@@ -69,6 +69,10 @@ export interface FlexOptions {
   cross?: CrossAlign;
   /** Lay the children out along the main axis backwards (CSS `row-reverse` / `column-reverse`). */
   reverse?: boolean;
+  /** Let the children flow onto further lines when they do not fit (CSS `flex-wrap: wrap`). */
+  wrap?: boolean;
+  /** How the BLOCK of wrapped lines sits across the axis (CSS `align-content`). Default `start`. */
+  alignContent?: MainAlign;
 }
 
 /**
@@ -96,7 +100,158 @@ export class FlexLayoutHelper {
    * extent occupied. Vertical with `gap 0`, `main start`, `cross stretch` reproduces the
    * previous Column layout exactly.
    */
+  /**
+   * Lays out the children along `axis`, on one line or several.
+   *
+   * Without `wrap` this is the single-line engine and nothing about it changed - the call goes
+   * straight through, which is what keeps every existing document byte-identical. With `wrap` the
+   * children are split into lines first and the SAME engine runs once per line.
+   */
   static layout(
+    children: PDFElement[],
+    axis: FlexAxis,
+    mainAvail: number,
+    crossAvail: number,
+    mainStart: number,
+    crossOrigin: number,
+    options: FlexOptions,
+    ctx: LayoutContext,
+  ): { mainUsed: number; crossUsed: number } {
+    if (!options.wrap || children.length === 0 || !Number.isFinite(mainAvail)) {
+      // An unbounded main axis has no edge to wrap at, so wrapping there is meaningless, not an error.
+      return FlexLayoutHelper.layoutLine(
+        children,
+        axis,
+        mainAvail,
+        crossAvail,
+        mainStart,
+        crossOrigin,
+        options,
+        ctx,
+      );
+    }
+    return FlexLayoutHelper.layoutWrapped(
+      children,
+      axis,
+      mainAvail,
+      crossAvail,
+      mainStart,
+      crossOrigin,
+      options,
+      ctx,
+    );
+  }
+
+  /**
+   * The wrapping path: split into lines, lay each one out, then place the lines across the axis.
+   *
+   * Lines are laid out TWICE - once to learn how tall each is, once at its final cross position. That
+   * is the same measure-then-place shape the single-line engine already uses, and it is what
+   * `alignContent` needs: the block of lines can only be centred once its total is known.
+   */
+  private static layoutWrapped(
+    children: PDFElement[],
+    axis: FlexAxis,
+    mainAvail: number,
+    crossAvail: number,
+    mainStart: number,
+    crossOrigin: number,
+    options: FlexOptions,
+    ctx: LayoutContext,
+  ): { mainUsed: number; crossUsed: number } {
+    const gap = options.gap ?? 0;
+    const ordered = inLayoutOrder(children, options.reverse ?? false);
+
+    // Which children share a line. A child is measured at its natural main extent; a flex child
+    // contributes its BASIS, which is 0 unless it asked for one - so it never forces a break by itself.
+    const lines: PDFElement[][] = [[]];
+    let used = 0;
+    for (const child of ordered) {
+      // Measured UNCAPPED on the main axis, the same way the single-line engine measures a plain
+      // child. Handing the line width in as a cap would silently squash a child that is wider than the
+      // line - CSS lets such a child overflow, and so does our own non-wrapping path. Only a child that
+      // cannot lay itself out without a bound (a percentage, or a nested stack holding a flex child)
+      // gets one, exactly as `mainCapFor` decides inside the engine.
+      const needsBound =
+        child.relativeSizeFactor(axis.mainHorizontal) !== undefined ||
+        child.needsBoundedMain(axis.mainHorizontal);
+      const size =
+        child instanceof FlexiblePDFElement
+          ? child.getBasis(mainAvail)
+          : axis.mainOf(
+              child.calculateLayout(
+                axis.measureConstraints(crossAvail, needsBound ? mainAvail : Infinity),
+                axis.offsetAt(mainStart, crossOrigin),
+                ctx,
+              ),
+            );
+      const current = lines[lines.length - 1];
+      const wouldBe = used + (current.length > 0 ? gap : 0) + size;
+      // A child wider than a whole line still gets one of its own rather than an empty line before it.
+      if (current.length > 0 && wouldBe > mainAvail) {
+        lines.push([child]);
+        used = size;
+      } else {
+        current.push(child);
+        used = wouldBe;
+      }
+    }
+
+    // Each line keeps SOURCE order internally: the ordering was applied above, and applying it again
+    // per line would reverse twice.
+    const lineOptions = { ...options, wrap: false, reverse: false };
+    const measure = lines.map((line) =>
+      FlexLayoutHelper.layoutLine(
+        line,
+        axis,
+        mainAvail,
+        Infinity, // let each line report the cross extent it actually needs
+        mainStart,
+        crossOrigin,
+        lineOptions,
+        ctx,
+      ),
+    );
+
+    const heights = measure.map((m) => m.crossUsed);
+    const totalCross = heights.reduce((n, h) => n + h, 0) + Math.max(0, lines.length - 1) * gap;
+
+    // `alignContent` distributes the BLOCK of lines across the axis, using the same vocabulary the main
+    // axis uses. Only meaningful in a bounded cross axis with room left over.
+    const slack = Number.isFinite(crossAvail) ? crossAvail - totalCross : 0;
+    const align = options.alignContent ?? "start";
+    let cursor = crossOrigin;
+    let between = gap;
+    if (slack > 0) {
+      if (align === "center") cursor += slack / 2;
+      else if (align === "end") cursor += slack;
+      else if (align === "between" && lines.length > 1) between = gap + slack / (lines.length - 1);
+      else if (align === "around") {
+        const unit = slack / lines.length;
+        cursor += unit / 2;
+        between = gap + unit;
+      }
+    }
+
+    lines.forEach((line, i) => {
+      FlexLayoutHelper.layoutLine(
+        line,
+        axis,
+        mainAvail,
+        heights[i], // the line's own extent, so `stretch` fills the line and not the container
+        mainStart,
+        cursor,
+        lineOptions,
+        ctx,
+      );
+      cursor += heights[i];
+      if (i < lines.length - 1) cursor += between;
+    });
+
+    return { mainUsed: mainAvail, crossUsed: Math.max(totalCross, cursor - crossOrigin) };
+  }
+
+  private static layoutLine(
     children: PDFElement[],
     axis: FlexAxis,
     mainAvail: number,
