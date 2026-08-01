@@ -3,6 +3,7 @@ import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 import { RectangleElement, SideBorders } from "../elements/rectangle-element.ts";
 import { RendererRegistry } from "../utils/renderer-registry.ts";
 import { IRNode, Rect, Line } from "../ir/display-list.ts";
+import { isGradientInput, resolveGradient } from "../api/gradient.ts";
 import { Color } from "../common/color.ts";
 
 export class RectangleRenderer {
@@ -27,11 +28,18 @@ export class RectangleRenderer {
     const h = height!;
     const nodes: IRNode[] = [];
 
+    // A gradient is written box-relative (an angle and stops); this is the first place the box is
+    // known, so it is resolved into the absolute page coordinates the IR wants.
+    const fill =
+      backgroundColor !== undefined && isGradientInput(backgroundColor)
+        ? resolveGradient(backgroundColor, x, y, width, h)
+        : backgroundColor;
+
     if (sideBorders) {
       // Per-side borders: a fill-only box (no stroke), then a line per present side
       // (sharp corners). This is what lets cells draw grid lines.
       if (backgroundColor) {
-        nodes.push({ type: "rect", x, y, width, height: h, strokeWidth: 0, fill: backgroundColor });
+        nodes.push({ type: "rect", x, y, width, height: h, strokeWidth: 0, fill });
       }
       nodes.push(...RectangleRenderer.sideLines(x, y, width, h, borderWidth!, sideBorders));
     } else {
@@ -45,7 +53,7 @@ export class RectangleRenderer {
         height: h,
         stroke: color,
         strokeWidth: borderWidth!,
-        ...(backgroundColor ? { fill: backgroundColor } : {}),
+        ...(fill ? { fill } : {}),
         ...(radius ? { radius } : {}),
       };
       nodes.push(node);

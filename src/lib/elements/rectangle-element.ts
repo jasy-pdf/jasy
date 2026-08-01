@@ -1,4 +1,5 @@
 import type { Radii } from "../ir/display-list.ts";
+import type { GradientInput } from "../api/gradient.ts";
 import { Color } from "../common/color.ts";
 import {
   BoxConstraints,
@@ -34,7 +35,8 @@ export interface SideBorders {
 
 interface RectangleElementParams extends SizedElement, WithChildren {
   color?: Color;
-  backgroundColor?: Color;
+  /** Solid colour, or a box-relative gradient the renderer resolves against this box. */
+  backgroundColor?: Color | GradientInput;
   borderWidth?: number;
   /** Corner radius in points - one number for all four corners, or per corner. 0 = sharp (default). */
   radius?: number | Radii;
@@ -70,7 +72,7 @@ interface RectangleElementParams extends SizedElement, WithChildren {
 export class RectangleElement extends SizedPDFElement implements Fragmentable {
   private children: PDFElement[] = [];
   private color: Color;
-  private backgroundColor?: Color;
+  private backgroundColor?: Color | GradientInput;
   private borderWidth: number;
   private radius: number | Radii;
   private sideBorders?: SideBorders;

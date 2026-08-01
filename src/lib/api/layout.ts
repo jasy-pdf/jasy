@@ -14,6 +14,7 @@ import { RotatedBoxElement } from "../elements/layout/rotated-box-element.ts";
 import { PDFElement } from "../elements/pdf-element.ts";
 import { MainAlign, CrossAlign } from "../utils/flex-layout.ts";
 import { ColorInput, toColor } from "./color.ts";
+import { isGradientInput, type GradientInput } from "./gradient.ts";
 import { Insets, toEdges } from "./insets.ts";
 import {
   BoundsInput,
@@ -141,8 +142,8 @@ export interface BoxOptions extends BoundsInput {
   borderLeft?: ColorInput;
   /** Border thickness in points (default 1 when a border is present). */
   borderWidth?: number;
-  /** Background fill color. */
-  bg?: ColorInput;
+  /** Background: a colour, or a gradient from `linearGradient()` / `radialGradient()`. */
+  bg?: ColorInput | GradientInput;
   /** Inner padding between the border and the children. */
   padding?: Insets;
   /** Size on each axis: a number of points (fixed) or a percentage string like `"50%"` (a fraction
@@ -210,7 +211,8 @@ export function Box(a: BoxOptions | PDFElement[], b?: PDFElement[]): PDFElement 
       y: 0,
       children: content,
       color: opts.border !== undefined ? toColor(opts.border) : undefined,
-      backgroundColor: opts.bg !== undefined ? toColor(opts.bg) : undefined,
+      backgroundColor:
+        opts.bg === undefined ? undefined : isGradientInput(opts.bg) ? opts.bg : toColor(opts.bg),
       borderWidth: hasBorder ? (opts.borderWidth ?? 1) : 0,
       width: w?.points,
       height: h?.points,

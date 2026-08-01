@@ -71,7 +71,8 @@ export interface Rect {
   y: number;
   width: number;
   height: number;
-  fill?: Color;
+  /** Solid colour, or a gradient whose anchor points are in absolute page coordinates. */
+  fill?: Color | Gradient;
   stroke?: Color;
   strokeWidth: number;
   /** Corner radius in points - one number for all four, or per corner. Absent/0 = sharp (plain `re`). */

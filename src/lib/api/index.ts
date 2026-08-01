@@ -3,6 +3,7 @@
 // core classes stay untouched and remain exported for power users.
 export * from "./color.ts";
 export * from "./insets.ts";
+export * from "./gradient.ts";
 export * from "./dimension.ts";
 export * from "./text.ts";
 export * from "./layout.ts";

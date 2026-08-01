@@ -445,6 +445,44 @@ agree: true })` → declarative values, not object mutation. Save is an **increm
   producers that DRAW their fields (jasy, pdf-lib) leave a stale picture of the old value; we wrote a new `/V`
   and kept the old drawing, a self-contradicting document. Fix: drop `/AP` for `Tx`/`Ch` on fill; a BUTTON's
   `/AP` holds its on/off STATES and is kept, only `/AS` moves.
+  **Flatten + the fill options** (2026-07-31): `flattenForm(bytes, { fields })` stamps a field's appearance
+  onto the page and drops the widget, and `fillForm(bytes, values, { flatten: true })` does both in ONE
+  incremental update. The trap that pass had to solve: flatten reads the picture a widget shows out of the
+  DOCUMENT, but mid-pass the new one is only in the WRITER - so a filled-and-flattened form would freeze the
+  value from BEFORE the fill. Both widget kinds go stale for different reasons (a text field's `/AP` is
+  replaced; a button's `/AP` keeps every state and only `/AS` moves), hence `FreshAppearances`. Two option
+  combinations are refused by name: `fieldAppearances` + `needAppearances` both false (nobody draws the
+  value), and `flatten` with `fieldAppearances: false` (nothing to freeze).
+
+- ✅ **The layout knobs** (2026-08-01) — `aspectRatio`, `minWidth`/`maxWidth`/`minHeight`/`maxHeight` (points
+  or a percentage), `%` on padding/margin, `alignSelf`, and a **per-corner** `radius`. One shared resolver
+  `resolveSize` (`layout/box-constraints.ts`) serves Box · Column · Row · Image, and the ORDER is the
+  contract, following CSS: relative sizing → the ratio fills whichever axis was left open → min/max clamp.
+  So an explicit bound beats the ratio, the way `min-height` beats `aspect-ratio` in a browser.
+  Two things that are easy to get wrong and are pinned by tests: min/max come back as **narrowed
+  CONSTRAINTS**, not a clamped number (an axis with no explicit size still has to obey them), but the
+  **fill-vs-shrink-wrap DECISION** stays on the constraints we were HANDED - a `max-width` caps a box, it
+  never makes one grow. And a percentage resolves against the OFFERED box, then gets clamped: `width: "50%"`
+  with `maxWidth: 100` in a 400pt region is 200 capped to 100, not 50% of 100.
+  `%` insets follow the CSS quirk on purpose: **a percentage resolves against the WIDTH on all four sides**,
+  top and bottom included (`layout/insets.ts`; Yoga does the same, so react-pdf agrees). The per-corner
+  radius scales two radii sharing an edge down TOGETHER when they would overlap, which react-pdf does not -
+  it clamps each corner alone. The `overflow: hidden` clip follows the same four corners.
+- ✅ **Gradients** (2026-08-01) — `Box({ bg: linearGradient(…) })` / `radialGradient(…)`, written
+  BOX-RELATIVE (an angle and stops) and resolved against the box by the renderer, which is the first place
+  its geometry is known (`api/gradient.ts` `resolveGradient`). Angles follow CSS: 0 points up, clockwise.
+  Cheap because the backend already emitted axial and radial shadings for COLR v1 colour emoji - only the
+  public prop and the plumbing were missing. **PDF has no gradient fill colour**: `sh` floods the current
+  clip, so a gradient box becomes the clip, the shading is painted inside it, and a border is stroked
+  afterwards on its own. A solid colour keeps the plain `rg`/`f` operators, so old output stays byte-identical.
+  `flipY` flips the gradient's page-space anchors WITH the rect, exactly as it already did for `Path`.
+- ✅ **The reader refuses a zip bomb** (2026-07-31, ISSUE-8) — `inflateBounded` (`edit/inflate.ts`) plus
+  `maxStreamSize` on `PdfDocument.load`/`open`, `fillForm` and `flattenForm` (default 64 MB), throwing a
+  named `PdfStreamTooLargeError`. Worth remembering because the obvious fix is wrong: **fflate does NOT
+  throw on an over-long inflate, it TRUNCATES silently**, so `unzlibSync(data, { out })` would have replaced
+  an OOM with quiet data corruption. The working shape streams the input in slices and checks the total as
+  it grows. It costs nothing because a stream too small to reach the ceiling at DEFLATE's maximum expansion
+  (1032:1) skips the check - which is nearly every stream in a real PDF.
 
 Genuine remaining gaps / deferred:
 

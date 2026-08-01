@@ -22,8 +22,14 @@ export class PdfBackend {
   static flipY(nodes: IRNode[], pageHeight: number): IRNode[] {
     return nodes.map((node) => {
       switch (node.type) {
-        case "rect":
-          return { ...node, y: pageHeight - node.y - node.height };
+        case "rect": {
+          // A gradient fill carries its own page-space anchors; flip them with the box (see "path").
+          const fill =
+            node.fill === undefined || node.fill instanceof Color
+              ? node.fill
+              : { ...node.fill, y0: pageHeight - node.fill.y0, y1: pageHeight - node.fill.y1 };
+          return { ...node, y: pageHeight - node.y - node.height, fill };
+        }
         case "line":
           return {
             ...node,
@@ -290,23 +296,42 @@ export class PdfBackend {
         // fill, no border) draws nothing. Paint: B = fill+stroke, f = fill, S = stroke.
         const doStroke = !!node.stroke && (node.strokeWidth ?? 0) > 0;
         if (!node.fill && !doStroke) return "";
-        let ops = "";
-        if (doStroke) {
-          ops += `${node.strokeWidth} w\n${node.stroke!.toPDFColorString()} RG\n`;
-        }
-        if (node.fill) ops += `${node.fill.toPDFColorString()} rg\n`;
-        const paint = node.fill ? (doStroke ? "B" : "f") : "S";
         // Rounded corners emit a Bézier path; sharp corners keep the plain `re`
         // (byte-identical when no radius is set).
         const path = isRounded(node.radius)
           ? PdfBackend.roundedRectPath(node.x, node.y, node.width, node.height, node.radius!)
           : `${node.x} ${node.y} ${node.width} ${node.height} re`;
+
+        // A gradient cannot be a fill COLOUR - PDF paints one with `sh`, which floods the current
+        // clip. So the box becomes the clip, the shading is painted inside it, and a border is
+        // stroked afterwards on its own. Solid fills keep the plain operators, byte for byte.
+        const gradient =
+          node.fill !== undefined && !(node.fill instanceof Color) ? node.fill : undefined;
+        if (gradient) {
+          const shading = om.registerShading(gradient);
+          let out = `q\n${path} W n\n/${shading} sh\nQ\n`;
+          if (doStroke) {
+            const gsStroke = PdfBackend.alphaPrefix(om, 1, node.stroke!.getAlpha());
+            const stroke =
+              `${node.strokeWidth} w\n${node.stroke!.toPDFColorString()} RG\n` + `${path} S\n`;
+            out += gsStroke ? `q\n${gsStroke}${stroke}Q\n` : stroke;
+          }
+          return out;
+        }
+
+        const fill = node.fill as Color | undefined;
+        let ops = "";
+        if (doStroke) {
+          ops += `${node.strokeWidth} w\n${node.stroke!.toPDFColorString()} RG\n`;
+        }
+        if (fill) ops += `${fill.toPDFColorString()} rg\n`;
+        const paint = fill ? (doStroke ? "B" : "f") : "S";
         const body = ops + `${path} ${paint}\n`;
         // Transparency needs an isolating q/Q so the state does not leak; opaque rects
         // keep their bare operators (byte-identical).
         const gs = PdfBackend.alphaPrefix(
           om,
-          node.fill?.getAlpha() ?? 1,
+          fill?.getAlpha() ?? 1,
           doStroke ? node.stroke!.getAlpha() : 1,
         );
         return gs ? `q\n${gs}${body}Q\n` : body;
