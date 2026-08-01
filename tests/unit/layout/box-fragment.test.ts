@@ -19,7 +19,10 @@ const metrics: FontMetrics = {
 };
 const ctx = { metrics } as LayoutContext;
 
-const tallText = () => new TextElement({ fontSize: 10, content: "aa bb cc dd ee ff" });
+// orphans/widows are switched OFF here on purpose: these suites are about WHERE the fragmenter cuts,
+// not about protecting the cut. The protection has its own tests in text/orphans-widows.test.ts.
+const tallText = () =>
+  new TextElement({ fontSize: 10, content: "aa bb cc dd ee ff", orphans: 1, widows: 1 });
 
 const laidOutHeight = (el: unknown, width: number) =>
   (el as PaddingElement).calculateLayout(BoxConstraints.loose(width, Infinity), { x: 0, y: 0 }, ctx)

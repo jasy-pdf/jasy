@@ -40,6 +40,14 @@ export interface TextOptions extends TextStyle {
   /** Cap the number of wrapped lines (default: unlimited - the text grows down as far as it needs,
    *  paginating onto the next page). Needs a bounded width (a Column/Expanded/`Box({ width })`). */
   maxLines?: number;
+  /**
+   * Minimum lines that must stay behind at a page break (CSS `orphans`), and minimum that must carry
+   * over (CSS `widows`). Both default to 2, as they do in every browser: a single line stranded at the
+   * foot of a page - or alone at the top of the next - reads as a mistake. Set both to 1 to switch the
+   * protection off and let a paragraph break wherever the page ends.
+   */
+  orphans?: number;
+  widows?: number;
   /** What happens past `maxLines`: `"clip"` (default) cuts hard, `"ellipsis"` ends with "…". */
   overflow?: TextOverflow;
   /** Line-height multiplier: each line is `size * lineHeight` tall. Unset means the font's own
@@ -132,6 +140,8 @@ export function Text(content: string | TextSegment[], opts: TextOptions = {}): T
     color: opts.color !== undefined ? toColor(opts.color) : undefined,
     textAlignment: opts.align ? ALIGN[opts.align] : undefined,
     maxLines: opts.maxLines,
+    orphans: opts.orphans,
+    widows: opts.widows,
     overflow: opts.overflow,
     lineHeight: opts.lineHeight,
     underline: opts.underline,

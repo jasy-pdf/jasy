@@ -17,10 +17,13 @@ const metrics: FontMetrics = {
 };
 const ctx = { metrics } as LayoutContext;
 
-const para = (content: string, fontSize = 10) => new TextElement({ fontSize, content });
+const para = (content: string, fontSize = 10) =>
+  new TextElement({ fontSize, content, orphans: 1, widows: 1 });
 
 const contentOf = (el: unknown) => (el as TextElement).getProps().content as string;
 
+// orphans/widows off: this suite is about WHERE the fragmenter cuts, not about protecting the cut.
+// The protection has its own tests in orphans-widows.test.ts.
 describe("TextElement.fragment - split at line boxes", () => {
   it("keeps the lines that fit and spills the rest", () => {
     // 3 lines, each 10pt tall. maxHeight 20 -> 2 lines fit.
@@ -62,7 +65,7 @@ describe("TextElement.fragment - split at line boxes", () => {
   it("splits styled segments at line boxes too", () => {
     // One segment wrapping to 3 lines of 10pt each; maxHeight 20 keeps 2.
     const segments: TextSegment[] = [{ content: "aa bb cc dd ee ff", fontSize: 10 }];
-    const text = new TextElement({ fontSize: 10, content: segments });
+    const text = new TextElement({ fontSize: 10, content: segments, orphans: 1, widows: 1 });
     const { fitted, remainder } = text.fragment(20, 50, ctx);
 
     expect(wrappedHeight(fitted)).toBe(20); // 2 lines kept
@@ -78,7 +81,7 @@ describe("TextElement.fragment - split at line boxes", () => {
       { content: "aa bb cc dd", fontSize: 10 },
       { content: "ee ff gg hh", fontSize: 10 },
     ];
-    const original = new TextElement({ fontSize: 10, content: segments });
+    const original = new TextElement({ fontSize: 10, content: segments, orphans: 1, widows: 1 });
     const originalHeight = wrappedHeight(original);
 
     const { fitted, remainder } = original.fragment(25, 50, ctx);
