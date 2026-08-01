@@ -63,15 +63,23 @@ The format picks the convention, so there's never a guess:
 Units are PDF points (pt). Padding / margin accept:
 
 ```ts
+type SizeInput = number | `${number}%`;
+
 type Insets =
-  | number // all sides
-  | { x?: number; y?: number } // horizontal / vertical
-  | { top?; right?; bottom?; left? } // per side
-  | [number, number, number, number]; // [top, right, bottom, left] (engine order)
+  | SizeInput // all sides
+  | { x?: SizeInput; y?: SizeInput } // horizontal / vertical
+  | { top?: SizeInput; right?: SizeInput; bottom?: SizeInput; left?: SizeInput } // per side
+  | [SizeInput, SizeInput, SizeInput, SizeInput]; // [top, right, bottom, left] (engine order)
 ```
 
-`toEdges(i): [t,r,b,l]` feeds the engine's `PaddingElement`. `gap` is a single number (space
+`toEdges(i)` normalizes to the engine's `[t,r,b,l]`, leaving a percentage unresolved; `resolveEdges`
+(`layout/insets.ts`) turns it into points once the box is known. `gap` is a single number (space
 _between_ children of a Column/Row).
+
+> **A percentage inset resolves against the WIDTH - on all four sides, top and bottom included.**
+> That is the CSS rule, and Yoga's, so react-pdf behaves the same. It reads as wrong the first time and
+> is what makes `padding-bottom: 56.25%` a 16:9 box on the web. A percentage needs a bounded width; in
+> an unbounded region it resolves to 0, the same no-op a percentage SIZE gives there.
 
 ---
 
@@ -86,28 +94,85 @@ _between_ children of a Column/Row).
 
 ### Layout
 
-| Factory                                | Purpose              | Key options                                                               | Maps to                                |
-| -------------------------------------- | -------------------- | ------------------------------------------------------------------------- | -------------------------------------- |
-| `Column(opts, children)`               | vertical stack       | `gap`, `justify`, `align`                                                 | `ContainerElement`                     |
-| `Row(opts, children)`                  | **horizontal** stack | `gap`, `justify`, `align`                                                 | **new `RowElement`**                   |
-| `Box(opts, children)`                  | bordered/filled box  | `border`, `borderWidth`, `bg`, `padding`, `width`, `height`, **`radius`** | `RectangleElement` (+ inner `Padding`) |
-| `Padding(opts, child)`                 | inset                | `padding: Insets` (`all`/`x`/`y`)                                         | `PaddingElement`                       |
-| `Spacer(flex?)`                        | flexible gap         | `flex`                                                                    | `ExpandedElement` (empty child)        |
-| `Expanded(opts, child)`                | child fills leftover | `flex`                                                                    | `ExpandedElement`                      |
-| `Center(child)` / `Align(opts, child)` | alignment wrapper    | `align`                                                                   | Column/Row align                       |
-| `SizedBox(opts, child?)`               | fixed size / strut   | `width`, `height`                                                         | `SizedContainerElement`                |
+| Factory                                | Purpose              | Key options                                                     | Maps to                                |
+| -------------------------------------- | -------------------- | --------------------------------------------------------------- | -------------------------------------- |
+| `Column(opts, children)`               | vertical stack       | `gap`, `justify`, `align`, sizing†                              | `ContainerElement`                     |
+| `Row(opts, children)`                  | **horizontal** stack | `gap`, `justify`, `align`, sizing†                              | **new `RowElement`**                   |
+| `Box(opts, children)`                  | bordered/filled box  | `border`, `borderWidth`, `bg`, `padding`, **`radius`**, sizing† | `RectangleElement` (+ inner `Padding`) |
+| `Padding(padding, child)`              | inset                | `Insets`: all sides · `{x,y}` · per side · tuple                | `PaddingElement`                       |
+| `Spacer(flex?)`                        | flexible gap         | `flex`                                                          | `ExpandedElement` (empty child)        |
+| `Expanded(opts, child)`                | child fills leftover | `flex`                                                          | `ExpandedElement`                      |
+| `Center(child)` / `Align(opts, child)` | alignment wrapper    | `align`                                                         | Column/Row align                       |
+| `SizedBox(opts, child?)`               | fixed size / strut   | `width`, `height`                                               | `SizedContainerElement`                |
+
+† **The sizing set**, shared by `Box` · `Column` · `Row` · `Image` and resolved in ONE place
+(`resolveSize`, `layout/box-constraints.ts`):
+
+| Option                                              | Meaning                                                       |
+| --------------------------------------------------- | ------------------------------------------------------------- |
+| `width` / `height`                                  | points or `"50%"` of the offered box                          |
+| `minWidth` / `maxWidth` / `minHeight` / `maxHeight` | bounds, also points or a percentage                           |
+| `aspectRatio`                                       | width ÷ height; fills in whichever axis is left open          |
+| `alignSelf`                                         | this child's cross-axis alignment, overriding the container's |
+
+**The order is the contract, and it follows CSS:** relative sizing → `aspectRatio` fills the open axis
+→ `min`/`max` clamp. So an explicit bound beats the ratio, exactly as `min-height` beats `aspect-ratio`
+in a browser. With NEITHER axis pinned a ratio takes the offered width and derives the height (CSS block
+behaviour).
+
+Two consequences worth knowing, both pinned by tests:
+
+- `min`/`max` come back as **narrowed constraints**, not just a clamped number, because an axis with no
+  explicit size still has to obey them - `maxWidth` alone means "fill, but no wider than this".
+- The **fill-versus-shrink-wrap decision** still comes from the constraints the element was HANDED. A
+  `max-width` caps a box; it never makes one grow.
+- A percentage resolves against the **offered** box and is clamped afterwards: `width: "50%"` with
+  `maxWidth: 100` in a 400pt region is 200 capped to 100 - not 50% of 100.
+
+`radius` takes a single number, `{ topLeft, topRight, bottomRight, bottomLeft }`, or the CSS tuple
+`[tl, tr, br, bl]`. Two radii sharing an edge are scaled down TOGETHER when they would overlap, so the
+outline can never fold back on itself; `overflow: "hidden"` clips to the same four corners.
+
+`bg` takes a colour **or a gradient** - `linearGradient(...)` / `radialGradient(...)` from
+`api/gradient.ts`. Gradients are written box-relative (an angle and stops, CSS convention: 0 points up,
+clockwise) and resolved against the box by the renderer.
 
 ### Content
 
-| Factory                            | Purpose                              | Key options                                                      | Maps to                   |
-| ---------------------------------- | ------------------------------------ | ---------------------------------------------------------------- | ------------------------- |
-| `Text(content, opts)`              | `content` = string OR `Span[]`       | `size`, `font`, `bold`, `italic`, `color`, `align`               | `TextElement`             |
-| `span(text, opts)`                 | inline run for mixed `Text`          | `size`, `font`, `bold`, `italic`, `color`                        | `TextSegment`             |
-| `Paragraph(content, opts)`         | `Text` with body defaults            | as `Text`                                                        | `TextElement`             |
-| `DefaultTextStyle(opts, children)` | cascaded text defaults for a subtree | `size`, `font`, `bold`, `italic`, `color`, `align`, `lineHeight` | `DefaultTextStyleElement` |
-| `Image(src, opts)`                 | image                                | `width`, `height`, `fit`, **`radius`**                           | `ImageElement`            |
-| `Divider(opts?)`                   | horizontal rule                      | `color`, `thickness`, `margin`                                   | `LineElement`             |
-| `Line(opts)`                       | explicit line                        | `from`, `to`, `color`, `thickness`                               | `LineElement`             |
+| Factory                            | Purpose                              | Key options                                                              | Maps to                   |
+| ---------------------------------- | ------------------------------------ | ------------------------------------------------------------------------ | ------------------------- |
+| `Text(content, opts)`              | `content` = string OR `Span[]`       | `size`, `font`, `bold`, `italic`, `color`, `align`, `orphans`, `widows`‡ | `TextElement`             |
+| `span(text, opts)`                 | inline run for mixed `Text`          | `size`, `font`, `bold`, `italic`, `color`                                | `TextSegment`             |
+| `Paragraph(content, opts)`         | `Text` with body defaults            | as `Text` (the same `TextOptions`, forwarded verbatim)                   | `TextElement`             |
+| `DefaultTextStyle(opts, children)` | cascaded text defaults for a subtree | `size`, `font`, `bold`, `italic`, `color`, `align`, `lineHeight`         | `DefaultTextStyleElement` |
+| `Image(src, opts)`                 | image                                | `fit`, **`radius`**, sizing†                                             | `ImageElement`            |
+| `Divider(opts?)`                   | horizontal rule                      | `color`, `thickness`, `margin`                                           | `LineElement`             |
+| `Line(opts)`                       | explicit line                        | `from`, `to`, `color`, `thickness`                                       | `LineElement`             |
+
+‡ **Page-break behaviour of a paragraph.**
+
+```ts
+Text(content, { orphans?: number; widows?: number })
+Paragraph(content, { orphans?: number; widows?: number }) // Paragraph forwards TextOptions verbatim
+```
+
+Each is a **whole number of LINES, at least 1** - anything else (a fraction, 0, a negative) is refused
+by name, because both end up as a slice index and a bad one would be truncated silently somewhere
+downstream. `1` is the documented way to switch that end off. Both default to **2**, the CSS initial
+value. (Browser support is uneven - Chrome honours them in paged media, Firefox has never implemented
+them - which is exactly why a PDF engine has to do it itself.)
+
+An orphan is the first line left alone at the foot of a page; a widow is the last line pushed alone to
+the top of the next. Splitting at line boxes prevents neither, so the fragmenter's split index is
+corrected: too few lines would stay, or too few would carry over, and the paragraph moves whole instead.
+
+> **They do NOT inherit**, unlike in CSS. `Document(...)` and `DefaultTextStyle(...)` cascade the text
+> STYLE properties (see the note below); a break rule is set per paragraph. Worth knowing if you come
+> from CSS, where `orphans` is an inherited property.
+
+An `Image` with an explicit `aspectRatio` uses it INSTEAD of the image's own; with one axis pinned and
+no ratio given, the image's intrinsic ratio still fills in the other. Either way the box was derived
+rather than given, so `fit` defaults to `fill`.
 
 > **Text styles inherit** (CSS / Flutter style): `Document(opts, …)` sets document-wide text defaults
 > and `DefaultTextStyle(opts, …)` a subtree's; a `Text` resolves each property
@@ -139,6 +204,24 @@ Shipping the full model in v1 (foundation work) so we never re-touch alignment.
 `ImageElement(new CustomLocalImage(src))` · `Page` auto-wraps children in a `Column`.
 
 ---
+
+## 6b. Added since the lock (all additive, none reopen a locked decision)
+
+| When               | What                                                                                                                     |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| 2026-06-21         | absolute positioning (`relative` / `Positioned`), `overflow`, font management (`addFont`)                                |
+| 2026-06-24         | inheritable text styles, custom page formats (`mm()`), `onOverflow`                                                      |
+| 2026-07-05         | relative sizing (`width`/`height` as `"50%"`)                                                                            |
+| 2026-07-08 → 07-11 | `Rotated` / `RotatedBox`, navigation, page numbers, `letterSpacing`, text decoration, page-break control                 |
+| 2026-07            | AcroForm fields; `@jasy/pdf/edit` for reading and filling an existing form                                               |
+| 2026-08-01         | the sizing set (`aspectRatio`, `min`/`max`), `%` insets, `alignSelf`, per-corner `radius`, gradients, `orphans`/`widows` |
+
+The component set HAS grown - `Positioned`, `Rotated`, `RotatedBox`, `Link`, `Anchor`, `Bookmark`,
+`PageBuilder`, `PageBreak`, `keepTogether`, the seven form fields and the gradient constructors are all
+new factories beside the original ones. What is unchanged is what the lock was actually protecting: the
+**shape** of the API (a factory taking one options object plus children), the alignment model below, and
+the meaning of every option that was already there. Nothing in the list above reopened a decision - it
+added next to one.
 
 ## 7. Decisions — LOCKED (2026-06-11)
 

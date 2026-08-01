@@ -15,6 +15,12 @@ import {
   segmentLinesToSegments,
   TextOverflow,
 } from "../text/line-breaker.ts";
+import {
+  adjustForOrphansWidows,
+  DEFAULT_ORPHANS,
+  DEFAULT_WIDOWS,
+  type OrphanWidowRule,
+} from "../text/orphans-widows.ts";
 import { lineBoxForSegmentLine, lineBoxForString } from "../text/line-metrics.ts";
 import { runAdvance } from "../text/advance.ts";
 import { HorizontalAlignment, LayoutContext, SizedPDFElement } from "./pdf-element.ts";
@@ -49,6 +55,10 @@ interface TextElementParams {
   textAlignment?: HorizontalAlignment;
   /** Cap the wrapped lines (default: unlimited / open-end). */
   maxLines?: number;
+  /** Minimum lines that must stay behind at a page break (CSS `orphans`, default 2). */
+  orphans?: number;
+  /** Minimum lines that must carry over to the next page (CSS `widows`, default 2). */
+  widows?: number;
   /** What to do past `maxLines`: `"clip"` (default) drops them, `"ellipsis"` ends with "…". */
   overflow?: TextOverflow;
   /** Line-height multiplier: each line is `fontSize * lineHeight` tall. Unset means the font's
@@ -95,6 +105,8 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
 
   private content: string | TextSegment[];
   private maxLines?: number;
+  private orphans?: number;
+  private widows?: number;
   private overflow: TextOverflow;
   private readonly role?: TextRole; // accessibility role (tagged PDF); undefined = paragraph
 
@@ -106,6 +118,8 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     color,
     textAlignment,
     maxLines,
+    orphans,
+    widows,
     overflow = "clip",
     lineHeight,
     underline,
@@ -129,6 +143,8 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     this.rawLetterSpacing = letterSpacing;
     this.content = content;
     this.maxLines = maxLines;
+    this.orphans = orphans;
+    this.widows = widows;
     this.overflow = overflow;
     this.applyStyle(DEFAULT_TEXT_STYLE);
   }
@@ -191,7 +207,11 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       this.fontSize,
       this.lineHeight,
     );
-    const fittedLineCount = Math.floor(maxHeight / box.height);
+    const fittedLineCount = adjustForOrphansWidows(
+      Math.floor(maxHeight / box.height),
+      lines.length,
+      this.breakRule(),
+    );
     if (fittedLineCount <= 0) return { fitted: null, remainder: this };
     if (fittedLineCount >= lines.length) return { fitted: this, remainder: null };
 
@@ -225,13 +245,14 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     );
 
     let used = 0;
-    let fittedLineCount = 0;
+    let packed = 0;
     for (const line of lines) {
       const lineBox = lineBoxForSegmentLine(line, defaults, ctx.metrics, this.lineHeight).height;
       if (used + lineBox > maxHeight) break;
       used += lineBox;
-      fittedLineCount++;
+      packed++;
     }
+    const fittedLineCount = adjustForOrphansWidows(packed, lines.length, this.breakRule());
 
     if (fittedLineCount <= 0) return { fitted: null, remainder: this };
     if (fittedLineCount >= lines.length) return { fitted: this, remainder: null };
@@ -239,6 +260,14 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     return {
       fitted: this.cloneWithContent(segmentLinesToSegments(lines.slice(0, fittedLineCount))),
       remainder: this.cloneWithContent(segmentLinesToSegments(lines.slice(fittedLineCount))),
+    };
+  }
+
+  /** The orphan/widow minimums for this paragraph; unset means the CSS default of 2 lines each. */
+  private breakRule(): OrphanWidowRule {
+    return {
+      orphans: this.orphans ?? DEFAULT_ORPHANS,
+      widows: this.widows ?? DEFAULT_WIDOWS,
     };
   }
 
@@ -253,6 +282,8 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       color: this.color,
       textAlignment: this.textAlignment,
       maxLines: this.maxLines,
+      orphans: this.orphans,
+      widows: this.widows,
       overflow: this.overflow,
       lineHeight: this.lineHeight,
       underline: this.underline,
@@ -358,6 +389,8 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       content: this.content,
       textAlignment: this.textAlignment,
       maxLines: this.maxLines,
+      orphans: this.orphans,
+      widows: this.widows,
       overflow: this.overflow,
       lineHeight: this.lineHeight,
       underline: this.underline,

@@ -140,7 +140,7 @@ verify all of it:
 - **PDF/A-3, matched not approximated.** The conformance graph is hand-built and **passes veraPDF**, the
   official ISO 19005 validator.
 - **Byte-exact round-trips.** Generate and parse are inverses: `generate → parse → regenerate` reproduces
-  the identical XML. 307 tests hold the line.
+  the identical XML. Over 900 tests hold the line across the workspace.
 - **Schematron, local.** The official EN-16931 + XRechnung rules run via saxon-js (the real XSLT, in pure
   JS) - no Java, no upload.
 
@@ -158,8 +158,9 @@ verify all of it:
 
 ## Why you can trust it
 
-- **307 tests, green.** The generator and the parser are **byte-exact inverses**:
-  `generate → parse → regenerate` reproduces the identical XML. Nothing is silently lost.
+- **Over 900 tests, green** across the workspace (850 in the engine alone). The generator and the parser
+  are **byte-exact inverses**: `generate → parse → regenerate` reproduces the identical XML. Nothing is
+  silently lost.
 - **The same rules the authorities use** - the official KoSIT EN-16931 + XRechnung Schematron, and the
   official **veraPDF** for the full ISO 19005 (PDF/A) check.
 - **Proven on real third-party invoices**, not only our own.
