@@ -121,7 +121,12 @@ export class FlexLayoutHelper {
     // The main cap to hand a child: `percentBase` for a percentage child (so its fraction resolves) and
     // for a child that cannot lay itself out without a bound (a nested stack holding an `Expanded`/
     // `Spacer`); unbounded for everyone else, who keep their natural size and never fill the line.
+    // Filled by the shrink pass below; read by `mainCapFor` in pass 2. Declared here so the closure
+    // can see it - it is empty for every document that does not ask for shrinking.
+    const shrunkCap = new Map<PDFElement, number>();
     const mainCapFor = (child: PDFElement): number => {
+      const target = shrunkCap.get(child);
+      if (target !== undefined) return target;
       if (percentBase === Infinity) return Infinity;
       const needsBound =
         child.relativeSizeFactor(axis.mainHorizontal) !== undefined ||
@@ -150,6 +155,40 @@ export class FlexLayoutHelper {
         fixedMain += axis.mainOf(size);
         crossUsed = Math.max(crossUsed, axis.crossOf(size));
         fixedSize.set(child, size);
+      }
+    }
+
+    // Shrinking: the line overflows and some children said they would give space back. CSS weights a
+    // shrinker's share by `shrink x its own size`, so a big item yields more than a small one - which is
+    // why this cannot reuse the grow maths above. Nobody shrinks by default, so a document that never
+    // asks for it never enters this block.
+    const shrinkers = children.filter(
+      (c) => c.flexShrink > 0 && !(c instanceof FlexiblePDFElement),
+    );
+    const overflow = fixedMain + totalBasis + totalGap - mainAvail;
+    if (shrinkers.length > 0 && Number.isFinite(mainAvail) && overflow > 0) {
+      const weight = (c: PDFElement) => c.flexShrink * axis.mainOf(fixedSize.get(c)!);
+      const totalWeight = shrinkers.reduce((n, c) => n + weight(c), 0);
+      if (totalWeight > 0) {
+        for (const child of shrinkers) {
+          const natural = axis.mainOf(fixedSize.get(child)!);
+          // Never below zero: when the GAPS alone outgrow the line, a proportional share asks for more
+          // than a child has. No test can tell this clamp apart from its absence - `constrainWidth`
+          // floors at 0 further down either way - but handing out a negative constraint is nonsense,
+          // and the next reader should not have to work out that it happens to be harmless.
+          const target = Math.max(0, natural - (weight(child) / totalWeight) * overflow);
+          shrunkCap.set(child, target);
+          // Re-measure NOW, not in pass 2: a narrower child may wrap to more lines, and the line's
+          // cross extent is settled just below.
+          const size = child.calculateLayout(
+            axis.measureConstraints(crossAvail, target),
+            axis.offsetAt(mainStart, crossOrigin),
+            ctx,
+          );
+          fixedMain += axis.mainOf(size) - natural;
+          crossUsed = Math.max(crossUsed, axis.crossOf(size));
+          fixedSize.set(child, size);
+        }
       }
     }
 

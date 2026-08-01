@@ -170,6 +170,25 @@ export abstract class PDFElement {
    */
   order = 0;
 
+  /**
+   * How willingly this child gives up main-axis space when the line overflows (CSS `flex-shrink`),
+   * weighted by its own size as CSS does. **Default 0, deliberately unlike CSS's 1**: shrinking is a
+   * change of what a document LOOKS like, and every document written before this existed must keep
+   * laying out exactly as it did. Opt in per child.
+   */
+  flexShrink = 0;
+
+  /** Sets `flexShrink` and returns the element. */
+  withFlexShrink(shrink: number | undefined): this {
+    if (shrink !== undefined) {
+      if (!Number.isFinite(shrink) || shrink < 0) {
+        throw new Error(`Invalid flexShrink ${shrink}: it must be a number of at least 0.`);
+      }
+      this.flexShrink = shrink;
+    }
+    return this;
+  }
+
   /** Sets `order` and returns the element, so a factory can thread it through in one expression. */
   withOrder(order: number | undefined): this {
     if (order !== undefined) {

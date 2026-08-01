@@ -114,12 +114,15 @@ export function Row(a: StackOptions | PDFElement[], b?: PDFElement[]): PDFElemen
 /** Wraps `element` in a `keepTogether` group when the `keepTogether` option is set; otherwise returns it
  *  unchanged (byte-identical). Shared by the `Box`/`Column`/`Row` prop shortcut. */
 function maybeKeepTogether(
-  opts: { keepTogether?: boolean; alignSelf?: CrossAlign; order?: number },
+  opts: { keepTogether?: boolean; alignSelf?: CrossAlign; order?: number; flexShrink?: number },
   element: PDFElement,
 ): PDFElement {
   // alignSelf and order go on the OUTERMOST element - that is the one the surrounding stack places.
   const wrapped = opts.keepTogether ? new KeepTogetherElement({ child: element }) : element;
-  return wrapped.withAlignSelf(opts.alignSelf).withOrder(opts.order);
+  return wrapped
+    .withAlignSelf(opts.alignSelf)
+    .withOrder(opts.order)
+    .withFlexShrink(opts.flexShrink);
 }
 
 /**
