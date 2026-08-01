@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { Box, Column, Document, Page, renderPdf } from "../../../src/lib/api/index.ts";
+import { Box, Column, Document, Page, Text, renderPdf } from "../../../src/lib/api/index.ts";
 import { toRadius } from "../../../src/lib/api/dimension.ts";
 import { isRounded } from "../../../src/lib/ir/display-list.ts";
 
@@ -90,5 +90,51 @@ describe("per corner", () => {
 
   it("differs from the same box with all four corners set", async () => {
     expect(pathOps(await draw({ topLeft: 20 }))).not.toBe(pathOps(await draw(20)));
+  });
+});
+
+describe("the clip follows the same corners", () => {
+  // `overflow: hidden` emits a SEPARATE IR node (clip-push) with its own copy of the radii, so it can
+  // drift from the drawn border without any test noticing. Verified visually once
+  // (claude-data/out/crop/crop.pdf); this is the automated half.
+  const cropped = async (radius: unknown) =>
+    renderPdf(
+      Document([
+        Page({ margin: 40 }, [
+          Column([
+            Box(
+              {
+                bg: "#dddddd",
+                borderWidth: 0,
+                width: 200,
+                height: 100,
+                radius,
+                overflow: "hidden",
+              } as never,
+              [Text("text that runs into the corner and keeps going", { size: 9 })],
+            ),
+          ]),
+        ]),
+      ]),
+      { compress: false },
+    );
+
+  it("clips to a rounded path, not to the plain rect", async () => {
+    const pdf = await cropped(20);
+    // `W n` is the clip operator; it has to be preceded by curves, not by a bare `re`.
+    expect(pdf).toMatch(/c\n\s*h\n\s*W n/);
+    expect(pdf).not.toMatch(/re\n\s*W n/);
+  });
+
+  it("uses the SAME corner radii as the border it belongs to", async () => {
+    // One corner only: the clip path must show that corner rounded and the other three square, i.e.
+    // exactly the operators the drawn path uses.
+    const pdf = await cropped({ topLeft: 20 });
+    expect(pdf).toContain("60.000 801.890 l");
+    expect(pdf).toContain("240.000 701.890 240.000 701.890 240.000 701.890 c");
+  });
+
+  it("stays a plain rect when nothing is rounded", async () => {
+    expect(await cropped(0)).toMatch(/re\n\s*W n/);
   });
 });

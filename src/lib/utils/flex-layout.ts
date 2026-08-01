@@ -185,10 +185,13 @@ export class FlexLayoutHelper {
       let mainExtent: number;
       if (child instanceof FlexiblePDFElement) {
         mainExtent = (child.getFlex() / totalFlex) * remaining;
+        // A flex child fills the MAIN axis, and its cross size is only known after layout - there is
+        // nothing to align against. So alignSelf is a no-op here, and that has to hold for the CROSS
+        // CONSTRAINT too: reading the per-child alignment would hand an `alignSelf: "start"` flex child
+        // an unbounded cross axis on a shrink-wrapping line, where the container's own rule gives it
+        // the line's extent. A no-op that changes the constraints is not a no-op.
         const size = child.calculateLayout(
-          axis.flexConstraints(mainExtent, stretch ? crossExtent : crossAvail),
-          // A flex child fills the MAIN axis; its cross size is only known after layout, so there is
-          // nothing to align against here. alignSelf on an Expanded/Spacer is a no-op, not a guess.
+          axis.flexConstraints(mainExtent, cross === "stretch" ? crossExtent : crossAvail),
           axis.offsetAt(mainPos, crossOrigin),
           ctx,
         );

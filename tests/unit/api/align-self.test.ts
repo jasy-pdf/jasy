@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { Box, Column, Row } from "../../../src/lib/api/layout.ts";
+import { Box, Column, Expanded, Row } from "../../../src/lib/api/layout.ts";
+import type { CrossAlign } from "../../../src/lib/layout/alignment.ts";
 import { BoxConstraints } from "../../../src/lib/layout/box-constraints.ts";
 import { LayoutContext } from "../../../src/lib/elements/pdf-element.ts";
 
@@ -87,5 +88,31 @@ describe("nothing asked for changes nothing", () => {
   it("the horizontal positions are untouched by cross alignment", () => {
     const row = Row({ align: "end", gap: 10, height: 200 }, [tile(), tile({ alignSelf: "start" })]);
     expect(childXs(row)).toEqual([0, 50]);
+  });
+});
+
+describe("a flex child is untouched by it", () => {
+  it("gives an Expanded the container's cross constraint, whatever it asks for itself", () => {
+    // Not reachable through the factories today - Expanded / Spacer have no `alignSelf` prop - but
+    // `withAlignSelf` is public on the base element, so the path exists. The claim in the code is that
+    // alignSelf is a NO-OP on a flex child; a no-op that changes the cross constraint is not one.
+    //
+    // The cross axis is left UNBOUNDED, which is the only place the line extent (the tallest child) and
+    // the offered extent (Infinity) differ - so a regression here is visible rather than theoretical.
+    const build = (self?: CrossAlign) => {
+      const filler = Expanded({ flex: 1 }, Box({ borderWidth: 0 }, []));
+      if (self) filler.withAlignSelf(self);
+      return Row({ align: "stretch", width: 400 }, [
+        Box({ borderWidth: 0, width: 40, height: 60 }, []),
+        filler,
+      ]);
+    };
+    const heightOf = (row: ReturnType<typeof Row>) => {
+      row.calculateLayout(new BoxConstraints(0, 400, 0, Infinity), { x: 0, y: 0 }, ctx);
+      const kids = (row as unknown as { children: { getProps(): { height?: number } }[] }).children;
+      return kids[1].getProps().height;
+    };
+    expect(heightOf(build("start"))).toBe(heightOf(build()));
+    expect(heightOf(build("end"))).toBe(heightOf(build()));
   });
 });
