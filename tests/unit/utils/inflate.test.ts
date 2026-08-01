@@ -4,7 +4,7 @@ import {
   DEFAULT_MAX_STREAM_SIZE,
   inflateBounded,
   PdfStreamTooLargeError,
-} from "../../../src/lib/edit/inflate.ts";
+} from "../../../src/lib/utils/inflate.ts";
 import { PdfDocument } from "../../../src/lib/edit/document.ts";
 import { get, isStream } from "../../../src/lib/edit/objects.ts";
 
