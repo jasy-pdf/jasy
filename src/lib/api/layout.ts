@@ -15,7 +15,14 @@ import { PDFElement } from "../elements/pdf-element.ts";
 import { MainAlign, CrossAlign } from "../utils/flex-layout.ts";
 import { ColorInput, toColor } from "./color.ts";
 import { Insets, toEdges } from "./insets.ts";
-import { BoundsInput, SizeInput, toBounds, toDimension } from "./dimension.ts";
+import {
+  BoundsInput,
+  SizeInput,
+  toBounds,
+  toDimension,
+  RadiusInput,
+  toRadius,
+} from "./dimension.ts";
 import { splitArgs } from "./args.ts";
 
 /** Options shared by the `Column` and `Row` stacks (locked §4). */
@@ -144,7 +151,7 @@ export interface BoxOptions extends BoundsInput {
   width?: SizeInput;
   height?: SizeInput;
   /** Corner radius in points. */
-  radius?: number;
+  radius?: RadiusInput;
   /** Make this box a positioning frame: `Positioned` children placed inside it resolve their
    *  offsets against this box (CSS `position: relative`). */
   relative?: boolean;
@@ -210,7 +217,7 @@ export function Box(a: BoxOptions | PDFElement[], b?: PDFElement[]): PDFElement 
       widthFactor: w?.factor,
       heightFactor: h?.factor,
       ...toBounds(opts),
-      radius: opts.radius,
+      radius: opts.radius !== undefined ? toRadius(opts.radius) : undefined,
       sideBorders: hasPerSide
         ? {
             top: side(opts.borderTop),

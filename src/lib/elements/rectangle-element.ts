@@ -1,3 +1,4 @@
+import type { Radii } from "../ir/display-list.ts";
 import { Color } from "../common/color.ts";
 import {
   BoxConstraints,
@@ -35,8 +36,8 @@ interface RectangleElementParams extends SizedElement, WithChildren {
   color?: Color;
   backgroundColor?: Color;
   borderWidth?: number;
-  /** Corner radius in points; 0 = sharp corners (default). */
-  radius?: number;
+  /** Corner radius in points - one number for all four corners, or per corner. 0 = sharp (default). */
+  radius?: number | Radii;
   /** Individual side borders; overrides the uniform `color` border when present. */
   sideBorders?: SideBorders;
   /** When true, this box is a positioning frame for `Positioned` descendants (CSS `relative`). */
@@ -71,7 +72,7 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
   private color: Color;
   private backgroundColor?: Color;
   private borderWidth: number;
-  private radius: number;
+  private radius: number | Radii;
   private sideBorders?: SideBorders;
   private relative: boolean;
   private overflow: "hidden" | "visible";

@@ -1,3 +1,4 @@
+import type { Radii } from "../ir/display-list.ts";
 import type { CrossAlign } from "../layout/alignment.ts";
 
 /**
@@ -72,4 +73,20 @@ export function toBounds(o: BoundsInput) {
     maxHeightFactor: maxH?.factor,
     aspectRatio: o.aspectRatio,
   };
+}
+
+/**
+ * Corner radius input. A single number rounds all four corners; the object names them; the tuple is
+ * CSS order - `[topLeft, topRight, bottomRight, bottomLeft]`, clockwise from the top left.
+ */
+export type RadiusInput =
+  | number
+  | { topLeft?: number; topRight?: number; bottomRight?: number; bottomLeft?: number }
+  | [number, number, number, number];
+
+/** Normalizes a `RadiusInput` to the engine's short corner names. */
+export function toRadius(r: RadiusInput): number | Radii {
+  if (typeof r === "number") return r;
+  if (Array.isArray(r)) return { tl: r[0], tr: r[1], br: r[2], bl: r[3] };
+  return { tl: r.topLeft, tr: r.topRight, br: r.bottomRight, bl: r.bottomLeft };
 }

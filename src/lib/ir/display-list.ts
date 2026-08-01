@@ -44,6 +44,27 @@ export interface TextRun {
 }
 
 /** An axis-aligned rectangle. An absent `fill` or `stroke` means that part is not drawn. */
+/**
+ * Corner radii in points (CSS `border-radius`). Any corner left out falls back to 0. A single number
+ * everywhere is the common case and stays a plain `number` on the nodes, so nothing changed for a
+ * document that never asks for different corners.
+ */
+export interface Radii {
+  tl?: number;
+  tr?: number;
+  br?: number;
+  bl?: number;
+}
+
+/** True when any corner asks for a radius - the gate between a plain rect and a curved path. */
+export function isRounded(radius: number | Radii | undefined): boolean {
+  if (radius === undefined) return false;
+  if (typeof radius === "number") return radius > 0;
+  return (
+    (radius.tl ?? 0) > 0 || (radius.tr ?? 0) > 0 || (radius.br ?? 0) > 0 || (radius.bl ?? 0) > 0
+  );
+}
+
 export interface Rect {
   type: "rect";
   x: number;
@@ -53,8 +74,8 @@ export interface Rect {
   fill?: Color;
   stroke?: Color;
   strokeWidth: number;
-  /** Corner radius in points; absent/0 = sharp corners (plain `re`). */
-  radius?: number;
+  /** Corner radius in points - one number for all four, or per corner. Absent/0 = sharp (plain `re`). */
+  radius?: number | Radii;
   tag?: StructTag; // accessible tagging; absent = Artifact
 }
 
@@ -85,8 +106,8 @@ export interface Image {
   smask?: string;
   /** cover/contain fits clip the placement to the element's original frame. */
   clip?: { x: number; y: number; width: number; height: number };
-  /** Corner radius in points for the image box; absent/0 = sharp corners. */
-  radius?: number;
+  /** Corner radius in points for the image box - one number or per corner; absent/0 = sharp. */
+  radius?: number | Radii;
   tag?: StructTag; // accessible tagging (a Figure needs `alt`); absent = Artifact
 }
 
@@ -101,7 +122,7 @@ export interface ClipPush {
   y: number;
   width: number;
   height: number;
-  radius?: number;
+  radius?: number | Radii;
 }
 
 /** Closes the most recent `ClipPush` (restores the graphics state). */

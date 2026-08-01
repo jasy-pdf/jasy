@@ -8,7 +8,7 @@ import {
   decodePngToRgbFlate,
 } from "../utils/image-helper.ts";
 import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
-import { IRNode, Image } from "../ir/display-list.ts";
+import { IRNode, Image, isRounded } from "../ir/display-list.ts";
 
 export class ImageRenderer {
   static async render(
@@ -87,7 +87,7 @@ export class ImageRenderer {
 
     // A radius rounds the image BOX (the element frame), so it clips to that frame too -
     // independent of the cover/contain overflow clip.
-    const wantsClip = mustCreateOverflowContainer || (radius ?? 0) > 0;
+    const wantsClip = mustCreateOverflowContainer || isRounded(radius);
 
     // The fitted geometry becomes a display-list primitive; the backend registers
     // the XObject and emits the placement (+ clip, rounded when a radius is set).

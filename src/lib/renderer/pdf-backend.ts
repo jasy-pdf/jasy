@@ -1,4 +1,4 @@
-import { IRNode } from "../ir/display-list.ts";
+import { IRNode, Radii, isRounded } from "../ir/display-list.ts";
 import { Color } from "../common/color.ts";
 import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 import type { PageStructContext } from "../utils/struct-tree.ts";
@@ -213,29 +213,56 @@ export class PdfBackend {
     y: number,
     w: number,
     h: number,
-    radius: number,
+    radius: number | Radii,
   ): string {
-    const r = Math.min(radius, w / 2, h / 2);
-    const c = r * 0.5523; // control-point offset that approximates a quarter circle
+    // Per corner, in PDF coordinates (y up). With all four equal this emits exactly the operators the
+    // single-radius version did - the byte-identity guard for every document that never asks for one.
+    const r = PdfBackend.clampRadii(radius, w, h);
+    const k = 0.5523; // control-point offset that approximates a quarter circle
     const f = (n: number) => n.toFixed(3);
-    const xr = x + r;
-    const xwr = x + w - r;
     const xw = x + w;
-    const yr = y + r;
-    const yhr = y + h - r;
     const yh = y + h;
     return (
-      `${f(xr)} ${f(y)} m\n` +
-      `${f(xwr)} ${f(y)} l\n` +
-      `${f(xwr + c)} ${f(y)} ${f(xw)} ${f(yr - c)} ${f(xw)} ${f(yr)} c\n` +
-      `${f(xw)} ${f(yhr)} l\n` +
-      `${f(xw)} ${f(yhr + c)} ${f(xwr + c)} ${f(yh)} ${f(xwr)} ${f(yh)} c\n` +
-      `${f(xr)} ${f(yh)} l\n` +
-      `${f(xr - c)} ${f(yh)} ${f(x)} ${f(yhr + c)} ${f(x)} ${f(yhr)} c\n` +
-      `${f(x)} ${f(yr)} l\n` +
-      `${f(x)} ${f(yr - c)} ${f(xr - c)} ${f(y)} ${f(xr)} ${f(y)} c\n` +
+      `${f(x + r.bl)} ${f(y)} m\n` +
+      `${f(xw - r.br)} ${f(y)} l\n` +
+      `${f(xw - r.br + r.br * k)} ${f(y)} ${f(xw)} ${f(y + r.br - r.br * k)} ${f(xw)} ${f(y + r.br)} c\n` +
+      `${f(xw)} ${f(yh - r.tr)} l\n` +
+      `${f(xw)} ${f(yh - r.tr + r.tr * k)} ${f(xw - r.tr + r.tr * k)} ${f(yh)} ${f(xw - r.tr)} ${f(yh)} c\n` +
+      `${f(x + r.tl)} ${f(yh)} l\n` +
+      `${f(x + r.tl - r.tl * k)} ${f(yh)} ${f(x)} ${f(yh - r.tl + r.tl * k)} ${f(x)} ${f(yh - r.tl)} c\n` +
+      `${f(x)} ${f(y + r.bl)} l\n` +
+      `${f(x)} ${f(y + r.bl - r.bl * k)} ${f(x + r.bl - r.bl * k)} ${f(y)} ${f(x + r.bl)} ${f(y)} c\n` +
       `h`
     );
+  }
+
+  /**
+   * Clamp the four radii into the box. Each is capped at half the box, and two radii sharing an edge
+   * are scaled down together when they would overlap - the CSS rule, and what keeps the path from
+   * folding back on itself.
+   */
+  private static clampRadii(radius: number | Radii, w: number, h: number): Required<Radii> {
+    const n = typeof radius === "number" ? radius : 0;
+    const cap = Math.max(0, Math.min(w, h) / 2);
+    const at = (v: number | undefined) => Math.max(0, Math.min(v ?? n, cap));
+    const r =
+      typeof radius === "number"
+        ? { tl: at(radius), tr: at(radius), br: at(radius), bl: at(radius) }
+        : { tl: at(radius.tl), tr: at(radius.tr), br: at(radius.br), bl: at(radius.bl) };
+    // Per-edge overlap: scale the whole set by the tightest edge, so the corners stay proportional.
+    // An edge whose two corners are both 0 constrains NOTHING - it must not contribute a ratio of 0,
+    // which would scale every other corner away with it.
+    const ratio = (extent: number, a: number, b: number) =>
+      a + b > 0 ? extent / (a + b) : Infinity;
+    const scale = Math.min(
+      1,
+      ratio(w, r.tl, r.tr),
+      ratio(w, r.bl, r.br),
+      ratio(h, r.tl, r.bl),
+      ratio(h, r.tr, r.br),
+    );
+    if (scale >= 1) return r;
+    return { tl: r.tl * scale, tr: r.tr * scale, br: r.br * scale, bl: r.bl * scale };
   }
 
   /**
@@ -271,10 +298,9 @@ export class PdfBackend {
         const paint = node.fill ? (doStroke ? "B" : "f") : "S";
         // Rounded corners emit a Bézier path; sharp corners keep the plain `re`
         // (byte-identical when no radius is set).
-        const path =
-          (node.radius ?? 0) > 0
-            ? PdfBackend.roundedRectPath(node.x, node.y, node.width, node.height, node.radius!)
-            : `${node.x} ${node.y} ${node.width} ${node.height} re`;
+        const path = isRounded(node.radius)
+          ? PdfBackend.roundedRectPath(node.x, node.y, node.width, node.height, node.radius!)
+          : `${node.x} ${node.y} ${node.width} ${node.height} re`;
         const body = ops + `${path} ${paint}\n`;
         // Transparency needs an isolating q/Q so the state does not leak; opaque rects
         // keep their bare operators (byte-identical).
@@ -341,19 +367,17 @@ export class PdfBackend {
         // Clip to the frame (re … W n); rounded when a radius is set. The rectangular
         // path is byte-identical to before.
         const c = node.clip;
-        const clipPath =
-          (node.radius ?? 0) > 0
-            ? PdfBackend.roundedRectPath(c.x, c.y, c.width, c.height, node.radius!)
-            : `${c.x} ${c.y} ${c.width} ${c.height} re `;
+        const clipPath = isRounded(node.radius)
+          ? PdfBackend.roundedRectPath(c.x, c.y, c.width, c.height, node.radius!)
+          : `${c.x} ${c.y} ${c.width} ${c.height} re `;
         return `q\n${clipPath}\nW n \n` + draw + `Q\n`;
       }
       case "clip-push": {
         // Save the graphics state and intersect the clip with this (rounded) rect. Everything
         // drawn until the matching clip-pop is cropped to it.
-        const path =
-          (node.radius ?? 0) > 0
-            ? PdfBackend.roundedRectPath(node.x, node.y, node.width, node.height, node.radius!)
-            : `${node.x} ${node.y} ${node.width} ${node.height} re`;
+        const path = isRounded(node.radius)
+          ? PdfBackend.roundedRectPath(node.x, node.y, node.width, node.height, node.radius!)
+          : `${node.x} ${node.y} ${node.width} ${node.height} re`;
         return `q\n${path}\nW n\n`;
       }
       case "path": {

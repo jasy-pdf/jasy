@@ -10,7 +10,14 @@ import {
 import { PDFElement } from "../elements/pdf-element.ts";
 import { ColorInput, toColor } from "./color.ts";
 import { Insets, toEdges } from "./insets.ts";
-import { BoundsInput, SizeInput, toBounds, toDimension } from "./dimension.ts";
+import {
+  BoundsInput,
+  SizeInput,
+  toBounds,
+  toDimension,
+  RadiusInput,
+  toRadius,
+} from "./dimension.ts";
 
 /** A horizontal rule (locked §4). */
 export interface DividerOptions {
@@ -67,7 +74,7 @@ export interface ImageOptions extends BoundsInput {
    *  exactly one axis pinned, or an `aspectRatio` - which defaults to `fill` so the image scales into it. */
   fit?: ImageFit;
   /** Corner radius in points (rounds the image box). */
-  radius?: number;
+  radius?: RadiusInput;
   /** Alternate text for accessibility (tagged PDF): describes the image for screen readers. With `alt`
    *  the image is a `Figure`; without it (and when rendered `accessible`) it counts as decoration. */
   alt?: string;
@@ -100,7 +107,7 @@ export function Image(src: ImageSource, opts: ImageOptions = {}): ImageElement {
     heightFactor: h?.factor,
     ...toBounds(opts),
     fit,
-    radius: opts.radius,
+    radius: opts.radius !== undefined ? toRadius(opts.radius) : undefined,
     alt: opts.alt,
   }).withAlignSelf(opts.alignSelf);
 }
