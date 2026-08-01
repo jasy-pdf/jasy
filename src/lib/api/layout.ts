@@ -48,6 +48,8 @@ export interface StackOptions extends BoundsInput {
   /** Try to keep this stack on one page (CSS `break-inside: avoid`). If it does not fit here but would
    *  fit on a fresh page, it moves there whole; if it is taller than a whole page, it splits anyway. */
   keepTogether?: boolean;
+  /** Lay the children out backwards along the axis (CSS `row-reverse` / `column-reverse`). */
+  reverse?: boolean;
 }
 
 /** Splits `StackOptions` width/height into the fixed points + fraction the stack elements expect. */
@@ -81,6 +83,7 @@ export function Column(a: StackOptions | PDFElement[], b?: PDFElement[]): PDFEle
       gap: opts.gap,
       main: opts.justify, // undefined → engine default `start` (matches §5)
       cross: opts.align ?? DEFAULT_CROSS,
+      reverse: opts.reverse,
       breakBefore: opts.breakBefore,
       breakAfter: opts.breakAfter,
       ...stackSize(opts),
@@ -100,6 +103,7 @@ export function Row(a: StackOptions | PDFElement[], b?: PDFElement[]): PDFElemen
       gap: opts.gap,
       main: opts.justify,
       cross: opts.align ?? DEFAULT_CROSS,
+      reverse: opts.reverse,
       breakBefore: opts.breakBefore,
       breakAfter: opts.breakAfter,
       ...stackSize(opts),
@@ -110,12 +114,12 @@ export function Row(a: StackOptions | PDFElement[], b?: PDFElement[]): PDFElemen
 /** Wraps `element` in a `keepTogether` group when the `keepTogether` option is set; otherwise returns it
  *  unchanged (byte-identical). Shared by the `Box`/`Column`/`Row` prop shortcut. */
 function maybeKeepTogether(
-  opts: { keepTogether?: boolean; alignSelf?: CrossAlign },
+  opts: { keepTogether?: boolean; alignSelf?: CrossAlign; order?: number },
   element: PDFElement,
 ): PDFElement {
-  // alignSelf goes on the OUTERMOST element - that is the one the surrounding stack places.
+  // alignSelf and order go on the OUTERMOST element - that is the one the surrounding stack places.
   const wrapped = opts.keepTogether ? new KeepTogetherElement({ child: element }) : element;
-  return wrapped.withAlignSelf(opts.alignSelf);
+  return wrapped.withAlignSelf(opts.alignSelf).withOrder(opts.order);
 }
 
 /**

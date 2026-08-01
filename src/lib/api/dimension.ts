@@ -42,6 +42,12 @@ export interface BoundsInput {
    * has no natural cross size to align.
    */
   alignSelf?: CrossAlign;
+  /**
+   * Where this child sits among its siblings (CSS `order`), lowest first, source order deciding ties.
+   * It moves the child in the LAYOUT only - the element tree is untouched, so a tagged PDF still
+   * exposes the source reading order. Default 0.
+   */
+  order?: number;
   minWidth?: SizeInput;
   maxWidth?: SizeInput;
   minHeight?: SizeInput;

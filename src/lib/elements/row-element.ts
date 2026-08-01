@@ -22,6 +22,8 @@ interface RowElementParams extends WithChildren {
   main?: MainAlign;
   /** Vertical alignment of each child (cross axis); defaults to `stretch`. */
   cross?: CrossAlign;
+  /** Lay the children out backwards along the main axis (CSS `row-reverse`). */
+  reverse?: boolean;
   /** Width/height as points (fixed) or a fraction (0..1) of the offered box (relative sizing). */
   width?: number;
   height?: number;
@@ -61,6 +63,7 @@ export class RowElement extends SizedPDFElement {
   private gap: number;
   private main: MainAlign;
   private cross: CrossAlign;
+  private reverse: boolean;
   private breakBefore: boolean;
   private breakAfter: boolean;
   // The requested size (fixed points or a fraction), kept separate from the laid-out this.width/height.
@@ -71,6 +74,7 @@ export class RowElement extends SizedPDFElement {
     gap,
     main,
     cross,
+    reverse,
     width,
     height,
     breakBefore,
@@ -82,6 +86,7 @@ export class RowElement extends SizedPDFElement {
     this.gap = gap ?? 0;
     this.main = main ?? "start";
     this.cross = cross ?? "stretch";
+    this.reverse = reverse ?? false;
     this.requested = { ...sizing, width, height };
     this.breakBefore = breakBefore ?? false;
     this.breakAfter = breakAfter ?? false;
@@ -151,7 +156,7 @@ export class RowElement extends SizedPDFElement {
         crossAvail,
         this.x,
         this.y,
-        { gap: this.gap, main: this.main, cross: this.cross },
+        { gap: this.gap, main: this.main, cross: this.cross, reverse: this.reverse },
         ctx,
       );
     }
@@ -172,6 +177,7 @@ export class RowElement extends SizedPDFElement {
       gap: this.gap,
       main: this.main,
       cross: this.cross,
+      reverse: this.reverse,
     };
   }
 }

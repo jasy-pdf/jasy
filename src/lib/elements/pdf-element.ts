@@ -162,6 +162,22 @@ export abstract class PDFElement {
     if (align !== undefined) this.alignSelf = align;
     return this;
   }
+
+  /**
+   * Where this child sits among its siblings (CSS `order`), lowest first, source order deciding ties.
+   * It moves the child in the LAYOUT only - the element tree, and therefore the reading order a tagged
+   * PDF exposes, is untouched. Default 0.
+   */
+  order = 0;
+
+  /** Sets `order` and returns the element, so a factory can thread it through in one expression. */
+  withOrder(order: number | undefined): this {
+    if (order !== undefined) {
+      if (!Number.isFinite(order)) throw new Error(`Invalid order ${order}: it must be a number.`);
+      this.order = order;
+    }
+    return this;
+  }
 }
 
 export abstract class SizedPDFElement extends PDFElement {

@@ -67,6 +67,23 @@ export interface FlexOptions {
   gap?: number;
   main?: MainAlign;
   cross?: CrossAlign;
+  /** Lay the children out along the main axis backwards (CSS `row-reverse` / `column-reverse`). */
+  reverse?: boolean;
+}
+
+/**
+ * The order children are LAID OUT in: by `order` (lowest first, ties keeping source order), then
+ * reversed if the container asks for it. The element tree itself is never touched, so the reading order
+ * a tagged PDF exposes stays the source order - which is what CSS says too.
+ *
+ * `sort` is stable in every engine we target, so equal `order` values keep their source positions and a
+ * container where nobody sets one comes back with the identical array.
+ */
+function inLayoutOrder(children: PDFElement[], reverse: boolean): PDFElement[] {
+  const ordered = children.some((c) => c.order !== 0)
+    ? [...children].sort((a, b) => a.order - b.order)
+    : children;
+  return reverse ? [...ordered].reverse() : ordered;
 }
 
 export class FlexLayoutHelper {
@@ -92,6 +109,7 @@ export class FlexLayoutHelper {
     const gap = options.gap ?? 0;
     const main = options.main ?? "start";
     const cross = options.cross ?? "stretch";
+    children = inLayoutOrder(children, options.reverse ?? false);
     const count = children.length;
     const totalGap = Math.max(0, count - 1) * gap;
 
