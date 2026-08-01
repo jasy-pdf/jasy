@@ -171,6 +171,25 @@ describe("a broken container is named, not parsed into nonsense", () => {
     expect(() => woffToSfnt(woff)).toThrow(/declared 99/);
   });
 
+  it("refuses a directory whose tables add up to more than any real font", () => {
+    // The hole a per-table ceiling does not close. Each table here is 2 MB of zeros - fine on its own,
+    // and it compresses to about a kilobyte, so the FILE stays tiny while the directory promises 66 MB.
+    // That is the actual shape of the attack: cheap to send, ruinous to unpack.
+    const many: Table[] = Array.from({ length: 33 }, (_, i) => ({
+      tag: `t${String(i).padStart(3, "0")}`,
+      data: new Uint8Array(2 * 1024 * 1024),
+    }));
+    const woff = makeWoff(many);
+    expect(woff.length).toBeLessThan(200_000); // a small file...
+    expect(() => woffToSfnt(woff)).toThrow(/more than \d+ bytes in total/); // ...refused all the same
+  });
+
+  it("refuses a single entry that declares more than the whole-font ceiling", () => {
+    const woff = makeWoff(source);
+    new DataView(woff.buffer).setUint32(44 + 12, 200 * 1024 * 1024);
+    expect(() => woffToSfnt(woff)).toThrow(/in total/);
+  });
+
   it("refuses a container with no tables", () => {
     const woff = makeWoff(source);
     new DataView(woff.buffer).setUint16(12, 0);

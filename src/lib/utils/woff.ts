@@ -19,6 +19,13 @@ const DIR_ENTRY = 20;
 /** One table may not inflate past this. A single sfnt table above 64 MB is not a real font. */
 const MAX_TABLE_BYTES = 64 * 1024 * 1024;
 
+/**
+ * And all of them together may not either. The per-table ceiling alone is not a bound: `numTables` is a
+ * uint16, so 65535 directory entries may all point at the SAME small compressed blob, and each would be
+ * inflated and kept. Generous enough for a full CJK face, which is the largest real font there is.
+ */
+const MAX_TOTAL_BYTES = 64 * 1024 * 1024;
+
 export class WoffError extends Error {
   constructor(message: string) {
     super(`@jasy/pdf: ${message}`);
@@ -59,10 +66,23 @@ export function woffToSfnt(woff: Uint8Array): Uint8Array {
     };
   });
 
+  // Tracked across ALL tables, and checked BEFORE each inflate so a hostile directory costs neither the
+  // CPU of unpacking nor the memory of keeping the result.
+  let unpacked = 0;
+  const claim = (bytes: number) => {
+    unpacked += bytes;
+    if (unpacked > MAX_TOTAL_BYTES) {
+      throw new WoffError(
+        `this WOFF unpacks to more than ${MAX_TOTAL_BYTES} bytes in total; no real font is that large`,
+      );
+    }
+  };
+
   const tables = entries.map((e) => {
     if (e.offset + e.compLength > woff.length) {
       throw new WoffError(`this WOFF is truncated: a table runs past the end of the file`);
     }
+    claim(e.origLength); // what it DECLARES, before any work is done on it
     const raw = woff.subarray(e.offset, e.offset + e.compLength);
     // Equal lengths mean the table was stored as-is; anything else is zlib, per the spec.
     if (e.compLength === e.origLength) return raw;
