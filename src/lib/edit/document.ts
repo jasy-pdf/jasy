@@ -1,5 +1,9 @@
 import { Lexer } from "./lexer.ts";
-import { DEFAULT_MAX_STREAM_SIZE, inflateBounded, PdfStreamTooLargeError } from "./inflate.ts";
+import {
+  DEFAULT_MAX_STREAM_SIZE,
+  inflateBounded,
+  PdfStreamTooLargeError,
+} from "../utils/inflate.ts";
 import {
   get,
   isDict,
