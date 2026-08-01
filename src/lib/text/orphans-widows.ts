@@ -9,7 +9,7 @@
  * lines fit, and this decides whether that number is acceptable.
  */
 
-/** How many lines must stay behind / must carry over. CSS and every browser default both to 2. */
+/** How many lines must stay behind / must carry over. Both default to 2, the CSS initial value. */
 export interface OrphanWidowRule {
   orphans: number;
   widows: number;

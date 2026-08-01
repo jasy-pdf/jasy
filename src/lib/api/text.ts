@@ -42,9 +42,9 @@ export interface TextOptions extends TextStyle {
   maxLines?: number;
   /**
    * Minimum lines that must stay behind at a page break (CSS `orphans`), and minimum that must carry
-   * over (CSS `widows`). Both default to 2, as they do in every browser: a single line stranded at the
-   * foot of a page - or alone at the top of the next - reads as a mistake. Set both to 1 to switch the
-   * protection off and let a paragraph break wherever the page ends.
+   * over (CSS `widows`). Both default to 2, the CSS initial value: a single line stranded at the foot of
+   * a page - or alone at the top of the next - reads as a mistake. Set both to 1 to switch the protection
+   * off and let a paragraph break wherever the page ends.
    */
   orphans?: number;
   widows?: number;

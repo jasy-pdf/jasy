@@ -68,7 +68,7 @@ type SizeInput = number | `${number}%`;
 type Insets =
   | SizeInput // all sides
   | { x?: SizeInput; y?: SizeInput } // horizontal / vertical
-  | { top?; right?; bottom?; left? } // per side
+  | { top?: SizeInput; right?: SizeInput; bottom?: SizeInput; left?: SizeInput } // per side
   | [SizeInput, SizeInput, SizeInput, SizeInput]; // [top, right, bottom, left] (engine order)
 ```
 
@@ -99,7 +99,7 @@ _between_ children of a Column/Row).
 | `Column(opts, children)`               | vertical stack       | `gap`, `justify`, `align`, sizing†                              | `ContainerElement`                     |
 | `Row(opts, children)`                  | **horizontal** stack | `gap`, `justify`, `align`, sizing†                              | **new `RowElement`**                   |
 | `Box(opts, children)`                  | bordered/filled box  | `border`, `borderWidth`, `bg`, `padding`, **`radius`**, sizing† | `RectangleElement` (+ inner `Padding`) |
-| `Padding(opts, child)`                 | inset                | `padding: Insets` (`all`/`x`/`y`)                               | `PaddingElement`                       |
+| `Padding(padding, child)`              | inset                | `Insets`: all sides · `{x,y}` · per side · tuple                | `PaddingElement`                       |
 | `Spacer(flex?)`                        | flexible gap         | `flex`                                                          | `ExpandedElement` (empty child)        |
 | `Expanded(opts, child)`                | child fills leftover | `flex`                                                          | `ExpandedElement`                      |
 | `Center(child)` / `Align(opts, child)` | alignment wrapper    | `align`                                                         | Column/Row align                       |
@@ -149,8 +149,9 @@ clockwise) and resolved against the box by the renderer.
 | `Divider(opts?)`                   | horizontal rule                      | `color`, `thickness`, `margin`                                   | `LineElement`             |
 | `Line(opts)`                       | explicit line                        | `from`, `to`, `color`, `thickness`                               | `LineElement`             |
 
-‡ **Page-break behaviour of a paragraph** - `orphans` and `widows`, both defaulting to **2** as they do
-in every browser. An orphan is the first line left alone at the foot of a page; a widow is the last line
+‡ **Page-break behaviour of a paragraph** - `orphans` and `widows`, both defaulting to **2**, the CSS
+initial value. (Support in browsers is uneven - Chrome honours them in paged media, Firefox has never
+implemented them - which is exactly why a PDF engine has to do it itself.) An orphan is the first line left alone at the foot of a page; a widow is the last line
 pushed alone to the top of the next. Splitting at line boxes prevents neither, so the fragmenter's split
 index is corrected: too few lines would stay, or too few would carry over, and the paragraph moves whole
 instead. Set both to `1` to switch the protection off and break wherever the page ends.
@@ -201,8 +202,12 @@ Shipping the full model in v1 (foundation work) so we never re-touch alignment.
 | 2026-07            | AcroForm fields; `@jasy/pdf/edit` for reading and filling an existing form                                               |
 | 2026-08-01         | the sizing set (`aspectRatio`, `min`/`max`), `%` insets, `alignSelf`, per-corner `radius`, gradients, `orphans`/`widows` |
 
-Everything in that list is a new PROP or a new factory beside the existing ones - the component set and
-the alignment model below are unchanged, which is what "locked" was meant to protect.
+The component set HAS grown - `Positioned`, `Rotated`, `RotatedBox`, `Link`, `Anchor`, `Bookmark`,
+`PageBuilder`, `PageBreak`, `keepTogether`, the seven form fields and the gradient constructors are all
+new factories beside the original ones. What is unchanged is what the lock was actually protecting: the
+**shape** of the API (a factory taking one options object plus children), the alignment model below, and
+the meaning of every option that was already there. Nothing in the list above reopened a decision - it
+added next to one.
 
 ## 7. Decisions — LOCKED (2026-06-11)
 
