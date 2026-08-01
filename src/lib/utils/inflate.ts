@@ -1,7 +1,10 @@
 import { Unzlib, unzlibSync } from "fflate";
 
 /**
- * Inflating a stream with a ceiling, so a zip bomb cannot exhaust memory.
+ * Inflating with a ceiling, so a hostile or mistaken input cannot exhaust memory.
+ *
+ * Used by BOTH sides: the reader inflating a PDF stream, and the font path unpacking a WOFF table.
+ * It lives in `utils/` for exactly that reason - the generate path must not import from `edit/`.
  *
  * fflate's `unzlibSync(data, { out })` is NOT usable for this: it truncates silently instead of failing.
  * Hence the streamed form - input in slices, so the total can be checked while it grows.

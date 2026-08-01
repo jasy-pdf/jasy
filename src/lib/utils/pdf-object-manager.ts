@@ -6,6 +6,7 @@ import { zlibSync } from "fflate";
 import { bytesFromLatin1, latin1FromBytes } from "./bytes.ts";
 import { AFMParser } from "./afm-parser.ts";
 import { mergeSpans, TTFParser } from "./ttf-parser.ts";
+import { isWoff, woffToSfnt } from "./woff.ts";
 import { subsetTTF } from "./ttf-subsetter.ts";
 import { getArrayBuffer } from "./utf8-to-windows1252-encoder.ts";
 import type { SecurityHandler } from "../crypto/security-handler.ts";
@@ -710,7 +711,10 @@ endstream`;
       this.customFonts.set(name, byStyle);
     }
     if (byStyle.has(style)) return;
-    byStyle.set(style, new TTFParser(data));
+    // A WOFF is the same sfnt behind a small wrapper, so it is unpacked HERE - the one place every
+    // font path meets (a file, raw bytes, a URL, a browser upload) - and TTFParser never learns a
+    // second container format.
+    byStyle.set(style, new TTFParser(isWoff(data) ? woffToSfnt(data) : data));
     this.verticalsCache.delete(name); // this family now answers from the .ttf, not from an AFM
     this.decorationCache.delete(name);
     // Emission (the PDF font objects + page resource) is DEFERRED to first use via ensureEmitted(),
