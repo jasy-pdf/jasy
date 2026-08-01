@@ -96,6 +96,89 @@ describe("it refuses by name, never by failing deep inside the parser", () => {
     await expect(loadFontFromUrl("https://x.example/f.ttf")).rejects.toThrow(/is empty/);
   });
 
+  it("gives up on a server that never answers", async () => {
+    // A hung server must not hang a render. The abort surfaces as a named error saying WHY.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((_u: string, init?: { signal?: AbortSignal }) => {
+        const err = new Error("aborted");
+        err.name = "TimeoutError";
+        void init;
+        return Promise.reject(err);
+      }),
+    );
+    await expect(loadFontFromUrl("https://x.example/slow.ttf")).rejects.toThrow(
+      /did not respond within/,
+    );
+  });
+
+  it("passes an abort signal, so the timeout is real and not decorative", async () => {
+    const seen: (AbortSignal | undefined)[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((_u: string, init?: { signal?: AbortSignal }) => {
+        seen.push(init?.signal);
+        return Promise.resolve(ok(fontLike("ttf")));
+      }),
+    );
+    await loadFontFromUrl("https://x.example/f.ttf");
+    expect(seen[0]).toBeInstanceOf(AbortSignal);
+  });
+
+  it("refuses a response that declares itself oversized, before reading it", async () => {
+    stubFetch(
+      () =>
+        ({
+          ok: true,
+          status: 200,
+          headers: { get: (h: string) => (h === "content-length" ? "99999999" : null) },
+          arrayBuffer: async () => new ArrayBuffer(0),
+        }) as unknown as Response,
+    );
+    await expect(loadFontFromUrl("https://x.example/huge.ttf")).rejects.toThrow(/the limit is/);
+  });
+
+  it("stops an oversized body WHILE it arrives, when nothing was declared", async () => {
+    // The header is a hint a server may omit or misstate; the real ceiling is enforced on the stream.
+    const chunk = new Uint8Array(1024 * 1024);
+    let served = 0;
+    stubFetch(
+      () =>
+        ({
+          ok: true,
+          status: 200,
+          headers: { get: () => null },
+          body: {
+            getReader: () => ({
+              read: async () => ({ done: false, value: (served++, chunk) }),
+              cancel: async () => undefined,
+            }),
+          },
+        }) as unknown as Response,
+    );
+    await expect(loadFontFromUrl("https://x.example/endless.ttf")).rejects.toThrow(
+      /larger than the/,
+    );
+    expect(served).toBeLessThan(100); // it stopped early rather than reading forever
+  });
+
+  it("wraps a body that fails mid-read, so the error type still holds", async () => {
+    stubFetch(
+      () =>
+        ({
+          ok: true,
+          status: 200,
+          headers: { get: () => null },
+          arrayBuffer: async () => {
+            throw new TypeError("terminated");
+          },
+        }) as unknown as Response,
+    );
+    const err = await loadFontFromUrl("https://x.example/f.ttf").catch((e) => e);
+    expect(err).toBeInstanceOf(FontUrlError);
+    expect(String(err.message)).toMatch(/could not be read: terminated/);
+  });
+
   it("throws a named error type, so a caller can tell it apart", async () => {
     stubFetch(() => ok(fontLike("wOF2")));
     await expect(loadFontFromUrl("https://x.example/f.ttf")).rejects.toBeInstanceOf(FontUrlError);
