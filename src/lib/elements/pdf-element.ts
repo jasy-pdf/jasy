@@ -29,8 +29,18 @@ export interface PositioningFrame {
  * the document's final physical page total. `pageSize` is the media box in points, orientation applied.
  */
 export interface PageInfo {
+  /** 1-based, counting PHYSICAL pages across the whole document. */
   pageNumber: number;
+  /** Physical pages in the whole document. */
   pageCount: number;
+  /**
+   * 1-based within the LOGICAL page this sheet came from - the `Page(...)` element the author wrote.
+   * A document of one `Page` has `subPageNumber === pageNumber`; a document of several (an invoice
+   * plus its attachment, say) restarts the count at each one.
+   */
+  subPageNumber: number;
+  /** Physical pages this logical page produced. */
+  subPageTotalPages: number;
   pageSize: { width: number; height: number };
 }
 

@@ -45,8 +45,13 @@ export class PDFDocumentRenderer {
     // pure (`{ fitted, remainder }`), so the full list of physical pages can be settled up front. Only
     // then is the total page count known, which is what page numbers in a header/footer need.
     const physicalPages: PhysicalPage[] = [];
+    // Where each sheet sits WITHIN the logical page it came from. Pass A already knows: one logical
+    // `Page` element produces one run of sheets, so the run's length is that section's total.
+    const section: { number: number; total: number }[] = [];
     for (const page of document.getProps().children) {
-      physicalPages.push(...PDFDocumentRenderer.paginateLogicalPage(page, ctx));
+      const sheets = PDFDocumentRenderer.paginateLogicalPage(page, ctx);
+      sheets.forEach((_, i) => section.push({ number: i + 1, total: sheets.length }));
+      physicalPages.push(...sheets);
     }
 
     // Pass B - draw them, in order, so the emitted page objects keep their previous numbering. Each page
@@ -57,6 +62,8 @@ export class PDFDocumentRenderer {
       const pageInfo = {
         pageNumber: index + 1,
         pageCount: physicalPages.length,
+        subPageNumber: section[index].number,
+        subPageTotalPages: section[index].total,
         pageSize: resolvePageSize(PDFDocumentRenderer.configOf(physical, ctx)),
       };
       pageNumbers.push(

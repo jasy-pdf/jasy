@@ -34,6 +34,8 @@ export class PageBuilderElement extends PDFElement {
       ctx.pageInfo ?? {
         pageNumber: 1,
         pageCount: 1,
+        subPageNumber: 1,
+        subPageTotalPages: 1,
         pageSize: resolvePageSize(ctx.pageConfig),
       }
     );
