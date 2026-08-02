@@ -21,12 +21,20 @@ export function applyTextTransform(
   if (transform === "none") return { text, atWordStart: ends };
   if (transform === "uppercase") return { text: text.toUpperCase(), atWordStart: ends };
   if (transform === "lowercase") return { text: text.toLowerCase(), atWordStart: ends };
-  // CSS raises the first letter of every WORD and leaves the rest as written.
+  // CSS raises the first typographic LETTER of every word. Punctuation is not one, so a leading
+  // bracket or quote does not consume the word start - `(hello)` becomes `(Hello)`, as in a browser.
   let start = atWordStart;
   let out = "";
   for (const ch of text) {
-    out += start && !/\s/u.test(ch) ? ch.toUpperCase() : ch;
-    start = /\s/u.test(ch);
+    if (/\s/u.test(ch)) {
+      out += ch;
+      start = true;
+    } else if (start && /\p{L}|\p{N}/u.test(ch)) {
+      out += ch.toUpperCase();
+      start = false;
+    } else {
+      out += ch;
+    }
   }
   return { text: out, atWordStart: start };
 }

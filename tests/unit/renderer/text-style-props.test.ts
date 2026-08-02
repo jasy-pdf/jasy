@@ -4,6 +4,7 @@ import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager.ts";
 import { TextElement } from "../../../src/lib/elements/text-element.ts";
 import { HorizontalAlignment } from "../../../src/lib/elements/pdf-element.ts";
 import { BoxConstraints } from "../../../src/lib/layout/box-constraints.ts";
+import type { LayoutContext } from "../../../src/lib/elements/pdf-element.ts";
 import { testMetrics } from "../support/metrics.ts";
 import type { TextRun } from "../../../src/lib/ir/display-list.ts";
 
@@ -22,11 +23,16 @@ const om = () =>
     getEmojiImageSource: () => undefined,
   }) as unknown as PDFObjectManager;
 
+/** A real `LayoutContext`, not a cast: every `PDFPageConfig` field is optional, so this costs nothing
+ *  and a change to the interface shows up here instead of hiding behind `as never`. */
+const context = (manager: PDFObjectManager): LayoutContext => ({
+  metrics: manager,
+  pageConfig: {},
+});
+
 const drawn = async (el: TextElement, width = 200) => {
   const manager = om();
-  el.calculateLayout(BoxConstraints.tight(width, 400), { x: 0, y: 0 }, {
-    metrics: manager,
-  } as never);
+  el.calculateLayout(BoxConstraints.tight(width, 400), { x: 0, y: 0 }, context(manager));
   return (await TextRenderer.render(el, manager)).filter((n): n is TextRun => n.type === "text");
 };
 
@@ -144,9 +150,7 @@ describe("a spaced paragraph sizes its own box", () => {
     // wrap inside it - the same defect that split a footer and a right-aligned span.
     const el = text("aa bb cc", { wordSpacing: 12 });
     const manager = om();
-    el.calculateLayout(BoxConstraints.loose(Infinity, 400), { x: 0, y: 0 }, {
-      metrics: manager,
-    } as never);
+    el.calculateLayout(BoxConstraints.loose(Infinity, 400), { x: 0, y: 0 }, context(manager));
     const runs = (await TextRenderer.render(el, manager)).filter(
       (n): n is TextRun => n.type === "text",
     );
@@ -184,7 +188,7 @@ describe("the three findings a review caught", () => {
     // the whole element comes back as the remainder - which would pass this test for the wrong reason.
     const el = text("aa bb cc dd ee ff gg hh ii jj", { textIndent: 30 });
     const manager = om();
-    const ctx = { metrics: manager } as never;
+    const ctx = context(manager);
     el.calculateLayout(BoxConstraints.tight(100, 400), { x: 0, y: 0 }, ctx);
     const { fitted, remainder } = el.fragment(20, 100, ctx);
     expect(fitted).not.toBeNull();
@@ -197,11 +201,26 @@ describe("the three findings a review caught", () => {
     const plain = text("aa bb");
     const indented = text("aa bb", { textIndent: 30 });
     const manager = om();
-    const ctx = { metrics: manager } as never;
+    const ctx = context(manager);
     for (const el of [plain, indented]) {
       el.calculateLayout(BoxConstraints.loose(Infinity, 400), { x: 0, y: 0 }, ctx);
     }
     const w = (el: TextElement) => (el.getProps() as { width?: number }).width!;
     expect(w(indented)).toBe(w(plain) + 30);
+  });
+});
+
+describe("capitalize and punctuation", () => {
+  it("raises the first LETTER, not the first character", async () => {
+    // CSS titlecases the first typographic letter of a word, so a bracket or quote in front of it
+    // does not swallow the turn. A browser gives `(Hello) "World"` here too.
+    const runs = await drawn(text('(hello) "world"', { textTransform: "capitalize" }));
+    expect(runs.map((r) => r.text).join("")).toBe('(Hello) "World"');
+  });
+
+  it("carries that through a span boundary as well", async () => {
+    const el = text([{ content: "(hel" }, { content: "lo)" }], { textTransform: "capitalize" });
+    const props = el.getProps() as { content: { content: string }[] };
+    expect(props.content.map((c) => c.content).join("")).toBe("(Hello)");
   });
 });
