@@ -11,6 +11,7 @@ import { BoxConstraints, Offset, Size } from "../layout/box-constraints.ts";
 import type { Direction } from "../text/bidi.ts";
 import { Fragmentable, FragmentResult } from "../layout/fragmentation.ts";
 import {
+  singleLineWidth,
   MAX_SPACE_SHRINK,
   wrapStringIntoLines,
   breakSegmentsIntoLines,
@@ -24,7 +25,6 @@ import {
   type OrphanWidowRule,
 } from "../text/orphans-widows.ts";
 import { lineBoxForSegmentLine, lineBoxForString } from "../text/line-metrics.ts";
-import { runAdvance } from "../text/advance.ts";
 import { HorizontalAlignment, LayoutContext, SizedPDFElement } from "./pdf-element.ts";
 export interface TextSegment {
   content: string;
@@ -353,25 +353,20 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
    *  - enough to tip a borderline string (e.g. "20 Jun 2026", wider than "04 Jul 2026" only because
    *  'n' beats 'l') one bit over its own width, dropping the last word onto a second line. */
   private naturalWidth(metrics: FontMetrics): number {
+    // The breaker's own sum, to the last bit - see `singleLineWidth`.
     const oneLine = (
       text: string,
       family: string,
       size: number,
       style: FontStyle,
       letterSpacing: number,
-    ): number => {
-      const font = { fontFamily: family, fontSize: size, fontStyle: style };
-      const words = text.split(" ");
-      const space = runAdvance(metrics, " ", font, letterSpacing);
-      let width = 0;
-      words.forEach((word, i) => {
-        const w = runAdvance(metrics, word, font, letterSpacing);
-        // Group (word + space) as one term, exactly like the breaker - see the note above. Both use
-        // the same `runAdvance`, so the two agree bit for bit even with letterSpacing.
-        width += i < words.length - 1 ? w + space : w;
-      });
-      return width;
-    };
+    ): number =>
+      singleLineWidth(
+        text,
+        { fontFamily: family, fontSize: size, fontStyle: style },
+        metrics,
+        letterSpacing,
+      );
     if (typeof this.content === "string") {
       return oneLine(
         this.content,
