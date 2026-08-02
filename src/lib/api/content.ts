@@ -109,5 +109,8 @@ export function Image(src: ImageSource, opts: ImageOptions = {}): ImageElement {
     fit,
     radius: opts.radius !== undefined ? toRadius(opts.radius) : undefined,
     alt: opts.alt,
-  }).withAlignSelf(opts.alignSelf);
+  })
+    .withAlignSelf(opts.alignSelf)
+    .withOrder(opts.order)
+    .withFlexShrink(opts.flexShrink);
 }

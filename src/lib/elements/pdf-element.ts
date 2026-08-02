@@ -162,6 +162,41 @@ export abstract class PDFElement {
     if (align !== undefined) this.alignSelf = align;
     return this;
   }
+
+  /**
+   * Where this child sits among its siblings (CSS `order`), lowest first, source order deciding ties.
+   * It moves the child in the LAYOUT only - the element tree, and therefore the reading order a tagged
+   * PDF exposes, is untouched. Default 0.
+   */
+  order = 0;
+
+  /**
+   * How willingly this child gives up main-axis space when the line overflows (CSS `flex-shrink`),
+   * weighted by its own size as CSS does. **Default 0, deliberately unlike CSS's 1**: shrinking is a
+   * change of what a document LOOKS like, and every document written before this existed must keep
+   * laying out exactly as it did. Opt in per child.
+   */
+  flexShrink = 0;
+
+  /** Sets `flexShrink` and returns the element. */
+  withFlexShrink(shrink: number | undefined): this {
+    if (shrink !== undefined) {
+      if (!Number.isFinite(shrink) || shrink < 0) {
+        throw new Error(`Invalid flexShrink ${shrink}: it must be a number of at least 0.`);
+      }
+      this.flexShrink = shrink;
+    }
+    return this;
+  }
+
+  /** Sets `order` and returns the element, so a factory can thread it through in one expression. */
+  withOrder(order: number | undefined): this {
+    if (order !== undefined) {
+      if (!Number.isFinite(order)) throw new Error(`Invalid order ${order}: it must be a number.`);
+      this.order = order;
+    }
+    return this;
+  }
 }
 
 export abstract class SizedPDFElement extends PDFElement {
@@ -186,15 +221,40 @@ export abstract class SizedPDFElement extends PDFElement {
 export abstract class FlexiblePDFElement extends PDFElement {
   protected flex: number;
   protected verticalChildAlignment: VerticalAlignment;
+  /** Points reserved before any leftover is shared out (CSS `flex-basis`); default 0. */
+  protected basis: number;
+  /** The same as a fraction of the line, for `flexBasis: "25%"`. */
+  protected basisFactor?: number;
 
   constructor(data: FlexibleElement) {
     super();
     this.flex = data.flex;
     this.verticalChildAlignment = data.verticalChildAlignment || VerticalAlignment.middle;
+    this.basis = data.basis ?? 0;
+    this.basisFactor = data.basisFactor;
   }
 
   getFlex(): number {
     return this.flex;
+  }
+
+  /**
+   * The main extent this child starts from, before the leftover is shared out. `lineMain` is what the
+   * line offers its items (its extent minus the gaps), so a percentage basis resolves against the same
+   * base a percentage WIDTH already does - and falls back to 0 on an unbounded axis, where a fraction
+   * has no meaning.
+   */
+  /** Whether a PERCENTAGE basis was given - it resolves to 0 on an unbounded axis, so asking for the
+   *  number alone cannot tell "no basis" from "a basis that does not apply here". */
+  hasBasisFactor(): boolean {
+    return this.basisFactor !== undefined;
+  }
+
+  getBasis(lineMain: number): number {
+    if (this.basisFactor !== undefined) {
+      return Number.isFinite(lineMain) ? lineMain * this.basisFactor : 0;
+    }
+    return this.basis;
   }
 }
 
@@ -221,6 +281,10 @@ export interface WithChild {
 
 export interface FlexibleElement {
   flex: number;
+  /** Points reserved before the leftover is shared out (CSS `flex-basis`). */
+  basis?: number;
+  /** The same as a fraction of the line, for `flexBasis: "25%"`. */
+  basisFactor?: number;
   verticalChildAlignment?: VerticalAlignment;
 }
 

@@ -42,6 +42,18 @@ export interface BoundsInput {
    * has no natural cross size to align.
    */
   alignSelf?: CrossAlign;
+  /**
+   * Where this child sits among its siblings (CSS `order`), lowest first, source order deciding ties.
+   * It moves the child in the LAYOUT only - the element tree is untouched, so a tagged PDF still
+   * exposes the source reading order. Default 0.
+   */
+  order?: number;
+  /**
+   * How willingly this child gives up main-axis space when the line overflows (CSS `flex-shrink`),
+   * weighted by its own size. **Default 0, deliberately unlike CSS's 1** - shrinking changes what a
+   * document looks like, so it is opted into per child rather than applied to everything at once.
+   */
+  flexShrink?: number;
   minWidth?: SizeInput;
   maxWidth?: SizeInput;
   minHeight?: SizeInput;

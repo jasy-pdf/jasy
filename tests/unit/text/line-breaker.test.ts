@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { breakSegmentsIntoLines, wrapStringIntoLines } from "../../../src/lib/text/line-breaker";
 import { FontStyle } from "../../../src/lib/utils/pdf-object-manager";
 import type { FontMetrics } from "../../../src/lib/utils/font-metrics";
-import { unitVerticals } from "../support/metrics";
+import { unitVerticals } from "../support/metrics.ts";
 import { lineBoxForSegmentLine } from "../../../src/lib/text/line-metrics";
 
 // Deterministic metrics: every glyph is 10 wide, spaces are 0. Expected line breaks

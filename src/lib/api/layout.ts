@@ -48,6 +48,13 @@ export interface StackOptions extends BoundsInput {
   /** Try to keep this stack on one page (CSS `break-inside: avoid`). If it does not fit here but would
    *  fit on a fresh page, it moves there whole; if it is taller than a whole page, it splits anyway. */
   keepTogether?: boolean;
+  /** Lay the children out backwards along the axis (CSS `row-reverse` / `column-reverse`). */
+  reverse?: boolean;
+  /** Let the children flow onto further lines when they do not fit (CSS `flex-wrap: wrap`). The `gap`
+   *  is used BETWEEN the lines as well as between the items. */
+  wrap?: boolean;
+  /** How the block of wrapped lines sits across the axis (CSS `align-content`). Default `start`. */
+  alignContent?: MainAlign;
 }
 
 /** Splits `StackOptions` width/height into the fixed points + fraction the stack elements expect. */
@@ -81,6 +88,9 @@ export function Column(a: StackOptions | PDFElement[], b?: PDFElement[]): PDFEle
       gap: opts.gap,
       main: opts.justify, // undefined → engine default `start` (matches §5)
       cross: opts.align ?? DEFAULT_CROSS,
+      reverse: opts.reverse,
+      wrap: opts.wrap,
+      alignContent: opts.alignContent,
       breakBefore: opts.breakBefore,
       breakAfter: opts.breakAfter,
       ...stackSize(opts),
@@ -100,6 +110,9 @@ export function Row(a: StackOptions | PDFElement[], b?: PDFElement[]): PDFElemen
       gap: opts.gap,
       main: opts.justify,
       cross: opts.align ?? DEFAULT_CROSS,
+      reverse: opts.reverse,
+      wrap: opts.wrap,
+      alignContent: opts.alignContent,
       breakBefore: opts.breakBefore,
       breakAfter: opts.breakAfter,
       ...stackSize(opts),
@@ -110,12 +123,15 @@ export function Row(a: StackOptions | PDFElement[], b?: PDFElement[]): PDFElemen
 /** Wraps `element` in a `keepTogether` group when the `keepTogether` option is set; otherwise returns it
  *  unchanged (byte-identical). Shared by the `Box`/`Column`/`Row` prop shortcut. */
 function maybeKeepTogether(
-  opts: { keepTogether?: boolean; alignSelf?: CrossAlign },
+  opts: { keepTogether?: boolean; alignSelf?: CrossAlign; order?: number; flexShrink?: number },
   element: PDFElement,
 ): PDFElement {
-  // alignSelf goes on the OUTERMOST element - that is the one the surrounding stack places.
+  // alignSelf and order go on the OUTERMOST element - that is the one the surrounding stack places.
   const wrapped = opts.keepTogether ? new KeepTogetherElement({ child: element }) : element;
-  return wrapped.withAlignSelf(opts.alignSelf);
+  return wrapped
+    .withAlignSelf(opts.alignSelf)
+    .withOrder(opts.order)
+    .withFlexShrink(opts.flexShrink);
 }
 
 /**
@@ -337,6 +353,12 @@ export function PageBreak(): PageBreakElement {
 export interface ExpandedOptions {
   /** Share of the leftover space vs other flex children (default 1). */
   flex?: number;
+  /**
+   * Main-axis size reserved BEFORE the leftover is shared out (CSS `flex-basis`): points, or a
+   * percentage of what the line offers its items. The child ends up with `basis + its share of the
+   * rest`, so `flexBasis: 120` with `flex: 0` is simply a fixed 120pt slot. Default 0.
+   */
+  flexBasis?: SizeInput;
 }
 
 /**
@@ -349,5 +371,11 @@ export function Expanded(a: ExpandedOptions | PDFElement, b?: PDFElement): Expan
   const isOptsForm = b !== undefined;
   const opts = (isOptsForm ? a : {}) as ExpandedOptions;
   const child = (isOptsForm ? b : a) as PDFElement;
-  return new ExpandedElement({ flex: opts.flex ?? 1, child });
+  const basis = opts.flexBasis !== undefined ? toDimension(opts.flexBasis) : undefined;
+  return new ExpandedElement({
+    flex: opts.flex ?? 1,
+    basis: basis?.points,
+    basisFactor: basis?.factor,
+    child,
+  });
 }

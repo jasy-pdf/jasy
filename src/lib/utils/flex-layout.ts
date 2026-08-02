@@ -67,6 +67,27 @@ export interface FlexOptions {
   gap?: number;
   main?: MainAlign;
   cross?: CrossAlign;
+  /** Lay the children out along the main axis backwards (CSS `row-reverse` / `column-reverse`). */
+  reverse?: boolean;
+  /** Let the children flow onto further lines when they do not fit (CSS `flex-wrap: wrap`). */
+  wrap?: boolean;
+  /** How the BLOCK of wrapped lines sits across the axis (CSS `align-content`). Default `start`. */
+  alignContent?: MainAlign;
+}
+
+/**
+ * The order children are LAID OUT in: by `order` (lowest first, ties keeping source order), then
+ * reversed if the container asks for it. The element tree itself is never touched, so the reading order
+ * a tagged PDF exposes stays the source order - which is what CSS says too.
+ *
+ * `sort` is stable in every engine we target, so equal `order` values keep their source positions and a
+ * container where nobody sets one comes back with the identical array.
+ */
+function inLayoutOrder(children: PDFElement[], reverse: boolean): PDFElement[] {
+  const ordered = children.some((c) => c.order !== 0)
+    ? [...children].sort((a, b) => a.order - b.order)
+    : children;
+  return reverse ? [...ordered].reverse() : ordered;
 }
 
 export class FlexLayoutHelper {
@@ -79,7 +100,171 @@ export class FlexLayoutHelper {
    * extent occupied. Vertical with `gap 0`, `main start`, `cross stretch` reproduces the
    * previous Column layout exactly.
    */
+  /**
+   * Lays out the children along `axis`, on one line or several.
+   *
+   * Without `wrap` this is the single-line engine and nothing about it changed - the call goes
+   * straight through, which is what keeps every existing document byte-identical. With `wrap` the
+   * children are split into lines first and the SAME engine runs once per line.
+   */
   static layout(
+    children: PDFElement[],
+    axis: FlexAxis,
+    mainAvail: number,
+    crossAvail: number,
+    mainStart: number,
+    crossOrigin: number,
+    options: FlexOptions,
+    ctx: LayoutContext,
+  ): { mainUsed: number; crossUsed: number } {
+    if (!options.wrap || children.length === 0 || !Number.isFinite(mainAvail)) {
+      // An unbounded main axis has no edge to wrap at, so wrapping there is meaningless, not an error.
+      return FlexLayoutHelper.layoutLine(
+        children,
+        axis,
+        mainAvail,
+        crossAvail,
+        mainStart,
+        crossOrigin,
+        options,
+        ctx,
+      );
+    }
+    return FlexLayoutHelper.layoutWrapped(
+      children,
+      axis,
+      mainAvail,
+      crossAvail,
+      mainStart,
+      crossOrigin,
+      options,
+      ctx,
+    );
+  }
+
+  /**
+   * The wrapping path: split into lines, lay each one out, then place the lines across the axis.
+   *
+   * Lines are laid out TWICE - once to learn how tall each is, once at its final cross position. That
+   * is the same measure-then-place shape the single-line engine already uses, and it is what
+   * `alignContent` needs: the block of lines can only be centred once its total is known.
+   */
+  private static layoutWrapped(
+    children: PDFElement[],
+    axis: FlexAxis,
+    mainAvail: number,
+    crossAvail: number,
+    mainStart: number,
+    crossOrigin: number,
+    options: FlexOptions,
+    ctx: LayoutContext,
+  ): { mainUsed: number; crossUsed: number } {
+    const gap = options.gap ?? 0;
+    const ordered = inLayoutOrder(children, options.reverse ?? false);
+
+    // Which children share a line. A child is measured at its natural main extent; a flex child
+    // contributes its BASIS, which is 0 unless it asked for one - so it never forces a break by itself.
+    // A child's natural main extent. A PERCENTAGE child has no fixed answer: its size depends on how
+    // many gaps the line ends up with, which depends on who is on it. So it is asked again for every
+    // candidate membership below rather than measured once.
+    // A plain child's extent does not depend on the line, so it is laid out ONCE and remembered.
+    // Without this each membership probe re-lays every child already on the line - O(n^2) subtree
+    // layouts, which is expensive the moment those children hold a Table or a wrapping paragraph.
+    const measured = new Map<PDFElement, number>();
+    const naturalMain = (child: PDFElement, base: number): number => {
+      if (child instanceof FlexiblePDFElement) return child.getBasis(base);
+      const factor = child.relativeSizeFactor(axis.mainHorizontal);
+      if (factor !== undefined) return base * factor;
+      const cached = measured.get(child);
+      if (cached !== undefined) return cached;
+      // Measured UNCAPPED, the same way the single-line engine measures a plain child. Handing the
+      // line width in as a cap would silently squash a child wider than the line - CSS lets such a
+      // child overflow, and so does our own non-wrapping path.
+      const needsBound = child.needsBoundedMain(axis.mainHorizontal);
+      const main = axis.mainOf(
+        child.calculateLayout(
+          axis.measureConstraints(crossAvail, needsBound ? mainAvail : Infinity),
+          axis.offsetAt(mainStart, crossOrigin),
+          ctx,
+        ),
+      );
+      measured.set(child, main);
+      return main;
+    };
+
+    /** What a line of these children would occupy, resolving every `%` against ITS gap count. */
+    const lineExtent = (members: PDFElement[]): number => {
+      const gaps = Math.max(0, members.length - 1) * gap;
+      const base = Math.max(0, mainAvail - gaps);
+      return members.reduce((n, c) => n + naturalMain(c, base), 0) + gaps;
+    };
+
+    const lines: PDFElement[][] = [[]];
+    for (const child of ordered) {
+      const current = lines[lines.length - 1];
+      // A child wider than a whole line still gets one of its own rather than an empty line before it.
+      if (current.length > 0 && lineExtent([...current, child]) > mainAvail) {
+        lines.push([child]);
+      } else {
+        current.push(child);
+      }
+    }
+
+    // Each line keeps SOURCE order internally: the ordering was applied above, and applying it again
+    // per line would reverse twice.
+    const lineOptions = { ...options, wrap: false, reverse: false };
+    const measure = lines.map((line) =>
+      FlexLayoutHelper.layoutLine(
+        line,
+        axis,
+        mainAvail,
+        Infinity, // let each line report the cross extent it actually needs
+        mainStart,
+        crossOrigin,
+        lineOptions,
+        ctx,
+      ),
+    );
+
+    const heights = measure.map((m) => m.crossUsed);
+    const totalCross = heights.reduce((n, h) => n + h, 0) + Math.max(0, lines.length - 1) * gap;
+
+    // `alignContent` distributes the BLOCK of lines across the axis, using the same vocabulary the main
+    // axis uses. Only meaningful in a bounded cross axis with room left over.
+    const slack = Number.isFinite(crossAvail) ? crossAvail - totalCross : 0;
+    const align = options.alignContent ?? "start";
+    let cursor = crossOrigin;
+    let between = gap;
+    if (slack > 0) {
+      if (align === "center") cursor += slack / 2;
+      else if (align === "end") cursor += slack;
+      else if (align === "between" && lines.length > 1) between = gap + slack / (lines.length - 1);
+      else if (align === "around") {
+        const unit = slack / lines.length;
+        cursor += unit / 2;
+        between = gap + unit;
+      }
+    }
+
+    lines.forEach((line, i) => {
+      FlexLayoutHelper.layoutLine(
+        line,
+        axis,
+        mainAvail,
+        heights[i], // the line's own extent, so `stretch` fills the line and not the container
+        mainStart,
+        cursor,
+        lineOptions,
+        ctx,
+      );
+      cursor += heights[i];
+      if (i < lines.length - 1) cursor += between;
+    });
+
+    return { mainUsed: mainAvail, crossUsed: Math.max(totalCross, cursor - crossOrigin) };
+  }
+
+  private static layoutLine(
     children: PDFElement[],
     axis: FlexAxis,
     mainAvail: number,
@@ -92,6 +277,7 @@ export class FlexLayoutHelper {
     const gap = options.gap ?? 0;
     const main = options.main ?? "start";
     const cross = options.cross ?? "stretch";
+    children = inLayoutOrder(children, options.reverse ?? false);
     const count = children.length;
     const totalGap = Math.max(0, count - 1) * gap;
 
@@ -103,7 +289,12 @@ export class FlexLayoutHelper {
     // The main cap to hand a child: `percentBase` for a percentage child (so its fraction resolves) and
     // for a child that cannot lay itself out without a bound (a nested stack holding an `Expanded`/
     // `Spacer`); unbounded for everyone else, who keep their natural size and never fill the line.
+    // Filled by the shrink pass below; read by `mainCapFor` in pass 2. Declared here so the closure
+    // can see it - it is empty for every document that does not ask for shrinking.
+    const shrunkCap = new Map<PDFElement, number>();
     const mainCapFor = (child: PDFElement): number => {
+      const target = shrunkCap.get(child);
+      if (target !== undefined) return target;
       if (percentBase === Infinity) return Infinity;
       const needsBound =
         child.relativeSizeFactor(axis.mainHorizontal) !== undefined ||
@@ -112,13 +303,17 @@ export class FlexLayoutHelper {
     };
 
     // Pass 1: measure the fixed children (main extent + cross size) and total the flex.
+    // A flex child's BASIS is reserved here too: it is main extent the leftover no longer contains,
+    // exactly like a fixed child's size. With the default basis of 0 this line adds nothing.
     let fixedMain = 0;
     let totalFlex = 0;
+    let totalBasis = 0;
     let crossUsed = 0;
     const fixedSize = new Map<PDFElement, Size>();
     for (const child of children) {
       if (child instanceof FlexiblePDFElement) {
         totalFlex += child.getFlex();
+        totalBasis += child.getBasis(percentBase);
       } else {
         const size = child.calculateLayout(
           axis.measureConstraints(crossAvail, mainCapFor(child)),
@@ -131,7 +326,41 @@ export class FlexLayoutHelper {
       }
     }
 
-    const leftover = mainAvail - fixedMain - totalGap;
+    // Shrinking: the line overflows and some children said they would give space back. CSS weights a
+    // shrinker's share by `shrink x its own size`, so a big item yields more than a small one - which is
+    // why this cannot reuse the grow maths above. Nobody shrinks by default, so a document that never
+    // asks for it never enters this block.
+    const shrinkers = children.filter(
+      (c) => c.flexShrink > 0 && !(c instanceof FlexiblePDFElement),
+    );
+    const overflow = fixedMain + totalBasis + totalGap - mainAvail;
+    if (shrinkers.length > 0 && Number.isFinite(mainAvail) && overflow > 0) {
+      const weight = (c: PDFElement) => c.flexShrink * axis.mainOf(fixedSize.get(c)!);
+      const totalWeight = shrinkers.reduce((n, c) => n + weight(c), 0);
+      if (totalWeight > 0) {
+        for (const child of shrinkers) {
+          const natural = axis.mainOf(fixedSize.get(child)!);
+          // Never below zero: when the GAPS alone outgrow the line, a proportional share asks for more
+          // than a child has. No test can tell this clamp apart from its absence - `constrainWidth`
+          // floors at 0 further down either way - but handing out a negative constraint is nonsense,
+          // and the next reader should not have to work out that it happens to be harmless.
+          const target = Math.max(0, natural - (weight(child) / totalWeight) * overflow);
+          shrunkCap.set(child, target);
+          // Re-measure NOW, not in pass 2: a narrower child may wrap to more lines, and the line's
+          // cross extent is settled just below.
+          const size = child.calculateLayout(
+            axis.measureConstraints(crossAvail, target),
+            axis.offsetAt(mainStart, crossOrigin),
+            ctx,
+          );
+          fixedMain += axis.mainOf(size) - natural;
+          crossUsed = Math.max(crossUsed, axis.crossOf(size));
+          fixedSize.set(child, size);
+        }
+      }
+    }
+
+    const leftover = mainAvail - fixedMain - totalBasis - totalGap;
     // A flex child on an UNBOUNDED main axis has no leftover space to claim. It must collapse to zero,
     // never to `Infinity`: an infinite extent would become the offset of every following sibling and get
     // written into the content stream verbatim, silently corrupting the page from that point on.
@@ -156,7 +385,8 @@ export class FlexLayoutHelper {
     if (totalFlex > 0) {
       for (const child of children) {
         if (child instanceof FlexiblePDFElement) {
-          const mainExtent = (child.getFlex() / totalFlex) * remaining;
+          const mainExtent =
+            child.getBasis(percentBase) + (child.getFlex() / totalFlex) * remaining;
           const size = child.calculateLayout(
             axis.flexConstraints(mainExtent, crossAvail),
             axis.offsetAt(mainStart, crossOrigin),
@@ -184,7 +414,7 @@ export class FlexLayoutHelper {
       const stretch = align === "stretch";
       let mainExtent: number;
       if (child instanceof FlexiblePDFElement) {
-        mainExtent = (child.getFlex() / totalFlex) * remaining;
+        mainExtent = child.getBasis(percentBase) + (child.getFlex() / totalFlex) * remaining;
         // A flex child fills the MAIN axis, and its cross size is only known after layout - there is
         // nothing to align against. So alignSelf is a no-op here, and that has to hold for the CROSS
         // CONSTRAINT too: reading the per-child alignment would hand an `alignSelf: "start"` flex child

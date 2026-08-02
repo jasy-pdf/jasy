@@ -18,8 +18,8 @@ export class ExpandedElement extends FlexiblePDFElement implements Fragmentable 
   private width: number = 0;
   private height: number = 0;
 
-  constructor({ flex, child }: ExpandedElementParams) {
-    super({ flex });
+  constructor({ flex, basis, basisFactor, child }: ExpandedElementParams) {
+    super({ flex, basis, basisFactor });
 
     this.child = child;
   }
@@ -74,7 +74,14 @@ export class ExpandedElement extends FlexiblePDFElement implements Fragmentable 
   }
 
   private cloneWithChild(child: PDFElement): ExpandedElement {
-    return new ExpandedElement({ flex: this.flex, child });
+    // The basis has to come along: a fragment that lost it would claim only its share of the leftover,
+    // so a `flexBasis` slot would silently change width on the page it continues onto.
+    return new ExpandedElement({
+      flex: this.flex,
+      basis: this.basis,
+      basisFactor: this.basisFactor,
+      child,
+    });
   }
 
   override getProps() {
@@ -83,6 +90,8 @@ export class ExpandedElement extends FlexiblePDFElement implements Fragmentable 
       y: this.y,
       width: this.width,
       height: this.height,
+      basis: this.basis,
+      basisFactor: this.basisFactor,
       child: this.child,
     };
   }

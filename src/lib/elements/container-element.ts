@@ -29,6 +29,12 @@ interface ContainerElementParams extends SizedElement, WithChildren {
   main?: MainAlign;
   /** Horizontal alignment of each child (cross axis); defaults to `stretch`. */
   cross?: CrossAlign;
+  /** Lay the children out backwards along the main axis (CSS `row-reverse`). */
+  reverse?: boolean;
+  /** Let the children flow onto further lines when they do not fit (CSS `flex-wrap`). */
+  wrap?: boolean;
+  /** How the block of wrapped lines sits across the axis (CSS `align-content`). */
+  alignContent?: MainAlign;
   /** Width/height as a fraction (0..1) of the offered box instead of `width`/`height` (relative sizing). */
   widthFactor?: number;
   heightFactor?: number;
@@ -54,6 +60,9 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
   private gap: number;
   private main: MainAlign;
   private cross: CrossAlign;
+  private reverse: boolean;
+  private wrap: boolean;
+  private alignContent?: MainAlign;
   private breakBefore: boolean;
   private breakAfter: boolean;
   // The requested size, snapshot at construction so re-layouts (fragmentation measuring, which
@@ -69,6 +78,9 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
     gap,
     main,
     cross,
+    reverse,
+    wrap,
+    alignContent,
     breakBefore,
     breakAfter,
     ...sizing
@@ -79,6 +91,9 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
     this.gap = gap ?? 0;
     this.main = main ?? "start";
     this.cross = cross ?? "stretch";
+    this.reverse = reverse ?? false;
+    this.wrap = wrap ?? false;
+    this.alignContent = alignContent;
     this.requested = { ...sizing, width, height };
     this.breakBefore = breakBefore ?? false;
     this.breakAfter = breakAfter ?? false;
@@ -143,6 +158,9 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
       gap: this.gap,
       main: this.main,
       cross: this.cross,
+      reverse: this.reverse,
+      wrap: this.wrap,
+      alignContent: this.alignContent,
       breakAfter,
     });
   }
@@ -215,7 +233,14 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
         crossAvail,
         this.y,
         this.x,
-        { gap: this.gap, main: this.main, cross: this.cross },
+        {
+          gap: this.gap,
+          main: this.main,
+          cross: this.cross,
+          reverse: this.reverse,
+          wrap: this.wrap,
+          alignContent: this.alignContent,
+        },
         ctx,
       );
     }
