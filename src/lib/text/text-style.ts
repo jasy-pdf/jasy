@@ -48,6 +48,8 @@ export function applyTextTransform(
 export interface ResolvedTextStyle {
   fontSize: number;
   fontFamily: string;
+  /** The rest of the family stack: tried, in order, for a code point `fontFamily` cannot draw. */
+  fontFallback: string[];
   fontStyle: FontStyle;
   color: Color;
   textAlignment: HorizontalAlignment;
@@ -82,6 +84,7 @@ export interface ResolvedTextStyle {
 export const DEFAULT_TEXT_STYLE: ResolvedTextStyle = {
   fontSize: 12,
   fontFamily: "Helvetica",
+  fontFallback: [],
   fontStyle: FontStyle.Normal,
   color: new Color(0, 0, 0),
   textAlignment: HorizontalAlignment.start,
@@ -105,6 +108,7 @@ export function mergeTextStyle(
   return {
     fontSize: override.fontSize ?? base.fontSize,
     fontFamily: override.fontFamily ?? base.fontFamily,
+    fontFallback: override.fontFallback ?? base.fontFallback,
     fontStyle: override.fontStyle ?? base.fontStyle,
     color: override.color ?? base.color,
     textAlignment: override.textAlignment ?? base.textAlignment,

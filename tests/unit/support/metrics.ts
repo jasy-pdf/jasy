@@ -27,6 +27,8 @@ export const testMetrics = (over: Partial<FontMetrics> = {}): FontMetrics => ({
     capHeight: 0.7,
     xHeight: 0.5,
   }),
+  // A stand-in font draws everything, so a fallback stack never fires unless a test says so.
+  hasGlyph: () => true,
   kerningEnabled: false,
   getKernPairs: (text) => Array.from({ length: Math.max(0, [...text].length - 1) }, () => 0),
   ...over,

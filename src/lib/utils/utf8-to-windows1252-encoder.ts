@@ -34,6 +34,16 @@ const CP1252_FROM_UNICODE: Record<number, number> = {
   0x0178: 0x9f, // Ÿ Y diaeresis
 };
 
+/**
+ * Whether Windows-1252 can carry this code point - which is exactly what a standard-14 font can draw,
+ * since that is the encoding its `/Widths` array is indexed by. Latin-1 passes straight through,
+ * except the C1 range, which the table above fills with printable punctuation instead.
+ */
+export function isWindows1252(codePoint: number): boolean {
+  if (codePoint in CP1252_FROM_UNICODE) return true;
+  return codePoint <= 0xff && !(codePoint >= 0x80 && codePoint <= 0x9f);
+}
+
 /** Encodes a JavaScript string to a Windows-1252 byte buffer (the PDF text encoding). */
 export function getArrayBuffer(data: string): ArrayBuffer {
   const u8 = new Uint8Array(data.length);

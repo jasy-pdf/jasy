@@ -179,6 +179,9 @@ describe("the three findings a review caught", () => {
     const el = text([{ content: "hel" }, { content: "lo world" }], {
       textTransform: "capitalize",
     });
+    // The content is resolved by the LAYOUT pass, which is what the renderer then reads.
+    const manager = om();
+    el.calculateLayout(BoxConstraints.tight(400, 400), { x: 0, y: 0 }, context(manager));
     const props = el.getProps() as { content: { content: string }[] };
     expect(props.content.map((c) => c.content).join("")).toBe("Hello World");
   });
@@ -218,9 +221,61 @@ describe("capitalize and punctuation", () => {
     expect(runs.map((r) => r.text).join("")).toBe('(Hello) "World"');
   });
 
-  it("carries that through a span boundary as well", async () => {
+  it("carries that through a span boundary as well", () => {
     const el = text([{ content: "(hel" }, { content: "lo)" }], { textTransform: "capitalize" });
+    const manager = om();
+    el.calculateLayout(BoxConstraints.tight(400, 400), { x: 0, y: 0 }, context(manager));
     const props = el.getProps() as { content: { content: string }[] };
     expect(props.content.map((c) => c.content).join("")).toBe("(Hello)");
+  });
+});
+
+describe("font fallback", () => {
+  // "Latin" holds ASCII only; "CJK" holds the rest. The element must SPLIT the text into spans, one
+  // per family - and it has to do so in the LAYOUT pass, because the renderer has no metrics to
+  // redo it with and would otherwise draw everything in the first family.
+  const stackMetrics = () =>
+    ({
+      ...testMetrics({
+        getStringWidth: (t) => [...t].length * 10,
+        getCharWidth: () => 10,
+        hasGlyph: (cp, family) => (family === "Latin" ? cp < 0x80 : true),
+      }),
+      struct: { enabled: false },
+      shapeText: () => undefined,
+      isCustomFont: () => false,
+      getColorFont: () => undefined,
+      getEmojiSource: () => undefined,
+      getEmojiFont: () => undefined,
+      getEmojiImageSource: () => undefined,
+    }) as unknown as PDFObjectManager;
+
+  it("draws each stretch in the family that has its glyphs", async () => {
+    const el = new TextElement({
+      content: "ab漢字cd",
+      fontSize: 10,
+      fontFamily: "Latin",
+      fontFallback: ["CJK"],
+    });
+    const manager = stackMetrics();
+    el.calculateLayout(BoxConstraints.tight(400, 400), { x: 0, y: 0 }, context(manager));
+    const runs = (await TextRenderer.render(el, manager)).filter(
+      (n): n is TextRun => n.type === "text",
+    );
+    expect(runs.map((r) => [r.text, r.fontFamily])).toEqual([
+      ["ab", "Latin"],
+      ["漢字", "CJK"],
+      ["cd", "Latin"],
+    ]);
+  });
+
+  it("leaves a document without a stack exactly as it was", async () => {
+    const el = new TextElement({ content: "ab漢字", fontSize: 10, fontFamily: "Latin" });
+    const manager = stackMetrics();
+    el.calculateLayout(BoxConstraints.tight(400, 400), { x: 0, y: 0 }, context(manager));
+    const runs = (await TextRenderer.render(el, manager)).filter(
+      (n): n is TextRun => n.type === "text",
+    );
+    expect(runs.map((r) => r.text)).toEqual(["ab漢字"]);
   });
 });

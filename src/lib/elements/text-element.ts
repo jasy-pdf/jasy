@@ -10,6 +10,7 @@ import type { FontMetrics } from "../utils/font-metrics.ts";
 import { BoxConstraints, Offset, Size } from "../layout/box-constraints.ts";
 import type { Direction } from "../text/bidi.ts";
 import { applyTextTransform, type TextTransform } from "../text/text-style.ts";
+import { splitByFont } from "../text/font-fallback.ts";
 import { Fragmentable, FragmentResult } from "../layout/fragmentation.ts";
 import {
   type LineOptions,
@@ -33,6 +34,8 @@ export interface TextSegment {
   fontStyle?: FontStyle;
   fontColor?: Color;
   fontFamily?: string;
+  /** The rest of the family stack, for code points `fontFamily` cannot draw. */
+  fontFallback?: string[];
   fontSize?: number;
   /** External URL: this segment becomes an inline hyperlink (a /Link annotation over its glyphs). */
   href?: string;
@@ -69,6 +72,8 @@ interface TextElementParams {
   /** Unset (undefined) inherits the cascaded size; see ResolvedTextStyle. */
   fontSize?: number;
   fontFamily?: string;
+  /** The rest of the family stack, for code points `fontFamily` cannot draw. */
+  fontFallback?: string[];
   fontStyle?: FontStyle;
   content: string | TextSegment[];
   color?: Color; // optional param
@@ -130,6 +135,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
   private readonly rawSkipInk?: boolean;
   private readonly rawLetterSpacing?: number;
   private readonly rawDirection?: Direction;
+  private readonly rawFontFallback?: string[];
   private readonly rawTextTransform?: TextTransform;
   private readonly rawWordSpacing?: number;
   private readonly rawTextIndent?: number;
@@ -147,6 +153,10 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
   private skipInk!: boolean;
   private letterSpacing!: number;
   private direction!: Direction;
+  private fontFallback!: string[];
+  // What the layout pass resolved the content to (transform applied, split by font). The render pass
+  // has no metrics of its own, so it MUST read the same thing layout measured, not recompute it.
+  private resolved?: string | TextSegment[];
   private textTransform!: TextTransform;
   private wordSpacing!: number;
   private textIndent!: number;
@@ -175,6 +185,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     skipInk,
     letterSpacing,
     direction,
+    fontFallback,
     textTransform,
     wordSpacing,
     textIndent,
@@ -194,6 +205,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     this.rawSkipInk = skipInk;
     this.rawLetterSpacing = letterSpacing;
     this.rawDirection = direction;
+    this.rawFontFallback = fontFallback;
     this.rawTextTransform = textTransform;
     this.rawWordSpacing = finitePoints(wordSpacing, "wordSpacing");
     this.rawTextIndent = finitePoints(textIndent, "textIndent");
@@ -217,7 +229,30 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
    * paragraph can never be measured in one casing and drawn in another (`ABC` and `abc` are not the
    * same width in most fonts).
    */
-  private display(): string | TextSegment[] {
+  private display(metrics?: FontMetrics): string | TextSegment[] {
+    const cased = this.recased();
+    if (this.fontFallback.length === 0 || !metrics) return cased;
+    // Font fallback turns the content into spans - one per family - which every later pass already
+    // knows how to handle. Nothing new downstream.
+    const pieces = typeof cased === "string" ? [{ content: cased } as TextSegment] : cased;
+    const out: TextSegment[] = [];
+    for (const seg of pieces) {
+      const runs = splitByFont(
+        seg.content,
+        seg.fontFamily ?? this.fontFamily,
+        this.fontFallback,
+        seg.fontStyle ?? this.fontStyle,
+        metrics,
+      );
+      if (!runs) out.push(seg);
+      else
+        for (const run of runs) out.push({ ...seg, content: run.text, fontFamily: run.fontFamily });
+    }
+    return out;
+  }
+
+  /** The content with `text-transform` applied, and nothing else. */
+  private recased(): string | TextSegment[] {
     if (this.textTransform === "none") return this.content;
     if (typeof this.content === "string") {
       return applyTextTransform(this.content, this.textTransform).text;
@@ -252,6 +287,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     this.skipInk = this.rawSkipInk ?? ts.skipInk;
     this.letterSpacing = this.rawLetterSpacing ?? ts.letterSpacing;
     this.direction = this.rawDirection ?? ts.direction;
+    this.fontFallback = this.rawFontFallback ?? ts.fontFallback;
     this.textTransform = this.rawTextTransform ?? ts.textTransform;
     this.wordSpacing = this.rawWordSpacing ?? ts.wordSpacing;
     this.textIndent = this.rawTextIndent ?? ts.textIndent;
@@ -265,7 +301,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
    */
   fragment(maxHeight: number, width: number, ctx: LayoutContext): FragmentResult {
     this.resolveStyle(ctx);
-    const content = this.display();
+    const content = this.display(ctx.metrics);
     return typeof content === "string"
       ? this.fragmentString(content, maxHeight, width, ctx)
       : this.fragmentSegments(content, maxHeight, width, ctx);
@@ -400,13 +436,14 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     // Bounded width (e.g. inside a Column) wraps to that width; an unbounded width
     // (e.g. inside a Row) means the text takes its natural single-line width and does
     // not wrap. Columns always bound the width, so this leaves their layout untouched.
+    this.resolved = this.display(ctx.metrics);
     this.width = constraints.hasBoundedWidth
       ? constraints.maxWidth
       : this.naturalWidth(ctx.metrics);
 
     const wrapWidth = this.width ?? 0;
     this.height = TextRenderer.calculateTextHeight(
-      this.display(),
+      this.resolved,
       this.fontSize,
       this.fontFamily,
       this.fontStyle,
@@ -451,7 +488,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       );
     // The FIRST line starts `textIndent` in, so an unbounded box has to be that much wider.
     const indent = Math.max(0, this.textIndent);
-    const content = this.display();
+    const content = this.display(metrics);
     if (typeof content === "string") {
       return (
         indent +
@@ -482,7 +519,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       fontFamily: this.fontFamily,
       fontStyle: this.fontStyle,
       color: this.color,
-      content: this.display(),
+      content: this.resolved ?? this.content,
       textAlignment: this.textAlignment,
       maxLines: this.maxLines,
       orphans: this.orphans,
