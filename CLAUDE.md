@@ -230,8 +230,8 @@ rendering. This is the standing visual check; prefer it over one-off `scripts/ru
 - `pnpm test` — Vitest (watch). `pnpm exec vitest run` for a one-shot CI-style run.
   `pnpm run test:coverage` for coverage. Unit tests live in **`tests/unit/`**, mirroring the `src/lib/`
   structure (`tests/unit/{common,elements,renderer,utils}/…`). `src/` is pure production code — the
-  build (`tsconfig.json` includes only `src/**`) therefore keeps `dist/` test-free. **996 tests, green** —
-  what the root run covers: core 899, `@jasy/cli` 37, `@jasy/vue` 33, `@jasy/e-invoice` 27. `@jasy/nuxt`
+  build (`tsconfig.json` includes only `src/**`) therefore keeps `dist/` test-free. **1005 tests, green** —
+  what the root run covers: core 908, `@jasy/cli` 37, `@jasy/vue` 33, `@jasy/e-invoice` 27. `@jasy/nuxt`
   is excluded from it (`vitest.config.ts`) and runs on its own.
 - `pnpm run build` — `tsc` → `dist/`.
 - `pnpm run lint` (oxlint) + `pnpm run fmt:check` (oxfmt `--check`); `pnpm run fmt` formats. **Run `pnpm run fmt`
@@ -594,6 +594,14 @@ agree: true })` → declarative values, not object mutation. Save is an **increm
   the pixel and only Chrome differs, by 3 px on one mark. Also the discretionary `liga` (Latin, nothing
   to do with RTL) and scripts beyond the Arabic family. All in `todo.md`.
 
+- ✅ **Justified text** (2026-08-02) — `Text({ align: "justify" })`. It maps onto
+  `HorizontalAlignment.block`, which had been sitting in the enum with nothing implementing it. A full
+  line's slack is spread over its spaces by MOVING THE PEN, one run per word: the `Tw` operator reaches
+  only the single byte 32, so an embedded Identity-H font could never be stretched that way. The LAST
+  line of a paragraph keeps its natural spacing (print and CSS both), and a shaped piece is never split,
+  so Arabic keeps natural spacing too. Verified against react-pdf: both fill exactly 222.0 pt on the same
+  box. Off by default — 30/30 gallery byte-identical.
+
 Genuine remaining gaps / deferred:
 
 1. **Absolute positioning — Stages 1+2 built** (2026-06-21). CSS-style: `Box({ relative: true })` is a
@@ -670,7 +678,7 @@ below), `@jasy/cli`@alpha.6, `@jasy/vue`@alpha.7, `@jasy/nuxt`@alpha.6** (the al
 page-break control — the termination guard, `PageBreak`, `breakBefore`/`breakAfter`, `keepTogether` — plus
 kerning turned on by default). Repo public + locked, full CI + changelog +
 bots in place (see Repo facts). The engine is **feature-complete for the alpha** — inheritance, `onOverflow`,
-custom formats, the line-breaker fixes; **996 tests green** (the root run, i.e. everything but
+custom formats, the line-breaker fixes; **1005 tests green** (the root run, i.e. everything but
 `@jasy/nuxt`). The **landing**
 (`~/projects/jasy-landing` → **jasy.dev**) is built: showroom (12 cards), validator, docs, a home-page
 roadmap section, and a full **SEO + AI-discoverability layer** (OG image, JSON-LD, `robots.txt`,

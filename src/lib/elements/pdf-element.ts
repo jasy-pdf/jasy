@@ -265,7 +265,8 @@ export enum HorizontalAlignment {
   left = "LEFT",
   right = "RIGHT",
   center = "CENTER",
-  block = "BLOCK",
+  /** CSS `text-align: justify` - both edges line up, the last line of a paragraph excepted. */
+  justify = "JUSTIFY",
 }
 
 export enum VerticalAlignment {

@@ -41,7 +41,7 @@ export interface TextStyle {
 
 export interface TextOptions extends TextStyle {
   /** Text-internal alignment (left/center/right) - independent of a parent's `cross` (§5). */
-  align?: "left" | "center" | "right";
+  align?: "left" | "center" | "right" | "justify";
   /** Cap the number of wrapped lines (default: unlimited - the text grows down as far as it needs,
    *  paginating onto the next page). Needs a bounded width (a Column/Expanded/`Box({ width })`). */
   maxLines?: number;
@@ -76,6 +76,7 @@ const ALIGN: Record<NonNullable<TextOptions["align"]>, HorizontalAlignment> = {
   left: HorizontalAlignment.left,
   center: HorizontalAlignment.center,
   right: HorizontalAlignment.right,
+  justify: HorizontalAlignment.justify,
 };
 
 /**
@@ -171,7 +172,7 @@ export interface TextDefaults {
   bold?: boolean;
   italic?: boolean;
   color?: ColorInput;
-  align?: "left" | "center" | "right";
+  align?: "left" | "center" | "right" | "justify";
   lineHeight?: number;
   underline?: boolean;
   strikethrough?: boolean;
