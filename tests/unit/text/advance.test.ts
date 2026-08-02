@@ -1,3 +1,4 @@
+import { testMetrics } from "../support/metrics.ts";
 import { describe, it, expect } from "vitest";
 import { codePointCount, runAdvance } from "../../../src/lib/text/advance";
 import { PDFObjectManager, FontStyle } from "../../../src/lib/utils/pdf-object-manager";
@@ -65,12 +66,11 @@ describe("naturalWidth matches the wrapped width (via the shared primitive)", ()
     // text would re-wrap in its own box. Both call runAdvance, so they agree.
     const { TextElement } = await import("../../../src/lib/elements/text-element");
     const { BoxConstraints } = await import("../../../src/lib/layout/box-constraints");
-    const m: FontMetrics = {
+    const m: FontMetrics = testMetrics({
       getStringWidth: (t) => t.length * 6,
       getCharWidth: () => 6,
       getFontVerticals: () => ({ ascent: 0.8, descent: 0.2, lineGap: 0 }),
-      hasGlyph: () => true,
-    };
+    });
     const ctx = { metrics: m, pageConfig: {} } as never;
 
     const text = new TextElement({ fontSize: 10, content: "one two three", letterSpacing: 2 });

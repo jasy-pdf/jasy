@@ -6,7 +6,7 @@ import { TextElement } from "../../../src/lib/elements/text-element";
 import { BoxConstraints } from "../../../src/lib/layout/box-constraints";
 import { LayoutContext } from "../../../src/lib/elements/pdf-element";
 import { FontMetrics } from "../../../src/lib/utils/font-metrics";
-import { unitVerticals } from "../support/metrics.ts";
+import { testMetrics } from "../support/metrics.ts";
 
 const box = (width: number, height: number) =>
   new RectangleElement({ x: 0, y: 0, children: [], width, height, borderWidth: 0 });
@@ -31,12 +31,10 @@ describe("RowElement", () => {
 
   it("a Spacer pushes the last child to the right edge (title … page number)", () => {
     // deterministic metrics: 6 pt per char (string == sum of chars, i.e. no kerning here)
-    const metrics = {
+    const metrics = testMetrics({
       getStringWidth: (t: string) => t.length * 6,
       getCharWidth: () => 6,
-      getFontVerticals: unitVerticals,
-      hasGlyph: () => true,
-    } as unknown as FontMetrics;
+    }) as unknown as FontMetrics;
     const ctx = { metrics, pageConfig: {} } as LayoutContext;
 
     const left = new TextElement({ fontSize: 10, content: "Left" }); // width 24
@@ -56,12 +54,10 @@ describe("RowElement", () => {
   // go through the same `runAdvance`, so they agree by construction. (CSS: a space → never wraps.)
   it("a fixed Text in a Row takes its one-line width, so it never wraps inside its own box", () => {
     // Consistent font: getStringWidth is the sum of getCharWidth. Every glyph, space included, 6 wide.
-    const metrics = {
+    const metrics = testMetrics({
       getStringWidth: (t: string) => t.length * 6,
       getCharWidth: () => 6,
-      getFontVerticals: unitVerticals,
-      hasGlyph: () => true,
-    } as unknown as FontMetrics;
+    }) as unknown as FontMetrics;
     const ctx = { metrics, pageConfig: {} } as LayoutContext;
 
     const text = new TextElement({ fontSize: 10, content: "Total due" });
@@ -80,12 +76,10 @@ describe("RowElement", () => {
   // letterSpacing widens the reserved width by one spacing per glyph, and the breaker agrees, so the
   // text still does not re-wrap in its own box.
   it("reserves the letter-spaced width, so a spaced fixed Text still does not wrap", () => {
-    const metrics = {
+    const metrics = testMetrics({
       getStringWidth: (t: string) => t.length * 6,
       getCharWidth: () => 6,
-      getFontVerticals: unitVerticals,
-      hasGlyph: () => true,
-    } as unknown as FontMetrics;
+    }) as unknown as FontMetrics;
     const ctx = { metrics, pageConfig: {} } as LayoutContext;
 
     const text = new TextElement({ fontSize: 10, content: "Total due", letterSpacing: 2 });
