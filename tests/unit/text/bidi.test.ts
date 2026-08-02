@@ -9,7 +9,9 @@ const HE_VISUAL = [...HE].reverse().join("");
 
 describe("the fast path", () => {
   it("leaves plain Latin text as one untouched run", () => {
-    expect(visualRuns("Invoice 2026")).toEqual([{ text: "Invoice 2026", rtl: false }]);
+    expect(visualRuns("Invoice 2026")).toEqual([
+      { text: "Invoice 2026", logical: "Invoice 2026", rtl: false },
+    ]);
   });
 
   it("spots text that could reorder, and text that cannot", () => {
@@ -23,9 +25,10 @@ describe("a right-to-left run inside left-to-right text", () => {
   it("draws the Hebrew backwards, between the Latin around it", () => {
     const runs = visualRuns(`Hello ${HE} world`);
     expect(runs).toEqual([
-      { text: "Hello ", rtl: false },
-      { text: HE_VISUAL, rtl: true },
-      { text: " world", rtl: false },
+      { text: "Hello ", logical: "Hello ", rtl: false },
+      // The drawn text is reversed; `logical` gives back what was written, which is what shaping needs.
+      { text: HE_VISUAL, logical: HE, rtl: true },
+      { text: " world", logical: " world", rtl: false },
     ]);
   });
 
@@ -40,7 +43,7 @@ describe("a right-to-left run inside left-to-right text", () => {
 describe("a right-to-left base direction", () => {
   it("puts a Latin word at the LEFT, since the line starts on the right", () => {
     const runs = visualRuns(`${HE} abc`, "rtl");
-    expect(runs[0]).toEqual({ text: "abc", rtl: false });
+    expect(runs[0]).toEqual({ text: "abc", logical: "abc", rtl: false });
     const last = runs[runs.length - 1];
     expect(last.rtl).toBe(true);
     // The space between them is a NEUTRAL and resolves to the surrounding right-to-left level, so it
@@ -119,8 +122,26 @@ describe("spans keep their identity through the reordering", () => {
       "ltr",
     );
     expect(runs).toEqual([
-      { text: "a", rtl: false, source: 1 },
-      { text: "", rtl: false, source: 2 },
+      { text: "a", logical: "a", rtl: false, source: 1 },
+      { text: "", logical: "", rtl: false, source: 2 },
     ]);
+  });
+});
+
+describe("the logical text a run remembers", () => {
+  it("gives back what was written, not what is drawn", () => {
+    // SHAPING needs this. A letter's form comes from its neighbours, and reversing swaps them - so
+    // shaping the drawn text produces the mirror-image form of every letter (measured on Arabic: a
+    // word 8pt too wide). Shape `logical`, then reverse the GLYPHS.
+    const [run] = visualRuns(HE, "rtl");
+    expect(run.text).toBe(HE_VISUAL);
+    expect(run.logical).toBe(HE);
+    expect(run.rtl).toBe(true);
+  });
+
+  it("is the same string for a left-to-right run", () => {
+    const [run] = visualRuns("abc");
+    expect(run.logical).toBe(run.text);
+    expect(run.rtl).toBe(false);
   });
 });

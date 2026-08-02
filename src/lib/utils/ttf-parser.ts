@@ -4,6 +4,7 @@
 
 import { i16, latin1FromBytes, u8, u16, u32 } from "./bytes.ts";
 import type { FontDecoration } from "../text/text-decoration.ts";
+import { GsubTable } from "./gsub.ts";
 
 interface TableRecord {
   offset: number;
@@ -165,6 +166,8 @@ export class TTFParser {
   // GPOS Type 2 (pair positioning) subtables, in absolute byte offsets. Queried per pair (format 2
   // is class-based, so it cannot be enumerated into `kernPairs` up front). Preferred over `kern`.
   private gposPairPos: number[] = [];
+  // GSUB (glyph substitution - Arabic joining, ligatures), built on first use.
+  private gsubTable?: GsubTable | null;
 
   constructor(private data: Uint8Array) {
     this.readTableDirectory();
@@ -233,6 +236,20 @@ export class TTFParser {
     return Math.round((v * 1000) / this.unitsPerEm);
   }
 
+  /** The font's `GSUB`, or undefined when it has none. Parsed once, on demand. */
+  gsub(): GsubTable | undefined {
+    if (this.gsubTable === undefined) {
+      const record = this.tables["GSUB"];
+      // Degrade to "no shaping" rather than break font loading - same rule as kern.
+      try {
+        this.gsubTable = record ? new GsubTable(this.data, record.offset) : null;
+      } catch {
+        this.gsubTable = null;
+      }
+    }
+    return this.gsubTable ?? undefined;
+  }
+
   // Codepoint → glyph id (0 = .notdef when the font has no glyph for it).
   getGlyphIndex(codePoint: number): number {
     const g = this.cmap.get(codePoint);
@@ -252,6 +269,11 @@ export class TTFParser {
   }
 
   // Char width at fontSize, scaled from font units (em = unitsPerEm) to points.
+  /** Font units -> points at `fontSize`; the one scaling rule for shaped and plain advances alike. */
+  unitsToPoints(units: number, fontSize: number): number {
+    return (units / this.unitsPerEm) * fontSize;
+  }
+
   getCharWidth(char: string, fontSize: number): number {
     const units = this.getAdvanceWidth(this.getGlyphIndex(char.codePointAt(0)!));
     return (units / this.unitsPerEm) * fontSize;

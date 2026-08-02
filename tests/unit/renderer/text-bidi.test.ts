@@ -28,6 +28,7 @@ const om = () =>
     kerningEnabled: false,
     getKernPairs: (t: string) => Array.from({ length: Math.max(0, [...t].length - 1) }, () => 0),
     struct: { enabled: false },
+    shapeText: () => undefined,
     isCustomFont: () => false,
     getColorFont: () => undefined,
     getEmojiSource: () => undefined,
@@ -130,5 +131,51 @@ describe("direction inherits like every other text style", () => {
     });
     const inherited = { ...DEFAULT_TEXT_STYLE, direction: "rtl" as const };
     expect((await drawn(el, 400, inherited)).map((r) => r.x)).toEqual([0]);
+  });
+});
+
+describe("shaping sees the LOGICAL text, and its glyphs are drawn in visual order", () => {
+  // The bug this pins: bidi reverses a right-to-left run for drawing, and shaping the REVERSED text
+  // gives every letter the form of its mirror-image neighbours. Measured on Arabic in DejaVu Sans, a
+  // word came out 42.5pt instead of 34.4pt - and both the measuring and the drawing were wrong
+  // together, so nothing looked inconsistent. Shape the logical text, reverse the GLYPHS.
+  const HE_LOGICAL = HE;
+
+  const shapingOm = (seen: string[]) =>
+    ({
+      ...om(),
+      // Pretend the font shapes: one glyph per code point, numbered so order is readable.
+      shapeText: (text: string) => {
+        seen.push(text);
+        return [...text].map((c, i) => ({
+          glyph: 1000 + i,
+          advance: 10,
+          codePoints: [c.codePointAt(0)!],
+        }));
+      },
+    }) as unknown as PDFObjectManager;
+
+  it("hands the shaper the text as it was written, not as it is drawn", async () => {
+    const seen: string[] = [];
+    const el = new TextElement({ content: HE_LOGICAL, fontSize: 10, fontFamily: "Helvetica" });
+    el.calculateLayout(BoxConstraints.tight(400, 400), { x: 0, y: 0 }, {
+      metrics: shapingOm(seen),
+    } as never);
+    await TextRenderer.render(el, shapingOm(seen));
+    expect(seen).toContain(HE_LOGICAL);
+    expect(seen).not.toContain([...HE_LOGICAL].reverse().join(""));
+  });
+
+  it("reverses the resulting glyphs, so a right-to-left run still draws right to left", async () => {
+    const el = new TextElement({ content: HE_LOGICAL, fontSize: 10, fontFamily: "Helvetica" });
+    const manager = shapingOm([]);
+    el.calculateLayout(BoxConstraints.tight(400, 400), { x: 0, y: 0 }, {
+      metrics: manager,
+    } as never);
+    const runs = (await TextRenderer.render(el, manager)).filter(
+      (n): n is TextRun => n.type === "text",
+    );
+    // Shaped logically as 1000,1001,1002,1003 - drawn in the reverse of that.
+    expect(runs[0].glyphs).toEqual([1003, 1002, 1001, 1000]);
   });
 });

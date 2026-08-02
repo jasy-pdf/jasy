@@ -371,8 +371,8 @@ export class TextRenderer {
     const decorations: Line[] = [];
 
     // Horizontal offset of a line of the given width under the current alignment.
-    // `start` means the side the writing begins on, so it is the one alignment that depends on the
-    // direction. Resolved HERE, the single place alignment is consumed.
+    // `start` is the one alignment that depends on the direction, resolved at the single place
+    // alignment is consumed.
     const align =
       textAlignment === HorizontalAlignment.start
         ? direction === "rtl"
@@ -472,6 +472,23 @@ export class TextRenderer {
       return skipInkSegments(runWidth, inkSpans, stroke.thickness);
     };
 
+    /**
+     * One drawn piece of a line. SHAPING must see the run's LOGICAL text - a letter's form comes from
+     * its neighbours, and a reversed run has those swapped - so we shape that and then reverse the
+     * GLYPHS for an rtl run. A font that does not shape keeps the old path exactly: draw the visual
+     * text, no glyph list, byte-identical output.
+     */
+    const shapedPiece = (
+      part: { text: string; logical: string; rtl: boolean },
+      family: string,
+      style: FontStyle,
+    ): { text: string; glyphs?: number[] } => {
+      const shaped = objectManager.shapeText(part.logical, family, style);
+      if (!shaped) return { text: part.text };
+      const ordered = part.rtl ? [...shaped].reverse() : shaped;
+      return { text: part.logical, glyphs: ordered.map((g) => g.glyph) };
+    };
+
     // The advance the viewer will use: plain glyph widths (a `Tj` never kerns) plus one
     // `letterSpacing` per code point (the `Tc` operator), from the one shared `advance.ts` primitive.
     const font = { fontFamily, fontSize, fontStyle };
@@ -496,15 +513,16 @@ export class TextRenderer {
         const lineWidth = runAdvance(objectManager, line, font, letterSpacing);
         let x = initialX + alignmentOffset(lineWidth);
         const baseline = yPosition + box.baseline + box.height * index;
-        // Bidi: one line becomes the pieces that are DRAWN, left to right. Latin-only text in an
-        // `ltr` paragraph comes back as the single original string, so nothing changes for it.
+        // Latin-only text in an `ltr` paragraph comes back as one unchanged piece.
         for (const part of visualRuns(line, direction)) {
-          const partWidth = runAdvance(objectManager, part.text, font, letterSpacing);
+          const piece = shapedPiece(part, fontFamily, fontStyle);
+          const partWidth = runAdvance(objectManager, piece.text, font, letterSpacing);
           runs.push({
             type: "text",
             x,
             y: baseline,
-            text: part.text,
+            text: piece.text,
+            ...(piece.glyphs ? { glyphs: piece.glyphs } : {}),
             fontFamily,
             fontStyle,
             fontSize,
@@ -512,7 +530,7 @@ export class TextRenderer {
             ...(letterSpacing ? { letterSpacing } : {}),
           });
           decorate(
-            part.text,
+            piece.text,
             x,
             partWidth,
             baseline,
@@ -537,18 +555,20 @@ export class TextRenderer {
     // height matches the measured height.
     const pushLine = (line: SegmentLine, lineY: number): void => {
       let x = initialX + alignmentOffset(line.width);
-      // Bidi runs over the WHOLE line, across span boundaries - a Hebrew span beside a Latin one has to
-      // be ordered against its neighbours, not inside itself. Each returned run carries the segment it
-      // came from, so it keeps that span's font, colour, decoration and link.
+      // Across span boundaries, so a Hebrew span is ordered against its neighbours rather than inside
+      // itself. Each run keeps the segment it came from, and with it that span's style.
       const ordered = visualRunsOf(
         line.segments.map((segment) => ({ text: segment.content, source: segment })),
         direction,
       );
-      ordered.forEach(({ text: runText, source: segment }) => {
+      ordered.forEach((part) => {
+        const segment = part.source;
         const family = segment.fontFamily || fontFamily;
         const size = segment.fontSize || fontSize;
         const style = segment.fontStyle || fontStyle;
         const segLetterSpacing = segment.letterSpacing ?? letterSpacing;
+        const piece = shapedPiece(part, family, style);
+        const runText = piece.text;
         const advance = runAdvance(
           objectManager,
           runText,
@@ -561,6 +581,7 @@ export class TextRenderer {
           x,
           y: lineY,
           text: runText,
+          ...(piece.glyphs ? { glyphs: piece.glyphs } : {}),
           fontFamily: family,
           fontStyle: style,
           fontSize: size,

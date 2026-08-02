@@ -230,8 +230,8 @@ rendering. This is the standing visual check; prefer it over one-off `scripts/ru
 - `pnpm test` — Vitest (watch). `pnpm exec vitest run` for a one-shot CI-style run.
   `pnpm run test:coverage` for coverage. Unit tests live in **`tests/unit/`**, mirroring the `src/lib/`
   structure (`tests/unit/{common,elements,renderer,utils}/…`). `src/` is pure production code — the
-  build (`tsconfig.json` includes only `src/**`) therefore keeps `dist/` test-free. **954 tests, green** —
-  what the root run covers: core 857, `@jasy/cli` 37, `@jasy/vue` 33, `@jasy/e-invoice` 27. `@jasy/nuxt`
+  build (`tsconfig.json` includes only `src/**`) therefore keeps `dist/` test-free. **996 tests, green** —
+  what the root run covers: core 899, `@jasy/cli` 37, `@jasy/vue` 33, `@jasy/e-invoice` 27. `@jasy/nuxt`
   is excluded from it (`vitest.config.ts`) and runs on its own.
 - `pnpm run build` — `tsc` → `dist/`.
 - `pnpm run lint` (oxlint) + `pnpm run fmt:check` (oxfmt `--check`); `pnpm run fmt` formats. **Run `pnpm run fmt`
@@ -564,8 +564,34 @@ agree: true })` → declarative values, not object mutation. Save is an **increm
   mirrored — and our own test was vacuously green because it asserted the broken order. Known gap, in
   `todo.md`: we SUBSTITUTE the mirrored character (as react-pdf does) where Chrome keeps the original and
   mirrors the glyph, so extracted text has swapped brackets.
-  **Arabic is ORDERED correctly but not SHAPED** — letters do not join yet (that is `GSUB`, its own
-  project; the x positions are the only thing that differs from Chrome). Deliberate, and in `todo.md`.
+  Arabic ordering landed here; the JOINING that makes it readable came right after — see the shaping
+  entry below.
+
+- ✅ **Arabic SHAPING (OpenType GSUB)** (2026-08-02) — letters join and lam-alef collapses into one
+  glyph, read from the font's own `GSUB`. No presentation-form (U+FExx) fallback: that route is a dead
+  end, since modern Arabic faces omit the block and rely on `GSUB` alone.
+  Three modules, each with one job. **`utils/gsub.ts`** reads script → langsys → feature → lookup and
+  runs the types that carry Arabic: **1** (one glyph becomes another — that IS the joining), **4**
+  (several collapse into one — lam-alef) and **7** (the extension wrapper big fonts hide the rest
+  behind). Any other type is REPORTED, never guessed at. **`text/arabic.ts`** holds the Unicode 17.0.0
+  joining types (187 ranges, binary-searched); transparent marks are folded in from the character
+  database because `ArabicShaping.txt` lists almost none of them. **`text/shape.ts`** is the only place
+  the two meet.
+  **The rule that cost the most: shaping sees the LOGICAL text, and its GLYPHS are reversed after.** A
+  letter's form comes from its neighbours, and bidi has already swapped them — shaping the drawn text
+  gave a word 42.5 pt where it should be 34.4, and measuring and drawing were wrong TOGETHER, so
+  nothing looked inconsistent. `VisualRun.logical` exists for exactly this.
+  Two more that are easy to miss: **kerning is off for a shaped run** (its pairs are keyed by unshaped
+  glyphs, and the `TJ` path would re-shape each chunk in isolation, turning every letter isolated), and
+  **`letterSpacing` counts DRAWN glyphs**, since a ligature is one glyph for two code points.
+  `TextRun.glyphs` is the new IR field — a shaped run cannot be expressed as a string. `ToUnicode` maps
+  each shaped glyph back to the letters that were WRITTEN (recorded at shaping time, the only moment
+  both are known), so copied text is real Arabic and not presentation forms.
+  **Verified against headless Chrome AND react-pdf 4.5.1**: identical word widths to 0.1 pt and
+  identical extracted text. Demo `claude-data/out/bidi/bidi.pdf`.
+  Not built, none blocking: lookup type **6** (chained context — Naskh picks between two heights of the
+  hah family; same advance, so nothing shifts), **GPOS mark positioning**, the discretionary `liga`, and
+  scripts beyond the Arabic family. All in `todo.md`.
 
 Genuine remaining gaps / deferred:
 
@@ -643,7 +669,7 @@ below), `@jasy/cli`@alpha.6, `@jasy/vue`@alpha.7, `@jasy/nuxt`@alpha.6** (the al
 page-break control — the termination guard, `PageBreak`, `breakBefore`/`breakAfter`, `keepTogether` — plus
 kerning turned on by default). Repo public + locked, full CI + changelog +
 bots in place (see Repo facts). The engine is **feature-complete for the alpha** — inheritance, `onOverflow`,
-custom formats, the line-breaker fixes; **954 tests green** (the root run, i.e. everything but
+custom formats, the line-breaker fixes; **996 tests green** (the root run, i.e. everything but
 `@jasy/nuxt`). The **landing**
 (`~/projects/jasy-landing` → **jasy.dev**) is built: showroom (12 cards), validator, docs, a home-page
 roadmap section, and a full **SEO + AI-discoverability layer** (OG image, JSON-LD, `robots.txt`,

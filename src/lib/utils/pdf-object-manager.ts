@@ -8,6 +8,7 @@ import { AFMParser } from "./afm-parser.ts";
 import { mergeSpans, TTFParser } from "./ttf-parser.ts";
 import { isWoff, woffToSfnt } from "./woff.ts";
 import { subsetTTF } from "./ttf-subsetter.ts";
+import { shapeRun, type ShapedGlyph } from "../text/shape.ts";
 import { getArrayBuffer } from "./utf8-to-windows1252-encoder.ts";
 import type { SecurityHandler } from "../crypto/security-handler.ts";
 import type { Gradient, GradientStop } from "../ir/display-list.ts";
@@ -212,6 +213,12 @@ export class PDFObjectManager implements FontMetrics {
       used: Set<number>;
     }
   >();
+
+  // Shaped runs, keyed by font + text; `null` means "asked, and there was nothing to shape".
+  private shapeCache = new Map<string, ShapedGlyph[] | null>();
+  // Per font, glyph -> the code points it stands for. A shaped glyph is often absent from the cmap (a
+  // ligature) or maps back to a presentation form, so `ToUnicode` cannot come from the cmap alone.
+  private shapedOrigins = new Map<string, Map<number, number[]>>();
 
   // Embedded file attachments (their /Filespec object numbers + display names). Referenced from
   // the catalog's /Names/EmbeddedFiles + /AF. Drives ZUGFeRD's embedded factur-x.xml.
@@ -754,13 +761,16 @@ endstream`;
   // Fills the reserved font objects with a SUBSET of each font (only the glyphs the document used),
   // tagged "ABCDEF+" as PDF/A requires for subsets. Call once, after the render pass, before output.
   finalizeCustomFonts(): void {
-    for (const e of this.customFontEmit.values()) {
+    for (const [key, e] of this.customFontEmit) {
       const ttf = e.ttf;
       const base = `${this.subsetTag(e.pdfName, e.used)}+${e.pdfName}`;
       this.replaceObject(e.fontFile, this.buildFontFile2(ttf, e.used));
       this.replaceObject(e.descriptor, this.buildFontDescriptor(base, ttf, e.fontFile));
       this.replaceObject(e.cidFont, this.buildCIDFont(base, ttf, e.descriptor, e.used));
-      this.replaceObject(e.toUnicode, this.buildToUnicode(ttf, e.used));
+      this.replaceObject(
+        e.toUnicode,
+        this.buildToUnicode(ttf, e.used, this.shapedOrigins.get(key)),
+      );
       this.replaceObject(e.type0, this.buildType0(base, e.cidFont, e.toUnicode));
     }
   }
@@ -856,6 +866,59 @@ endstream`;
     return this.fonts.getFont(name, resolved);
   }
 
+  /** How many glyphs a run draws - its code-point count unless a ligature merged some. `letterSpacing`
+   *  is per glyph (`Tc`), so this is what it multiplies. */
+  shapedGlyphCount(text: string, fontFamily?: string, fontStyle?: FontStyle): number | undefined {
+    return this.shapeText(text, fontFamily, fontStyle)?.length;
+  }
+
+  /**
+   * The shaped glyphs of a run, or undefined when nothing needed shaping. The ONE place shaping is
+   * decided, so measuring and drawing cannot disagree. Memoised: a paragraph is measured several
+   * times (layout, pagination, drawing).
+   */
+  shapeText(text: string, fontFamily?: string, fontStyle: FontStyle = FontStyle.Normal) {
+    const resolved = this.resolveCustomStyle(fontFamily, fontStyle);
+    if (!resolved) return undefined;
+    const key = `${this.customKey(fontFamily!, resolved)}\u0000${text}`;
+    const cached = this.shapeCache.get(key);
+    if (cached !== undefined) return cached ?? undefined;
+    const ttf = this.customFonts.get(fontFamily!)!.get(resolved)!;
+    const shaped =
+      shapeRun(
+        [...text].map((c) => c.codePointAt(0)!),
+        ttf,
+      ) ?? null;
+    this.shapeCache.set(key, shaped);
+    if (shaped) {
+      // Recorded at shaping time - the only moment the glyph and its code points are known together.
+      const fontKey = this.customKey(fontFamily!, resolved);
+      let origins = this.shapedOrigins.get(fontKey);
+      if (!origins) this.shapedOrigins.set(fontKey, (origins = new Map()));
+      for (const g of shaped) origins.set(g.glyph, g.codePoints);
+    }
+    return shaped ?? undefined;
+  }
+
+  /** Hex Identity-H for glyphs the producer already resolved (a shaped run), which cannot be given as
+   *  text. Recording each keeps it in the subset. */
+  registerGlyphs(
+    name: string,
+    glyphs: readonly number[],
+    style: FontStyle = FontStyle.Normal,
+  ): string {
+    const resolved = this.resolveCustomStyle(name, style);
+    if (!resolved) return "";
+    this.ensureEmitted(name, resolved);
+    const emit = this.customFontEmit.get(this.customKey(name, resolved))!;
+    let out = "";
+    for (const g of glyphs) {
+      emit.used.add(g);
+      out += g.toString(16).padStart(4, "0").toUpperCase();
+    }
+    return out;
+  }
+
   // Encodes text as a hex Identity-H string for an embedded font's Tj operator: each codepoint
   // becomes its 2-byte glyph id (CID == GID under /CIDToGIDMap /Identity).
   encodeCustomText(name: string, text: string, style: FontStyle = FontStyle.Normal): string {
@@ -865,11 +928,24 @@ endstream`;
     // Once per text run, not per character: the flat key is fine here.
     const emit = this.customFontEmit.get(this.customKey(name, resolved))!;
     const { ttf, used } = emit;
+    const hex4 = (gid: number) => gid.toString(16).padStart(4, "0").toUpperCase();
+
+    // The SAME shaped run the measuring path used, so the glyphs drawn are the glyphs measured.
+    const shaped = this.shapeText(text, name, style);
+    if (shaped) {
+      let out = "";
+      for (const g of shaped) {
+        used.add(g.glyph);
+        out += hex4(g.glyph);
+      }
+      return out;
+    }
+
     let hex = "";
     for (const ch of text) {
       const gid = ttf.getGlyphIndex(ch.codePointAt(0)!);
       used.add(gid); // record the glyph so the subset keeps it
-      hex += gid.toString(16).padStart(4, "0").toUpperCase();
+      hex += hex4(gid);
     }
     return hex;
   }
@@ -915,17 +991,29 @@ endstream`;
 
   // Maps glyph id -> Unicode so the text stays copy-/searchable (rendering doesn't need it). Only
   // the used glyphs are listed, to match the subset.
-  private buildToUnicode(ttf: TTFParser, used: Set<number>): string {
+  private buildToUnicode(
+    ttf: TTFParser,
+    used: Set<number>,
+    shapedOrigins: Map<number, number[]> = new Map(),
+  ): string {
     const hex4 = (n: number) => n.toString(16).padStart(4, "0").toUpperCase();
+    // A code point above the BMP needs its surrogate PAIR here - a `bfchar` destination is UTF-16BE.
+    const utf16 = (code: number) =>
+      code > 0xffff
+        ? hex4(0xd800 + ((code - 0x10000) >> 10)) + hex4(0xdc00 + ((code - 0x10000) & 0x3ff))
+        : hex4(code);
     const rev = ttf.reverseCmap();
+    // A SHAPED glyph wins: it is often absent from the cmap (a ligature) or maps back to a
+    // presentation form rather than the letter that was written (a joining form), so the reverse
+    // cmap alone would make copied text wrong.
     const entries = [...used]
       .sort((a, b) => a - b)
-      .filter((g) => rev.has(g))
-      .map((g) => [g, rev.get(g)!] as [number, number]);
+      .filter((g) => shapedOrigins.has(g) || rev.has(g))
+      .map((g) => [g, shapedOrigins.get(g) ?? [rev.get(g)!]] as [number, number[]]);
     const blocks: string[] = [];
     for (let i = 0; i < entries.length; i += 100) {
       const block = entries.slice(i, i + 100);
-      const lines = block.map(([gid, code]) => `<${hex4(gid)}> <${hex4(code)}>`);
+      const lines = block.map(([gid, codes]) => `<${hex4(gid)}> <${codes.map(utf16).join("")}>`);
       blocks.push(`${block.length} beginbfchar\n${lines.join("\n")}\nendbfchar`);
     }
     const body =
@@ -1016,6 +1104,10 @@ endstream`;
   getKernPairs(text: string, fontFamily: string, fontStyle: FontStyle): number[] {
     const chars = [...text];
     if (chars.length < 2) return [];
+    // A shaped run does not kern here: these pairs are keyed by the UNSHAPED glyphs, and the `TJ`
+    // path would re-shape each chunk on its own, turning every letter isolated. Arabic kerning is in
+    // GPOS, applied during shaping - not built (`todo.md`).
+    if (this.shapeText(text, fontFamily, fontStyle)) return [];
     const out: number[] = [];
     // An embedded font kerns by GLYPH id (kern table / GPOS); a standard-14 one by character (AFM).
     const ttf = this.getCustomFont(fontFamily, fontStyle);
@@ -1084,6 +1176,14 @@ endstream`;
     fontSize: number,
     fontStyle: FontStyle,
   ): number {
+    // Shaping first: a joined run is narrower than the same letters apart, so measuring the unshaped
+    // form while drawing the shaped one would break every line. Both sides ask `shapeText`.
+    const shaped = this.shapeText(text, fontFamily, fontStyle);
+    if (shaped) {
+      const ttf = this.getCustomFont(fontFamily, fontStyle)!;
+      return shaped.reduce((w, g) => w + ttf.unitsToPoints(g.advance, fontSize), 0);
+    }
+
     let width = 0;
 
     // Iterate code points, not UTF-16 units: an astral char (emoji, CJK-ext) is a surrogate pair,
