@@ -9,8 +9,10 @@ import { DEFAULT_TEXT_STYLE, ResolvedTextStyle } from "../text/text-style.ts";
 import type { FontMetrics } from "../utils/font-metrics.ts";
 import { BoxConstraints, Offset, Size } from "../layout/box-constraints.ts";
 import type { Direction } from "../text/bidi.ts";
+import { applyTextTransform, type TextTransform } from "../text/text-style.ts";
 import { Fragmentable, FragmentResult } from "../layout/fragmentation.ts";
 import {
+  type LineOptions,
   singleLineWidth,
   MAX_SPACE_SHRINK,
   wrapStringIntoLines,
@@ -41,7 +43,23 @@ export interface TextSegment {
   strikethrough?: boolean;
   /** Extra space after every glyph, in points; unset inherits the Text's own value. */
   letterSpacing?: number;
+  /**
+   * CSS `vertical-align`, for a footnote marker or a formula index. Shifts THIS run's baseline;
+   * it does not resize the text, and it does not change the line's height - set `fontSize` yourself
+   * for the smaller look a browser's `<sup>` gets from its default stylesheet.
+   */
+  verticalAlign?: VerticalTextAlign;
 }
+
+/** How far a run sits off the baseline, as a fraction of its font size (up is positive). */
+export const VERTICAL_TEXT_SHIFT: Record<VerticalTextAlign, number> = {
+  baseline: 0,
+  super: 1 / 3,
+  sub: -1 / 5,
+};
+
+/** CSS `vertical-align`, the three values that mean something for a run of text. */
+export type VerticalTextAlign = "baseline" | "super" | "sub";
 
 /** Accessibility role for the tagged structure tree: a heading level or a paragraph (the default). */
 export type TextRole = "h1" | "h2" | "h3" | "h4" | "h5" | "h6" | "p";
@@ -76,6 +94,12 @@ interface TextElementParams {
   letterSpacing?: number;
   /** Base writing direction (CSS `direction`); decides where a line starts. Default `"ltr"`. */
   direction?: Direction;
+  /** CSS `text-transform`; applied before the text is measured or drawn. */
+  textTransform?: TextTransform;
+  /** CSS `word-spacing`, in points: extra advance at every space. */
+  wordSpacing?: number;
+  /** CSS `text-indent`, in points: how far the first line starts in. */
+  textIndent?: number;
   /** Accessibility role for the tagged structure tree (heading level or paragraph; default `"p"`). */
   role?: TextRole;
 }
@@ -94,6 +118,9 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
   private readonly rawSkipInk?: boolean;
   private readonly rawLetterSpacing?: number;
   private readonly rawDirection?: Direction;
+  private readonly rawTextTransform?: TextTransform;
+  private readonly rawWordSpacing?: number;
+  private readonly rawTextIndent?: number;
 
   // Resolved style (raw -> inherited -> built-in default). Seeded to the built-in default in the
   // constructor so the element is self-sufficient, then refined against the cascade at layout time.
@@ -108,6 +135,9 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
   private skipInk!: boolean;
   private letterSpacing!: number;
   private direction!: Direction;
+  private textTransform!: TextTransform;
+  private wordSpacing!: number;
+  private textIndent!: number;
 
   private content: string | TextSegment[];
   private maxLines?: number;
@@ -133,6 +163,9 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     skipInk,
     letterSpacing,
     direction,
+    textTransform,
+    wordSpacing,
+    textIndent,
     role,
   }: TextElementParams) {
     super({ x: 0, y: 0 });
@@ -149,6 +182,9 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     this.rawSkipInk = skipInk;
     this.rawLetterSpacing = letterSpacing;
     this.rawDirection = direction;
+    this.rawTextTransform = textTransform;
+    this.rawWordSpacing = wordSpacing;
+    this.rawTextIndent = textIndent;
     this.content = content;
     this.maxLines = maxLines;
     this.orphans = orphans;
@@ -164,8 +200,28 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
 
   /** Justified lines may be squeezed to keep a word; every other alignment gets no slack. Read by the
    *  breaker in BOTH passes, or a measured line and a drawn one would disagree about where it ends. */
-  private spaceShrink(): number {
-    return this.textAlignment === HorizontalAlignment.justify ? MAX_SPACE_SHRINK : 0;
+  /**
+   * The content as it is measured AND drawn - `text-transform` applied. One place, so a recased
+   * paragraph can never be measured in one casing and drawn in another (`ABC` and `abc` are not the
+   * same width in most fonts).
+   */
+  private display(): string | TextSegment[] {
+    if (this.textTransform === "none") return this.content;
+    return typeof this.content === "string"
+      ? applyTextTransform(this.content, this.textTransform)
+      : this.content.map((seg) => ({
+          ...seg,
+          content: applyTextTransform(seg.content, this.textTransform),
+        }));
+  }
+
+  private lineOptions(): LineOptions {
+    return {
+      wordSpacing: this.wordSpacing,
+      indent: this.textIndent,
+      // Justified lines may be squeezed to keep a word; every other alignment gets no slack.
+      shrink: this.textAlignment === HorizontalAlignment.justify ? MAX_SPACE_SHRINK : 0,
+    };
   }
 
   private applyStyle(ts: ResolvedTextStyle): void {
@@ -180,6 +236,9 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     this.skipInk = this.rawSkipInk ?? ts.skipInk;
     this.letterSpacing = this.rawLetterSpacing ?? ts.letterSpacing;
     this.direction = this.rawDirection ?? ts.direction;
+    this.textTransform = this.rawTextTransform ?? ts.textTransform;
+    this.wordSpacing = this.rawWordSpacing ?? ts.wordSpacing;
+    this.textIndent = this.rawTextIndent ?? ts.textIndent;
   }
 
   /**
@@ -190,9 +249,10 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
    */
   fragment(maxHeight: number, width: number, ctx: LayoutContext): FragmentResult {
     this.resolveStyle(ctx);
-    return typeof this.content === "string"
-      ? this.fragmentString(this.content, maxHeight, width, ctx)
-      : this.fragmentSegments(this.content, maxHeight, width, ctx);
+    const content = this.display();
+    return typeof content === "string"
+      ? this.fragmentString(content, maxHeight, width, ctx)
+      : this.fragmentSegments(content, maxHeight, width, ctx);
   }
 
   // Plain string: every wrapped line gets the same box (the same one calculateTextHeight uses),
@@ -213,7 +273,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       this.maxLines,
       this.overflow,
       this.letterSpacing,
-      this.spaceShrink(),
+      this.lineOptions(),
     );
 
     const box = lineBoxForString(
@@ -251,6 +311,8 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       fontStyle: this.fontStyle,
       letterSpacing: this.letterSpacing,
       direction: this.direction,
+      wordSpacing: this.wordSpacing,
+      textIndent: this.textIndent,
     };
     const lines = breakSegmentsIntoLines(
       content,
@@ -308,6 +370,8 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       skipInk: this.skipInk,
       letterSpacing: this.letterSpacing,
       direction: this.direction,
+      wordSpacing: this.wordSpacing,
+      textIndent: this.textIndent,
       role: this.role,
     }).adoptStructId(this); // a wrapped remainder is the SAME logical paragraph (one P across pages)
   }
@@ -325,7 +389,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
 
     const wrapWidth = this.width ?? 0;
     this.height = TextRenderer.calculateTextHeight(
-      this.content,
+      this.display(),
       this.fontSize,
       this.fontFamily,
       this.fontStyle,
@@ -335,7 +399,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       this.overflow,
       this.lineHeight,
       this.letterSpacing,
-      this.spaceShrink(),
+      this.lineOptions(),
     );
 
     // Top-left coordinates (y = top of the text box). The baseline offset and the
@@ -366,17 +430,13 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
         { fontFamily: family, fontSize: size, fontStyle: style },
         metrics,
         letterSpacing,
+        this.wordSpacing,
       );
-    if (typeof this.content === "string") {
-      return oneLine(
-        this.content,
-        this.fontFamily,
-        this.fontSize,
-        this.fontStyle,
-        this.letterSpacing,
-      );
+    const content = this.display();
+    if (typeof content === "string") {
+      return oneLine(content, this.fontFamily, this.fontSize, this.fontStyle, this.letterSpacing);
     }
-    return this.content.reduce(
+    return content.reduce(
       (sum, seg) =>
         sum +
         oneLine(
@@ -400,7 +460,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       fontFamily: this.fontFamily,
       fontStyle: this.fontStyle,
       color: this.color,
-      content: this.content,
+      content: this.display(),
       textAlignment: this.textAlignment,
       maxLines: this.maxLines,
       orphans: this.orphans,
@@ -412,6 +472,8 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       skipInk: this.skipInk,
       letterSpacing: this.letterSpacing,
       direction: this.direction,
+      wordSpacing: this.wordSpacing,
+      textIndent: this.textIndent,
       role: this.role,
     };
   }

@@ -3,6 +3,21 @@ import { FontStyle } from "../utils/pdf-object-manager.ts";
 import { HorizontalAlignment } from "../elements/pdf-element.ts";
 import type { Direction } from "./bidi.ts";
 
+/** CSS `text-transform`. `capitalize` upper-cases the first letter of every word, as CSS does. */
+export type TextTransform = "none" | "uppercase" | "lowercase" | "capitalize";
+
+/** Apply a `text-transform`. One place, so the measured text and the drawn text are the same string. */
+export function applyTextTransform(text: string, transform: TextTransform): string {
+  if (transform === "none") return text;
+  if (transform === "uppercase") return text.toUpperCase();
+  if (transform === "lowercase") return text.toLowerCase();
+  // CSS capitalises the first letter of every WORD and leaves the rest as written.
+  return text.replace(
+    /(^|\s)(\S)/gu,
+    (_, lead: string, first: string) => lead + first.toUpperCase(),
+  );
+}
+
 /**
  * The inheritable text properties - the same set CSS and Flutter cascade. A `Text` resolves each of
  * its own (possibly unset) properties against the nearest cascaded style: explicit > inherited >
@@ -31,6 +46,12 @@ export interface ResolvedTextStyle {
    *  characters between two scripts resolve; the reordering itself follows Unicode UAX #9 either
    *  way, so Hebrew inside an `ltr` paragraph still comes out right. */
   direction: Direction;
+  /** CSS `text-transform`: recase the text before it is measured or drawn. */
+  textTransform: TextTransform;
+  /** CSS `word-spacing`, in points: extra advance at every space. Negative tightens. */
+  wordSpacing: number;
+  /** CSS `text-indent`, in points: how far the FIRST line of a paragraph starts in. */
+  textIndent: number;
 }
 
 /**
@@ -49,6 +70,9 @@ export const DEFAULT_TEXT_STYLE: ResolvedTextStyle = {
   skipInk: false,
   letterSpacing: 0,
   direction: "ltr",
+  textTransform: "none",
+  wordSpacing: 0,
+  textIndent: 0,
 };
 
 /** Layers a partial override onto a complete style; an unset (undefined) field keeps the base. */
@@ -69,5 +93,8 @@ export function mergeTextStyle(
     skipInk: override.skipInk ?? base.skipInk,
     letterSpacing: override.letterSpacing ?? base.letterSpacing,
     direction: override.direction ?? base.direction,
+    textTransform: override.textTransform ?? base.textTransform,
+    wordSpacing: override.wordSpacing ?? base.wordSpacing,
+    textIndent: override.textIndent ?? base.textIndent,
   };
 }

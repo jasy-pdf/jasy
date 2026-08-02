@@ -180,8 +180,8 @@ describe("TextRenderer - calculateTextHeight", () => {
       getColorFont: vi.fn().mockReturnValue(undefined),
       getEmojiFont: vi.fn().mockReturnValue(undefined),
       getEmojiImageSource: vi.fn().mockReturnValue(undefined),
-      getStringWidth: vi.fn().mockReturnValue(25), // Here we get the widht of the "complete" string, because the renderer renders each "line", not only the words/segments: 25
-      getCharWidth: vi.fn().mockReturnValue(0), // For empty spaces: 0
+      getStringWidth: vi.fn((t: string) => t.length * 5),
+      getCharWidth: vi.fn(() => 5),
       getFontVerticals: unitVerticals,
       struct: { enabled: false },
       shapeText: () => undefined,
@@ -193,11 +193,11 @@ describe("TextRenderer - calculateTextHeight", () => {
     );
 
     expect(result).toContain("/F1 12 Tf");
-    // x: 10 + (200 - 25) / 2 = 97.5.
+    // x: 10 + (200 - 55) / 2 = 82.5.
     // y: the test font is 0.75 up / 0.25 down, so its natural box is 1 em = 12 with no leading to
     // split; the baseline sits at its ascent, 12*0.75 = 9, below the top: 20 + 9 = 29.
     // (top-left baseline; the seam flips to PDF coordinates later).
-    expect(result).toContain("97.500 29.000 Td");
+    expect(result).toContain("82.500 29.000 Td");
     expect(result).toContain("(Hello World) Tj");
   });
 
@@ -222,8 +222,8 @@ describe("TextRenderer - calculateTextHeight", () => {
       getColorFont: vi.fn().mockReturnValue(undefined),
       getEmojiFont: vi.fn().mockReturnValue(undefined),
       getEmojiImageSource: vi.fn().mockReturnValue(undefined),
-      getStringWidth: vi.fn().mockReturnValue(25), // Here we get the widht of the "complete" string, because the renderer renders each "line", not only the words/segments: 25
-      getCharWidth: vi.fn().mockReturnValue(0),
+      getStringWidth: vi.fn((t: string) => t.length * 5),
+      getCharWidth: vi.fn(() => 5),
       getFontVerticals: unitVerticals,
       struct: { enabled: false },
       shapeText: () => undefined,
@@ -236,7 +236,7 @@ describe("TextRenderer - calculateTextHeight", () => {
 
     expect(result).toContain("/F1 12 Tf");
     // x: 10 + 200 - 25 = 185. y: top 20 + ascent 12*0.75 = 29.
-    expect(result).toContain("185.000 29.000 Td");
+    expect(result).toContain("155.000 29.000 Td");
     expect(result).toContain("(Hello World) Tj");
   });
 
