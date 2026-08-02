@@ -6,17 +6,15 @@ import { LineElement } from "../../../src/lib/elements/line-element";
 import { LayoutContext, PDFElement } from "../../../src/lib/elements/pdf-element";
 import { BoxConstraints, Offset, Size } from "../../../src/lib/layout/box-constraints";
 import { packChildren } from "../../../src/lib/layout/fragmentation";
-import type { FontMetrics } from "../../../src/lib/utils/font-metrics";
-import { unitVerticals } from "../support/metrics.ts";
+import { testMetrics } from "../support/metrics.ts";
 
 // Each glyph 10 wide, spaces 0: "aa bb cc dd ee ff" wraps to 3 lines of 10pt at width 50.
-const metrics: FontMetrics = {
+const metrics = testMetrics({
   // Consistent font: getStringWidth is the sum of getCharWidth (as it is in reality). Each glyph is
   // 10 wide, a space is 0, so word widths are len*10 and spaces cost nothing - the arithmetic below.
   getStringWidth: (text: string) => [...text].reduce((w, c) => w + (c === " " ? 0 : 10), 0),
   getCharWidth: (c: string) => (c === " " ? 0 : 10),
-  getFontVerticals: unitVerticals,
-};
+});
 const ctx = { metrics } as LayoutContext;
 
 // orphans/widows are switched OFF here on purpose: these suites are about WHERE the fragmenter cuts,

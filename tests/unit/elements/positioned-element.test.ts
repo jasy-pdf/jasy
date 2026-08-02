@@ -8,15 +8,13 @@ import { LayoutContext } from "../../../src/lib/elements/pdf-element";
 import { BoxConstraints } from "../../../src/lib/layout/box-constraints";
 import { Orientation } from "../../../src/lib/renderer/pdf-config";
 import { PageSize } from "../../../src/lib/constants/page-sizes";
-import type { FontMetrics } from "../../../src/lib/utils/font-metrics";
 import type { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager";
-import { unitVerticals } from "../support/metrics.ts";
+import { testMetrics } from "../support/metrics.ts";
 
-const metrics: FontMetrics = {
+const metrics = testMetrics({
   getStringWidth: (text) => text.length * 10,
   getCharWidth: () => 0,
-  getFontVerticals: unitVerticals,
-};
+});
 const ctx = { metrics } as LayoutContext;
 // A `Positioned` refuses to lay out without a frame, so the out-of-flow tests below need one. It is
 // never drained: they assert what the element does NOT do to the flow, not where the child lands.

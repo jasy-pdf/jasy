@@ -36,6 +36,9 @@ export interface FontMetrics {
    *  zero next to a space. Only meaningful when `kerningEnabled`. */
   getKernPairs(text: string, fontFamily: string, fontStyle: FontStyle): number[];
 
+  /** Whether this family can draw the code point at all - what picks a face out of a fallback stack. */
+  hasGlyph(codePoint: number, fontFamily: string, fontStyle: FontStyle): boolean;
+
   /** How many glyphs the run will DRAW, when a ligature made that differ from its code-point count.
    *  Absent or `undefined` means "the same", which is every Latin run. */
   shapedGlyphCount?(text: string, fontFamily?: string, fontStyle?: FontStyle): number | undefined;

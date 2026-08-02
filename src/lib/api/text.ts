@@ -17,7 +17,9 @@ export type { TextOverflow };
  *  (locked §7.3) and combine into one engine `FontStyle`. */
 export interface TextStyle {
   size?: number;
-  font?: string;
+  /** Font family, or a STACK: each code point is drawn by the first family in the list that has a
+   *  glyph for it, so `["Inter", "NotoSansCJK"]` sets mixed-script text without splitting it by hand. */
+  font?: string | string[];
   bold?: boolean;
   italic?: boolean;
   color?: ColorInput;
@@ -86,6 +88,14 @@ function toFontStyle(bold?: boolean, italic?: boolean): FontStyle {
   return FontStyle.Normal;
 }
 
+/** The family a run starts in - the first of a stack, or the single name given. */
+const primaryFont = (font?: string | string[]): string | undefined =>
+  Array.isArray(font) ? font[0] : font;
+
+/** The rest of the stack, tried in order for a code point the first family cannot draw. */
+const fallbackFonts = (font?: string | string[]): string[] | undefined =>
+  Array.isArray(font) ? font.slice(1) : undefined;
+
 const ALIGN: Record<NonNullable<TextOptions["align"]>, HorizontalAlignment> = {
   left: HorizontalAlignment.left,
   center: HorizontalAlignment.center,
@@ -122,7 +132,8 @@ export function span(text: string, style: TextStyle = {}): TextSegment {
   return {
     content: text,
     fontSize: toFontSize(style.size),
-    fontFamily: style.font,
+    fontFamily: primaryFont(style.font),
+    fontFallback: fallbackFonts(style.font),
     fontStyle:
       style.bold !== undefined || style.italic !== undefined
         ? toFontStyle(style.bold, style.italic)
@@ -153,7 +164,8 @@ export function Text(content: string | TextSegment[], opts: TextOptions = {}): T
   return new TextElement({
     content: body,
     fontSize: toFontSize(opts.size),
-    fontFamily: opts.font,
+    fontFamily: primaryFont(opts.font),
+    fontFallback: fallbackFonts(opts.font),
     fontStyle:
       opts.bold !== undefined || opts.italic !== undefined
         ? toFontStyle(opts.bold, opts.italic)
@@ -186,7 +198,9 @@ export function Paragraph(content: string | TextSegment[], opts: TextOptions = {
  *  Unset fields stay out so they keep inheriting. */
 export interface TextDefaults {
   size?: number;
-  font?: string;
+  /** Font family, or a STACK: each code point is drawn by the first family in the list that has a
+   *  glyph for it, so `["Inter", "NotoSansCJK"]` sets mixed-script text without splitting it by hand. */
+  font?: string | string[];
   bold?: boolean;
   italic?: boolean;
   color?: ColorInput;
@@ -213,7 +227,10 @@ export interface TextDefaults {
 export function toTextStyleOverride(opts: TextDefaults): Partial<ResolvedTextStyle> {
   const style: Partial<ResolvedTextStyle> = {};
   if (opts.size !== undefined) style.fontSize = toFontSize(opts.size);
-  if (opts.font !== undefined) style.fontFamily = opts.font;
+  if (opts.font !== undefined) {
+    style.fontFamily = primaryFont(opts.font);
+    style.fontFallback = fallbackFonts(opts.font);
+  }
   if (opts.bold !== undefined || opts.italic !== undefined) {
     style.fontStyle = toFontStyle(opts.bold, opts.italic);
   }

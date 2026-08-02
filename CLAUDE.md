@@ -230,7 +230,7 @@ rendering. This is the standing visual check; prefer it over one-off `scripts/ru
 - `pnpm test` — Vitest (watch). `pnpm exec vitest run` for a one-shot CI-style run.
   `pnpm run test:coverage` for coverage. Unit tests live in **`tests/unit/`**, mirroring the `src/lib/`
   structure (`tests/unit/{common,elements,renderer,utils}/…`). `src/` is pure production code — the
-  build (`tsconfig.json` includes only `src/**`) therefore keeps `dist/` test-free. **1036 tests, green** —
+  build (`tsconfig.json` includes only `src/**`) therefore keeps `dist/` test-free. **1053 tests, green** —
   what the root run covers: core 908, `@jasy/cli` 37, `@jasy/vue` 33, `@jasy/e-invoice` 27. `@jasy/nuxt`
   is excluded from it (`vitest.config.ts`) and runs on its own.
 - `pnpm run build` — `tsc` → `dist/`.
@@ -652,6 +652,22 @@ wordWidth > maxWidth` and forgot the SPACE that would join the word. It went uns
   The breaker's growing tail of positional arguments became one `LineOptions` bag ({ wordSpacing,
   indent, shrink }).
 
+- ✅ **Font fallback stack** (2026-08-02) — `Text({ font: ["Inter", "NotoSansCJK"] })`: each code point
+  is drawn by the first family in the list that has a glyph for it, so mixed-script text works without
+  splitting it by hand. Inheritable like every other text style; a single name behaves exactly as before.
+  The decision that made it small: the fallback resolves the content into **spans**, one per family
+  (`text/font-fallback.ts` → `splitByFont`). That is the shape a styled `span` already has, so breaking,
+  bidi, shaping and drawing all handle it with no new code — instead of a second per-code-point
+  mechanism beside the existing ones.
+  Coverage is `FontMetrics.hasGlyph`: an embedded face answers from its `cmap`, a standard-14 one from
+  what Windows-1252 encodes (`isWindows1252`), which is exactly what its `/Widths` array indexes.
+  Two things that had to be right: the split happens in the LAYOUT pass and is REMEMBERED
+  (`TextElement.resolved`), because the render pass has no metrics and would otherwise draw everything
+  in the first family — measured ≠ drawn again; and it iterates CODE POINTS, or a BMP-only family would
+  keep both halves of an astral character and draw it from a font that does not have it.
+  A code point no family in the stack has stays with the first one and shows its `.notdef`, as a browser
+  does — dropping it would make the text read differently than it was written.
+
 Genuine remaining gaps / deferred:
 
 1. **Absolute positioning — Stages 1+2 built** (2026-06-21). CSS-style: `Box({ relative: true })` is a
@@ -728,7 +744,7 @@ below), `@jasy/cli`@alpha.6, `@jasy/vue`@alpha.7, `@jasy/nuxt`@alpha.6** (the al
 page-break control — the termination guard, `PageBreak`, `breakBefore`/`breakAfter`, `keepTogether` — plus
 kerning turned on by default). Repo public + locked, full CI + changelog +
 bots in place (see Repo facts). The engine is **feature-complete for the alpha** — inheritance, `onOverflow`,
-custom formats, the line-breaker fixes; **1036 tests green** (the root run, i.e. everything but
+custom formats, the line-breaker fixes; **1053 tests green** (the root run, i.e. everything but
 `@jasy/nuxt`). The **landing**
 (`~/projects/jasy-landing` → **jasy.dev**) is built: showroom (12 cards), validator, docs, a home-page
 roadmap section, and a full **SEO + AI-discoverability layer** (OG image, JSON-LD, `robots.txt`,

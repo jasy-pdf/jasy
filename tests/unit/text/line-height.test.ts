@@ -2,16 +2,14 @@ import { describe, it, expect } from "vitest";
 import { TextElement } from "../../../src/lib/elements/text-element";
 import { BoxConstraints } from "../../../src/lib/layout/box-constraints";
 import { LayoutContext } from "../../../src/lib/elements/pdf-element";
-import { FontMetrics } from "../../../src/lib/utils/font-metrics";
 import { Text } from "../../../src/lib/api";
-import { unitVerticals } from "../support/metrics.ts";
+import { testMetrics } from "../support/metrics.ts";
 
 // Every glyph (and the space) is 10pt wide -> "alfa" = 40pt; at width 50 each word lands on its line.
-const metrics = {
+const metrics = testMetrics({
   getStringWidth: (t: string) => t.length * 10,
   getCharWidth: () => 10,
-  getFontVerticals: unitVerticals,
-} as unknown as FontMetrics;
+});
 
 const CONTENT = "alfa bram char dent emil"; // wraps to 5 lines at width 50
 
@@ -38,11 +36,11 @@ describe("lineHeight", () => {
     // A face that asks for 0.9 up, 0.3 down and 0.1 of lineGap wants a 1.3 em line box. A 1 em box
     // would be tighter than the font itself declares - which is exactly what the old hard-coded
     // baseline constant did to every embedded font.
-    const tall = {
+    const tall = testMetrics({
       getStringWidth: (t: string) => t.length * 10,
       getCharWidth: () => 10,
       getFontVerticals: () => ({ ascent: 0.9, descent: 0.3, lineGap: 0.1 }),
-    } as unknown as FontMetrics;
+    });
     const ctx = { metrics: tall, pageConfig: {} } as LayoutContext;
 
     const natural = new TextElement({ fontSize: 10, content: CONTENT });

@@ -9,7 +9,7 @@ import { mergeSpans, TTFParser } from "./ttf-parser.ts";
 import { isWoff, woffToSfnt } from "./woff.ts";
 import { subsetTTF } from "./ttf-subsetter.ts";
 import { shapeRun, type ShapedGlyph } from "../text/shape.ts";
-import { getArrayBuffer } from "./utf8-to-windows1252-encoder.ts";
+import { getArrayBuffer, isWindows1252 } from "./utf8-to-windows1252-encoder.ts";
 import type { SecurityHandler } from "../crypto/security-handler.ts";
 import type { Gradient, GradientStop } from "../ir/display-list.ts";
 import { isEmojiCodePoint } from "../text/emoji-codepoints.ts";
@@ -850,6 +850,21 @@ endstream`;
   }
 
   // Whether `ttf` has a COLOR glyph for a code point (i.e. it would render it as color emoji).
+  /**
+   * Whether a family can draw this code point at all. An embedded face answers from its `cmap`; a
+   * standard-14 one can only draw what Windows-1252 encodes, which is what its `/Widths` array covers.
+   * Used to pick a family out of a fallback stack, per code point.
+   */
+  hasGlyph(
+    codePoint: number,
+    fontFamily: string,
+    fontStyle: FontStyle = FontStyle.Normal,
+  ): boolean {
+    const ttf = this.getCustomFont(fontFamily, fontStyle);
+    if (ttf) return ttf.getGlyphIndex(codePoint) !== 0;
+    return isWindows1252(codePoint);
+  }
+
   private colorRenders(ttf: TTFParser, codePoint: number): boolean {
     return ttf.getColorGlyph(ttf.getGlyphIndex(codePoint)) !== null;
   }

@@ -1,8 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { TextElement } from "../../../src/lib/elements/text-element.ts";
 import type { LayoutContext } from "../../../src/lib/elements/pdf-element.ts";
-import type { FontMetrics } from "../../../src/lib/utils/font-metrics.ts";
-import { unitVerticals } from "../support/metrics.ts";
+import { testMetrics } from "../support/metrics.ts";
 import {
   adjustForOrphansWidows,
   DEFAULT_ORPHANS,
@@ -123,11 +122,10 @@ describe("turning it off", () => {
 describe("through TextElement.fragment", () => {
   // The deterministic metrics from the fragment suite: each glyph is 10 wide, spaces are 0, so with
   // maxWidth 50 a six-word paragraph of two-letter words breaks into exactly three lines of ten high.
-  const metrics: FontMetrics = {
+  const metrics = testMetrics({
     getStringWidth: (text: string) => [...text].reduce((w, c) => w + (c === " " ? 0 : 10), 0),
     getCharWidth: (c: string) => (c === " " ? 0 : 10),
-    getFontVerticals: unitVerticals,
-  };
+  });
   const ctx = { metrics } as LayoutContext;
   const para = (orphans?: number, widows?: number) =>
     new TextElement({ fontSize: 10, content: "aa bb cc dd ee ff", orphans, widows });
