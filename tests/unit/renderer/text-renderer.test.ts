@@ -334,7 +334,7 @@ describe("TextRenderer - calculateTextHeight", () => {
       getEmojiImageSource: vi.fn().mockReturnValue(undefined),
       ...testMetrics({
         getStringWidth: vi.fn((content, fontFamily, fontSize) => {
-          return content.length * fontSize; // Einfacher Algorithmus zur Rückgabe der Breite
+          return content.length * fontSize; // one glyph per character, at the font size
         }),
 
         getCharWidth: vi.fn().mockReturnValue(10),
@@ -348,8 +348,8 @@ describe("TextRenderer - calculateTextHeight", () => {
       mockObjectManager,
     );
 
-    expect(result).toContain("/F1 12 Tf"); // Normal font für "Hello"
-    expect(result).toContain("/F2 14 Tf"); // Bold font für "World"
+    expect(result).toContain("/F1 12 Tf"); // the normal font, for "Hello"
+    expect(result).toContain("/F2 14 Tf"); // the bold one, for "World"
     expect(result).toContain("(Hello) Tj");
     expect(result).toContain("(World) Tj");
   });
