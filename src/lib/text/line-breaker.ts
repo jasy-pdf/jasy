@@ -17,6 +17,16 @@ import { runAdvance } from "./advance.ts";
  */
 export const MAX_SPACE_SHRINK = 1 / 4;
 
+/** The knobs that change where a line ENDS, beyond the font and the box. */
+export interface LineOptions {
+  /** Extra advance at every space (CSS `word-spacing`), in points. */
+  wordSpacing?: number;
+  /** How far the FIRST line starts in (CSS `text-indent`), in points - it has that much less room. */
+  indent?: number;
+  /** How far a justified line's spaces may be squeezed to keep one more word (0 = not justified). */
+  shrink?: number;
+}
+
 /** Default font for segments that don't override it. */
 export interface SegmentDefaults {
   fontFamily: string;
@@ -61,8 +71,9 @@ export function singleLineWidth(
   font: { fontFamily: string; fontSize: number; fontStyle: FontStyle },
   metrics: FontMetrics,
   letterSpacing = 0,
+  wordSpacing = 0,
 ): number {
-  const space = runAdvance(metrics, " ", font, letterSpacing);
+  const space = runAdvance(metrics, " ", font, letterSpacing) + wordSpacing;
   return text
     .split(" ")
     .reduce(
@@ -84,8 +95,9 @@ export function wrapStringIntoLines(
   maxLines?: number,
   overflow?: TextOverflow,
   letterSpacing = 0,
-  shrink = 0,
+  options: LineOptions = {},
 ): string[] {
+  const { wordSpacing = 0, indent = 0, shrink = 0 } = options;
   let currentLine = "";
   let currentWidth = 0;
   let gaps = 0; // spaces on the current line, which is what a justified line can squeeze
@@ -97,7 +109,9 @@ export function wrapStringIntoLines(
     // Word and space advances come from the one shared primitive (`advance.ts`), the same one
     // `naturalWidth` uses - so a bounded and an unbounded layout of the same text agree bit for bit.
     const wordWidth = runAdvance(metrics, word, font, letterSpacing);
-    const spaceWidth = runAdvance(metrics, " ", font, letterSpacing);
+    const spaceWidth = runAdvance(metrics, " ", font, letterSpacing) + wordSpacing;
+    // The FIRST line has the indent taken out of its room; every later one gets the full box.
+    const room = lines.length === 0 ? maxWidth - indent : maxWidth;
 
     // Break before a word that won't fit - counting the SPACE that would join it, which the old test
     // forgot. It went unnoticed on the first line, where the very first word added a space too many
@@ -118,7 +132,7 @@ export function wrapStringIntoLines(
       // ONE expression, used for the test AND for the running total. Adding the same three numbers in
       // a different order gives a different last bit, and a line that lands exactly on `maxWidth` is
       // then broken by that bit alone - which is how a footer sized to its own text wrapped.
-    } else if (candidate - (gaps + 1) * spaceWidth * shrink > maxWidth) {
+    } else if (candidate - (gaps + 1) * spaceWidth * shrink > room) {
       lines.push(currentLine.trim());
       currentLine = word;
       currentWidth = wordWidth;
@@ -142,9 +156,11 @@ export function wrapStringIntoLines(
       fontFamily,
       fontSize,
       fontStyle,
-      maxWidth,
+      // The same room that line was broken against: the first one lost the indent to it.
+      last === 0 ? maxWidth - indent : maxWidth,
       metrics,
       letterSpacing,
+      wordSpacing,
     );
   }
   return kept;
@@ -254,10 +270,13 @@ function ellipsize(
   maxWidth: number,
   metrics: FontMetrics,
   letterSpacing = 0,
+  wordSpacing = 0,
 ): string {
   const font = { fontFamily, fontSize, fontStyle };
+  // Measured through `singleLineWidth`, so the ellipsised line is judged by the same sum that decides
+  // every other line - word-spacing included.
   const fits = (s: string): boolean =>
-    runAdvance(metrics, s + ELLIPSIS, font, letterSpacing) <= maxWidth;
+    singleLineWidth(s + ELLIPSIS, font, metrics, letterSpacing, wordSpacing) <= maxWidth;
   if (fits(line)) return line + ELLIPSIS;
 
   const words = line.split(" ");

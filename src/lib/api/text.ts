@@ -1,9 +1,14 @@
-import { TextElement, TextRole, TextSegment } from "../elements/text-element.ts";
+import {
+  TextElement,
+  TextRole,
+  TextSegment,
+  type VerticalTextAlign,
+} from "../elements/text-element.ts";
 import { HorizontalAlignment } from "../elements/pdf-element.ts";
 import { FontStyle } from "../utils/pdf-object-manager.ts";
 import { TextOverflow } from "../text/line-breaker.ts";
 import type { Direction } from "../text/bidi.ts";
-import { ResolvedTextStyle } from "../text/text-style.ts";
+import { ResolvedTextStyle, type TextTransform } from "../text/text-style.ts";
 import { ColorInput, toColor } from "./color.ts";
 
 export type { TextOverflow };
@@ -31,6 +36,15 @@ export interface TextStyle {
    *  Arabic. Mixed text is reordered per Unicode UAX #9 either way, so Hebrew inside an `ltr`
    *  paragraph already comes out right - this decides where the LINE starts. */
   direction?: Direction;
+  /** CSS `text-transform`: recase the text. `capitalize` upper-cases the first letter of each word. */
+  textTransform?: TextTransform;
+  /** CSS `word-spacing`, in points: extra advance at every space. Negative tightens. */
+  wordSpacing?: number;
+  /** CSS `text-indent`, in points: how far the FIRST line of a paragraph starts in. */
+  textIndent?: number;
+  /** CSS `vertical-align` for a SPAN: raises a footnote marker or lowers an index. It shifts the
+   *  baseline only - pass a smaller `size` too if you want the browser's `<sup>` look. */
+  verticalAlign?: VerticalTextAlign;
   /** External URL - makes this run an inline hyperlink (a /Link annotation over its glyphs). On a
    *  `span` it links just that run; on a whole `Text` (plain string) it links the whole text. */
   href?: string;
@@ -117,6 +131,7 @@ export function span(text: string, style: TextStyle = {}): TextSegment {
     underline: style.underline,
     strikethrough: style.strikethrough,
     letterSpacing: style.letterSpacing,
+    verticalAlign: style.verticalAlign,
     href: style.href,
     dest: style.to,
   };
@@ -155,6 +170,9 @@ export function Text(content: string | TextSegment[], opts: TextOptions = {}): T
     skipInk: opts.skipInk,
     letterSpacing: opts.letterSpacing,
     direction: opts.direction,
+    textTransform: opts.textTransform,
+    wordSpacing: opts.wordSpacing,
+    textIndent: opts.textIndent,
     role: opts.role,
   });
 }
@@ -182,6 +200,12 @@ export interface TextDefaults {
    *  Arabic. Mixed text is reordered per Unicode UAX #9 either way, so Hebrew inside an `ltr`
    *  paragraph already comes out right - this decides where the LINE starts. */
   direction?: Direction;
+  /** CSS `text-transform`: recase the text. `capitalize` upper-cases the first letter of each word. */
+  textTransform?: TextTransform;
+  /** CSS `word-spacing`, in points: extra advance at every space. Negative tightens. */
+  wordSpacing?: number;
+  /** CSS `text-indent`, in points: how far the FIRST line of a paragraph starts in. */
+  textIndent?: number;
 }
 
 /** Maps the `Text`-style option names onto a partial engine `ResolvedTextStyle` (only the set
@@ -201,5 +225,8 @@ export function toTextStyleOverride(opts: TextDefaults): Partial<ResolvedTextSty
   if (opts.skipInk !== undefined) style.skipInk = opts.skipInk;
   if (opts.letterSpacing !== undefined) style.letterSpacing = opts.letterSpacing;
   if (opts.direction !== undefined) style.direction = opts.direction;
+  if (opts.textTransform !== undefined) style.textTransform = opts.textTransform;
+  if (opts.wordSpacing !== undefined) style.wordSpacing = opts.wordSpacing;
+  if (opts.textIndent !== undefined) style.textIndent = opts.textIndent;
   return style;
 }

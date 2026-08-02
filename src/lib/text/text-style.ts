@@ -3,6 +3,42 @@ import { FontStyle } from "../utils/pdf-object-manager.ts";
 import { HorizontalAlignment } from "../elements/pdf-element.ts";
 import type { Direction } from "./bidi.ts";
 
+/** CSS `text-transform`. `capitalize` upper-cases the first letter of every word, as CSS does. */
+export type TextTransform = "none" | "uppercase" | "lowercase" | "capitalize";
+
+/**
+ * Apply a `text-transform`. One place, so the measured text and the drawn text are the same string.
+ *
+ * `atWordStart` carries the capitalisation state ACROSS pieces: a word split over two spans
+ * (`span("hel") + span("lo")`) is still one word, and only its first letter is raised.
+ */
+export function applyTextTransform(
+  text: string,
+  transform: TextTransform,
+  atWordStart = true,
+): { text: string; atWordStart: boolean } {
+  const ends = text === "" ? atWordStart : /\s$/u.test(text);
+  if (transform === "none") return { text, atWordStart: ends };
+  if (transform === "uppercase") return { text: text.toUpperCase(), atWordStart: ends };
+  if (transform === "lowercase") return { text: text.toLowerCase(), atWordStart: ends };
+  // CSS raises the first typographic LETTER of every word. Punctuation is not one, so a leading
+  // bracket or quote does not consume the word start - `(hello)` becomes `(Hello)`, as in a browser.
+  let start = atWordStart;
+  let out = "";
+  for (const ch of text) {
+    if (/\s/u.test(ch)) {
+      out += ch;
+      start = true;
+    } else if (start && /\p{L}|\p{N}/u.test(ch)) {
+      out += ch.toUpperCase();
+      start = false;
+    } else {
+      out += ch;
+    }
+  }
+  return { text: out, atWordStart: start };
+}
+
 /**
  * The inheritable text properties - the same set CSS and Flutter cascade. A `Text` resolves each of
  * its own (possibly unset) properties against the nearest cascaded style: explicit > inherited >
@@ -31,6 +67,12 @@ export interface ResolvedTextStyle {
    *  characters between two scripts resolve; the reordering itself follows Unicode UAX #9 either
    *  way, so Hebrew inside an `ltr` paragraph still comes out right. */
   direction: Direction;
+  /** CSS `text-transform`: recase the text before it is measured or drawn. */
+  textTransform: TextTransform;
+  /** CSS `word-spacing`, in points: extra advance at every space. Negative tightens. */
+  wordSpacing: number;
+  /** CSS `text-indent`, in points: how far the FIRST line of a paragraph starts in. */
+  textIndent: number;
 }
 
 /**
@@ -49,6 +91,9 @@ export const DEFAULT_TEXT_STYLE: ResolvedTextStyle = {
   skipInk: false,
   letterSpacing: 0,
   direction: "ltr",
+  textTransform: "none",
+  wordSpacing: 0,
+  textIndent: 0,
 };
 
 /** Layers a partial override onto a complete style; an unset (undefined) field keeps the base. */
@@ -69,5 +114,8 @@ export function mergeTextStyle(
     skipInk: override.skipInk ?? base.skipInk,
     letterSpacing: override.letterSpacing ?? base.letterSpacing,
     direction: override.direction ?? base.direction,
+    textTransform: override.textTransform ?? base.textTransform,
+    wordSpacing: override.wordSpacing ?? base.wordSpacing,
+    textIndent: override.textIndent ?? base.textIndent,
   };
 }

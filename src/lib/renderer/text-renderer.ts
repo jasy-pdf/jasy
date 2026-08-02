@@ -1,6 +1,6 @@
 import { Color } from "../common/color.ts";
 import { HorizontalAlignment } from "../elements/pdf-element.ts";
-import { TextElement, TextSegment } from "../elements/text-element.ts";
+import { VERTICAL_TEXT_SHIFT, TextElement, TextSegment } from "../elements/text-element.ts";
 import { FontStyle, PDFObjectManager } from "../utils/pdf-object-manager.ts";
 import type { FontMetrics } from "../utils/font-metrics.ts";
 import type {
@@ -14,6 +14,8 @@ import { IRNode, TextRun, PathCommand, Gradient, Line, Link } from "../ir/displa
 import { isEmojiCodePoint } from "../text/emoji-codepoints.ts";
 import { emojiImageNode } from "./emoji-image.ts";
 import {
+  singleLineWidth,
+  type LineOptions,
   MAX_SPACE_SHRINK,
   wrapStringIntoLines,
   breakSegmentsIntoLines,
@@ -44,7 +46,7 @@ export class TextRenderer {
     overflow?: TextOverflow,
     lineHeight?: number,
     letterSpacing = 0,
-    spaceShrink = 0,
+    lineOptions: LineOptions = {},
   ): number {
     // Plain string: every wrapped line gets the same box.
     if (typeof content === "string") {
@@ -58,7 +60,7 @@ export class TextRenderer {
         maxLines,
         overflow,
         letterSpacing,
-        spaceShrink,
+        lineOptions,
       );
       const box = lineBoxForString(objectManager, fontFamily, fontStyle, fontSize, lineHeight);
       return lines.length * box.height;
@@ -103,6 +105,8 @@ export class TextRenderer {
       skipInk,
       letterSpacing,
       direction,
+      wordSpacing,
+      textIndent,
       role,
     } = textElement.getProps();
 
@@ -128,6 +132,8 @@ export class TextRenderer {
       skipInk,
       letterSpacing,
       direction,
+      wordSpacing,
+      textIndent,
     );
 
     // Accessible tagging: this whole text block is one structure element (a paragraph P, or a heading
@@ -370,6 +376,8 @@ export class TextRenderer {
     skipInk = false,
     letterSpacing = 0,
     direction: Direction = "ltr",
+    wordSpacing = 0,
+    textIndent = 0,
   ): { runs: TextRun[]; links: Link[]; decorations: Line[] } {
     const runs: TextRun[] = [];
     // /Link annotation rects for any `href` spans, collected as we place segments. Empty for the
@@ -388,9 +396,10 @@ export class TextRenderer {
           ? HorizontalAlignment.right
           : HorizontalAlignment.left
         : textAlignment;
-    const alignmentOffset = (lineWidth: number): number => {
-      if (align === HorizontalAlignment.center) return (maxWidth - lineWidth) / 2;
-      if (align === HorizontalAlignment.right) return maxWidth - lineWidth;
+    const alignmentOffset = (lineWidth: number, indent = 0): number => {
+      const room = maxWidth - indent;
+      if (align === HorizontalAlignment.center) return (room - lineWidth) / 2;
+      if (align === HorizontalAlignment.right) return room - lineWidth;
       return 0;
     };
 
@@ -402,11 +411,16 @@ export class TextRenderer {
      * Spaces are stretched by moving the pen, not by the `Tw` operator: `Tw` applies only to the
      * single byte 32, so an embedded (Identity-H) font would ignore it entirely.
      */
-    const justifyExtra = (line: string, naturalWidth: number, isLast: boolean): number => {
+    const justifyExtra = (
+      line: string,
+      naturalWidth: number,
+      isLast: boolean,
+      indent = 0,
+    ): number => {
       if (align !== HorizontalAlignment.justify) return 0;
       const gaps = [...line].filter((c) => c === " ").length;
       if (gaps === 0) return 0;
-      const slack = maxWidth - naturalWidth;
+      const slack = maxWidth - indent - naturalWidth;
       // Negative slack is real now: the breaker keeps a word when the line can be SQUEEZED to hold
       // it, so justification has to deliver that squeeze. The floor is the same limit the breaker
       // used, which is what stops a line it never promised from being crushed.
@@ -578,19 +592,28 @@ export class TextRenderer {
         maxLines,
         overflow,
         letterSpacing,
-        // The SAME slack the measure pass used (`TextElement.spaceShrink`), or a line would be
+        // The SAME knobs the measure pass used (`TextElement.lineOptions`), or a line would be
         // measured one width and drawn another.
-        align === HorizontalAlignment.justify ? MAX_SPACE_SHRINK : 0,
+        {
+          wordSpacing,
+          indent: textIndent,
+          shrink: align === HorizontalAlignment.justify ? MAX_SPACE_SHRINK : 0,
+        },
       );
       // yPosition is the top of the text box (top-left). The line box seats its own baseline; lines
       // then stack by that box's height. Same numbers as calculateTextHeight, by construction.
       const box = lineBoxForString(objectManager, fontFamily, fontStyle, fontSize, lineHeight);
       lines.forEach((line, index) => {
-        const lineWidth = runAdvance(objectManager, line, font, letterSpacing);
-        let x = initialX + alignmentOffset(lineWidth);
+        const lineWidth = singleLineWidth(line, font, objectManager, letterSpacing, wordSpacing);
+        // CSS `text-indent`: the FIRST line starts in, and had that much less room to fill.
+        const indent = index === 0 ? textIndent : 0;
+        let x = initialX + indent + alignmentOffset(lineWidth, indent);
         const baseline = yPosition + box.baseline + box.height * index;
         // Latin-only text in an `ltr` paragraph comes back as one unchanged piece.
-        const extra = justifyExtra(line, lineWidth, index === lines.length - 1);
+        // Word-spacing is a per-gap advance just like the justification slack, so it rides the same
+        // mechanism: `Tw` would reach only the single byte 32 and miss every embedded font.
+        const extra =
+          wordSpacing + justifyExtra(line, lineWidth, index === lines.length - 1, indent);
         for (const part of visualRuns(line, direction)) {
           const piece = shapedPiece(part, fontFamily, fontStyle);
           const partWidth = emitPiece(
@@ -654,12 +677,16 @@ export class TextRenderer {
         const piece = shapedPiece(part, family, style);
         const runText = piece.text;
         const runColor = segment.fontColor || color;
+        // `vertical-align`: this run alone leaves the line's baseline. Its own decoration and link box
+        // ride along, since both are placed from the same y.
+        const shift = VERTICAL_TEXT_SHIFT[segment.verticalAlign ?? "baseline"] * size;
+        const runY = lineY - shift;
         const drawn = emitPiece(
           piece,
           x,
           extra,
           {
-            y: lineY,
+            y: runY,
             fontFamily: family,
             fontStyle: style,
             fontSize: size,
@@ -673,7 +700,7 @@ export class TextRenderer {
           runText,
           x,
           drawn,
-          lineY,
+          runY,
           family,
           style,
           size,
@@ -690,7 +717,7 @@ export class TextRenderer {
           links.push({
             type: "link",
             x,
-            y: lineY - v.ascent * size,
+            y: runY - v.ascent * size,
             width: drawn,
             height: (v.ascent + v.descent) * size,
             href: segment.href,

@@ -230,7 +230,7 @@ rendering. This is the standing visual check; prefer it over one-off `scripts/ru
 - `pnpm test` — Vitest (watch). `pnpm exec vitest run` for a one-shot CI-style run.
   `pnpm run test:coverage` for coverage. Unit tests live in **`tests/unit/`**, mirroring the `src/lib/`
   structure (`tests/unit/{common,elements,renderer,utils}/…`). `src/` is pure production code — the
-  build (`tsconfig.json` includes only `src/**`) therefore keeps `dist/` test-free. **1020 tests, green** —
+  build (`tsconfig.json` includes only `src/**`) therefore keeps `dist/` test-free. **1036 tests, green** —
   what the root run covers: core 908, `@jasy/cli` 37, `@jasy/vue` 33, `@jasy/e-invoice` 27. `@jasy/nuxt`
   is excluded from it (`vitest.config.ts`) and runs on its own.
 - `pnpm run build` — `tsc` → `dist/`.
@@ -635,6 +635,23 @@ wordWidth > maxWidth` and forgot the SPACE that would join the word. It went uns
   the same rule, and a space joins words only INSIDE a segment, since `span("a") + span("b")` draws
   `ab` with nothing between.
 
+- ✅ **The four CSS text properties react-pdf had and we did not** (2026-08-02) — `textTransform`,
+  `wordSpacing`, `textIndent` (all inheritable, `Document` → `DefaultTextStyle` → `Text`) and
+  `verticalAlign` on a `span` (super/sub). Each was measured against `@react-pdf/stylesheet` first, not
+  recalled.
+  Two of them are only correct because they reach BOTH passes. **`textTransform`** is applied at one
+  choke point, `TextElement.display()`, which every measure, break and draw reads - recasing at draw
+  time alone would measure `world` and draw `WORLD`. **`wordSpacing`** is a per-gap advance that rides
+  the same mechanism as the justification slack (one run per word), because `Tw` reaches only the single
+  byte 32 and would miss every embedded font; it is counted in `singleLineWidth` too, or a `Text` in a
+  `Row` would get a box too narrow for its own spaced text.
+  **`textIndent`** takes its room out of the FIRST line only - the breaker gets `maxWidth - indent` for
+  it, and alignment measures against that same reduced room. **`verticalAlign`** shifts one run's
+  baseline (super +1/3 em, sub -1/5 em) and deliberately does NOT resize it: a browser's `<sup>` is
+  small because of its default stylesheet, not because of `vertical-align`.
+  The breaker's growing tail of positional arguments became one `LineOptions` bag ({ wordSpacing,
+  indent, shrink }).
+
 Genuine remaining gaps / deferred:
 
 1. **Absolute positioning — Stages 1+2 built** (2026-06-21). CSS-style: `Box({ relative: true })` is a
@@ -711,7 +728,7 @@ below), `@jasy/cli`@alpha.6, `@jasy/vue`@alpha.7, `@jasy/nuxt`@alpha.6** (the al
 page-break control — the termination guard, `PageBreak`, `breakBefore`/`breakAfter`, `keepTogether` — plus
 kerning turned on by default). Repo public + locked, full CI + changelog +
 bots in place (see Repo facts). The engine is **feature-complete for the alpha** — inheritance, `onOverflow`,
-custom formats, the line-breaker fixes; **1020 tests green** (the root run, i.e. everything but
+custom formats, the line-breaker fixes; **1036 tests green** (the root run, i.e. everything but
 `@jasy/nuxt`). The **landing**
 (`~/projects/jasy-landing` → **jasy.dev**) is built: showroom (12 cards), validator, docs, a home-page
 roadmap section, and a full **SEO + AI-discoverability layer** (OG image, JSON-LD, `robots.txt`,
