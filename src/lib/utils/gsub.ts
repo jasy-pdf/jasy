@@ -18,6 +18,9 @@ interface Lookup {
 
 const EXTENSION = 7;
 
+/** A coverage table may not expand past this: a glyph id is a uint16, so no honest one can. */
+const MAX_COVERAGE_ENTRIES = 65536;
+
 export class GsubTable {
   private scriptList: number;
   private featureList: number;
@@ -51,7 +54,8 @@ export class GsubTable {
       defaultOff !== 0
         ? scriptOff + defaultOff
         : u16(this.data, scriptOff + 2) > 0
-          ? scriptOff + u16(this.data, scriptOff + 6)
+          ? // The first LangSysRecord is at +4 and is tag(4) + offset(2), so its offset is at +8.
+            scriptOff + u16(this.data, scriptOff + 8)
           : undefined;
     if (langSys === undefined) return [];
 
@@ -175,14 +179,24 @@ export class GsubTable {
     if (u16(this.data, off) === 1) {
       for (let i = 0; i < count; i++) map.set(u16(this.data, off + 4 + i * 2), i);
     } else {
+      // Format 2 is RANGES, and a malformed file can claim far more glyphs than any font holds. Such
+      // a table is refused whole rather than expanded - the feature then simply does not apply.
+      let total = 0;
       for (let i = 0; i < count; i++) {
         const record = off + 4 + i * 6;
         const start = u16(this.data, record);
         const end = u16(this.data, record + 2);
+        if (end < start) continue; // an inverted range covers nothing
+        total += end - start + 1;
+        if (total > MAX_COVERAGE_ENTRIES) return this.cacheCoverage(off, new Map());
         const startIndex = u16(this.data, record + 4);
         for (let g = start; g <= end; g++) map.set(g, startIndex + (g - start));
       }
     }
+    return this.cacheCoverage(off, map);
+  }
+
+  private cacheCoverage(off: number, map: Map<number, number>): Map<number, number> {
     this.coverageCache.set(off, map);
     return map;
   }

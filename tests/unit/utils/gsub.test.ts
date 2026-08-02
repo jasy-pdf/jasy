@@ -47,6 +47,24 @@ describe("finding a feature's lookups", () => {
   });
 });
 
+describe("a script with no DEFAULT language system", () => {
+  // Some fonts declare only a named LangSys (`ARA `) and no default. Its offset lives at a different
+  // place in the script table, and reading it from the wrong one silently finds no features at all.
+  const table = new GsubTable(
+    buildGsub(
+      [{ tag: "init", lookups: [0] }],
+      [{ type: 1, subtables: [single1(coverage1([10]), 100)] }],
+      true,
+    ),
+    0,
+  );
+
+  it("falls back to the first named one instead of giving up", () => {
+    expect(table.lookups("arab", "init")).toEqual([0]);
+    expect(table.substituteSingle(0, 10)).toBe(110);
+  });
+});
+
 describe("single substitution - the joining forms themselves", () => {
   const table = new GsubTable(
     buildGsub(

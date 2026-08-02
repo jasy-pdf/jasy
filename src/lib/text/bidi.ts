@@ -75,20 +75,24 @@ export function visualRunsOf<T>(
   const mirrored = bidi.getMirroredCharactersMap(text, levels.levels);
 
   const runs: AttributedRun<T>[] = [];
-  let current: string[] = [];
+  let current: string[] = []; // visual order, mirrored
+  let written: string[] = []; // the same run as the author wrote it
   let currentRtl = false;
   let currentOwner = -1;
 
   const flush = (): void => {
     if (current.length > 0) {
-      const text = current.join("");
       runs.push({
-        text,
-        logical: currentRtl ? [...text].reverse().join("") : text,
+        text: current.join(""),
+        // Tracked separately rather than un-reversing the visual text: that text has been MIRRORED,
+        // so a bracket would come back as its twin and shaping - and `ToUnicode` after it - would see
+        // a character the author never wrote.
+        logical: (currentRtl ? [...written].reverse() : written).join(""),
         rtl: currentRtl,
         source: pieces[currentOwner].source,
       });
       current = [];
+      written = [];
     }
   };
 
@@ -104,10 +108,12 @@ export function visualRunsOf<T>(
     const next = k + 1 < order.length ? order[k + 1] : -1;
     if (isLowSurrogate(text[i]) && next === i - 1 && isHighSurrogate(text[next])) {
       current.push(text[next], text[i]);
+      written.push(text[next], text[i]);
       k++;
       continue;
     }
     current.push(mirrored.get(i) ?? text[i]);
+    written.push(text[i]);
   }
   flush();
   return runs;

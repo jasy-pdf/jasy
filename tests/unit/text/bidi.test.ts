@@ -145,3 +145,14 @@ describe("the logical text a run remembers", () => {
     expect(run.rtl).toBe(false);
   });
 });
+
+describe("mirrored characters and the logical text", () => {
+  it("keeps the author's own bracket in `logical`, not its mirror", () => {
+    // The drawn text has the bracket MIRRORED (rule L4). `logical` feeds shaping and, through it,
+    // `ToUnicode` - so a mirrored character there would put a bracket in the extracted text that
+    // nobody wrote.
+    const [run] = visualRuns(`(${HE})`, "rtl");
+    expect(run.text).toBe(`(${HE_VISUAL})`); // drawn: closing bracket first, depicted as an opening one
+    expect(run.logical).toBe(`(${HE})`); // written: exactly what was passed in
+  });
+});

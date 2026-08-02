@@ -164,6 +164,12 @@ export class TextRenderer {
         : undefined;
     const imageSource = om.getEmojiImageSource();
     if (!own && !fallback && !imageSource) return [run];
+    // A SHAPED run cannot be split here: the sub-runs are cut by code point, while `glyphs` is a
+    // drawn-order list in which a ligature is one glyph for several code points - so no sub-run could
+    // be given the right slice, and inheriting the whole list would draw every glyph again per piece.
+    // Passed through whole instead: an emoji inside Arabic then comes from the text font rather than
+    // the emoji source (`todo.md`).
+    if (run.glyphs) return [run];
 
     const nodes: IRNode[] = [];
     let cursorX = run.x; // absolute x of the next glyph

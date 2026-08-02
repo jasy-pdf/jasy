@@ -87,6 +87,7 @@ export interface LookupSpec {
 export function buildGsub(
   features: { tag: string; lookups: number[] }[],
   lookups: LookupSpec[],
+  named = false,
 ): Uint8Array {
   // --- LookupList
   const lookupBlobs = lookups.map((l) => {
@@ -135,14 +136,19 @@ export function buildGsub(
     ...featureBlobs.flat(),
   ];
 
-  // --- ScriptList: one script, default LangSys listing every feature by index
+  // --- ScriptList: one script, its LangSys listing every feature by index
   const langSys = [
     ...be16(0), // lookupOrder, always null
     ...be16(0xffff), // no required feature
     ...be16(features.length),
     ...features.flatMap((_, i) => be16(i)),
   ];
-  const script = [...be16(4), ...be16(0), ...langSys]; // defaultLangSys right after the 4-byte header
+  // Two shapes a real font may use. Default: the LangSys sits right after the 4-byte header. Named:
+  // there is NO default and one LangSysRecord (tag + offset) points at it - the layout whose offset
+  // field lives at +8, which is easy to read from the wrong place.
+  const script = named
+    ? [...be16(0), ...be16(1), ...tag("ARA "), ...be16(4 + 6), ...langSys]
+    : [...be16(4), ...be16(0), ...langSys];
   const scriptList = [...be16(1), ...tag("arab"), ...be16(2 + 6), ...script];
 
   const headerSize = 10;

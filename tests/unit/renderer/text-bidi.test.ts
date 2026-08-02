@@ -179,3 +179,40 @@ describe("shaping sees the LOGICAL text, and its glyphs are drawn in visual orde
     expect(runs[0].glyphs).toEqual([1003, 1002, 1001, 1000]);
   });
 });
+
+describe("a shaped run and the colour-emoji split", () => {
+  it("is passed through whole, never cut into pieces that inherit the full glyph list", async () => {
+    // The expansion walks CODE POINTS, while `glyphs` is a drawn-order list where a ligature is one
+    // glyph for several of them - so no slice is correct, and spreading the run onto each piece would
+    // draw every glyph again in each. Latin around the emoji, so bidi leaves it as ONE run and the
+    // colour glyph is the only thing that could cut it.
+    const colourFont = {
+      unitsPerEm: 1000,
+      getGlyphIndex: (cp: number) => (cp === 0x1f600 ? 7 : 0),
+      getColorGlyph: (gid: number) =>
+        gid === 7 ? [{ glyphId: 7, paint: { type: "solid", color: null } }] : null,
+      getGlyphPath: () => [], // empty outline: the split is what matters, not the drawing
+    };
+    const manager = {
+      ...om(),
+      shapeText: (text: string) =>
+        [...text].map((c, i) => ({
+          glyph: 2000 + i,
+          advance: 10,
+          codePoints: [c.codePointAt(0)!],
+        })),
+      getColorFont: () => colourFont,
+    } as unknown as PDFObjectManager;
+
+    const content = "ab\u{1F600}cd";
+    const el = new TextElement({ content, fontSize: 10, fontFamily: "Helvetica" });
+    el.calculateLayout(BoxConstraints.tight(400, 400), { x: 0, y: 0 }, {
+      metrics: manager,
+    } as never);
+    const runs = (await TextRenderer.render(el, manager)).filter(
+      (n): n is TextRun => n.type === "text",
+    );
+    expect(runs).toHaveLength(1);
+    expect(runs[0].glyphs).toHaveLength([...content].length);
+  });
+});
