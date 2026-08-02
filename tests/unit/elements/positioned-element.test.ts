@@ -16,6 +16,7 @@ const metrics: FontMetrics = {
   getStringWidth: (text) => text.length * 10,
   getCharWidth: () => 0,
   getFontVerticals: unitVerticals,
+  hasGlyph: () => true,
 };
 const ctx = { metrics } as LayoutContext;
 // A `Positioned` refuses to lay out without a frame, so the out-of-flow tests below need one. It is

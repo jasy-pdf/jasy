@@ -34,7 +34,7 @@ export interface TextSegment {
   fontStyle?: FontStyle;
   fontColor?: Color;
   fontFamily?: string;
-  /** The rest of the family stack, for code points `fontFamily` cannot draw. */
+  /** The rest of the family stack for THIS run; unset inherits the Text's own. */
   fontFallback?: string[];
   fontSize?: number;
   /** External URL: this segment becomes an inline hyperlink (a /Link annotation over its glyphs). */
@@ -231,7 +231,11 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
    */
   private display(metrics?: FontMetrics): string | TextSegment[] {
     const cased = this.recased();
-    if (this.fontFallback.length === 0 || !metrics) return cased;
+    // A SPAN may bring its own stack, so the element's being empty is not enough to skip the pass.
+    const anyStack =
+      this.fontFallback.length > 0 ||
+      (typeof cased !== "string" && cased.some((seg) => (seg.fontFallback?.length ?? 0) > 0));
+    if (!anyStack || !metrics) return cased;
     // Font fallback turns the content into spans - one per family - which every later pass already
     // knows how to handle. Nothing new downstream.
     const pieces = typeof cased === "string" ? [{ content: cased } as TextSegment] : cased;
@@ -240,7 +244,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       const runs = splitByFont(
         seg.content,
         seg.fontFamily ?? this.fontFamily,
-        this.fontFallback,
+        seg.fontFallback ?? this.fontFallback,
         seg.fontStyle ?? this.fontStyle,
         metrics,
       );

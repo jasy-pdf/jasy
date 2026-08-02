@@ -84,3 +84,10 @@ describe("astral characters", () => {
     ]);
   });
 });
+
+describe("the edge a review caught", () => {
+  it("says 'nothing to substitute' for empty text, not 'no runs at all'", () => {
+    // Returning `[]` would hand the caller an empty list to draw - the text would vanish.
+    expect(split("", ["Latin", "CJK"])).toBeUndefined();
+  });
+});

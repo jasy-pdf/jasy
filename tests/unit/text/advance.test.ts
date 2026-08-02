@@ -69,6 +69,7 @@ describe("naturalWidth matches the wrapped width (via the shared primitive)", ()
       getStringWidth: (t) => t.length * 6,
       getCharWidth: () => 6,
       getFontVerticals: () => ({ ascent: 0.8, descent: 0.2, lineGap: 0 }),
+      hasGlyph: () => true,
     };
     const ctx = { metrics: m, pageConfig: {} } as never;
 

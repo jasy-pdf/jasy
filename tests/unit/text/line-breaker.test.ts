@@ -11,6 +11,7 @@ const metrics: FontMetrics = {
   getStringWidth: (text) => text.length * 10,
   getCharWidth: () => 0,
   getFontVerticals: unitVerticals,
+  hasGlyph: () => true,
 };
 
 const defaults = {

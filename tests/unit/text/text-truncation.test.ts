@@ -13,6 +13,7 @@ const metrics = {
   getStringWidth: (t: string) => t.length * 10,
   getCharWidth: () => 10,
   getFontVerticals: unitVerticals,
+  hasGlyph: () => true,
 } as unknown as FontMetrics;
 
 const wrap = (text: string, maxWidth: number, maxLines?: number, overflow?: "clip" | "ellipsis") =>

@@ -11,6 +11,7 @@ const metrics = {
   getStringWidth: (t: string) => t.length * 10,
   getCharWidth: () => 10,
   getFontVerticals: unitVerticals,
+  hasGlyph: () => true,
 } as unknown as FontMetrics;
 
 const CONTENT = "alfa bram char dent emil"; // wraps to 5 lines at width 50
@@ -42,6 +43,7 @@ describe("lineHeight", () => {
       getStringWidth: (t: string) => t.length * 10,
       getCharWidth: () => 10,
       getFontVerticals: () => ({ ascent: 0.9, descent: 0.3, lineGap: 0.1 }),
+      hasGlyph: () => true,
     } as unknown as FontMetrics;
     const ctx = { metrics: tall, pageConfig: {} } as LayoutContext;
 

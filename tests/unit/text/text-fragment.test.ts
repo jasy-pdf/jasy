@@ -14,6 +14,7 @@ const metrics: FontMetrics = {
   getStringWidth: (text: string) => [...text].reduce((w, c) => w + (c === " " ? 0 : 10), 0),
   getCharWidth: (c: string) => (c === " " ? 0 : 10),
   getFontVerticals: unitVerticals,
+  hasGlyph: () => true,
 };
 const ctx = { metrics } as LayoutContext;
 

@@ -57,7 +57,8 @@ export function splitByFont(
   }
   if (current !== "") runs.push({ text: current, fontFamily: currentFamily });
 
-  // One run in the original family means nothing was substituted; say so, and the caller keeps its
-  // cheaper path.
-  return runs.length === 1 && runs[0].fontFamily === fontFamily ? undefined : runs;
+  // Nothing substituted - no runs at all (empty text), or one in the family we started with. Say so,
+  // and the caller keeps its cheaper path instead of being handed an empty list to draw.
+  const unchanged = runs.length === 0 || (runs.length === 1 && runs[0].fontFamily === fontFamily);
+  return unchanged ? undefined : runs;
 }

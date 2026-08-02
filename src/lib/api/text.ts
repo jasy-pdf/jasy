@@ -133,6 +133,7 @@ export function span(text: string, style: TextStyle = {}): TextSegment {
     content: text,
     fontSize: toFontSize(style.size),
     fontFamily: primaryFont(style.font),
+    fontFallback: fallbackFonts(style.font),
     fontStyle:
       style.bold !== undefined || style.italic !== undefined
         ? toFontStyle(style.bold, style.italic)

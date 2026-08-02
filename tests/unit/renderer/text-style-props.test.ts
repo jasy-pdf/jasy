@@ -279,3 +279,37 @@ describe("font fallback", () => {
     expect(runs.map((r) => r.text)).toEqual(["ab漢字"]);
   });
 });
+
+describe("a span brings its own font stack", () => {
+  it("falls back inside that span alone", async () => {
+    // `span(text, { font: ["A", "B"] })` was accepted by the type and silently ignored: the element's
+    // own stack was empty, so the whole pass was skipped.
+    const el = new TextElement({
+      content: [{ content: "ab" }, { content: "漢字", fontFamily: "Latin", fontFallback: ["CJK"] }],
+      fontSize: 10,
+      fontFamily: "Latin",
+    });
+    const manager = {
+      ...testMetrics({
+        getStringWidth: (t) => [...t].length * 10,
+        getCharWidth: () => 10,
+        hasGlyph: (cp, family) => (family === "Latin" ? cp < 0x80 : true),
+      }),
+      struct: { enabled: false },
+      shapeText: () => undefined,
+      isCustomFont: () => false,
+      getColorFont: () => undefined,
+      getEmojiSource: () => undefined,
+      getEmojiFont: () => undefined,
+      getEmojiImageSource: () => undefined,
+    } as unknown as PDFObjectManager;
+    el.calculateLayout(BoxConstraints.tight(400, 400), { x: 0, y: 0 }, context(manager));
+    const runs = (await TextRenderer.render(el, manager)).filter(
+      (n): n is TextRun => n.type === "text",
+    );
+    expect(runs.map((r) => [r.text, r.fontFamily])).toEqual([
+      ["ab", "Latin"],
+      ["漢字", "CJK"],
+    ]);
+  });
+});

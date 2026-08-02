@@ -14,6 +14,7 @@ describe("TextRenderer - calculateTextHeight", () => {
       getStringWidth: vi.fn((t: string) => t.length * 5),
       getCharWidth: vi.fn().mockReturnValue(5),
       getFontVerticals: unitVerticals,
+      hasGlyph: () => true,
       struct: { enabled: false },
       shapeText: () => undefined,
     } as unknown as PDFObjectManager;
@@ -36,6 +37,7 @@ describe("TextRenderer - calculateTextHeight", () => {
       getStringWidth: vi.fn().mockReturnValue(10), // String width is used for each word = 60
       getCharWidth: vi.fn().mockReturnValue(5), // Used for empty spaces = 25
       getFontVerticals: unitVerticals,
+      hasGlyph: () => true,
       struct: { enabled: false },
       shapeText: () => undefined,
     } as unknown as PDFObjectManager;
@@ -57,6 +59,7 @@ describe("TextRenderer - calculateTextHeight", () => {
       getStringWidth: vi.fn().mockReturnValue(10),
       getCharWidth: vi.fn().mockReturnValue(5),
       getFontVerticals: unitVerticals,
+      hasGlyph: () => true,
       struct: { enabled: false },
       shapeText: () => undefined,
     } as unknown as PDFObjectManager;
@@ -102,6 +105,7 @@ describe("TextRenderer - calculateTextHeight", () => {
       getStringWidth: vi.fn().mockReturnValue(10),
       getCharWidth: vi.fn().mockReturnValue(5),
       getFontVerticals: unitVerticals,
+      hasGlyph: () => true,
       struct: { enabled: false },
       shapeText: () => undefined,
     } as unknown as PDFObjectManager;
@@ -144,6 +148,7 @@ describe("TextRenderer - calculateTextHeight", () => {
       getStringWidth: vi.fn().mockReturnValue(10),
       getCharWidth: vi.fn().mockReturnValue(5),
       getFontVerticals: unitVerticals,
+      hasGlyph: () => true,
       struct: { enabled: false },
       shapeText: () => undefined,
     } as unknown as PDFObjectManager;
@@ -183,6 +188,7 @@ describe("TextRenderer - calculateTextHeight", () => {
       getStringWidth: vi.fn((t: string) => t.length * 5),
       getCharWidth: vi.fn(() => 5),
       getFontVerticals: unitVerticals,
+      hasGlyph: () => true,
       struct: { enabled: false },
       shapeText: () => undefined,
     } as unknown as PDFObjectManager;
@@ -225,6 +231,7 @@ describe("TextRenderer - calculateTextHeight", () => {
       getStringWidth: vi.fn((t: string) => t.length * 5),
       getCharWidth: vi.fn(() => 5),
       getFontVerticals: unitVerticals,
+      hasGlyph: () => true,
       struct: { enabled: false },
       shapeText: () => undefined,
     } as unknown as PDFObjectManager;
@@ -264,6 +271,7 @@ describe("TextRenderer - calculateTextHeight", () => {
       getStringWidth: vi.fn().mockReturnValue(0),
       getCharWidth: vi.fn().mockReturnValue(0),
       getFontVerticals: unitVerticals,
+      hasGlyph: () => true,
       struct: { enabled: false },
       shapeText: () => undefined,
     } as unknown as PDFObjectManager;
@@ -322,6 +330,7 @@ describe("TextRenderer - calculateTextHeight", () => {
       }),
       getCharWidth: vi.fn().mockReturnValue(10),
       getFontVerticals: unitVerticals,
+      hasGlyph: () => true,
       struct: { enabled: false },
       shapeText: () => undefined,
     } as unknown as PDFObjectManager;
@@ -379,6 +388,7 @@ describe("TextRenderer - calculateTextHeight", () => {
       getStringWidth: vi.fn().mockReturnValue(25), // Here we get the widht of each segment: 50
       getCharWidth: vi.fn().mockReturnValue(0), // For empty spaces: 0
       getFontVerticals: unitVerticals,
+      hasGlyph: () => true,
       struct: { enabled: false },
       shapeText: () => undefined,
     } as unknown as PDFObjectManager;

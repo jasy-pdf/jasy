@@ -35,6 +35,7 @@ describe("RowElement", () => {
       getStringWidth: (t: string) => t.length * 6,
       getCharWidth: () => 6,
       getFontVerticals: unitVerticals,
+      hasGlyph: () => true,
     } as unknown as FontMetrics;
     const ctx = { metrics, pageConfig: {} } as LayoutContext;
 
@@ -59,6 +60,7 @@ describe("RowElement", () => {
       getStringWidth: (t: string) => t.length * 6,
       getCharWidth: () => 6,
       getFontVerticals: unitVerticals,
+      hasGlyph: () => true,
     } as unknown as FontMetrics;
     const ctx = { metrics, pageConfig: {} } as LayoutContext;
 
@@ -82,6 +84,7 @@ describe("RowElement", () => {
       getStringWidth: (t: string) => t.length * 6,
       getCharWidth: () => 6,
       getFontVerticals: unitVerticals,
+      hasGlyph: () => true,
     } as unknown as FontMetrics;
     const ctx = { metrics, pageConfig: {} } as LayoutContext;
 
