@@ -15,6 +15,7 @@ describe("TextRenderer - calculateTextHeight", () => {
       getCharWidth: vi.fn().mockReturnValue(5),
       getFontVerticals: unitVerticals,
       struct: { enabled: false },
+      shapeText: () => undefined,
     } as unknown as PDFObjectManager;
 
     // "Hello World" is 11 glyphs * 5 = 55 wide; width 100 leaves it on one line.
@@ -36,6 +37,7 @@ describe("TextRenderer - calculateTextHeight", () => {
       getCharWidth: vi.fn().mockReturnValue(5), // Used for empty spaces = 25
       getFontVerticals: unitVerticals,
       struct: { enabled: false },
+      shapeText: () => undefined,
     } as unknown as PDFObjectManager;
 
     const textHeight = TextRenderer.calculateTextHeight(
@@ -56,6 +58,7 @@ describe("TextRenderer - calculateTextHeight", () => {
       getCharWidth: vi.fn().mockReturnValue(5),
       getFontVerticals: unitVerticals,
       struct: { enabled: false },
+      shapeText: () => undefined,
     } as unknown as PDFObjectManager;
 
     const segments = [
@@ -100,6 +103,7 @@ describe("TextRenderer - calculateTextHeight", () => {
       getCharWidth: vi.fn().mockReturnValue(5),
       getFontVerticals: unitVerticals,
       struct: { enabled: false },
+      shapeText: () => undefined,
     } as unknown as PDFObjectManager;
 
     const result = PdfBackend.serialize(
@@ -141,6 +145,7 @@ describe("TextRenderer - calculateTextHeight", () => {
       getCharWidth: vi.fn().mockReturnValue(5),
       getFontVerticals: unitVerticals,
       struct: { enabled: false },
+      shapeText: () => undefined,
     } as unknown as PDFObjectManager;
 
     const result = PdfBackend.serialize(
@@ -179,6 +184,7 @@ describe("TextRenderer - calculateTextHeight", () => {
       getCharWidth: vi.fn().mockReturnValue(0), // For empty spaces: 0
       getFontVerticals: unitVerticals,
       struct: { enabled: false },
+      shapeText: () => undefined,
     } as unknown as PDFObjectManager;
 
     const result = PdfBackend.serialize(
@@ -220,6 +226,7 @@ describe("TextRenderer - calculateTextHeight", () => {
       getCharWidth: vi.fn().mockReturnValue(0),
       getFontVerticals: unitVerticals,
       struct: { enabled: false },
+      shapeText: () => undefined,
     } as unknown as PDFObjectManager;
 
     const result = PdfBackend.serialize(
@@ -258,6 +265,7 @@ describe("TextRenderer - calculateTextHeight", () => {
       getCharWidth: vi.fn().mockReturnValue(0),
       getFontVerticals: unitVerticals,
       struct: { enabled: false },
+      shapeText: () => undefined,
     } as unknown as PDFObjectManager;
 
     const result = PdfBackend.serialize(
@@ -315,6 +323,7 @@ describe("TextRenderer - calculateTextHeight", () => {
       getCharWidth: vi.fn().mockReturnValue(10),
       getFontVerticals: unitVerticals,
       struct: { enabled: false },
+      shapeText: () => undefined,
     } as unknown as PDFObjectManager;
 
     const result = PdfBackend.serialize(
@@ -371,6 +380,7 @@ describe("TextRenderer - calculateTextHeight", () => {
       getCharWidth: vi.fn().mockReturnValue(0), // For empty spaces: 0
       getFontVerticals: unitVerticals,
       struct: { enabled: false },
+      shapeText: () => undefined,
     } as unknown as PDFObjectManager;
 
     const result = PdfBackend.serialize(

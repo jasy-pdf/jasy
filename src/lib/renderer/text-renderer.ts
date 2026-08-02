@@ -21,6 +21,7 @@ import {
 } from "../text/line-breaker.ts";
 import { lineBoxForSegmentLine, lineBoxForString } from "../text/line-metrics.ts";
 import { runAdvance } from "../text/advance.ts";
+import { visualRuns, visualRunsOf, type Direction } from "../text/bidi.ts";
 import {
   DecorationStroke,
   skipInkSegments,
@@ -98,6 +99,7 @@ export class TextRenderer {
       strikethrough,
       skipInk,
       letterSpacing,
+      direction,
       role,
     } = textElement.getProps();
 
@@ -122,6 +124,7 @@ export class TextRenderer {
       strikethrough,
       skipInk,
       letterSpacing,
+      direction,
     );
 
     // Accessible tagging: this whole text block is one structure element (a paragraph P, or a heading
@@ -161,6 +164,12 @@ export class TextRenderer {
         : undefined;
     const imageSource = om.getEmojiImageSource();
     if (!own && !fallback && !imageSource) return [run];
+    // A SHAPED run cannot be split here: the sub-runs are cut by code point, while `glyphs` is a
+    // drawn-order list in which a ligature is one glyph for several code points - so no sub-run could
+    // be given the right slice, and inheriting the whole list would draw every glyph again per piece.
+    // Passed through whole instead: an emoji inside Arabic then comes from the text font rather than
+    // the emoji source (`todo.md`).
+    if (run.glyphs) return [run];
 
     const nodes: IRNode[] = [];
     let cursorX = run.x; // absolute x of the next glyph
@@ -357,6 +366,7 @@ export class TextRenderer {
     strikethrough = false,
     skipInk = false,
     letterSpacing = 0,
+    direction: Direction = "ltr",
   ): { runs: TextRun[]; links: Link[]; decorations: Line[] } {
     const runs: TextRun[] = [];
     // /Link annotation rects for any `href` spans, collected as we place segments. Empty for the
@@ -367,9 +377,17 @@ export class TextRenderer {
     const decorations: Line[] = [];
 
     // Horizontal offset of a line of the given width under the current alignment.
+    // `start` is the one alignment that depends on the direction, resolved at the single place
+    // alignment is consumed.
+    const align =
+      textAlignment === HorizontalAlignment.start
+        ? direction === "rtl"
+          ? HorizontalAlignment.right
+          : HorizontalAlignment.left
+        : textAlignment;
     const alignmentOffset = (lineWidth: number): number => {
-      if (textAlignment === HorizontalAlignment.center) return (maxWidth - lineWidth) / 2;
-      if (textAlignment === HorizontalAlignment.right) return maxWidth - lineWidth;
+      if (align === HorizontalAlignment.center) return (maxWidth - lineWidth) / 2;
+      if (align === HorizontalAlignment.right) return maxWidth - lineWidth;
       return 0;
     };
 
@@ -460,6 +478,23 @@ export class TextRenderer {
       return skipInkSegments(runWidth, inkSpans, stroke.thickness);
     };
 
+    /**
+     * One drawn piece of a line. SHAPING must see the run's LOGICAL text - a letter's form comes from
+     * its neighbours, and a reversed run has those swapped - so we shape that and then reverse the
+     * GLYPHS for an rtl run. A font that does not shape keeps the old path exactly: draw the visual
+     * text, no glyph list, byte-identical output.
+     */
+    const shapedPiece = (
+      part: { text: string; logical: string; rtl: boolean },
+      family: string,
+      style: FontStyle,
+    ): { text: string; glyphs?: number[] } => {
+      const shaped = objectManager.shapeText(part.logical, family, style);
+      if (!shaped) return { text: part.text };
+      const ordered = part.rtl ? [...shaped].reverse() : shaped;
+      return { text: part.logical, glyphs: ordered.map((g) => g.glyph) };
+    };
+
     // The advance the viewer will use: plain glyph widths (a `Tj` never kerns) plus one
     // `letterSpacing` per code point (the `Tc` operator), from the one shared `advance.ts` primitive.
     const font = { fontFamily, fontSize, fontStyle };
@@ -482,32 +517,39 @@ export class TextRenderer {
       const box = lineBoxForString(objectManager, fontFamily, fontStyle, fontSize, lineHeight);
       lines.forEach((line, index) => {
         const lineWidth = runAdvance(objectManager, line, font, letterSpacing);
-        const x = initialX + alignmentOffset(lineWidth);
+        let x = initialX + alignmentOffset(lineWidth);
         const baseline = yPosition + box.baseline + box.height * index;
-        runs.push({
-          type: "text",
-          x,
-          y: baseline,
-          text: line,
-          fontFamily,
-          fontStyle,
-          fontSize,
-          color,
-          ...(letterSpacing ? { letterSpacing } : {}),
-        });
-        decorate(
-          line,
-          x,
-          lineWidth,
-          baseline,
-          fontFamily,
-          fontStyle,
-          fontSize,
-          color,
-          underline,
-          strikethrough,
-          letterSpacing,
-        );
+        // Latin-only text in an `ltr` paragraph comes back as one unchanged piece.
+        for (const part of visualRuns(line, direction)) {
+          const piece = shapedPiece(part, fontFamily, fontStyle);
+          const partWidth = runAdvance(objectManager, piece.text, font, letterSpacing);
+          runs.push({
+            type: "text",
+            x,
+            y: baseline,
+            text: piece.text,
+            ...(piece.glyphs ? { glyphs: piece.glyphs } : {}),
+            fontFamily,
+            fontStyle,
+            fontSize,
+            color,
+            ...(letterSpacing ? { letterSpacing } : {}),
+          });
+          decorate(
+            piece.text,
+            x,
+            partWidth,
+            baseline,
+            fontFamily,
+            fontStyle,
+            fontSize,
+            color,
+            underline,
+            strikethrough,
+            letterSpacing,
+          );
+          x += partWidth;
+        }
       });
       return { runs, links, decorations };
     }
@@ -519,14 +561,23 @@ export class TextRenderer {
     // height matches the measured height.
     const pushLine = (line: SegmentLine, lineY: number): void => {
       let x = initialX + alignmentOffset(line.width);
-      line.segments.forEach((segment) => {
+      // Across span boundaries, so a Hebrew span is ordered against its neighbours rather than inside
+      // itself. Each run keeps the segment it came from, and with it that span's style.
+      const ordered = visualRunsOf(
+        line.segments.map((segment) => ({ text: segment.content, source: segment })),
+        direction,
+      );
+      ordered.forEach((part) => {
+        const segment = part.source;
         const family = segment.fontFamily || fontFamily;
         const size = segment.fontSize || fontSize;
         const style = segment.fontStyle || fontStyle;
         const segLetterSpacing = segment.letterSpacing ?? letterSpacing;
+        const piece = shapedPiece(part, family, style);
+        const runText = piece.text;
         const advance = runAdvance(
           objectManager,
-          segment.content,
+          runText,
           { fontFamily: family, fontSize: size, fontStyle: style },
           segLetterSpacing,
         );
@@ -535,7 +586,8 @@ export class TextRenderer {
           type: "text",
           x,
           y: lineY,
-          text: segment.content,
+          text: runText,
+          ...(piece.glyphs ? { glyphs: piece.glyphs } : {}),
           fontFamily: family,
           fontStyle: style,
           fontSize: size,
@@ -543,7 +595,7 @@ export class TextRenderer {
           ...(segLetterSpacing ? { letterSpacing: segLetterSpacing } : {}),
         });
         decorate(
-          segment.content,
+          runText,
           x,
           advance,
           lineY,

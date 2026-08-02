@@ -35,6 +35,9 @@ export interface TextRun {
   x: number;
   y: number;
   text: string; // raw text; the backend handles PDF string escaping + encoding
+  /** The glyphs to draw, when the run was SHAPED. The backend emits these instead of encoding `text`,
+   *  which stays logical for `ToUnicode` and the accessible tree. */
+  glyphs?: number[];
   fontFamily: string;
   fontStyle: FontStyle;
   fontSize: number;

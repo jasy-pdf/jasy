@@ -8,6 +8,7 @@ import { FontStyle } from "../utils/pdf-object-manager.ts";
 import { DEFAULT_TEXT_STYLE, ResolvedTextStyle } from "../text/text-style.ts";
 import type { FontMetrics } from "../utils/font-metrics.ts";
 import { BoxConstraints, Offset, Size } from "../layout/box-constraints.ts";
+import type { Direction } from "../text/bidi.ts";
 import { Fragmentable, FragmentResult } from "../layout/fragmentation.ts";
 import {
   wrapStringIntoLines,
@@ -72,6 +73,8 @@ interface TextElementParams {
   skipInk?: boolean;
   /** Extra space after every glyph, in points (CSS `letter-spacing`). Default 0. */
   letterSpacing?: number;
+  /** Base writing direction (CSS `direction`); decides where a line starts. Default `"ltr"`. */
+  direction?: Direction;
   /** Accessibility role for the tagged structure tree (heading level or paragraph; default `"p"`). */
   role?: TextRole;
 }
@@ -89,6 +92,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
   private readonly rawStrikethrough?: boolean;
   private readonly rawSkipInk?: boolean;
   private readonly rawLetterSpacing?: number;
+  private readonly rawDirection?: Direction;
 
   // Resolved style (raw -> inherited -> built-in default). Seeded to the built-in default in the
   // constructor so the element is self-sufficient, then refined against the cascade at layout time.
@@ -102,6 +106,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
   private strikethrough!: boolean;
   private skipInk!: boolean;
   private letterSpacing!: number;
+  private direction!: Direction;
 
   private content: string | TextSegment[];
   private maxLines?: number;
@@ -126,6 +131,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     strikethrough,
     skipInk,
     letterSpacing,
+    direction,
     role,
   }: TextElementParams) {
     super({ x: 0, y: 0 });
@@ -141,6 +147,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     this.rawStrikethrough = strikethrough;
     this.rawSkipInk = skipInk;
     this.rawLetterSpacing = letterSpacing;
+    this.rawDirection = direction;
     this.content = content;
     this.maxLines = maxLines;
     this.orphans = orphans;
@@ -165,6 +172,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     this.strikethrough = this.rawStrikethrough ?? ts.strikethrough;
     this.skipInk = this.rawSkipInk ?? ts.skipInk;
     this.letterSpacing = this.rawLetterSpacing ?? ts.letterSpacing;
+    this.direction = this.rawDirection ?? ts.direction;
   }
 
   /**
@@ -234,6 +242,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       fontSize: this.fontSize,
       fontStyle: this.fontStyle,
       letterSpacing: this.letterSpacing,
+      direction: this.direction,
     };
     const lines = breakSegmentsIntoLines(
       content,
@@ -290,6 +299,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       strikethrough: this.strikethrough,
       skipInk: this.skipInk,
       letterSpacing: this.letterSpacing,
+      direction: this.direction,
       role: this.role,
     }).adoptStructId(this); // a wrapped remainder is the SAME logical paragraph (one P across pages)
   }
@@ -397,6 +407,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       strikethrough: this.strikethrough,
       skipInk: this.skipInk,
       letterSpacing: this.letterSpacing,
+      direction: this.direction,
       role: this.role,
     };
   }

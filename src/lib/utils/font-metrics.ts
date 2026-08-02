@@ -35,4 +35,8 @@ export interface FontMetrics {
   /** Per-adjacent-pair kerning of `text`, in em/1000 (negative tightens); length `codePoints - 1`,
    *  zero next to a space. Only meaningful when `kerningEnabled`. */
   getKernPairs(text: string, fontFamily: string, fontStyle: FontStyle): number[];
+
+  /** How many glyphs the run will DRAW, when a ligature made that differ from its code-point count.
+   *  Absent or `undefined` means "the same", which is every Latin run. */
+  shapedGlyphCount?(text: string, fontFamily?: string, fontStyle?: FontStyle): number | undefined;
 }

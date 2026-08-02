@@ -1,6 +1,7 @@
 import { Color } from "../common/color.ts";
 import { FontStyle } from "../utils/pdf-object-manager.ts";
 import { HorizontalAlignment } from "../elements/pdf-element.ts";
+import type { Direction } from "./bidi.ts";
 
 /**
  * The inheritable text properties - the same set CSS and Flutter cascade. A `Text` resolves each of
@@ -26,6 +27,10 @@ export interface ResolvedTextStyle {
   skipInk: boolean;
   /** Extra space after every glyph, in points (CSS `letter-spacing`). Default 0. */
   letterSpacing: number;
+  /** Base writing direction (CSS `direction`). It decides where a line STARTS and how neutral
+   *  characters between two scripts resolve; the reordering itself follows Unicode UAX #9 either
+   *  way, so Hebrew inside an `ltr` paragraph still comes out right. */
+  direction: Direction;
 }
 
 /**
@@ -37,12 +42,13 @@ export const DEFAULT_TEXT_STYLE: ResolvedTextStyle = {
   fontFamily: "Helvetica",
   fontStyle: FontStyle.Normal,
   color: new Color(0, 0, 0),
-  textAlignment: HorizontalAlignment.left,
+  textAlignment: HorizontalAlignment.start,
   lineHeight: undefined,
   underline: false,
   strikethrough: false,
   skipInk: false,
   letterSpacing: 0,
+  direction: "ltr",
 };
 
 /** Layers a partial override onto a complete style; an unset (undefined) field keeps the base. */
@@ -62,5 +68,6 @@ export function mergeTextStyle(
     strikethrough: override.strikethrough ?? base.strikethrough,
     skipInk: override.skipInk ?? base.skipInk,
     letterSpacing: override.letterSpacing ?? base.letterSpacing,
+    direction: override.direction ?? base.direction,
   };
 }

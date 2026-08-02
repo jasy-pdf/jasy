@@ -352,15 +352,23 @@ export class PdfBackend {
           isCustom
             ? `<${om.encodeCustomText(node.fontFamily, t, node.fontStyle)}>`
             : `(${PdfBackend.escapePdfString(t)})`;
+        // A shaped run brings its own glyphs, already in drawing order - they cannot be derived from
+        // the text here.
+        const shapedHex =
+          node.glyphs && isCustom
+            ? om.registerGlyphs(node.fontFamily, node.glyphs, node.fontStyle)
+            : undefined;
         // Kerning (if the document has it on): a `TJ` array with the font's per-pair adjustments
         // between glyph chunks, measured into the layout by the SAME numbers (runAdvance). A plain
         // `Tj` when the run has no kerning, byte-identical.
         const kerns = om.kerningEnabled
           ? om.getKernPairs(node.text, node.fontFamily, node.fontStyle)
           : [];
-        const showOp = kerns.some((k) => k !== 0)
-          ? `${PdfBackend.kernedArray(node.text, kerns, encode)} TJ`
-          : `${encode(node.text)} Tj`;
+        const showOp = shapedHex
+          ? `<${shapedHex}> Tj`
+          : kerns.some((k) => k !== 0)
+            ? `${PdfBackend.kernedArray(node.text, kerns, encode)} TJ`
+            : `${encode(node.text)} Tj`;
         // letterSpacing is the `Tc` operator: extra advance after EVERY glyph (an embedded
         // Identity-H font too - that is `Tw`, word spacing, which only touches single-byte code 32).
         const spacing = node.letterSpacing ? `${node.letterSpacing.toFixed(3)} Tc\n` : "";

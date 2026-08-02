@@ -46,7 +46,12 @@ export function runAdvance(
   letterSpacing = 0,
 ): number {
   let advance = metrics.getStringWidth(text, font.fontFamily, font.fontSize, font.fontStyle);
-  if (letterSpacing !== 0) advance += codePointCount(text) * letterSpacing;
+  if (letterSpacing !== 0) {
+    // Per DRAWN glyph, which is what `Tc` applies to; only a ligature makes that differ.
+    const glyphs =
+      metrics.shapedGlyphCount?.(text, font.fontFamily, font.fontStyle) ?? codePointCount(text);
+    advance += glyphs * letterSpacing;
+  }
   if (metrics.kerningEnabled) {
     let units = 0;
     for (const k of metrics.getKernPairs(text, font.fontFamily, font.fontStyle)) units += k;
