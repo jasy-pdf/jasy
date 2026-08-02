@@ -87,12 +87,13 @@ export interface ImageOptions extends BoundsInput {
 export function Image(src: ImageSource, opts: ImageOptions = {}): ImageElement {
   const w = opts.width !== undefined ? toDimension(opts.width) : undefined;
   const h = opts.height !== undefined ? toDimension(opts.height) : undefined;
-  // The box was derived rather than given outright - from the image's own ratio (exactly one axis
-  // pinned) or from an explicit `aspectRatio` - so scale the image into it (fit: fill). Two pinned axes
-  // and no ratio keep the default fit (none).
-  const autoScale =
-    (opts.width !== undefined) !== (opts.height !== undefined) || opts.aspectRatio !== undefined;
-  const fit = opts.fit ? FIT[opts.fit] : autoScale ? BoxFit.fill : undefined;
+  // ANY explicit size scales the image into the box (fit: fill), which is what `<img width height>`
+  // does in HTML and what react-pdf does. Two pinned axes used to keep `none` - drawing the image at
+  // its pixel size regardless - so a logo asked for at 48x48 spanned a third of the page.
+  // An image with NO size given still draws at its intrinsic size, as an unsized `<img>` does.
+  const sized =
+    opts.width !== undefined || opts.height !== undefined || opts.aspectRatio !== undefined;
+  const fit = opts.fit ? FIT[opts.fit] : sized ? BoxFit.fill : undefined;
 
   return new ImageElement({
     image:

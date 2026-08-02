@@ -57,10 +57,15 @@ describe("Image relative sizing + aspect auto-height", () => {
     expect(Image(new FakeImage(400, 200), { height: 80 }).getProps().fit).toBe(BoxFit.fill);
   });
 
-  it("both axes or neither keep the default fit (none) - unchanged behavior", () => {
+  it("pinning BOTH axes scales into the box too, as `<img width height>` does", () => {
+    // It used to keep `none` and draw the image at its pixel size, so a logo asked for at 48x48 could
+    // span a third of the page. HTML and react-pdf both scale; so do we.
     expect(Image(new FakeImage(400, 200), { width: 100, height: 100 }).getProps().fit).toBe(
-      BoxFit.none,
+      BoxFit.fill,
     );
+  });
+
+  it("an image given NO size still draws at its intrinsic size, like an unsized <img>", () => {
     expect(Image(new FakeImage(400, 200)).getProps().fit).toBe(BoxFit.none);
   });
 
