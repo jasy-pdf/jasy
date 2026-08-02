@@ -155,3 +155,53 @@ describe("a spaced paragraph sizes its own box", () => {
     expect((el.getProps() as { width?: number }).width).toBe(104);
   });
 });
+
+describe("the numbers have to be real numbers", () => {
+  it("refuses a non-finite wordSpacing or textIndent by name", () => {
+    // Unchecked, these travel into the content stream as a position: the backend does refuse them
+    // there, but the message then names a coordinate instead of the property that was wrong.
+    expect(() => text("a", { wordSpacing: Number.NaN })).toThrow(/wordSpacing/);
+    expect(() => text("a", { textIndent: Infinity })).toThrow(/textIndent/);
+  });
+
+  it("lets a normal value through, negatives included", () => {
+    expect(() => text("a", { wordSpacing: -2, textIndent: 12 })).not.toThrow();
+  });
+});
+
+describe("the three findings a review caught", () => {
+  it("capitalizes a word SPLIT across two spans only once", () => {
+    // Per-span transforming gives "HelLo"; the word is one word and only its first letter rises.
+    const el = text([{ content: "hel" }, { content: "lo world" }], {
+      textTransform: "capitalize",
+    });
+    const props = el.getProps() as { content: { content: string }[] };
+    expect(props.content.map((c) => c.content).join("")).toBe("Hello World");
+  });
+
+  it("drops the indent on a CONTINUATION, which is no longer a first line", () => {
+    // Enough lines that the split is real: with too few, the orphan rule refuses to break at all and
+    // the whole element comes back as the remainder - which would pass this test for the wrong reason.
+    const el = text("aa bb cc dd ee ff gg hh ii jj", { textIndent: 30 });
+    const manager = om();
+    const ctx = { metrics: manager } as never;
+    el.calculateLayout(BoxConstraints.tight(100, 400), { x: 0, y: 0 }, ctx);
+    const { fitted, remainder } = el.fragment(20, 100, ctx);
+    expect(fitted).not.toBeNull();
+    expect((fitted!.getProps() as { textIndent: number }).textIndent).toBe(30);
+    expect(remainder).not.toBeNull();
+    expect((remainder!.getProps() as { textIndent: number }).textIndent).toBe(0);
+  });
+
+  it("makes an unbounded box wide enough for the indent as well", () => {
+    const plain = text("aa bb");
+    const indented = text("aa bb", { textIndent: 30 });
+    const manager = om();
+    const ctx = { metrics: manager } as never;
+    for (const el of [plain, indented]) {
+      el.calculateLayout(BoxConstraints.loose(Infinity, 400), { x: 0, y: 0 }, ctx);
+    }
+    const w = (el: TextElement) => (el.getProps() as { width?: number }).width!;
+    expect(w(indented)).toBe(w(plain) + 30);
+  });
+});

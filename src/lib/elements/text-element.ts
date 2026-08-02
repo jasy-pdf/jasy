@@ -104,6 +104,18 @@ interface TextElementParams {
   role?: TextRole;
 }
 
+/**
+ * A measurement in points has to be a real number. A NaN or an Infinity would travel all the way into
+ * the content stream as a position - the backend refuses it there, but by then the message names a
+ * coordinate rather than the property that was wrong. Rejected here, where the caller can see it.
+ */
+function finitePoints(value: number | undefined, name: string): number | undefined {
+  if (value !== undefined && !Number.isFinite(value)) {
+    throw new Error(`@jasy/pdf: Invalid ${name} ${value}: it must be a finite number of points.`);
+  }
+  return value;
+}
+
 export class TextElement extends SizedPDFElement implements Fragmentable {
   // Author-set style; `undefined` means "inherit from the cascade". Kept so the style can be
   // re-resolved against whatever context lays the element out.
@@ -183,8 +195,8 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     this.rawLetterSpacing = letterSpacing;
     this.rawDirection = direction;
     this.rawTextTransform = textTransform;
-    this.rawWordSpacing = wordSpacing;
-    this.rawTextIndent = textIndent;
+    this.rawWordSpacing = finitePoints(wordSpacing, "wordSpacing");
+    this.rawTextIndent = finitePoints(textIndent, "textIndent");
     this.content = content;
     this.maxLines = maxLines;
     this.orphans = orphans;
@@ -207,12 +219,16 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
    */
   private display(): string | TextSegment[] {
     if (this.textTransform === "none") return this.content;
-    return typeof this.content === "string"
-      ? applyTextTransform(this.content, this.textTransform)
-      : this.content.map((seg) => ({
-          ...seg,
-          content: applyTextTransform(seg.content, this.textTransform),
-        }));
+    if (typeof this.content === "string") {
+      return applyTextTransform(this.content, this.textTransform).text;
+    }
+    // The capitalisation state runs THROUGH the spans: `span("hel") + span("lo")` is one word.
+    let atWordStart = true;
+    return this.content.map((seg) => {
+      const done = applyTextTransform(seg.content, this.textTransform, atWordStart);
+      atWordStart = done.atWordStart;
+      return { ...seg, content: done.text };
+    });
   }
 
   private lineOptions(): LineOptions {
@@ -293,7 +309,8 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
 
     return {
       fitted: this.cloneWithContent(lines.slice(0, fittedLineCount).join(" ")),
-      remainder: this.cloneWithContent(lines.slice(fittedLineCount).join(" ")),
+      // A continuation is no longer the paragraph's FIRST line, so it carries no indent.
+      remainder: this.cloneWithContent(lines.slice(fittedLineCount).join(" "), 0),
     };
   }
 
@@ -338,7 +355,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
 
     return {
       fitted: this.cloneWithContent(segmentLinesToSegments(lines.slice(0, fittedLineCount))),
-      remainder: this.cloneWithContent(segmentLinesToSegments(lines.slice(fittedLineCount))),
+      remainder: this.cloneWithContent(segmentLinesToSegments(lines.slice(fittedLineCount)), 0),
     };
   }
 
@@ -352,7 +369,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
 
   // A copy carrying the same style but different (already-wrapped) content. Re-wrapping at
   // the same width reproduces exactly those lines (greedy is deterministic).
-  private cloneWithContent(content: string | TextSegment[]): TextElement {
+  private cloneWithContent(content: string | TextSegment[], indent = this.textIndent): TextElement {
     return new TextElement({
       content,
       fontSize: this.fontSize,
@@ -371,7 +388,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       letterSpacing: this.letterSpacing,
       direction: this.direction,
       wordSpacing: this.wordSpacing,
-      textIndent: this.textIndent,
+      textIndent: indent,
       role: this.role,
     }).adoptStructId(this); // a wrapped remainder is the SAME logical paragraph (one P across pages)
   }
@@ -432,9 +449,14 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
         letterSpacing,
         this.wordSpacing,
       );
+    // The FIRST line starts `textIndent` in, so an unbounded box has to be that much wider.
+    const indent = Math.max(0, this.textIndent);
     const content = this.display();
     if (typeof content === "string") {
-      return oneLine(content, this.fontFamily, this.fontSize, this.fontStyle, this.letterSpacing);
+      return (
+        indent +
+        oneLine(content, this.fontFamily, this.fontSize, this.fontStyle, this.letterSpacing)
+      );
     }
     return content.reduce(
       (sum, seg) =>
@@ -446,7 +468,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
           seg.fontStyle ?? this.fontStyle,
           seg.letterSpacing ?? this.letterSpacing,
         ),
-      0,
+      indent,
     );
   }
 

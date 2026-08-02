@@ -6,16 +6,29 @@ import type { Direction } from "./bidi.ts";
 /** CSS `text-transform`. `capitalize` upper-cases the first letter of every word, as CSS does. */
 export type TextTransform = "none" | "uppercase" | "lowercase" | "capitalize";
 
-/** Apply a `text-transform`. One place, so the measured text and the drawn text are the same string. */
-export function applyTextTransform(text: string, transform: TextTransform): string {
-  if (transform === "none") return text;
-  if (transform === "uppercase") return text.toUpperCase();
-  if (transform === "lowercase") return text.toLowerCase();
-  // CSS capitalises the first letter of every WORD and leaves the rest as written.
-  return text.replace(
-    /(^|\s)(\S)/gu,
-    (_, lead: string, first: string) => lead + first.toUpperCase(),
-  );
+/**
+ * Apply a `text-transform`. One place, so the measured text and the drawn text are the same string.
+ *
+ * `atWordStart` carries the capitalisation state ACROSS pieces: a word split over two spans
+ * (`span("hel") + span("lo")`) is still one word, and only its first letter is raised.
+ */
+export function applyTextTransform(
+  text: string,
+  transform: TextTransform,
+  atWordStart = true,
+): { text: string; atWordStart: boolean } {
+  const ends = text === "" ? atWordStart : /\s$/u.test(text);
+  if (transform === "none") return { text, atWordStart: ends };
+  if (transform === "uppercase") return { text: text.toUpperCase(), atWordStart: ends };
+  if (transform === "lowercase") return { text: text.toLowerCase(), atWordStart: ends };
+  // CSS raises the first letter of every WORD and leaves the rest as written.
+  let start = atWordStart;
+  let out = "";
+  for (const ch of text) {
+    out += start && !/\s/u.test(ch) ? ch.toUpperCase() : ch;
+    start = /\s/u.test(ch);
+  }
+  return { text: out, atWordStart: start };
 }
 
 /**

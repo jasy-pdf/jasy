@@ -156,9 +156,11 @@ export function wrapStringIntoLines(
       fontFamily,
       fontSize,
       fontStyle,
-      maxWidth,
+      // The same room that line was broken against: the first one lost the indent to it.
+      last === 0 ? maxWidth - indent : maxWidth,
       metrics,
       letterSpacing,
+      wordSpacing,
     );
   }
   return kept;
@@ -268,10 +270,13 @@ function ellipsize(
   maxWidth: number,
   metrics: FontMetrics,
   letterSpacing = 0,
+  wordSpacing = 0,
 ): string {
   const font = { fontFamily, fontSize, fontStyle };
+  // Measured through `singleLineWidth`, so the ellipsised line is judged by the same sum that decides
+  // every other line - word-spacing included.
   const fits = (s: string): boolean =>
-    runAdvance(metrics, s + ELLIPSIS, font, letterSpacing) <= maxWidth;
+    singleLineWidth(s + ELLIPSIS, font, metrics, letterSpacing, wordSpacing) <= maxWidth;
   if (fits(line)) return line + ELLIPSIS;
 
   const words = line.split(" ");
