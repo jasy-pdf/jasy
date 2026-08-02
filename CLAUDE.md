@@ -230,7 +230,7 @@ rendering. This is the standing visual check; prefer it over one-off `scripts/ru
 - `pnpm test` — Vitest (watch). `pnpm exec vitest run` for a one-shot CI-style run.
   `pnpm run test:coverage` for coverage. Unit tests live in **`tests/unit/`**, mirroring the `src/lib/`
   structure (`tests/unit/{common,elements,renderer,utils}/…`). `src/` is pure production code — the
-  build (`tsconfig.json` includes only `src/**`) therefore keeps `dist/` test-free. **1005 tests, green** —
+  build (`tsconfig.json` includes only `src/**`) therefore keeps `dist/` test-free. **1016 tests, green** —
   what the root run covers: core 908, `@jasy/cli` 37, `@jasy/vue` 33, `@jasy/e-invoice` 27. `@jasy/nuxt`
   is excluded from it (`vitest.config.ts`) and runs on its own.
 - `pnpm run build` — `tsc` → `dist/`.
@@ -619,6 +619,17 @@ wordWidth > maxWidth` and forgot the SPACE that would join the word. It went uns
   (`07-header-footer`, `12-line-height`, `17-page-numbers`, `19-text-decoration`) now break a word
   earlier, because they were overflowing before.
 
+- ✅ **`singleLineWidth` — the box and the breaker agree to the last bit** (2026-08-02) — a `Text` in a
+  `Row` is sized by its natural single-line width, and the breaker then decides whether that line fits.
+  Both sum the same words and spaces, but they GROUPED the additions differently — `(word + space)` per
+  word versus `word + (space + word)` — and floating-point addition is not associative. The box came out
+  one bit narrower than the line it was made for, so the text wrapped inside it. A gallery footer split
+  onto two lines from exactly that.
+  One exported function in `text/line-breaker.ts` now owns the sum, and the breaker's own fit test uses
+  the identical expression for the test AND for the running total. Pinned by
+  `tests/unit/text/single-line-width.test.ts`, whose metrics are deliberately non-binary widths so the
+  grouping actually shows.
+
 Genuine remaining gaps / deferred:
 
 1. **Absolute positioning — Stages 1+2 built** (2026-06-21). CSS-style: `Box({ relative: true })` is a
@@ -695,7 +706,7 @@ below), `@jasy/cli`@alpha.6, `@jasy/vue`@alpha.7, `@jasy/nuxt`@alpha.6** (the al
 page-break control — the termination guard, `PageBreak`, `breakBefore`/`breakAfter`, `keepTogether` — plus
 kerning turned on by default). Repo public + locked, full CI + changelog +
 bots in place (see Repo facts). The engine is **feature-complete for the alpha** — inheritance, `onOverflow`,
-custom formats, the line-breaker fixes; **1005 tests green** (the root run, i.e. everything but
+custom formats, the line-breaker fixes; **1016 tests green** (the root run, i.e. everything but
 `@jasy/nuxt`). The **landing**
 (`~/projects/jasy-landing` → **jasy.dev**) is built: showroom (12 cards), validator, docs, a home-page
 roadmap section, and a full **SEO + AI-discoverability layer** (OG image, JSON-LD, `robots.txt`,

@@ -49,6 +49,31 @@ export interface SegmentLine {
  * rendering call this, so they can never disagree. Depends only on `FontMetrics`,
  * not the PDF byte writer - the future fragmentation pass can reuse it.
  */
+/**
+ * The width of `text` set as ONE line, accumulated in EXACTLY the order `wrapStringIntoLines` builds a
+ * line: the first word, then `+ (space + word)` each time. The order matters because floating-point
+ * addition is not associative - a box sized by a differently-grouped sum can be one bit too small for
+ * the very line the breaker then measures, and the text wraps inside a box made to fit it. That is not
+ * hypothetical: it is what split a footer sized to its own content.
+ */
+export function singleLineWidth(
+  text: string,
+  font: { fontFamily: string; fontSize: number; fontStyle: FontStyle },
+  metrics: FontMetrics,
+  letterSpacing = 0,
+): number {
+  const space = runAdvance(metrics, " ", font, letterSpacing);
+  return text
+    .split(" ")
+    .reduce(
+      (width, word, i) =>
+        i === 0
+          ? runAdvance(metrics, word, font, letterSpacing)
+          : width + (space + runAdvance(metrics, word, font, letterSpacing)),
+      0,
+    );
+}
+
 export function wrapStringIntoLines(
   text: string,
   fontFamily: string,
@@ -68,7 +93,7 @@ export function wrapStringIntoLines(
 
   const font = { fontFamily, fontSize, fontStyle };
   const words = text.split(" ");
-  words.forEach((word, index) => {
+  words.forEach((word) => {
     // Word and space advances come from the one shared primitive (`advance.ts`), the same one
     // `naturalWidth` uses - so a bounded and an unbounded layout of the same text agree bit for bit.
     const wordWidth = runAdvance(metrics, word, font, letterSpacing);
@@ -81,6 +106,8 @@ export function wrapStringIntoLines(
     //
     // A single word wider than maxWidth still sits on its (empty) line and overflows, rather than
     // pushing a phantom empty line before it (which would over-count the height by a line).
+    const candidate = currentWidth + (spaceWidth + wordWidth);
+
     if (currentLine === "") {
       currentLine = word;
       currentWidth = wordWidth;
@@ -88,17 +115,17 @@ export function wrapStringIntoLines(
       // How much a JUSTIFIED line may be squeezed to keep one more word: the spaces already on the
       // line plus the one that would join it, each giving up at most `shrink` of its width. Zero for
       // every other alignment, where a squeezed line would simply overflow instead.
-    } else if (
-      currentWidth + spaceWidth + wordWidth - (gaps + 1) * spaceWidth * shrink >
-      maxWidth
-    ) {
+      // ONE expression, used for the test AND for the running total. Adding the same three numbers in
+      // a different order gives a different last bit, and a line that lands exactly on `maxWidth` is
+      // then broken by that bit alone - which is how a footer sized to its own text wrapped.
+    } else if (candidate - (gaps + 1) * spaceWidth * shrink > maxWidth) {
       lines.push(currentLine.trim());
       currentLine = word;
       currentWidth = wordWidth;
       gaps = 0;
     } else {
       currentLine += " " + word;
-      currentWidth += spaceWidth + wordWidth;
+      currentWidth = candidate;
       gaps += 1;
     }
   });
