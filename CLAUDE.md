@@ -230,8 +230,9 @@ rendering. This is the standing visual check; prefer it over one-off `scripts/ru
 - `pnpm test` — Vitest (watch). `pnpm exec vitest run` for a one-shot CI-style run.
   `pnpm run test:coverage` for coverage. Unit tests live in **`tests/unit/`**, mirroring the `src/lib/`
   structure (`tests/unit/{common,elements,renderer,utils}/…`). `src/` is pure production code — the
-  build (`tsconfig.json` includes only `src/**`) therefore keeps `dist/` test-free. **929 tests, green**
-  in the core (plus the `@jasy/e-invoice` suite).
+  build (`tsconfig.json` includes only `src/**`) therefore keeps `dist/` test-free. **936 tests, green** —
+  what the root run covers: core 839, `@jasy/cli` 37, `@jasy/vue` 33, `@jasy/e-invoice` 27. `@jasy/nuxt`
+  is excluded from it (`vitest.config.ts`) and runs on its own.
 - `pnpm run build` — `tsc` → `dist/`.
 - `pnpm run lint` (oxlint) + `pnpm run fmt:check` (oxfmt `--check`); `pnpm run fmt` formats. **Run `pnpm run fmt`
   before committing** — CI fails on unformatted files.
@@ -257,8 +258,9 @@ rendering. This is the standing visual check; prefer it over one-off `scripts/ru
 - New element = new file in `elements/`, export from `elements/index.ts`, write a renderer in
   `renderer/` that returns `IRNode[]`, **register it in `PDFRenderer.render()`**, export from
   `renderer/index.ts`, add a test under `tests/unit/<group>/` (mirror the source path; import the
-  subject via `../../../src/lib/<group>/<module>.ts` — **with the `.ts` extension**, which `nodenext`
-  requires; without it the module resolves to `any` and a real type error in the test is invisible, see
+  subject via a relative path to `src/lib/<group>/<module>.ts` — count the `../` from the test's OWN
+  depth (`tests/unit/<group>/` needs three, `tests/unit/elements/layout/` four) and **keep the `.ts`
+  extension**, which `nodenext` requires; without it the module resolves to `any` and a real type error in the test is invisible, see
   ISSUE-6). A layout test needs a `FontMetrics`: use `testMetrics()` from `tests/unit/support/metrics.ts`
   rather than a hand-rolled literal, so the object really satisfies the interface instead of being cast
   past it. A new drawable primitive also needs an `IRNode` variant in `ir/display-list.ts` + a `case` in
@@ -523,11 +525,13 @@ agree: true })` → declarative values, not object mutation. Save is an **increm
   candidate membership. Pinned by `tests/unit/api/flex-real-content.test.ts`, which is deliberately NOT
   plain boxes — a `Table`, a wrapping paragraph and a nested `Column` re-measure differently when an
   item is made narrower, and that is where a flex engine actually breaks. Gallery `31-flexbox`.
-- ✅ **Byte-stable output** (verified 2026-08-01) — the same document rendered twice is byte-identical,
-  including a ZUGFeRD invoice, across separate processes. Nothing in the render path reads the clock or a
-  random source (the only `getRandomValues` is in the encryption path, which PDF/A forbids anyway); we
-  write no `/CreationDate`/`/ModDate`; and the trailer `/ID` PDF/A requires is `contentId()`, an MD5 over
-  the objects. This is what makes an archived or audited e-invoice re-derivable and hashable years later.
+- ✅ **Byte-stable output, UNENCRYPTED** (verified 2026-08-01) — the same document rendered twice is
+  byte-identical, PDF/A and a ZUGFeRD invoice included, across separate processes. Nothing on that path
+  reads the clock or a random source; we write no `/CreationDate`/`/ModDate`; and the trailer `/ID` PDF/A
+  requires is `contentId()`, an MD5 over the objects. **`renderToBytes(doc, { encrypt })` is excluded and
+  cannot be otherwise**: R6 draws random salts and a random file key, and every stream gets a fresh IV, so
+  two renders of the same document differ by design (measured). Encryption and PDF/A are mutually
+  exclusive anyway, so the archival case never meets it. This is what makes an archived or audited e-invoice re-derivable and hashable years later.
   `packages/e-invoice/tests/determinism.test.ts` pins it, with a counter-test that a changed invoice
   number DOES change the bytes so the check cannot pass vacuously. The honest limit: byte-stable per
   library VERSION — a bump may legitimately change output, as turning kerning on did.
@@ -608,7 +612,8 @@ below), `@jasy/cli`@alpha.6, `@jasy/vue`@alpha.7, `@jasy/nuxt`@alpha.6** (the al
 page-break control — the termination guard, `PageBreak`, `breakBefore`/`breakAfter`, `keepTogether` — plus
 kerning turned on by default). Repo public + locked, full CI + changelog +
 bots in place (see Repo facts). The engine is **feature-complete for the alpha** — inheritance, `onOverflow`,
-custom formats, the line-breaker fixes; **929 tests green**. The **landing**
+custom formats, the line-breaker fixes; **936 tests green** (the root run, i.e. everything but
+`@jasy/nuxt`). The **landing**
 (`~/projects/jasy-landing` → **jasy.dev**) is built: showroom (12 cards), validator, docs, a home-page
 roadmap section, and a full **SEO + AI-discoverability layer** (OG image, JSON-LD, `robots.txt`,
 `llms.txt`, `sitemap.xml`).

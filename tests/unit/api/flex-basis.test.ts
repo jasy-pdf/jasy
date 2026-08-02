@@ -8,8 +8,7 @@ import { testMetrics } from "../support/metrics.ts";
 // `flexBasis` is the main-axis size a flex child STARTS from, before the leftover is shared out. It is
 // reserved exactly like a fixed child's size, so the leftover the others split shrinks by it.
 
-const ctx = {} as LayoutContext;
-const metricsCtx = { metrics: testMetrics() } as LayoutContext;
+const ctx = { metrics: testMetrics() } as LayoutContext;
 const filler = (opts: Record<string, unknown> = {}) =>
   Expanded(opts as never, Box({ borderWidth: 0 }, []));
 
@@ -80,8 +79,8 @@ describe("flexBasis across a page break", () => {
       };
       calculateLayout(c: BoxConstraints, o: { x: number; y: number }, ctx: LayoutContext): unknown;
     };
-    e.calculateLayout(BoxConstraints.loose(400, Infinity), { x: 0, y: 0 }, metricsCtx);
-    return e.fragment(50, 400, metricsCtx);
+    e.calculateLayout(BoxConstraints.loose(400, Infinity), { x: 0, y: 0 }, ctx);
+    return e.fragment(50, 400, ctx);
   };
 
   it("carries a point basis onto the continuation", () => {
