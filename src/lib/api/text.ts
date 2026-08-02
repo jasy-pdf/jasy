@@ -2,6 +2,7 @@ import { TextElement, TextRole, TextSegment } from "../elements/text-element.ts"
 import { HorizontalAlignment } from "../elements/pdf-element.ts";
 import { FontStyle } from "../utils/pdf-object-manager.ts";
 import { TextOverflow } from "../text/line-breaker.ts";
+import type { Direction } from "../text/bidi.ts";
 import { ResolvedTextStyle } from "../text/text-style.ts";
 import { ColorInput, toColor } from "./color.ts";
 
@@ -26,6 +27,10 @@ export interface TextStyle {
   skipInk?: boolean;
   /** Extra space after every glyph, in points (CSS `letter-spacing`). Negative tightens. Default 0. */
   letterSpacing?: number;
+  /** Base writing direction (CSS `direction`): `"rtl"` starts the line on the right, for Hebrew or
+   *  Arabic. Mixed text is reordered per Unicode UAX #9 either way, so Hebrew inside an `ltr`
+   *  paragraph already comes out right - this decides where the LINE starts. */
+  direction?: Direction;
   /** External URL - makes this run an inline hyperlink (a /Link annotation over its glyphs). On a
    *  `span` it links just that run; on a whole `Text` (plain string) it links the whole text. */
   href?: string;
@@ -148,6 +153,7 @@ export function Text(content: string | TextSegment[], opts: TextOptions = {}): T
     strikethrough: opts.strikethrough,
     skipInk: opts.skipInk,
     letterSpacing: opts.letterSpacing,
+    direction: opts.direction,
     role: opts.role,
   });
 }
@@ -171,6 +177,10 @@ export interface TextDefaults {
   strikethrough?: boolean;
   skipInk?: boolean;
   letterSpacing?: number;
+  /** Base writing direction (CSS `direction`): `"rtl"` starts the line on the right, for Hebrew or
+   *  Arabic. Mixed text is reordered per Unicode UAX #9 either way, so Hebrew inside an `ltr`
+   *  paragraph already comes out right - this decides where the LINE starts. */
+  direction?: Direction;
 }
 
 /** Maps the `Text`-style option names onto a partial engine `ResolvedTextStyle` (only the set
@@ -189,5 +199,6 @@ export function toTextStyleOverride(opts: TextDefaults): Partial<ResolvedTextSty
   if (opts.strikethrough !== undefined) style.strikethrough = opts.strikethrough;
   if (opts.skipInk !== undefined) style.skipInk = opts.skipInk;
   if (opts.letterSpacing !== undefined) style.letterSpacing = opts.letterSpacing;
+  if (opts.direction !== undefined) style.direction = opts.direction;
   return style;
 }

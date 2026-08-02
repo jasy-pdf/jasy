@@ -21,6 +21,7 @@ import {
 } from "../text/line-breaker.ts";
 import { lineBoxForSegmentLine, lineBoxForString } from "../text/line-metrics.ts";
 import { runAdvance } from "../text/advance.ts";
+import { visualRuns, visualRunsOf, type Direction } from "../text/bidi.ts";
 import {
   DecorationStroke,
   skipInkSegments,
@@ -98,6 +99,7 @@ export class TextRenderer {
       strikethrough,
       skipInk,
       letterSpacing,
+      direction,
       role,
     } = textElement.getProps();
 
@@ -122,6 +124,7 @@ export class TextRenderer {
       strikethrough,
       skipInk,
       letterSpacing,
+      direction,
     );
 
     // Accessible tagging: this whole text block is one structure element (a paragraph P, or a heading
@@ -357,6 +360,7 @@ export class TextRenderer {
     strikethrough = false,
     skipInk = false,
     letterSpacing = 0,
+    direction: Direction = "ltr",
   ): { runs: TextRun[]; links: Link[]; decorations: Line[] } {
     const runs: TextRun[] = [];
     // /Link annotation rects for any `href` spans, collected as we place segments. Empty for the
@@ -367,9 +371,17 @@ export class TextRenderer {
     const decorations: Line[] = [];
 
     // Horizontal offset of a line of the given width under the current alignment.
+    // `start` means the side the writing begins on, so it is the one alignment that depends on the
+    // direction. Resolved HERE, the single place alignment is consumed.
+    const align =
+      textAlignment === HorizontalAlignment.start
+        ? direction === "rtl"
+          ? HorizontalAlignment.right
+          : HorizontalAlignment.left
+        : textAlignment;
     const alignmentOffset = (lineWidth: number): number => {
-      if (textAlignment === HorizontalAlignment.center) return (maxWidth - lineWidth) / 2;
-      if (textAlignment === HorizontalAlignment.right) return maxWidth - lineWidth;
+      if (align === HorizontalAlignment.center) return (maxWidth - lineWidth) / 2;
+      if (align === HorizontalAlignment.right) return maxWidth - lineWidth;
       return 0;
     };
 
@@ -482,32 +494,38 @@ export class TextRenderer {
       const box = lineBoxForString(objectManager, fontFamily, fontStyle, fontSize, lineHeight);
       lines.forEach((line, index) => {
         const lineWidth = runAdvance(objectManager, line, font, letterSpacing);
-        const x = initialX + alignmentOffset(lineWidth);
+        let x = initialX + alignmentOffset(lineWidth);
         const baseline = yPosition + box.baseline + box.height * index;
-        runs.push({
-          type: "text",
-          x,
-          y: baseline,
-          text: line,
-          fontFamily,
-          fontStyle,
-          fontSize,
-          color,
-          ...(letterSpacing ? { letterSpacing } : {}),
-        });
-        decorate(
-          line,
-          x,
-          lineWidth,
-          baseline,
-          fontFamily,
-          fontStyle,
-          fontSize,
-          color,
-          underline,
-          strikethrough,
-          letterSpacing,
-        );
+        // Bidi: one line becomes the pieces that are DRAWN, left to right. Latin-only text in an
+        // `ltr` paragraph comes back as the single original string, so nothing changes for it.
+        for (const part of visualRuns(line, direction)) {
+          const partWidth = runAdvance(objectManager, part.text, font, letterSpacing);
+          runs.push({
+            type: "text",
+            x,
+            y: baseline,
+            text: part.text,
+            fontFamily,
+            fontStyle,
+            fontSize,
+            color,
+            ...(letterSpacing ? { letterSpacing } : {}),
+          });
+          decorate(
+            part.text,
+            x,
+            partWidth,
+            baseline,
+            fontFamily,
+            fontStyle,
+            fontSize,
+            color,
+            underline,
+            strikethrough,
+            letterSpacing,
+          );
+          x += partWidth;
+        }
       });
       return { runs, links, decorations };
     }
@@ -519,14 +537,21 @@ export class TextRenderer {
     // height matches the measured height.
     const pushLine = (line: SegmentLine, lineY: number): void => {
       let x = initialX + alignmentOffset(line.width);
-      line.segments.forEach((segment) => {
+      // Bidi runs over the WHOLE line, across span boundaries - a Hebrew span beside a Latin one has to
+      // be ordered against its neighbours, not inside itself. Each returned run carries the segment it
+      // came from, so it keeps that span's font, colour, decoration and link.
+      const ordered = visualRunsOf(
+        line.segments.map((segment) => ({ text: segment.content, source: segment })),
+        direction,
+      );
+      ordered.forEach(({ text: runText, source: segment }) => {
         const family = segment.fontFamily || fontFamily;
         const size = segment.fontSize || fontSize;
         const style = segment.fontStyle || fontStyle;
         const segLetterSpacing = segment.letterSpacing ?? letterSpacing;
         const advance = runAdvance(
           objectManager,
-          segment.content,
+          runText,
           { fontFamily: family, fontSize: size, fontStyle: style },
           segLetterSpacing,
         );
@@ -535,7 +560,7 @@ export class TextRenderer {
           type: "text",
           x,
           y: lineY,
-          text: segment.content,
+          text: runText,
           fontFamily: family,
           fontStyle: style,
           fontSize: size,
@@ -543,7 +568,7 @@ export class TextRenderer {
           ...(segLetterSpacing ? { letterSpacing: segLetterSpacing } : {}),
         });
         decorate(
-          segment.content,
+          runText,
           x,
           advance,
           lineY,

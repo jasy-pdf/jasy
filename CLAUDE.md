@@ -230,8 +230,8 @@ rendering. This is the standing visual check; prefer it over one-off `scripts/ru
 - `pnpm test` — Vitest (watch). `pnpm exec vitest run` for a one-shot CI-style run.
   `pnpm run test:coverage` for coverage. Unit tests live in **`tests/unit/`**, mirroring the `src/lib/`
   structure (`tests/unit/{common,elements,renderer,utils}/…`). `src/` is pure production code — the
-  build (`tsconfig.json` includes only `src/**`) therefore keeps `dist/` test-free. **936 tests, green** —
-  what the root run covers: core 839, `@jasy/cli` 37, `@jasy/vue` 33, `@jasy/e-invoice` 27. `@jasy/nuxt`
+  build (`tsconfig.json` includes only `src/**`) therefore keeps `dist/` test-free. **954 tests, green** —
+  what the root run covers: core 857, `@jasy/cli` 37, `@jasy/vue` 33, `@jasy/e-invoice` 27. `@jasy/nuxt`
   is excluded from it (`vitest.config.ts`) and runs on its own.
 - `pnpm run build` — `tsc` → `dist/`.
 - `pnpm run lint` (oxlint) + `pnpm run fmt:check` (oxfmt `--check`); `pnpm run fmt` formats. **Run `pnpm run fmt`
@@ -536,6 +536,37 @@ agree: true })` → declarative values, not object mutation. Save is an **increm
   number DOES change the bytes so the check cannot pass vacuously. The honest limit: byte-stable per
   library VERSION — a bump may legitimately change output, as turning kerning on did.
 
+- ✅ **Bidirectional text - ORDERING** (2026-08-02) — Hebrew, and mixed Hebrew/Latin/digits, come out in
+  the order a reader expects. `Text({ direction: "rtl" })`, inheritable from `Document`/`DefaultTextStyle`
+  like every other text style. The whole seam is **`src/lib/text/bidi.ts`** (`visualRunsOf`): one LINE of
+  pieces in, the runs to DRAW out, left to right. UAX #9 itself comes from `bidi-js` — the same library
+  react-pdf uses — and **nothing outside that file knows it exists**, so replacing it with our own is a
+  one-file change (a named `todo.md` item; the dep is unmaintained since 2023 and ships no types, hence
+  `src/types/bidi-js.d.ts`).
+  Why it was not a rewrite: bidi runs AFTER line breaking, per finished line, and `pushLine` already
+  emitted a line as runs with their own absolute x — so reordering is a permutation plus recomputed x.
+  Decorations and links follow for free, since they hang off the same x/advance.
+  Three things that are easy to get wrong and are pinned by tests: the algorithm runs over the **whole
+  line across span boundaries** (each run remembers its span, so it keeps that font/colour/link) — doing
+  it per span would leave a Hebrew span in source order; a **surrogate pair** is two code units at one
+  level, so a naive reversal splits an emoji in Hebrew text into two broken halves; and the fast path is
+  a strict **pass-through** (same pieces, empty ones included) so every existing document stays
+  byte-identical — 30/30 gallery unchanged.
+  `HorizontalAlignment.start` is new and is now the DEFAULT: CSS `text-align: start`, resolved to left in
+  `ltr` and right in `rtl` at the ONE place alignment is consumed. That is what makes an rtl paragraph
+  begin on the right without anyone asking.
+  **Verified against headless Chrome AND react-pdf 4.5.1**, not against our own reasoning: on Hebrew we
+  and react-pdf are identical character for character, and both sit within 1 pt of Chrome — a Latin
+  sentence with Hebrew in it, an rtl base line, digits inside rtl text, and bracket **mirroring**. Demo
+  `claude-data/out/bidi/bidi.pdf` (`claude-data/gallery/bidi-demo.ts`).
+  The react-pdf run is what caught the one real bug: `getMirroredCharactersMap` wants the LEVEL ARRAY
+  while bidi-js's README passes the result object, so it returned an empty map and no bracket was ever
+  mirrored — and our own test was vacuously green because it asserted the broken order. Known gap, in
+  `todo.md`: we SUBSTITUTE the mirrored character (as react-pdf does) where Chrome keeps the original and
+  mirrors the glyph, so extracted text has swapped brackets.
+  **Arabic is ORDERED correctly but not SHAPED** — letters do not join yet (that is `GSUB`, its own
+  project; the x positions are the only thing that differs from Chrome). Deliberate, and in `todo.md`.
+
 Genuine remaining gaps / deferred:
 
 1. **Absolute positioning — Stages 1+2 built** (2026-06-21). CSS-style: `Box({ relative: true })` is a
@@ -612,7 +643,7 @@ below), `@jasy/cli`@alpha.6, `@jasy/vue`@alpha.7, `@jasy/nuxt`@alpha.6** (the al
 page-break control — the termination guard, `PageBreak`, `breakBefore`/`breakAfter`, `keepTogether` — plus
 kerning turned on by default). Repo public + locked, full CI + changelog +
 bots in place (see Repo facts). The engine is **feature-complete for the alpha** — inheritance, `onOverflow`,
-custom formats, the line-breaker fixes; **936 tests green** (the root run, i.e. everything but
+custom formats, the line-breaker fixes; **954 tests green** (the root run, i.e. everything but
 `@jasy/nuxt`). The **landing**
 (`~/projects/jasy-landing` → **jasy.dev**) is built: showroom (12 cards), validator, docs, a home-page
 roadmap section, and a full **SEO + AI-discoverability layer** (OG image, JSON-LD, `robots.txt`,
@@ -658,5 +689,5 @@ more e-invoice profiles, framework bindings). See `todo.md` "⭐ Active" + "🔮
   else = issues + fork PRs. **CodeRabbit** (`.coderabbit.yaml`) reviews PRs; **Renovate** (`renovate.json`, app
   bypass-listed in the ruleset) opens weekly dependency PRs. Community-health files (CONTRIBUTING / CODE_OF_CONDUCT /
   SECURITY / LICENSE / issue+PR templates / FUNDING) all in. Branch `main`. Runtime deps: `jimp` (images), `fflate`
-  (isomorphic deflate); the old `reflect-metadata`
-  DI is gone (decorator removed).
+  (isomorphic deflate), `bidi-js` (UAX #9, behind the `text/bidi.ts` seam and slated to be replaced by
+  our own - see `todo.md`); the old `reflect-metadata` DI is gone (decorator removed).

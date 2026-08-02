@@ -259,6 +259,9 @@ export abstract class FlexiblePDFElement extends PDFElement {
 }
 
 export enum HorizontalAlignment {
+  /** CSS `text-align: start` - the side the writing STARTS on: left in `ltr`, right in `rtl`. The
+   *  default, so a right-to-left paragraph begins on the right without anyone asking for it. */
+  start = "START",
   left = "LEFT",
   right = "RIGHT",
   center = "CENTER",
