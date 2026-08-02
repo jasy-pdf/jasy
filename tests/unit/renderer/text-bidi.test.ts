@@ -1,9 +1,9 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { TextRenderer } from "../../../src/lib/renderer/text-renderer.ts";
 import { FontStyle, PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager.ts";
 import { TextElement } from "../../../src/lib/elements/text-element.ts";
 import { HorizontalAlignment } from "../../../src/lib/elements/pdf-element.ts";
-import { unitVerticals } from "../support/metrics.ts";
+import { testMetrics } from "../support/metrics.ts";
 import { DEFAULT_TEXT_STYLE, type ResolvedTextStyle } from "../../../src/lib/text/text-style.ts";
 import type { TextRun } from "../../../src/lib/ir/display-list.ts";
 import { BoxConstraints } from "../../../src/lib/layout/box-constraints.ts";
@@ -16,17 +16,9 @@ const HE_VISUAL = [...HE].reverse().join("");
 
 const om = () =>
   ({
-    getStringWidth: vi.fn((t: string) => [...t].length * 10),
-    getCharWidth: vi.fn(() => 10),
-    getFontVerticals: unitVerticals,
-    getFontDecoration: () => ({
-      underlinePosition: -0.1,
-      underlineThickness: 0.05,
-      capHeight: 0.7,
-      xHeight: 0.5,
-    }),
-    kerningEnabled: false,
-    getKernPairs: (t: string) => Array.from({ length: Math.max(0, [...t].length - 1) }, () => 0),
+    // The metric half comes from the shared helper, so this file only stubs what a RENDERER needs
+    // beyond measuring. Every glyph is 10 wide at size 10, which makes an x readable as a glyph count.
+    ...testMetrics({ getStringWidth: (t) => [...t].length * 10, getCharWidth: () => 10 }),
     struct: { enabled: false },
     shapeText: () => undefined,
     isCustomFont: () => false,
@@ -34,6 +26,7 @@ const om = () =>
     getEmojiSource: () => undefined,
     getEmojiFont: () => undefined,
     getEmojiImageSource: () => undefined,
+    // Not a real PDFObjectManager - the renderer only reaches for the members above.
   }) as unknown as PDFObjectManager;
 
 /** The text runs a `TextElement` produces, in the order the page draws them. */
@@ -213,6 +206,9 @@ describe("a shaped run and the colour-emoji split", () => {
       (n): n is TextRun => n.type === "text",
     );
     expect(runs).toHaveLength(1);
-    expect(runs[0].glyphs).toHaveLength([...content].length);
+    // The whole run, not a piece of it: its own logical text and the full glyph sequence the stub
+    // shaper produced (one glyph per code point, numbered in order).
+    expect(runs[0].text).toBe(content);
+    expect(runs[0].glyphs).toEqual([...content].map((_, i) => 2000 + i));
   });
 });
