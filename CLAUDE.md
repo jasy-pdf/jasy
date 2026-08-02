@@ -589,9 +589,10 @@ agree: true })` → declarative values, not object mutation. Save is an **increm
   both are known), so copied text is real Arabic and not presentation forms.
   **Verified against headless Chrome AND react-pdf 4.5.1**: identical word widths to 0.1 pt and
   identical extracted text. Demo `claude-data/out/bidi/bidi.pdf`.
-  Not built, none blocking: lookup type **6** (chained context — Naskh picks between two heights of the
-  hah family; same advance, so nothing shifts), **GPOS mark positioning**, the discretionary `liga`, and
-  scripts beyond the Arabic family. All in `todo.md`.
+  Not built, none blocking: lookup type **6** (chained context) and **GPOS mark positioning** — measured
+  2026-08-02, **react-pdf does neither either**: on vocalised Arabic our ink box and its are identical to
+  the pixel and only Chrome differs, by 3 px on one mark. Also the discretionary `liga` (Latin, nothing
+  to do with RTL) and scripts beyond the Arabic family. All in `todo.md`.
 
 Genuine remaining gaps / deferred:
 
