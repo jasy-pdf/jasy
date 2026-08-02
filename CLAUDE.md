@@ -230,7 +230,7 @@ rendering. This is the standing visual check; prefer it over one-off `scripts/ru
 - `pnpm test` — Vitest (watch). `pnpm exec vitest run` for a one-shot CI-style run.
   `pnpm run test:coverage` for coverage. Unit tests live in **`tests/unit/`**, mirroring the `src/lib/`
   structure (`tests/unit/{common,elements,renderer,utils}/…`). `src/` is pure production code — the
-  build (`tsconfig.json` includes only `src/**`) therefore keeps `dist/` test-free. **1016 tests, green** —
+  build (`tsconfig.json` includes only `src/**`) therefore keeps `dist/` test-free. **1020 tests, green** —
   what the root run covers: core 908, `@jasy/cli` 37, `@jasy/vue` 33, `@jasy/e-invoice` 27. `@jasy/nuxt`
   is excluded from it (`vitest.config.ts`) and runs on its own.
 - `pnpm run build` — `tsc` → `dist/`.
@@ -629,6 +629,11 @@ wordWidth > maxWidth` and forgot the SPACE that would join the word. It went uns
   the identical expression for the test AND for the running total. Pinned by
   `tests/unit/text/single-line-width.test.ts`, whose metrics are deliberately non-binary widths so the
   grouping actually shows.
+  The SEGMENT breaker had the same disease twice over (found by review): its reported `line.width`
+  counted a space for EVERY word, the last one included, so a right-aligned span line sat 16 pt short of
+  its box — and its fit test forgot the joining space, exactly as the string one had. Both now follow
+  the same rule, and a space joins words only INSIDE a segment, since `span("a") + span("b")` draws
+  `ab` with nothing between.
 
 Genuine remaining gaps / deferred:
 
@@ -706,7 +711,7 @@ below), `@jasy/cli`@alpha.6, `@jasy/vue`@alpha.7, `@jasy/nuxt`@alpha.6** (the al
 page-break control — the termination guard, `PageBreak`, `breakBefore`/`breakAfter`, `keepTogether` — plus
 kerning turned on by default). Repo public + locked, full CI + changelog +
 bots in place (see Repo facts). The engine is **feature-complete for the alpha** — inheritance, `onOverflow`,
-custom formats, the line-breaker fixes; **1016 tests green** (the root run, i.e. everything but
+custom formats, the line-breaker fixes; **1020 tests green** (the root run, i.e. everything but
 `@jasy/nuxt`). The **landing**
 (`~/projects/jasy-landing` → **jasy.dev**) is built: showroom (12 cards), validator, docs, a home-page
 roadmap section, and a full **SEO + AI-discoverability layer** (OG image, JSON-LD, `robots.txt`,

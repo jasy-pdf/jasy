@@ -186,19 +186,25 @@ export function breakSegmentsIntoLines(
 
     words.forEach((word, wordIndex) => {
       const wordWidth = runAdvance(metrics, word, font, letterSpacing);
+      // A space joins this word to what precedes it only INSIDE a segment; segments butt together
+      // with nothing between them, which is what `span("a") + span("b")` draws.
+      const joiner = wordIndex > 0 ? spaceWidth : 0;
+      // ONE expression for the test and for the running total, grouped exactly as `singleLineWidth`
+      // groups it - see the note there. A width built any other way can be a bit off the one the box
+      // was sized with, and the text wraps inside a box made to hold it.
+      const candidate = width + (joiner + wordWidth);
 
       // Same guard as the string path: don't open a phantom empty line for an over-wide first word -
       // place it (overflowing) on the current empty line instead.
-      if (width + wordWidth > maxWidth && width > 0) {
+      if (candidate > maxWidth && width > 0) {
         lines.push({ segments: lineSegments, width });
-        width = 0;
+        width = wordWidth;
         lineSegments = [];
         combined = word;
-        width += wordWidth + spaceWidth;
         lineSegments.push({ ...segment, content: combined });
       } else {
         combined += wordIndex === 0 ? word : " " + word;
-        width += wordWidth + spaceWidth;
+        width = candidate;
         if (lineSegments.length === 0) {
           lineSegments.push({ ...segment, fontFamily: family, content: combined });
         }
