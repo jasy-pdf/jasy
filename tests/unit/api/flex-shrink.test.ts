@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { Box, Row } from "../../../src/lib/api/layout.ts";
+import { Image } from "../../../src/lib/api/content.ts";
+import { CustomBytesImage } from "../../../src/lib/elements/image-element.ts";
 import { BoxConstraints } from "../../../src/lib/layout/box-constraints.ts";
 import { LayoutContext } from "../../../src/lib/elements/pdf-element.ts";
 
@@ -67,5 +69,24 @@ describe("giving space back", () => {
 
   it("refuses a negative willingness", () => {
     expect(() => tile(100, { flexShrink: -1 })).toThrow(/Invalid flexShrink/);
+  });
+});
+
+describe("an Image is a flex child like any other", () => {
+  // `ImageOptions` extends `BoundsInput`, so the prop is offered and documented on an Image. It was
+  // accepted and then dropped on the floor - the picture simply overflowed.
+  const pic = (width: number, opts: Record<string, unknown> = {}) =>
+    Image(new CustomBytesImage(new Uint8Array([1])), { width, height: 20, ...opts });
+
+  it("honours flexShrink on an Image", () => {
+    // 300 + 200 in a 400pt line: 100 too much, shared out by each picture's own width.
+    const [a, b] = widths([pic(300, { flexShrink: 1 }), pic(200, { flexShrink: 1 })]);
+    expect(a! + b!).toBeCloseTo(400, 5); // the line is exactly filled...
+    expect(a!).toBeCloseTo(240, 5); // ...and the wide one gave up 60 of the 100, the narrow one 40
+    expect(b!).toBeCloseTo(160, 5);
+  });
+
+  it("still leaves an Image alone without it", () => {
+    expect(widths([pic(300), pic(300)])).toEqual([300, 300]);
   });
 });

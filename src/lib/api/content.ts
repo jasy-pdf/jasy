@@ -111,5 +111,6 @@ export function Image(src: ImageSource, opts: ImageOptions = {}): ImageElement {
     alt: opts.alt,
   })
     .withAlignSelf(opts.alignSelf)
-    .withOrder(opts.order);
+    .withOrder(opts.order)
+    .withFlexShrink(opts.flexShrink);
 }

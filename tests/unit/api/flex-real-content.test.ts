@@ -83,8 +83,8 @@ describe("a flex item holding real content", () => {
       ]);
     const row = Row({ gap: 6, wrap: true, width: 300 }, [panel(140), panel(140), panel(140)]);
     const out = laid(row, 300);
-    expect(out.map((p) => p.y)).toEqual([out[0].y, out[0].y, out[2].y]);
-    expect(out[2].y).toBeGreaterThan(out[0].y);
+    expect(out[1].y).toBe(out[0].y); // the first two share a line...
+    expect(out[2].y).toBeGreaterThan(out[0].y); // ...the third starts the next one
     for (const p of out) expect(p.height).toBeGreaterThan(0); // every panel really laid out
   });
 

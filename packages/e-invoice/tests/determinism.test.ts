@@ -41,10 +41,19 @@ const invoice: Invoice = {
 
 const sha = (b: Uint8Array) => createHash("sha256").update(b).digest("hex");
 
+/** The first offset at which two renders differ, or -1. A hash says only THAT they differ. */
+const firstDifference = (a: Uint8Array, b: Uint8Array): number => {
+  const n = Math.min(a.length, b.length);
+  for (let i = 0; i < n; i++) if (a[i] !== b[i]) return i;
+  return a.length === b.length ? -1 : n;
+};
+
 describe("re-rendering the same invoice", () => {
   it("produces byte-identical PDF and XML", async () => {
     const a = await renderZugferd(invoice);
     const b = await renderZugferd(invoice);
+    expect(firstDifference(a.bytes, b.bytes)).toBe(-1);
+    expect(b.bytes.length).toBe(a.bytes.length);
     expect(sha(b.bytes)).toBe(sha(a.bytes));
     expect(b.xml).toBe(a.xml);
   });
@@ -62,7 +71,14 @@ describe("re-rendering the same invoice", () => {
     );
     expect(ids).not.toBeNull();
     expect(ids![1]).toBe(ids![2]); // a fresh document uses one hash for both strings
+    const firstId = (bytes: Uint8Array) =>
+      /\/ID \[<([0-9A-F]+)>/.exec(Buffer.from(bytes).toString("latin1"))![1];
+
     const b = await renderZugferd(invoice);
-    expect(/\/ID \[<([0-9A-F]+)>/.exec(Buffer.from(b.bytes).toString("latin1"))![1]).toBe(ids![1]);
+    expect(firstId(b.bytes)).toBe(ids![1]);
+
+    // ... and it tracks the CONTENT, or an unchanged ID would prove nothing about a changed document.
+    const other = await renderZugferd({ ...invoice, number: "RE-2026-002" });
+    expect(firstId(other.bytes)).not.toBe(ids![1]);
   });
 });

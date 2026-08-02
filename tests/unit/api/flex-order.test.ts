@@ -40,7 +40,7 @@ describe("order", () => {
     expect(xs(Row({ gap: 10 }, [tile(), tile(), tile()]))).toEqual([0, 50, 100]);
   });
 
-  it("refuses a value that is not a number", () => {
+  it("refuses a non-finite value", () => {
     expect(() => tile({ order: Infinity })).toThrow(/Invalid order/);
   });
 });

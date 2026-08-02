@@ -167,21 +167,29 @@ export class FlexLayoutHelper {
     // A child's natural main extent. A PERCENTAGE child has no fixed answer: its size depends on how
     // many gaps the line ends up with, which depends on who is on it. So it is asked again for every
     // candidate membership below rather than measured once.
+    // A plain child's extent does not depend on the line, so it is laid out ONCE and remembered.
+    // Without this each membership probe re-lays every child already on the line - O(n^2) subtree
+    // layouts, which is expensive the moment those children hold a Table or a wrapping paragraph.
+    const measured = new Map<PDFElement, number>();
     const naturalMain = (child: PDFElement, base: number): number => {
       if (child instanceof FlexiblePDFElement) return child.getBasis(base);
       const factor = child.relativeSizeFactor(axis.mainHorizontal);
       if (factor !== undefined) return base * factor;
+      const cached = measured.get(child);
+      if (cached !== undefined) return cached;
       // Measured UNCAPPED, the same way the single-line engine measures a plain child. Handing the
       // line width in as a cap would silently squash a child wider than the line - CSS lets such a
       // child overflow, and so does our own non-wrapping path.
       const needsBound = child.needsBoundedMain(axis.mainHorizontal);
-      return axis.mainOf(
+      const main = axis.mainOf(
         child.calculateLayout(
           axis.measureConstraints(crossAvail, needsBound ? mainAvail : Infinity),
           axis.offsetAt(mainStart, crossOrigin),
           ctx,
         ),
       );
+      measured.set(child, main);
+      return main;
     };
 
     /** What a line of these children would occupy, resolving every `%` against ITS gap count. */

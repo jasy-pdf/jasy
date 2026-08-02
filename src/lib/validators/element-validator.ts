@@ -62,7 +62,10 @@ export class Validator {
     // `flex: 0` used to be meaningless - claiming no share is what leaving the element out does. With a
     // `flexBasis` it is not: the child is then exactly its basis, a fixed slot that still participates
     // in the line. So the rule now reads "claim SOMETHING": a share, a basis, or both.
-    if (flex < 0 || (flex === 0 && element.getBasis(Infinity) <= 0 && !element.hasBasisFactor())) {
+    // A percentage basis resolves to 0 on an unbounded axis, so it is measured against a finite
+    // reference instead - otherwise `flexBasis: "0%"` would claim nothing and still pass.
+    const claimsSpace = element.getBasis(Infinity) > 0 || element.getBasis(1) > 0;
+    if (flex < 0 || (flex === 0 && !claimsSpace)) {
       throw new Error(
         `@jasy/pdf: Spacer/Expanded needs a flex above 0, got ${flex}. Flex is a SHARE of the leftover ` +
           "space, so 0 would claim none - which is what leaving the element out does. For a fixed gap " +

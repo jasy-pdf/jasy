@@ -230,7 +230,7 @@ rendering. This is the standing visual check; prefer it over one-off `scripts/ru
 - `pnpm test` — Vitest (watch). `pnpm exec vitest run` for a one-shot CI-style run.
   `pnpm run test:coverage` for coverage. Unit tests live in **`tests/unit/`**, mirroring the `src/lib/`
   structure (`tests/unit/{common,elements,renderer,utils}/…`). `src/` is pure production code — the
-  build (`tsconfig.json` includes only `src/**`) therefore keeps `dist/` test-free. **512 tests, green**
+  build (`tsconfig.json` includes only `src/**`) therefore keeps `dist/` test-free. **929 tests, green**
   in the core (plus the `@jasy/e-invoice` suite).
 - `pnpm run build` — `tsc` → `dist/`.
 - `pnpm run lint` (oxlint) + `pnpm run fmt:check` (oxfmt `--check`); `pnpm run fmt` formats. **Run `pnpm run fmt`
@@ -257,8 +257,12 @@ rendering. This is the standing visual check; prefer it over one-off `scripts/ru
 - New element = new file in `elements/`, export from `elements/index.ts`, write a renderer in
   `renderer/` that returns `IRNode[]`, **register it in `PDFRenderer.render()`**, export from
   `renderer/index.ts`, add a test under `tests/unit/<group>/` (mirror the source path; import the
-  subject via `../../../src/lib/<group>/<module>`). A new drawable primitive also needs an `IRNode`
-  variant in `ir/display-list.ts` + a `case` in `PdfBackend.serializeNode`.
+  subject via `../../../src/lib/<group>/<module>.ts` — **with the `.ts` extension**, which `nodenext`
+  requires; without it the module resolves to `any` and a real type error in the test is invisible, see
+  ISSUE-6). A layout test needs a `FontMetrics`: use `testMetrics()` from `tests/unit/support/metrics.ts`
+  rather than a hand-rolled literal, so the object really satisfies the interface instead of being cast
+  past it. A new drawable primitive also needs an `IRNode` variant in `ir/display-list.ts` + a `case` in
+  `PdfBackend.serializeNode`.
 - Units are PDF points (1/72"). Page formats in `constants/page-sizes.ts`.
 
 ## What's built, and the genuine gaps
@@ -504,6 +508,29 @@ agree: true })` → declarative values, not object mutation. Save is an **increm
   of 4". Nearly free because Pass A of the page driver already walks one logical page at a time - the
   length of each run IS that section's total. The provisional `PageInfo` used during pagination carries
   them too, or a `PageBuilder` would measure against a half-filled object.
+- ✅ **Full flexbox** (2026-08-01) — `wrap` + `alignContent`, `flexShrink`, `flexBasis` (points or `%`),
+  `order`, `reverse` on `Row`/`Column`. This closes the last react-pdf parity gap in layout (Yoga gives
+  them that set for free). `FlexLayoutHelper.layout()` now dispatches: the untouched single-line engine
+  is `layoutLine()`, and `layoutWrapped()` splits into lines, measures each, then places the BLOCK of
+  lines by `alignContent`. Two defaults deviate from CSS ON PURPOSE — `flexShrink` is **0** (CSS says 1)
+  so no existing layout moves, and `alignContent` is `start`. All of it is off by default, which is why
+  the 30 gallery cases before it stayed byte-identical.
+  **The trap that cost a real bug:** a line's `%` children resolve against **the line minus its gaps**
+  (our documented relative-sizing rule, so N columns at (100/N)% fit exactly). The wrap pass has to use
+  the SAME base — it first measured against the full line, making each child a few points too wide, and
+  three chips at 33% wrapped the third for no reason. A line cannot be measured child by child: whether
+  a child fits depends on how many gaps the line ends up with, so `lineExtent()` re-costs the whole
+  candidate membership. Pinned by `tests/unit/api/flex-real-content.test.ts`, which is deliberately NOT
+  plain boxes — a `Table`, a wrapping paragraph and a nested `Column` re-measure differently when an
+  item is made narrower, and that is where a flex engine actually breaks. Gallery `31-flexbox`.
+- ✅ **Byte-stable output** (verified 2026-08-01) — the same document rendered twice is byte-identical,
+  including a ZUGFeRD invoice, across separate processes. Nothing in the render path reads the clock or a
+  random source (the only `getRandomValues` is in the encryption path, which PDF/A forbids anyway); we
+  write no `/CreationDate`/`/ModDate`; and the trailer `/ID` PDF/A requires is `contentId()`, an MD5 over
+  the objects. This is what makes an archived or audited e-invoice re-derivable and hashable years later.
+  `packages/e-invoice/tests/determinism.test.ts` pins it, with a counter-test that a changed invoice
+  number DOES change the bytes so the check cannot pass vacuously. The honest limit: byte-stable per
+  library VERSION — a bump may legitimately change output, as turning kerning on did.
 
 Genuine remaining gaps / deferred:
 
@@ -561,12 +588,12 @@ Genuine remaining gaps / deferred:
    industry norm so indexers can read it), so in accessible mode the document TITLE is readable without
    the password. A switch for people who want everything hidden is not built.
 8. **The test tree is not type-checked** (`todo.md` ISSUE-6, MEDIUM). `tsconfig.json` compiles only `src/**`
-   and CI runs vitest, never tsc over `tests/**`; `tsc --noEmit -p tsconfig.test.json` reports ~420 errors.
+   and CI runs vitest, never tsc over `tests/**`; `tsc --noEmit -p tsconfig.test.json` reports 384 errors.
    Dominant cause: tests import without the `.ts` extension, which `nodenext` rejects — the module then
    resolves to `any`, so a REAL type error in a test cannot be seen. `tests/unit/edit/` is already fixed
    (extensions added; the guards in `edit/objects.ts` widened to `PdfObject | undefined`, since they are
-   nearly always applied to a lookup that may find nothing). The rest are not, and the CLAUDE.md test
-   convention below still documents the extensionless form.
+   nearly always applied to a lookup that may find nothing), as are the `support/metrics` imports. The
+   rest are not; the convention above now documents the extension, so new tests stop adding to the pile.
 
 ## Roadmap
 
@@ -581,7 +608,7 @@ below), `@jasy/cli`@alpha.6, `@jasy/vue`@alpha.7, `@jasy/nuxt`@alpha.6** (the al
 page-break control — the termination guard, `PageBreak`, `breakBefore`/`breakAfter`, `keepTogether` — plus
 kerning turned on by default). Repo public + locked, full CI + changelog +
 bots in place (see Repo facts). The engine is **feature-complete for the alpha** — inheritance, `onOverflow`,
-custom formats, the line-breaker fixes; **582 tests green**. The **landing**
+custom formats, the line-breaker fixes; **929 tests green**. The **landing**
 (`~/projects/jasy-landing` → **jasy.dev**) is built: showroom (12 cards), validator, docs, a home-page
 roadmap section, and a full **SEO + AI-discoverability layer** (OG image, JSON-LD, `robots.txt`,
 `llms.txt`, `sitemap.xml`).
