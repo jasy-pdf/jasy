@@ -14,13 +14,14 @@ import { IRNode, TextRun, PathCommand, Gradient, Line, Link } from "../ir/displa
 import { isEmojiCodePoint } from "../text/emoji-codepoints.ts";
 import { emojiImageNode } from "./emoji-image.ts";
 import {
+  MAX_SPACE_SHRINK,
   wrapStringIntoLines,
   breakSegmentsIntoLines,
   SegmentLine,
   TextOverflow,
 } from "../text/line-breaker.ts";
 import { lineBoxForSegmentLine, lineBoxForString } from "../text/line-metrics.ts";
-import { runAdvance } from "../text/advance.ts";
+import { runAdvance, type RunFont } from "../text/advance.ts";
 import { visualRuns, visualRunsOf, type Direction } from "../text/bidi.ts";
 import {
   DecorationStroke,
@@ -43,6 +44,7 @@ export class TextRenderer {
     overflow?: TextOverflow,
     lineHeight?: number,
     letterSpacing = 0,
+    spaceShrink = 0,
   ): number {
     // Plain string: every wrapped line gets the same box.
     if (typeof content === "string") {
@@ -56,6 +58,7 @@ export class TextRenderer {
         maxLines,
         overflow,
         letterSpacing,
+        spaceShrink,
       );
       const box = lineBoxForString(objectManager, fontFamily, fontStyle, fontSize, lineHeight);
       return lines.length * box.height;
@@ -391,6 +394,70 @@ export class TextRenderer {
       return 0;
     };
 
+    /**
+     * Justification: how much extra to put in EACH space of a line so it reaches the full width.
+     * The LAST line of a paragraph keeps its natural spacing, as it does in CSS and in print - a
+     * justified last line is the classic sign of a broken text engine.
+     *
+     * Spaces are stretched by moving the pen, not by the `Tw` operator: `Tw` applies only to the
+     * single byte 32, so an embedded (Identity-H) font would ignore it entirely.
+     */
+    const justifyExtra = (line: string, naturalWidth: number, isLast: boolean): number => {
+      if (align !== HorizontalAlignment.justify) return 0;
+      const gaps = [...line].filter((c) => c === " ").length;
+      if (gaps === 0) return 0;
+      const slack = maxWidth - naturalWidth;
+      // Negative slack is real now: the breaker keeps a word when the line can be SQUEEZED to hold
+      // it, so justification has to deliver that squeeze. The floor is the same limit the breaker
+      // used, which is what stops a line it never promised from being crushed.
+      const spaceWidth = runAdvance(
+        objectManager,
+        " ",
+        { fontFamily, fontSize, fontStyle },
+        letterSpacing,
+      );
+      const extra = Math.max(slack / gaps, -spaceWidth * MAX_SPACE_SHRINK);
+      // The last line is never STRETCHED - the rule print and CSS follow. It may still be SQUEEZED:
+      // the breaker was allowed to pack it that way, and drawing it loose would push it out of its box.
+      return isLast ? Math.min(0, extra) : extra;
+    };
+
+    /**
+     * Push one drawn piece and return the advance it took. When the line is justified the pen jumps an
+     * extra `extra` at every space, which means one run per word - the only way that works for an
+     * embedded font, whose spaces `Tw` cannot reach.
+     *
+     * A SHAPED piece is never split: its glyph list is in drawn order with ligatures merged, so no
+     * slice of it is correct. Such a piece keeps its natural spacing.
+     */
+    const emitPiece = (
+      piece: { text: string; glyphs?: number[] },
+      x: number,
+      extra: number,
+      style: Omit<TextRun, "type" | "x" | "text" | "glyphs">,
+      runFont: RunFont,
+      spacing: number,
+    ): number => {
+      const push = (at: number, text: string, glyphs?: number[]): void => {
+        runs.push({ type: "text", x: at, text, ...(glyphs ? { glyphs } : {}), ...style });
+      };
+      if (extra === 0 || piece.glyphs || !piece.text.includes(" ")) {
+        push(x, piece.text, piece.glyphs);
+        return runAdvance(objectManager, piece.text, runFont, spacing);
+      }
+      const spaceWidth = runAdvance(objectManager, " ", runFont, spacing);
+      const words = piece.text.split(" ");
+      let pen = x;
+      words.forEach((word, i) => {
+        if (word !== "") {
+          push(pen, word);
+          pen += runAdvance(objectManager, word, runFont, spacing);
+        }
+        if (i < words.length - 1) pen += spaceWidth + extra;
+      });
+      return pen - x;
+    };
+
     // The decoration strokes for one drawn run, at the geometry ITS OWN font declares. A mixed-size
     // line therefore gets a thicker line under the bigger span, which is what a browser does too.
     const decorate = (
@@ -511,6 +578,9 @@ export class TextRenderer {
         maxLines,
         overflow,
         letterSpacing,
+        // The SAME slack the measure pass used (`TextElement.spaceShrink`), or a line would be
+        // measured one width and drawn another.
+        align === HorizontalAlignment.justify ? MAX_SPACE_SHRINK : 0,
       );
       // yPosition is the top of the text box (top-left). The line box seats its own baseline; lines
       // then stack by that box's height. Same numbers as calculateTextHeight, by construction.
@@ -520,21 +590,24 @@ export class TextRenderer {
         let x = initialX + alignmentOffset(lineWidth);
         const baseline = yPosition + box.baseline + box.height * index;
         // Latin-only text in an `ltr` paragraph comes back as one unchanged piece.
+        const extra = justifyExtra(line, lineWidth, index === lines.length - 1);
         for (const part of visualRuns(line, direction)) {
           const piece = shapedPiece(part, fontFamily, fontStyle);
-          const partWidth = runAdvance(objectManager, piece.text, font, letterSpacing);
-          runs.push({
-            type: "text",
+          const partWidth = emitPiece(
+            piece,
             x,
-            y: baseline,
-            text: piece.text,
-            ...(piece.glyphs ? { glyphs: piece.glyphs } : {}),
-            fontFamily,
-            fontStyle,
-            fontSize,
-            color,
-            ...(letterSpacing ? { letterSpacing } : {}),
-          });
+            extra,
+            {
+              y: baseline,
+              fontFamily,
+              fontStyle,
+              fontSize,
+              color,
+              ...(letterSpacing ? { letterSpacing } : {}),
+            },
+            font,
+            letterSpacing,
+          );
           decorate(
             piece.text,
             x,
@@ -559,8 +632,13 @@ export class TextRenderer {
     // the previous segment's kerning-free advance. Each line drops by its OWN leading
     // (tallest font on that line), so mixed-font lines space correctly and the drawn
     // height matches the measured height.
-    const pushLine = (line: SegmentLine, lineY: number): void => {
+    const pushLine = (line: SegmentLine, lineY: number, isLast: boolean): void => {
       let x = initialX + alignmentOffset(line.width);
+      const extra = justifyExtra(
+        line.segments.map((seg) => seg.content).join(""),
+        line.width,
+        isLast,
+      );
       // Across span boundaries, so a Hebrew span is ordered against its neighbours rather than inside
       // itself. Each run keeps the segment it came from, and with it that span's style.
       const ordered = visualRunsOf(
@@ -575,29 +653,26 @@ export class TextRenderer {
         const segLetterSpacing = segment.letterSpacing ?? letterSpacing;
         const piece = shapedPiece(part, family, style);
         const runText = piece.text;
-        const advance = runAdvance(
-          objectManager,
-          runText,
+        const runColor = segment.fontColor || color;
+        const drawn = emitPiece(
+          piece,
+          x,
+          extra,
+          {
+            y: lineY,
+            fontFamily: family,
+            fontStyle: style,
+            fontSize: size,
+            color: runColor,
+            ...(segLetterSpacing ? { letterSpacing: segLetterSpacing } : {}),
+          },
           { fontFamily: family, fontSize: size, fontStyle: style },
           segLetterSpacing,
         );
-        const runColor = segment.fontColor || color;
-        runs.push({
-          type: "text",
-          x,
-          y: lineY,
-          text: runText,
-          ...(piece.glyphs ? { glyphs: piece.glyphs } : {}),
-          fontFamily: family,
-          fontStyle: style,
-          fontSize: size,
-          color: runColor,
-          ...(segLetterSpacing ? { letterSpacing: segLetterSpacing } : {}),
-        });
         decorate(
           runText,
           x,
-          advance,
+          drawn,
           lineY,
           family,
           style,
@@ -616,13 +691,13 @@ export class TextRenderer {
             type: "link",
             x,
             y: lineY - v.ascent * size,
-            width: advance,
+            width: drawn,
             height: (v.ascent + v.descent) * size,
             href: segment.href,
             dest: segment.dest,
           });
         }
-        x += advance;
+        x += drawn;
       });
     };
 
@@ -633,18 +708,15 @@ export class TextRenderer {
     // measure path (calculateTextHeight) uses, or segmented spaced text mis-wraps (measured != drawn).
     const defaults = { fontFamily, fontSize, fontStyle, letterSpacing };
     let top = yPosition;
-    for (const line of breakSegmentsIntoLines(
-      content,
-      defaults,
-      maxWidth,
-      objectManager,
-      maxLines,
-      overflow,
-    )) {
+    // Materialised, because justification has to know which line is the LAST one of the paragraph.
+    const segmentLines = [
+      ...breakSegmentsIntoLines(content, defaults, maxWidth, objectManager, maxLines, overflow),
+    ];
+    segmentLines.forEach((line, index) => {
       const box = lineBoxForSegmentLine(line, defaults, objectManager, lineHeight);
-      pushLine(line, top + box.baseline);
+      pushLine(line, top + box.baseline, index === segmentLines.length - 1);
       top += box.height;
-    }
+    });
 
     return { runs, links, decorations };
   }

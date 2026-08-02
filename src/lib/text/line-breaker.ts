@@ -3,6 +3,20 @@ import type { FontMetrics } from "../utils/font-metrics.ts";
 import type { TextSegment } from "../elements/text-element.ts";
 import { runAdvance } from "./advance.ts";
 
+/**
+ * How far a JUSTIFIED line's spaces may be squeezed to keep one more word on it.
+ *
+ * A quarter, because our breaker is GREEDY: it will use the whole allowance every time that saves a
+ * line, so the limit has to be the tightest word space still worth reading - about three quarters of
+ * natural, the usual typographic floor. TeX allows a third, but its badness model rarely spends it.
+ * For reference, react-pdf reaches -19% in practice (measured: a 3.18pt space squeezed to 2.58pt),
+ * which this covers. Its packing can still differ by a word, because it spreads the squeeze over the
+ * CHARACTERS as well as the spaces.
+ *
+ * Only justified text uses it: under any other alignment a squeezed line would simply overflow.
+ */
+export const MAX_SPACE_SHRINK = 1 / 4;
+
 /** Default font for segments that don't override it. */
 export interface SegmentDefaults {
   fontFamily: string;
@@ -45,9 +59,11 @@ export function wrapStringIntoLines(
   maxLines?: number,
   overflow?: TextOverflow,
   letterSpacing = 0,
+  shrink = 0,
 ): string[] {
   let currentLine = "";
   let currentWidth = 0;
+  let gaps = 0; // spaces on the current line, which is what a justified line can squeeze
   const lines: string[] = [];
 
   const font = { fontFamily, fontSize, fontStyle };
@@ -58,16 +74,32 @@ export function wrapStringIntoLines(
     const wordWidth = runAdvance(metrics, word, font, letterSpacing);
     const spaceWidth = runAdvance(metrics, " ", font, letterSpacing);
 
-    // Break before a word that won't fit - but only once the line has content. A single word wider
-    // than maxWidth must sit on its (empty) line and overflow, not push a phantom empty line before
-    // it (which would over-count the height by a line and shift the text down at render).
-    if (currentWidth + wordWidth > maxWidth && currentLine !== "") {
+    // Break before a word that won't fit - counting the SPACE that would join it, which the old test
+    // forgot. It went unnoticed on the first line, where the very first word added a space too many
+    // and cancelled the error out; after a break `currentWidth` is the bare word, so every following
+    // test was short by one space and the line could overrun its box by that much.
+    //
+    // A single word wider than maxWidth still sits on its (empty) line and overflows, rather than
+    // pushing a phantom empty line before it (which would over-count the height by a line).
+    if (currentLine === "") {
+      currentLine = word;
+      currentWidth = wordWidth;
+      gaps = 0;
+      // How much a JUSTIFIED line may be squeezed to keep one more word: the spaces already on the
+      // line plus the one that would join it, each giving up at most `shrink` of its width. Zero for
+      // every other alignment, where a squeezed line would simply overflow instead.
+    } else if (
+      currentWidth + spaceWidth + wordWidth - (gaps + 1) * spaceWidth * shrink >
+      maxWidth
+    ) {
       lines.push(currentLine.trim());
       currentLine = word;
       currentWidth = wordWidth;
+      gaps = 0;
     } else {
-      currentLine += index === 0 ? word : " " + word;
-      currentWidth += wordWidth + spaceWidth;
+      currentLine += " " + word;
+      currentWidth += spaceWidth + wordWidth;
+      gaps += 1;
     }
   });
 

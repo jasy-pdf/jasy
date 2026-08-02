@@ -11,6 +11,7 @@ import { BoxConstraints, Offset, Size } from "../layout/box-constraints.ts";
 import type { Direction } from "../text/bidi.ts";
 import { Fragmentable, FragmentResult } from "../layout/fragmentation.ts";
 import {
+  MAX_SPACE_SHRINK,
   wrapStringIntoLines,
   breakSegmentsIntoLines,
   segmentLinesToSegments,
@@ -161,6 +162,12 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     this.applyStyle(ctx.textStyle ?? DEFAULT_TEXT_STYLE);
   }
 
+  /** Justified lines may be squeezed to keep a word; every other alignment gets no slack. Read by the
+   *  breaker in BOTH passes, or a measured line and a drawn one would disagree about where it ends. */
+  private spaceShrink(): number {
+    return this.textAlignment === HorizontalAlignment.justify ? MAX_SPACE_SHRINK : 0;
+  }
+
   private applyStyle(ts: ResolvedTextStyle): void {
     this.fontSize = this.rawFontSize ?? ts.fontSize;
     this.fontFamily = this.rawFontFamily ?? ts.fontFamily;
@@ -206,6 +213,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       this.maxLines,
       this.overflow,
       this.letterSpacing,
+      this.spaceShrink(),
     );
 
     const box = lineBoxForString(
@@ -327,6 +335,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       this.overflow,
       this.lineHeight,
       this.letterSpacing,
+      this.spaceShrink(),
     );
 
     // Top-left coordinates (y = top of the text box). The baseline offset and the
