@@ -594,13 +594,30 @@ agree: true })` → declarative values, not object mutation. Save is an **increm
   the pixel and only Chrome differs, by 3 px on one mark. Also the discretionary `liga` (Latin, nothing
   to do with RTL) and scripts beyond the Arabic family. All in `todo.md`.
 
-- ✅ **Justified text** (2026-08-02) — `Text({ align: "justify" })`. It maps onto
-  `HorizontalAlignment.block`, which had been sitting in the enum with nothing implementing it. A full
-  line's slack is spread over its spaces by MOVING THE PEN, one run per word: the `Tw` operator reaches
-  only the single byte 32, so an embedded Identity-H font could never be stretched that way. The LAST
-  line of a paragraph keeps its natural spacing (print and CSS both), and a shaped piece is never split,
-  so Arabic keeps natural spacing too. Verified against react-pdf: both fill exactly 222.0 pt on the same
-  box. Off by default — 30/30 gallery byte-identical.
+- ✅ **Justified text** (2026-08-02) — `Text({ align: "justify" })`. The enum member is
+  `HorizontalAlignment.justify`; it was called `block` and did nothing, and was renamed while it still
+  had no users. A line's slack is spread over its spaces by MOVING THE PEN, one run per word: the `Tw`
+  operator reaches only the single byte 32, so an embedded Identity-H font could never be stretched that
+  way. A shaped (Arabic) piece is never split, so it keeps natural spacing.
+  The line may also be **SQUEEZED** to keep one more word on it, up to `MAX_SPACE_SHRINK` (a quarter of
+  a space, `text/line-breaker.ts`). Our breaker is GREEDY and spends the whole allowance whenever it
+  saves a line, so the limit is the tightest word space still worth reading rather than TeX's third.
+  The allowance is threaded into BOTH passes (`TextElement.spaceShrink`), or a paragraph would be
+  measured at one line count and drawn at another.
+  The last line is never STRETCHED — the print and CSS rule — but it IS squeezed when the breaker
+  packed it that way, or it would be drawn out of its box. That case only surfaced under mutation
+  testing.
+  Verified against react-pdf: lines 2-6 of the same paragraph are identical, `print` lands on the same
+  line, and both fill exactly 222.0 pt. Line 1 still differs by one word because react-pdf spreads its
+  squeeze over the CHARACTERS as well as the spaces.
+- ✅ **Line-breaker fix: the joining space** (2026-08-02) — the fit test asked `currentWidth +
+wordWidth > maxWidth` and forgot the SPACE that would join the word. It went unseen on the first line,
+  where the paragraph's first word added a space too many and cancelled the error out; after a break
+  `currentWidth` is the bare word, so every following test was short by one space and the line could
+  overrun its box by that much. Found by comparing a justified paragraph with react-pdf — a glyph
+  visibly hanging past the edge. **This one is NOT byte-neutral**: four gallery cases
+  (`07-header-footer`, `12-line-height`, `17-page-numbers`, `19-text-decoration`) now break a word
+  earlier, because they were overflowing before.
 
 Genuine remaining gaps / deferred:
 
