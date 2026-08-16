@@ -1,4 +1,12 @@
-import { AllowanceCharge, Buyer, Invoice, InvoiceLine, PostalAddress, Seller } from "./invoice.ts";
+import {
+  AllowanceCharge,
+  Buyer,
+  Invoice,
+  InvoiceLine,
+  PostalAddress,
+  Seller,
+  ServicePeriod,
+} from "./invoice.ts";
 import { ComputedInvoice, VatBreakdownEntry } from "./compute.ts";
 
 // Emits the UN/CEFACT Cross Industry Invoice (CII) XML for the EN16931 profile. The structure is
@@ -149,6 +157,20 @@ function tradeTax(g: VatBreakdownEntry): string {
 }
 
 /** One invoice line (BG-25). `net` is the pre-computed line net amount (BT-131). */
+/**
+ * The service period (BG-14 on the document, BG-26 on a line). The XSD sequence puts it after the
+ * trade taxes and before the allowances, and the schematron checks that order - so where this lands
+ * is load-bearing, not cosmetic.
+ */
+function billingPeriod(p?: ServicePeriod): string {
+  return p
+    ? wrap("ram:BillingSpecifiedPeriod", [
+        wrap("ram:StartDateTime", [date102(p.start)]), // BT-73 / BT-134
+        wrap("ram:EndDateTime", [date102(p.end)]), // BT-74 / BT-135
+      ])
+    : "";
+}
+
 function line(l: InvoiceLine, net: number, index: number): string {
   return wrap("ram:IncludedSupplyChainTradeLineItem", [
     wrap("ram:AssociatedDocumentLineDocument", [
@@ -181,6 +203,7 @@ function line(l: InvoiceLine, net: number, index: number): string {
         el("ram:CategoryCode", l.vat.category), // BT-151
         el("ram:RateApplicablePercent", l.vat.ratePercent ?? 0), // BT-152
       ]),
+      billingPeriod(l.period), // BG-26
       wrap("ram:SpecifiedTradeSettlementLineMonetarySummation", [
         el("ram:LineTotalAmount", amount(net)), // BT-131
       ]),
@@ -289,6 +312,7 @@ export function toCII(
     el("ram:InvoiceCurrencyCode", invoice.currency), // BT-5
     paymentMeans, // BG-16
     ...computed.vatBreakdown.map(tradeTax), // BG-23
+    billingPeriod(invoice.period), // BG-14
     ...(invoice.allowancesCharges ?? []).map(docAllowanceCharge), // BG-20 / BG-21
     paymentTerms,
     totals, // BG-22

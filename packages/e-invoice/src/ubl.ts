@@ -1,4 +1,12 @@
-import { AllowanceCharge, Buyer, Invoice, InvoiceLine, PostalAddress, Seller } from "./invoice.ts";
+import {
+  ServicePeriod,
+  AllowanceCharge,
+  Buyer,
+  Invoice,
+  InvoiceLine,
+  PostalAddress,
+  Seller,
+} from "./invoice.ts";
 import { ComputedInvoice, VatBreakdownEntry } from "./compute.ts";
 import { BUSINESS_PROCESS, CiiProfile, GUIDELINE } from "./cii.ts";
 
@@ -144,12 +152,23 @@ function taxSubtotal(g: VatBreakdownEntry, currency: string): string {
   ]);
 }
 
+/** The service period (BG-14 on the document, BG-26 on a line) - UBL's `cac:InvoicePeriod`. */
+function invoicePeriod(p?: ServicePeriod): string {
+  return p
+    ? wrap("cac:InvoicePeriod", [
+        el("cbc:StartDate", p.start), // BT-73 / BT-134
+        el("cbc:EndDate", p.end), // BT-74 / BT-135
+      ])
+    : "";
+}
+
 function invoiceLine(l: InvoiceLine, net: number, index: number, currency: string): string {
   return wrap("cac:InvoiceLine", [
     el("cbc:ID", l.id ?? String(index + 1)), // BT-126
     l.note ? el("cbc:Note", l.note) : "", // BT-127
     el("cbc:InvoicedQuantity", l.quantity, { unitCode: l.unit }), // BT-129 / BT-130
     money("cbc:LineExtensionAmount", net, currency), // BT-131
+    invoicePeriod(l.period), // BG-26
     wrap("cac:Item", [
       el("cbc:Description", l.description), // BT-154
       el("cbc:Name", l.name), // BT-153
@@ -189,6 +208,7 @@ export function toUBL(
     ...(invoice.notes ?? []).map((n) => el("cbc:Note", n)), // BT-22
     el("cbc:DocumentCurrencyCode", cur), // BT-5
     el("cbc:BuyerReference", invoice.buyerReference), // BT-10 (Leitweg-ID)
+    invoicePeriod(invoice.period), // BG-14
     invoice.purchaseOrderRef
       ? wrap("cac:OrderReference", [el("cbc:ID", invoice.purchaseOrderRef)])
       : "", // BT-13
