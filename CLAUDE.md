@@ -230,8 +230,8 @@ rendering. This is the standing visual check; prefer it over one-off `scripts/ru
 - `pnpm test` — Vitest (watch). `pnpm exec vitest run` for a one-shot CI-style run.
   `pnpm run test:coverage` for coverage. Unit tests live in **`tests/unit/`**, mirroring the `src/lib/`
   structure (`tests/unit/{common,elements,renderer,utils}/…`). `src/` is pure production code — the
-  build (`tsconfig.json` includes only `src/**`) therefore keeps `dist/` test-free. **1053 tests, green** —
-  what the root run covers: core 908, `@jasy/cli` 37, `@jasy/vue` 33, `@jasy/e-invoice` 27. `@jasy/nuxt`
+  build (`tsconfig.json` includes only `src/**`) therefore keeps `dist/` test-free. **1066 tests, green** —
+  what the root run covers: core 908, `@jasy/cli` 37, `@jasy/vue` 33, `@jasy/e-invoice` 38. `@jasy/nuxt`
   is excluded from it (`vitest.config.ts`) and runs on its own.
 - `pnpm run build` — `tsc` → `dist/`.
 - `pnpm run lint` (oxlint) + `pnpm run fmt:check` (oxfmt `--check`); `pnpm run fmt` formats. **Run `pnpm run fmt`
@@ -668,6 +668,18 @@ wordWidth > maxWidth` and forgot the SPACE that would join the word. It went uns
   A code point no family in the stack has stays with the first one and shows its `.notdef`, as a browser
   does — dropping it would make the text read differently than it was written.
 
+- ✅ **Invoicing period, BG-14 + BG-26** (2026-08-02, `@jasy/e-invoice`) — `invoice.period` and
+  `line.period` (`{ start, end }`) emit `ram:BillingSpecifiedPeriod` in CII and `cac:InvoicePeriod` in
+  UBL, at document AND line level. Why it matters: §14 Abs. 4 Nr. 6 UStG wants a delivery DATE or a
+  PERIOD, and for a recurring monthly service the period is the truthful one. The XRechnung rule says
+  it word for word — delivery date OR document period OR a period on **every** line — so the
+  pre-check (`xrechnungProblems`) enforces exactly that, `every` and not `some`, and also refuses a
+  period that ends before it starts.
+  The position in the XSD sequence is load-bearing (after the trade taxes, before the allowances);
+  proved by rendering a real invoice and running it through our own KoSIT schematron, not by reading
+  the spec twice. Found while auditing four rejected SumUp invoices for Flo: none carried BT-72 or
+  BG-14, the period was free text in the item description only.
+
 Genuine remaining gaps / deferred:
 
 1. **Absolute positioning — Stages 1+2 built** (2026-06-21). CSS-style: `Box({ relative: true })` is a
@@ -744,7 +756,7 @@ below), `@jasy/cli`@alpha.6, `@jasy/vue`@alpha.7, `@jasy/nuxt`@alpha.6** (the al
 page-break control — the termination guard, `PageBreak`, `breakBefore`/`breakAfter`, `keepTogether` — plus
 kerning turned on by default). Repo public + locked, full CI + changelog +
 bots in place (see Repo facts). The engine is **feature-complete for the alpha** — inheritance, `onOverflow`,
-custom formats, the line-breaker fixes; **1053 tests green** (the root run, i.e. everything but
+custom formats, the line-breaker fixes; **1066 tests green** (the root run, i.e. everything but
 `@jasy/nuxt`). The **landing**
 (`~/projects/jasy-landing` → **jasy.dev**) is built: showroom (12 cards), validator, docs, a home-page
 roadmap section, and a full **SEO + AI-discoverability layer** (OG image, JSON-LD, `robots.txt`,

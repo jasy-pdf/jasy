@@ -95,6 +95,21 @@ export interface Buyer {
   contact?: Contact; // BG-9
 }
 
+/**
+ * A service period (BG-14 on the document, BG-26 on a line): the span the invoice actually covers.
+ *
+ * German VAT law (§14 Abs. 4 Nr. 6 UStG) wants the Leistungsdatum OR the Leistungszeitraum, and the
+ * XRechnung rule set says the same - `ActualDeliverySupplyChainEvent/OccurrenceDateTime` OR
+ * `BillingSpecifiedPeriod`. A recurring monthly service is honestly a PERIOD, not a single day, so
+ * a maintenance invoice should carry this rather than pick an arbitrary date inside it.
+ */
+export interface ServicePeriod {
+  /** First day of the period (BT-73 on the document, BT-134 on a line). */
+  start: IsoDate;
+  /** Last day, inclusive (BT-74 / BT-135). */
+  end: IsoDate;
+}
+
 /** Where the goods/services were delivered (BG-13). Optional; used when it differs from the buyer. */
 export interface Delivery {
   date?: IsoDate; // BT-72  actual delivery date
@@ -148,6 +163,8 @@ export interface InvoiceLine {
   /** Quantity the net price refers to (BT-149), default 1 - e.g. price "per 100". */
   priceBaseQuantity?: number;
   vat: LineVat; // BG-30  (MANDATORY)
+  /** The period THIS line covers (BG-26). Use it when lines span different months. */
+  period?: ServicePeriod;
   /** Per-line allowances/charges (BG-27 / BG-28). Net line amount BT-131 is computed from these. */
   allowancesCharges?: AllowanceCharge[];
   note?: string; // BT-127
@@ -197,6 +214,12 @@ export interface Invoice {
   seller: Seller; // BG-4  (MANDATORY)
   buyer: Buyer; // BG-7  (MANDATORY)
   delivery?: Delivery; // BG-13
+  /**
+   * The period the whole invoice covers (BG-14) - the "Leistungszeitraum". Either this or
+   * `delivery.date` satisfies §14 Abs. 4 Nr. 6 UStG; for a recurring service the period is the
+   * truthful one.
+   */
+  period?: ServicePeriod;
   /** Payee if different from the seller (BG-10). */
   payeeName?: string; // BT-59
 

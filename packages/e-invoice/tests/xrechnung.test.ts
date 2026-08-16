@@ -9,6 +9,9 @@ const complete: Invoice = {
   issueDate: "2026-06-18",
   currency: "EUR",
   dueDate: "2026-07-02",
+  // XRechnung insists on a delivery date or a service period; without one this fixture was not
+  // actually complete, which the new pre-check caught.
+  delivery: { date: "2026-06-15" },
   buyerReference: "04011000-12345-34",
   seller: {
     name: "Muster GmbH",

@@ -38,5 +38,30 @@ export function xrechnungProblems(invoice: Invoice): string[] {
   require(!creditTransfer ||
     payment?.iban, "XRechnung credit transfer needs an IBAN - set invoice.payment.iban (BT-84).");
 
+  // A period that runs backwards is silently accepted by the schema and read as nonsense downstream,
+  // so it is worth catching here where the message can name the field.
+  const periods: [string, { start: string; end: string } | undefined][] = [
+    ["invoice.period (BG-14)", invoice.period],
+    ...invoice.lines.map(
+      (l, i) => [`invoice.lines[${i}].period (BG-26)`, l.period] as [string, typeof l.period],
+    ),
+  ];
+  for (const [where, p] of periods) {
+    if (p && p.end < p.start) {
+      problems.push(`${where} ends before it starts: ${p.start} to ${p.end}.`);
+    }
+  }
+
+  // §14 Abs. 4 Nr. 6 UStG, and the XRechnung rule that mirrors it: a delivery DATE or a PERIOD. The
+  // schematron accepts either, so this only warns when neither is there.
+  // §14 Abs. 4 Nr. 6 UStG, and the XRechnung rule that mirrors it word for word: a delivery date, OR
+  // a document period, OR a period on EVERY line - "some lines" does not satisfy it.
+  require(invoice.delivery?.date ||
+    invoice.period ||
+    (invoice.lines.length > 0 &&
+      invoice.lines.every(
+        (l) => l.period,
+      )), "XRechnung needs a delivery date or a service period - set invoice.delivery.date (BT-72), invoice.period (BG-14), or a period on every line (BG-26).");
+
   return problems;
 }
