@@ -1,6 +1,6 @@
 {
   "name": "@jasy/e-invoice",
-  "version": "1.0.0-alpha.6",
+  "version": "1.0.0-alpha.7",
   "description": "ZUGFeRD / Factur-X / XRechnung (EN-16931) for @jasy/pdf - invoice data model, CII XML, PDF/A-3.",
   "keywords": [
     "e-invoice",
