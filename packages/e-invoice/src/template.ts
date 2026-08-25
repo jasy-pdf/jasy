@@ -67,15 +67,11 @@ export function defaultInvoiceTemplate(
         gap: 16,
         // header (letterhead) + legal footer are page bands → they repeat on every physical page.
         header: Column({ gap: 8 }, [sellerHeader(seller, L), Divider({ color: HAIR })]),
-        footer: legalFooter(seller, L),
+        footer: legalFooter(invoice, L),
       },
       [
         recipientAndMeta(invoice, L, fmt),
-        Text(`${invoice.type === 381 ? L.creditNote : L.invoice} ${invoice.number}`, {
-          size: 21,
-          bold: true,
-          color: INK,
-        }),
+        Text(documentTitle(invoice, L), { size: 21, bold: true, color: INK }),
         ...deliverTo(invoice.delivery, L),
         ...notes(invoice),
         lineItemsTable(invoice, c, L, fmt),
@@ -377,7 +373,14 @@ function paymentPanel(invoice: Invoice, L: InvoiceLabels, fmt: Formatters): PDFE
 }
 
 // --- legal footer band: identity + tax ids + register + bank ---
-function legalFooter(seller: Seller, L: InvoiceLabels): PDFElement {
+/** "Rechnung RE-2026-118" / "Gutschrift …" - BT-3 decides the word (§14 Abs. 4 Nr. 10 UStG).
+ *  Exported because the heading and the page footer must never drift apart. */
+export function documentTitle(invoice: Invoice, L: InvoiceLabels): string {
+  return `${invoice.type === 381 ? L.creditNote : L.invoice} ${invoice.number}`;
+}
+
+function legalFooter(invoice: Invoice, L: InvoiceLabels): PDFElement {
+  const { seller } = invoice;
   const col = (items: (string | false | undefined)[]) =>
     Expanded(
       { flex: 1 },
@@ -406,7 +409,7 @@ function legalFooter(seller: Seller, L: InvoiceLabels): PDFElement {
       ]),
     ]),
     PageBuilder(({ pageNumber, pageCount }) =>
-      Text(`${L.page} ${pageNumber} ${L.pageOf} ${pageCount}`, {
+      Text(`${documentTitle(invoice, L)} · ${L.page} ${pageNumber} ${L.pageOf} ${pageCount}`, {
         size: 7.5,
         color: MUTED,
         align: "right",

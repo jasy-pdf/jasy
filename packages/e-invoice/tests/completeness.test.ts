@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { defaultInvoiceTemplate } from "../src/template";
+import { defaultInvoiceTemplate, documentTitle } from "../src/template";
 import { computeInvoice } from "../src/compute";
 import { resolveLabels, makeFormatters } from "../src/i18n";
 import { Invoice } from "../src/invoice";
@@ -375,5 +375,32 @@ describe("a category that charges no VAT has to say why", () => {
 
   it("refuses to render one, rather than emitting a file the validator rejects", async () => {
     await expect(renderZugferd(withCategory("AE"))).rejects.toThrow(/BT-120/);
+  });
+});
+
+describe("every sheet names its own invoice", () => {
+  // Separate the pages - scanning, filing - and page two carries the totals, the VAT breakdown and
+  // the bank details with nothing to attach them to. The footer is a page band, so the title repeats
+  // on every physical page; that it is DRAWN there is measured on the rendered PDF, since a footer
+  // built by a PageBuilder does not exist until layout runs.
+  //
+  // What is pinned here is the string itself, which the heading and the footer share by construction.
+  it("names the document by its type", () => {
+    expect(documentTitle(maximal, resolveLabels("de"))).toBe(`Rechnung ${maximal.number}`);
+    expect(documentTitle({ ...maximal, type: 381 }, resolveLabels("de"))).toBe(
+      `Gutschrift ${maximal.number}`,
+    );
+    expect(documentTitle({ ...maximal, type: undefined }, resolveLabels("de"))).toBe(
+      `Rechnung ${maximal.number}`,
+    );
+  });
+
+  it("follows the locale", () => {
+    expect(documentTitle({ ...maximal, type: 381 }, resolveLabels("en"))).toBe(
+      `Credit note ${maximal.number}`,
+    );
+    expect(documentTitle({ ...maximal, type: 381 }, resolveLabels("fr"))).toBe(
+      `Avoir ${maximal.number}`,
+    );
   });
 });
