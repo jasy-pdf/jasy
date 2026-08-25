@@ -17,6 +17,7 @@ const invoice = {
     vatId: "DE123456789",
     taxNumber: "147/815/12345",
     legalRegistrationId: "HRB 98765",
+    additionalLegalInfo: "Geschäftsführer: Erika Muster", // BT-33
     electronicAddress: "rechnung@muster.de",
     address: {
       line1: "Hauptstraße 1",
@@ -46,6 +47,14 @@ const invoice = {
       unit: "HUR",
       netUnitPrice: 100,
       vat: { category: "S" as const, ratePercent: 19 },
+      allowancesCharges: [
+        {
+          isCharge: false,
+          amount: 10,
+          vat: { category: "S" as const, ratePercent: 19 },
+          reason: "Treuerabatt",
+        },
+      ],
     },
     {
       name: "Hosting",
@@ -60,6 +69,7 @@ const invoice = {
     bic: "BYLADEM1001",
     accountName: "Muster Studio GmbH",
     meansText: "SEPA",
+    reference: "VZ-2026-014", // BT-83
     terms: "14 Tage netto",
   },
 };

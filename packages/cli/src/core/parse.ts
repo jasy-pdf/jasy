@@ -85,6 +85,7 @@ function parseSeller(s: string): Seller {
     name: val(s, "ram:Name") ?? "",
     tradingName: val(org, "ram:TradingBusinessName"),
     legalRegistrationId: val(org, "ram:ID"),
+    additionalLegalInfo: val(s, "ram:Description"), // BT-33
     vatId: taxReg(s, "VA"),
     taxNumber: taxReg(s, "FC"),
     electronicAddress: val(inner(s, "ram:URIUniversalCommunication"), "ram:URIID"),
@@ -111,7 +112,15 @@ function parseLine(s: string, index: number): InvoiceLine {
   const product = inner(s, "ram:SpecifiedTradeProduct") ?? "";
   const price = inner(s, "ram:NetPriceProductTradePrice") ?? "";
   const del = inner(s, "ram:SpecifiedLineTradeDelivery") ?? "";
-  const tax = inner(inner(s, "ram:SpecifiedLineTradeSettlement"), "ram:ApplicableTradeTax") ?? "";
+  const lineSettlement = inner(s, "ram:SpecifiedLineTradeSettlement");
+  const tax = inner(lineSettlement, "ram:ApplicableTradeTax") ?? "";
+  const lineVat = {
+    category: (val(tax, "ram:CategoryCode") ?? "S") as VatCategory,
+    ratePercent: num(val(tax, "ram:RateApplicablePercent")),
+  };
+  const lineAC = innerAll(lineSettlement, "ram:SpecifiedTradeAllowanceCharge").map(
+    (ac) => ({ ...parseAllowanceCii(ac), vat: lineVat }), // BG-27 / BG-28
+  );
   const id = val(doc, "ram:LineID");
   const note = inner(doc, "ram:IncludedNote");
   const basis = inner(price, "ram:BasisQuantity");
@@ -131,6 +140,7 @@ function parseLine(s: string, index: number): InvoiceLine {
       ratePercent: num(val(tax, "ram:RateApplicablePercent")),
     },
     note: note ? val(note, "ram:Content") : undefined,
+    allowancesCharges: lineAC.length ? lineAC : undefined,
   };
 }
 
@@ -197,6 +207,7 @@ export function parseCII(xml: string): Invoice {
       ? {
           meansCode: val(pm, "ram:TypeCode"),
           meansText: val(pm, "ram:Information"),
+          reference: val(set, "ram:PaymentReference"), // BT-83
           iban: val(acct, "ram:IBANID"),
           accountName: val(acct, "ram:AccountName"),
           bic: val(inst, "ram:BICID"),
@@ -271,6 +282,7 @@ function parsePartyUbl(scope: string) {
     name: val(legal, "cbc:RegistrationName") ?? "",
     tradingName: val(inner(party, "cac:PartyName"), "cbc:Name"),
     legalRegistrationId: val(legal, "cbc:CompanyID"),
+    additionalLegalInfo: val(legal, "cbc:CompanyLegalForm"), // BT-33
     vatId: ublTaxId(party, "VAT"),
     electronicAddress: val(party, "cbc:EndpointID"),
     address: parseAddressUbl(inner(party, "cac:PostalAddress") ?? ""),
@@ -284,6 +296,15 @@ function parseLineUbl(s: string, index: number): InvoiceLine {
   const tax = inner(item, "cac:ClassifiedTaxCategory") ?? "";
   const id = val(s, "cbc:ID");
   const base = val(price, "cbc:BaseQuantity");
+  // Only the ones INSIDE this line - `cac:AllowanceCharge` before the item (BG-27 / BG-28).
+  const itemAt = s.indexOf("<cac:Item");
+  const lineVat = {
+    category: (val(tax, "cbc:ID") ?? "S") as VatCategory,
+    ratePercent: num(val(tax, "cbc:Percent")),
+  };
+  const lineAC = innerAll(itemAt >= 0 ? s.slice(0, itemAt) : s, "cac:AllowanceCharge").map(
+    (ac) => ({ ...parseAllowanceUbl(ac), vat: lineVat }), // BG-27 / BG-28
+  );
   return {
     id: id !== undefined && id !== String(index + 1) ? id : undefined, // omit the auto-number
     name: val(item, "cbc:Name") ?? "",
@@ -300,6 +321,7 @@ function parseLineUbl(s: string, index: number): InvoiceLine {
       ratePercent: num(val(tax, "cbc:Percent")),
     },
     note: val(s, "cbc:Note"),
+    allowancesCharges: lineAC.length ? lineAC : undefined,
   };
 }
 
@@ -364,6 +386,7 @@ export function parseUBL(xml: string): Invoice {
     pm || terms
       ? {
           meansCode: val(pm, "cbc:PaymentMeansCode"),
+          meansText: attr(pm, "cbc:PaymentMeansCode", "name"), // BT-82 is an attribute here
           reference: val(pm, "cbc:PaymentID"),
           iban: val(acct, "cbc:ID"),
           accountName: val(acct, "cbc:Name"),
@@ -392,6 +415,7 @@ export function parseUBL(xml: string): Invoice {
       name: seller.name,
       tradingName: seller.tradingName,
       legalRegistrationId: seller.legalRegistrationId,
+      additionalLegalInfo: seller.additionalLegalInfo, // BT-33
       vatId: seller.vatId,
       taxNumber: ublTaxId(seller.party, "FC"),
       electronicAddress: seller.electronicAddress,
@@ -408,6 +432,7 @@ export function parseUBL(xml: string): Invoice {
       contact: buyer.contact,
     },
     delivery,
+    payeeName: val(inner(inner(xml, "cac:PayeeParty"), "cac:PartyName"), "cbc:Name"), // BT-59
     lines: innerAll(xml, "cac:InvoiceLine").map(parseLineUbl),
     allowancesCharges: allowancesCharges.length ? allowancesCharges : undefined,
     vatExemptionReasons: exemptionsUbl(xml),

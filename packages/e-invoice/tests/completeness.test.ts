@@ -4,8 +4,11 @@ import { computeInvoice } from "../src/compute";
 import { resolveLabels, makeFormatters } from "../src/i18n";
 import { Invoice } from "../src/invoice";
 import { printedText } from "./support/printed";
+import { maximalInvoice as maximal } from "./support/maximal";
 import { en16931Problems } from "../src/profile-check";
 import { renderZugferd } from "../src/render";
+import { toCII } from "../src/cii";
+import { toUBL } from "../src/ubl";
 
 /**
  * Every field that reaches the XML must reach the PAPER.
@@ -18,123 +21,6 @@ import { renderZugferd } from "../src/render";
  * The invoice below sets EVERY optional field to a distinctive marker. Anything deliberately left
  * off the page belongs in `NOT_PRINTED` with a reason - never silently.
  */
-
-const maximal: Invoice = {
-  number: "RE-MARK-NUMBER",
-  issueDate: "2026-08-25",
-  type: 380,
-  currency: "EUR",
-  dueDate: "2026-09-08",
-  buyerReference: "MARK-BUYERREF",
-  purchaseOrderRef: "MARK-ORDERREF",
-  contractRef: "MARK-CONTRACTREF",
-  notes: ["MARK-DOCNOTE"],
-  seller: {
-    name: "MARK-SELLERNAME",
-    tradingName: "MARK-SELLERTRADING",
-    vatId: "MARK-SELLERVAT",
-    taxNumber: "MARK-SELLERTAXNO",
-    legalRegistrationId: "MARK-SELLERREG",
-    additionalLegalInfo: "MARK-SELLERLEGAL",
-    electronicAddress: "MARK-SELLEREADDR",
-    address: {
-      line1: "MARK-SELLERLINE1",
-      line2: "MARK-SELLERLINE2",
-      line3: "MARK-SELLERLINE3",
-      city: "MARK-SELLERCITY",
-      postCode: "11111",
-      subdivision: "MARK-SELLERSUB",
-      country: "DE",
-    },
-    contact: { name: "MARK-SELLERCONTACT", phone: "MARK-SELLERPHONE", email: "MARK-SELLERMAIL" },
-  },
-  buyer: {
-    name: "MARK-BUYERNAME",
-    tradingName: "MARK-BUYERTRADING",
-    vatId: "MARK-BUYERVAT",
-    legalRegistrationId: "MARK-BUYERREG",
-    electronicAddress: "MARK-BUYEREADDR",
-    address: {
-      line1: "MARK-BUYERLINE1",
-      line2: "MARK-BUYERLINE2",
-      line3: "MARK-BUYERLINE3",
-      city: "MARK-BUYERCITY",
-      postCode: "22222",
-      subdivision: "MARK-BUYERSUB",
-      country: "DE",
-    },
-    contact: { name: "MARK-BUYERCONTACT", phone: "MARK-BUYERPHONE", email: "MARK-BUYERMAIL" },
-  },
-  delivery: {
-    date: "2026-08-20",
-    recipientName: "MARK-DELIVERYTO",
-    address: {
-      line1: "MARK-DELIVERYLINE1",
-      city: "MARK-DELIVERYCITY",
-      postCode: "33333",
-      country: "DE",
-    },
-  },
-  period: { start: "2026-07-02", end: "2026-07-20" },
-  payeeName: "MARK-PAYEE",
-  lines: [
-    {
-      id: "MARK-LINEID",
-      name: "MARK-ITEMNAME",
-      description: "MARK-ITEMDESCR",
-      sellerItemId: "MARK-SELLERITEM",
-      buyerItemId: "MARK-BUYERITEM",
-      standardItemId: "MARK-GTIN",
-      quantity: 3,
-      unit: "C62",
-      netUnitPrice: 250,
-      priceBaseQuantity: 10,
-      vat: { category: "S", ratePercent: 19 },
-      period: { start: "2026-07-02", end: "2026-07-20" },
-      note: "MARK-LINENOTE",
-      allowancesCharges: [
-        {
-          isCharge: false,
-          amount: 5,
-          vat: { category: "S", ratePercent: 19 },
-          reason: "MARK-LINEALLOWANCE",
-        },
-      ],
-    },
-    {
-      name: "MARK-REVERSECHARGE",
-      quantity: 1,
-      unit: "C62",
-      netUnitPrice: 400,
-      vat: { category: "AE" },
-    },
-  ],
-  allowancesCharges: [
-    {
-      isCharge: false,
-      amount: 20,
-      vat: { category: "S", ratePercent: 19 },
-      reason: "MARK-DOCALLOWANCE",
-    },
-    {
-      isCharge: true,
-      amount: 15,
-      vat: { category: "S", ratePercent: 19 },
-      reason: "MARK-DOCCHARGE",
-    },
-  ],
-  vatExemptionReasons: { AE: { text: "MARK-EXEMPTTEXT", code: "MARK-EXEMPTCODE" } },
-  payment: {
-    meansCode: "58",
-    meansText: "MARK-MEANSTEXT",
-    reference: "MARK-PAYREF",
-    iban: "MARK-IBAN",
-    accountName: "MARK-ACCOUNTNAME",
-    bic: "MARK-BIC",
-    terms: "MARK-TERMS",
-  },
-  paidAmount: 100,
-};
 
 /** Deliberately absent from the page - each needs a reason, or it is a bug, not a decision. */
 const NOT_PRINTED: Record<string, string> = {
@@ -175,6 +61,21 @@ describe("every field that reaches the XML reaches the paper", () => {
     for (const [marker, reason] of Object.entries(NOT_PRINTED)) {
       expect(reason.length, `${marker} needs a reason`).toBeGreaterThan(20);
     }
+  });
+});
+
+describe.each([
+  ["CII", toCII],
+  ["UBL", toUBL],
+])("every field that reaches the paper reaches the %s", (_syntax, generate) => {
+  // The mirror of the block above, and it was missing: BT-83 and BT-33 were PRINTED for weeks while
+  // the CII carried neither. Running it over BOTH generators is the second half of the lesson - the
+  // first fixes went into cii.ts alone, and UBL quietly kept three of the same holes.
+  const xml = generate(maximal, computeInvoice(maximal), "en16931");
+  const markers = [...new Set(JSON.stringify(maximal).match(/MARK-[A-Z0-9]+/g) ?? [])];
+
+  it.each(markers)("emits %s", (marker) => {
+    expect(xml).toContain(marker);
   });
 });
 
