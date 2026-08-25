@@ -118,6 +118,10 @@ function recipientAndMeta(invoice: Invoice, L: InvoiceLabels, fmt: Formatters): 
   const meta: [string, string | undefined][] = [
     [L.invoiceNumber, invoice.number],
     [L.invoiceDate, fmt.date(invoice.issueDate)],
+    [
+      L.servicePeriod,
+      invoice.period ? fmt.period(invoice.period.start, invoice.period.end) : undefined,
+    ],
     [L.deliveryDate, invoice.delivery?.date ? fmt.date(invoice.delivery.date) : undefined],
     [L.dueDate, invoice.dueDate ? fmt.date(invoice.dueDate) : undefined],
     [L.customerReference, invoice.buyerReference],

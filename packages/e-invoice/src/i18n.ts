@@ -29,6 +29,7 @@ export interface InvoiceLabels {
   invoiceNumber: string;
   invoiceDate: string;
   deliveryDate: string;
+  servicePeriod: string;
   dueDate: string;
   customerReference: string;
   orderNumber: string;
@@ -61,6 +62,7 @@ const de: InvoiceLabels = {
   invoiceNumber: "Rechnungsnummer",
   invoiceDate: "Rechnungsdatum",
   deliveryDate: "Lieferdatum",
+  servicePeriod: "Leistungszeitraum",
   dueDate: "Fälligkeit",
   customerReference: "Kundenreferenz",
   orderNumber: "Bestellnummer",
@@ -93,6 +95,7 @@ const en: InvoiceLabels = {
   invoiceNumber: "Invoice no.",
   invoiceDate: "Invoice date",
   deliveryDate: "Delivery date",
+  servicePeriod: "Service period",
   dueDate: "Due date",
   customerReference: "Customer reference",
   orderNumber: "Order no.",
@@ -125,6 +128,7 @@ const fr: InvoiceLabels = {
   invoiceNumber: "N° de facture",
   invoiceDate: "Date de facture",
   deliveryDate: "Date de livraison",
+  servicePeriod: "Période de prestation",
   dueDate: "Échéance",
   customerReference: "Référence client",
   orderNumber: "N° de commande",
@@ -155,6 +159,12 @@ export interface Formatters {
   percent(ratePercent: number): string;
   /** An ISO date "YYYY-MM-DD" in the locale's short form (UTC, so no timezone drift). */
   date(iso: string): string;
+  /**
+   * A service period (BG-14/BG-26) for the eye. One covering exactly one whole calendar month reads
+   * AS that month ("Juni 2026") - the form §31 Abs. 4 UStDV allows in place of a day. The XML is
+   * untouched and keeps both ends, which is what BT-73/BT-74 require.
+   */
+  period(start: string, end: string): string;
 }
 
 export function makeFormatters(locale: Locale = "de", currency: string): Formatters {
@@ -168,10 +178,26 @@ export function makeFormatters(locale: Locale = "de", currency: string): Formatt
     day: "2-digit",
     timeZone: "UTC",
   });
+  const month = new Intl.DateTimeFormat(tag, { year: "numeric", month: "long", timeZone: "UTC" });
+  const utc = (iso: string) => new Date(`${iso}T00:00:00Z`);
   return {
     money: (n) => money.format(n),
     number: (n) => number.format(n),
     percent: (ratePercent) => percent.format(ratePercent / 100),
-    date: (iso) => date.format(new Date(`${iso}T00:00:00Z`)),
+    date: (iso) => date.format(utc(iso)),
+    period: (start, end) =>
+      wholeMonth(start, end)
+        ? month.format(utc(start))
+        : `${date.format(utc(start))} - ${date.format(utc(end))}`,
   };
+}
+
+/** Whether a period is exactly one calendar month, start to end - the case that reads as "Juni 2026". */
+function wholeMonth(start: string, end: string): boolean {
+  const [startYear, startMonth, startDay] = start.split("-").map(Number);
+  const [endYear, endMonth, endDay] = end.split("-").map(Number);
+  // Day 0 of the FOLLOWING month is the last day of this one; `endMonth` is 1-based, so as a 0-based
+  // index it already names the following month.
+  const lastDay = new Date(Date.UTC(endYear, endMonth, 0)).getUTCDate();
+  return startYear === endYear && startMonth === endMonth && startDay === 1 && endDay === lastDay;
 }
