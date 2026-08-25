@@ -1,4 +1,5 @@
 import { Invoice } from "./invoice.ts";
+import { computeInvoice } from "./compute.ts";
 
 // A friendly pre-flight for the XRechnung (German B2G) profile: it lists, in plain language, the
 // fields XRechnung makes mandatory on top of EN16931 - so the user gets actionable guidance BEFORE
@@ -8,25 +9,50 @@ import { Invoice } from "./invoice.ts";
 /**
  * Problems that would make ANY profile fail, so they are checked whatever the user asked for.
  *
- * EN 16931 BR-AE-3 / BR-IC-3: an invoice carrying a reverse-charge (AE) or intra-community (K) VAT
- * category must state BOTH VAT identifiers. German law says the same in §14a Abs. 1 UStG. Such a
- * file is rejected by the official validator anyway - catching it here names the missing field
- * instead of handing back a rule id.
+ * The wording of each rule below was read out of the vendored EN 16931 schematron, not recalled:
+ * the alternatives it allows are load-bearing. Requiring a VAT id where the standard also accepts a
+ * tax number would REJECT a valid invoice, and this check throws - a false positive costs the user
+ * more than a missing one.
  */
 export function en16931Problems(invoice: Invoice): string[] {
   const problems: string[] = [];
-  const categories = new Set(invoice.lines.map((l) => l.vat.category));
-  const needsBothVatIds = categories.has("AE") || categories.has("K");
+  const { seller, buyer } = invoice;
 
-  if (needsBothVatIds) {
-    const which = categories.has("AE") ? "Reverse charge (AE)" : "Intra-community supply (K)";
-    if (!invoice.seller.vatId) {
-      problems.push(`${which} needs the seller VAT ID - set invoice.seller.vatId (BT-31).`);
+  // The categories PRESENT, taken from the computed breakdown (BG-23) rather than from the lines:
+  // BR-AE-03 / BR-AE-04 apply to a document-level allowance or charge too, and those form their own
+  // breakdown group even when no line carries the category. Reading the breakdown is reading exactly
+  // what the rules are written against.
+  const categories = new Set(computeInvoice(invoice).vatBreakdown.map((v) => v.category));
+
+  // BR-AE-02/03/04: reverse charge. Both sides need AN identifier, and the standard accepts
+  // alternatives - the seller's tax number does, and so does the buyer's legal registration id.
+  if (categories.has("AE")) {
+    if (!seller.vatId && !seller.taxNumber) {
+      problems.push(
+        "Reverse charge (AE) needs a seller identifier - set invoice.seller.vatId (BT-31) or invoice.seller.taxNumber (BT-32).",
+      );
     }
-    if (!invoice.buyer.vatId) {
-      problems.push(`${which} needs the buyer VAT ID - set invoice.buyer.vatId (BT-48).`);
+    if (!buyer.vatId && !buyer.legalRegistrationId) {
+      problems.push(
+        "Reverse charge (AE) needs a buyer identifier - set invoice.buyer.vatId (BT-48) or invoice.buyer.legalRegistrationId (BT-47).",
+      );
     }
   }
+
+  // BR-IC-02: an intra-community supply is stricter - the buyer's VAT ID, and nothing else, will do.
+  if (categories.has("K")) {
+    if (!seller.vatId) {
+      problems.push(
+        "Intra-community supply (K) needs the seller VAT ID - set invoice.seller.vatId (BT-31).",
+      );
+    }
+    if (!buyer.vatId) {
+      problems.push(
+        "Intra-community supply (K) needs the buyer VAT ID - set invoice.buyer.vatId (BT-48); a legal registration id is not enough here.",
+      );
+    }
+  }
+
   // BR-E-10 / BR-AE-10 / BR-IC-10 / BR-G-10 / BR-O-10: every category that charges no (or zero) VAT
   // must SAY why. Without it the official validator rejects the file, and the paper is legally
   // deficient too - §14a Abs. 5 UStG prescribes the reverse-charge wording word for word.

@@ -178,41 +178,133 @@ describe("every field that reaches the XML reaches the paper", () => {
   });
 });
 
-describe("reverse charge without both VAT ids", () => {
-  // EN 16931 BR-AE-3 and §14a Abs. 1 UStG both want them. The official validator rejects such a
-  // file, so failing early with the field name beats handing the user a rule id.
-  const reverseCharge: Invoice = {
-    ...maximal,
-    lines: [
-      { name: "Beratung", quantity: 1, unit: "C62", netUnitPrice: 100, vat: { category: "AE" } },
-    ],
-  };
+describe("the identifiers a zero-VAT category demands", () => {
+  // The wording comes from the vendored schematron, not from memory - and the ALTERNATIVES matter.
+  // BR-AE-02/03/04 accept the seller's tax number and the buyer's legal registration id; BR-IC-02
+  // does not. Getting that wrong in a check that THROWS would reject perfectly valid invoices.
+  const bare = (category: "AE" | "K") =>
+    ({
+      ...maximal,
+      seller: { ...maximal.seller, vatId: undefined, taxNumber: undefined },
+      buyer: { ...maximal.buyer, vatId: undefined, legalRegistrationId: undefined },
+      allowancesCharges: undefined,
+      vatExemptionReasons: { [category]: { text: "Grund" } },
+      lines: [{ name: "Leistung", quantity: 1, unit: "C62", netUnitPrice: 100, vat: { category } }],
+    }) as Invoice;
 
-  it("is accepted when both are set", () => {
-    expect(en16931Problems(reverseCharge)).toEqual([]);
+  describe("reverse charge (AE)", () => {
+    it("names both sides when neither has any identifier", () => {
+      const problems = en16931Problems(bare("AE")).join(" ");
+      expect(problems).toMatch(/seller identifier.*BT-31.*BT-32/);
+      expect(problems).toMatch(/buyer identifier.*BT-48.*BT-47/);
+    });
+
+    it("accepts the seller's TAX NUMBER instead of a VAT id", () => {
+      const invoice = bare("AE");
+      const ok = {
+        ...invoice,
+        seller: { ...invoice.seller, taxNumber: "147/815/12345" },
+        buyer: { ...invoice.buyer, vatId: "ATU12345678" },
+      };
+      expect(en16931Problems(ok)).toEqual([]);
+    });
+
+    it("accepts the buyer's LEGAL REGISTRATION ID instead of a VAT id", () => {
+      const invoice = bare("AE");
+      const ok = {
+        ...invoice,
+        seller: { ...invoice.seller, vatId: "DE123456789" },
+        buyer: { ...invoice.buyer, legalRegistrationId: "FN 123456a" },
+      };
+      expect(en16931Problems(ok)).toEqual([]);
+    });
   });
 
-  it("names the BUYER id when it is missing", () => {
-    const missing = { ...reverseCharge, buyer: { ...reverseCharge.buyer, vatId: undefined } };
-    expect(en16931Problems(missing).join(" ")).toMatch(/buyer VAT ID.*BT-48/);
+  describe("intra-community supply (K) is stricter", () => {
+    it("will not take a legal registration id for the buyer", () => {
+      const invoice = bare("K");
+      const notEnough = {
+        ...invoice,
+        seller: { ...invoice.seller, vatId: "DE123456789" },
+        buyer: { ...invoice.buyer, legalRegistrationId: "FN 123456a" },
+      };
+      expect(en16931Problems(notEnough).join(" ")).toMatch(/buyer VAT ID.*BT-48/);
+    });
+
+    it("will not take a tax number for the seller", () => {
+      const invoice = bare("K");
+      const notEnough = {
+        ...invoice,
+        seller: { ...invoice.seller, taxNumber: "147/815/12345" },
+        buyer: { ...invoice.buyer, vatId: "ATU12345678" },
+      };
+      expect(en16931Problems(notEnough).join(" ")).toMatch(/seller VAT ID.*BT-31/);
+    });
+
+    it("is satisfied by both VAT ids", () => {
+      const invoice = bare("K");
+      const ok = {
+        ...invoice,
+        seller: { ...invoice.seller, vatId: "DE123456789" },
+        buyer: { ...invoice.buyer, vatId: "ATU12345678" },
+      };
+      expect(en16931Problems(ok)).toEqual([]);
+    });
   });
 
-  it("names the SELLER id when it is missing", () => {
-    const missing = { ...reverseCharge, seller: { ...reverseCharge.seller, vatId: undefined } };
-    expect(en16931Problems(missing).join(" ")).toMatch(/seller VAT ID.*BT-31/);
+  describe("a category that appears ONLY on a document allowance or charge", () => {
+    // BR-AE-03 / BR-AE-04 exist precisely for this: the category never touches a line, but it forms
+    // its own BG-23 group and the rule applies to it. Reading `invoice.lines` alone would miss it.
+    const onlyOnAdjustment = (isCharge: boolean): Invoice => ({
+      ...maximal,
+      seller: { ...maximal.seller, vatId: undefined, taxNumber: undefined },
+      buyer: { ...maximal.buyer, vatId: undefined, legalRegistrationId: undefined },
+      vatExemptionReasons: { AE: { text: "Reverse charge" } },
+      lines: [
+        {
+          name: "Leistung",
+          quantity: 1,
+          unit: "C62",
+          netUnitPrice: 100,
+          vat: { category: "S", ratePercent: 19 },
+        },
+      ],
+      allowancesCharges: [{ isCharge, amount: 10, vat: { category: "AE" }, reason: "Grund" }],
+    });
+
+    it.each([false, true])("is caught (isCharge=%s)", (isCharge) => {
+      expect(en16931Problems(onlyOnAdjustment(isCharge)).join(" ")).toMatch(
+        /Reverse charge \(AE\)/,
+      );
+    });
+
+    it("also demands its exemption reason", () => {
+      const noReason = { ...onlyOnAdjustment(false), vatExemptionReasons: undefined };
+      expect(en16931Problems(noReason).join(" ")).toMatch(/Category AE needs an exemption reason/);
+    });
   });
 
   it("says nothing for an ordinary taxed invoice", () => {
-    const plain = {
-      ...reverseCharge,
-      lines: [{ ...reverseCharge.lines[0], vat: { category: "S" as const, ratePercent: 19 } }],
+    const plain: Invoice = {
+      ...maximal,
+      allowancesCharges: undefined,
+      vatExemptionReasons: undefined,
+      buyer: { ...maximal.buyer, vatId: undefined, legalRegistrationId: undefined },
+      lines: [
+        {
+          name: "L",
+          quantity: 1,
+          unit: "C62",
+          netUnitPrice: 100,
+          vat: { category: "S", ratePercent: 19 },
+        },
+      ],
     };
-    expect(en16931Problems({ ...plain, buyer: { ...plain.buyer, vatId: undefined } })).toEqual([]);
+    expect(en16931Problems(plain)).toEqual([]);
   });
 
-  it("refuses to render one, rather than emitting a file that will be rejected", async () => {
-    const missing = { ...reverseCharge, buyer: { ...reverseCharge.buyer, vatId: undefined } };
-    await expect(renderZugferd(missing)).rejects.toThrow(/BT-48/);
+  it("refuses to render, rather than emitting a file that will be rejected", async () => {
+    await expect(renderZugferd(bare("AE"))).rejects.toThrow(/BT-48/);
   });
 });
 
