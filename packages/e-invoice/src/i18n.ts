@@ -33,6 +33,17 @@ export interface InvoiceLabels {
   dueDate: string;
   customerReference: string;
   orderNumber: string;
+  contractReference: string;
+  buyerVatId: string;
+  deliverTo: string;
+  payee: string;
+  paymentMeans: string;
+  itemNumber: string;
+  perQuantity: string;
+  page: string;
+  pageOf: string;
+  contactPerson: string;
+  email: string;
   vatId: string;
   taxNumber: string;
   registration: string;
@@ -66,6 +77,17 @@ const de: InvoiceLabels = {
   dueDate: "Fälligkeit",
   customerReference: "Kundenreferenz",
   orderNumber: "Bestellnummer",
+  contractReference: "Vertragsnummer",
+  buyerVatId: "USt-IdNr. Kunde",
+  deliverTo: "Lieferanschrift",
+  payee: "Zahlungsempfänger",
+  paymentMeans: "Zahlungsart",
+  itemNumber: "Art.-Nr.",
+  perQuantity: "je",
+  page: "Seite",
+  pageOf: "von",
+  contactPerson: "Ansprechpartner",
+  email: "E-Mail",
   vatId: "USt-IdNr",
   taxNumber: "Steuernr",
   registration: "Reg.",
@@ -99,6 +121,17 @@ const en: InvoiceLabels = {
   dueDate: "Due date",
   customerReference: "Customer reference",
   orderNumber: "Order no.",
+  contractReference: "Contract reference",
+  buyerVatId: "Buyer VAT ID",
+  deliverTo: "Delivery address",
+  payee: "Payee",
+  paymentMeans: "Payment method",
+  itemNumber: "Item no.",
+  perQuantity: "per",
+  page: "Page",
+  pageOf: "of",
+  contactPerson: "Contact",
+  email: "Email",
   vatId: "VAT ID",
   taxNumber: "Tax no.",
   registration: "Reg.",
@@ -132,6 +165,17 @@ const fr: InvoiceLabels = {
   dueDate: "Échéance",
   customerReference: "Référence client",
   orderNumber: "N° de commande",
+  contractReference: "Référence du contrat",
+  buyerVatId: "N° TVA client",
+  deliverTo: "Adresse de livraison",
+  payee: "Bénéficiaire",
+  paymentMeans: "Mode de paiement",
+  itemNumber: "Réf. article",
+  perQuantity: "par",
+  page: "Page",
+  pageOf: "sur",
+  contactPerson: "Interlocuteur",
+  email: "E-mail",
   vatId: "N° TVA",
   taxNumber: "N° fiscal",
   registration: "Immatriculation",

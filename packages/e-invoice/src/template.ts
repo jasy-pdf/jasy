@@ -3,22 +3,24 @@ import {
   Column,
   Divider,
   Document,
+  PageBuilder,
   Expanded,
   Page,
   type PDFDocumentElement,
   type PDFElement,
   Row,
-  Spacer,
   Table,
   Text,
 } from "@jasy/pdf";
-import { Invoice, PostalAddress, Seller } from "./invoice.ts";
+import { Delivery, Invoice, PostalAddress, Seller } from "./invoice.ts";
 import { ComputedInvoice, VatBreakdownEntry } from "./compute.ts";
 import { Formatters, InvoiceLabels } from "./i18n.ts";
 
-// The built-in invoice layout: a complete, §14-UStG-aware invoice that renders EVERYTHING the
-// Invoice carries (legal mandatory fields + bank details + payment reference + legal footer), not
-// just a pretty subset. All visible chrome comes from `labels`, all amounts/dates from `fmt` (locale)
+// The built-in invoice layout: a complete, §14-UStG-aware invoice that renders everything the
+// Invoice carries. That is not a promise in prose - `tests/completeness.test.ts` sets EVERY field to
+// a marker and insists each one reaches the page, and the handful left off are listed there with a
+// reason. It matters because a ZUGFeRD file has two halves: a value that reaches the XML and not the
+// paper makes the document contradict itself, and no validator checks that. All visible chrome comes from `labels`, all amounts/dates from `fmt` (locale)
 // - the invoice DATA stays in the user's language. The recipient block sits where a DIN-5008 window
 // envelope expects it. Override the whole layout via `renderZugferd(invoice, { pdf })`.
 
@@ -70,9 +72,10 @@ export function defaultInvoiceTemplate(
       [
         recipientAndMeta(invoice, L, fmt),
         Text(`${L.invoice} ${invoice.number}`, { size: 21, bold: true, color: INK }),
+        ...deliverTo(invoice.delivery, L),
         ...notes(invoice),
         lineItemsTable(invoice, c, L, fmt),
-        totals(c, L, fmt, valueLine),
+        totals(invoice, c, L, fmt, valueLine),
         paymentPanel(invoice, L, fmt),
       ],
     ),
@@ -83,16 +86,21 @@ export function defaultInvoiceTemplate(
 function sellerHeader(seller: Seller, L: InvoiceLabels): PDFElement {
   const contact = [
     ...addressLines(seller.address),
+    seller.contact?.name,
     seller.contact?.phone && `${L.phone} ${seller.contact.phone}`,
     seller.contact?.email,
   ].filter((s): s is string => Boolean(s));
 
-  return Row({ align: "start" }, [
-    Column({ gap: 1 }, [
-      Text(seller.name, { size: 18, bold: true, color: BRAND }),
-      ...(seller.tradingName ? [Text(seller.tradingName, { size: 10, color: MUTED })] : []),
-    ]),
-    Spacer(),
+  // The name is Expanded, NOT shrink-wrapped: a long company name would otherwise take its natural
+  // single-line width and push the contact block clean off the page, where the viewer clips it.
+  return Row({ align: "start", gap: 16 }, [
+    Expanded(
+      { flex: 1 },
+      Column({ gap: 1 }, [
+        Text(seller.name, { size: 18, bold: true, color: BRAND }),
+        ...(seller.tradingName ? [Text(seller.tradingName, { size: 10, color: MUTED })] : []),
+      ]),
+    ),
     Box({ width: 220 }, [
       Column(
         { gap: 1 },
@@ -100,6 +108,24 @@ function sellerHeader(seller: Seller, L: InvoiceLabels): PDFElement {
       ),
     ]),
   ]);
+}
+
+/** A deliver-to party/address (BT-70 / BG-15) when goods go somewhere other than the buyer. */
+function deliverTo(delivery: Delivery | undefined, L: InvoiceLabels): PDFElement[] {
+  const lines = [
+    delivery?.recipientName,
+    ...(delivery?.address ? addressLines(delivery.address) : []),
+  ].filter((s): s is string => Boolean(s));
+
+  // ONE element, not loose lines: the page flow has a 16pt gap and would space the address apart.
+  return lines.length === 0
+    ? []
+    : [
+        Column({ gap: 1 }, [
+          Text(L.deliverTo, { size: 8, bold: true, color: MUTED }),
+          ...lines.map((l) => Text(l, { size: 9, color: INK })),
+        ]),
+      ];
 }
 
 // --- recipient address (left, window-envelope position) + invoice meta (right) ---
@@ -126,6 +152,14 @@ function recipientAndMeta(invoice: Invoice, L: InvoiceLabels, fmt: Formatters): 
     [L.dueDate, invoice.dueDate ? fmt.date(invoice.dueDate) : undefined],
     [L.customerReference, invoice.buyerReference],
     [L.orderNumber, invoice.purchaseOrderRef],
+    [L.contractReference, invoice.contractRef],
+    // BT-48 belongs on the paper (§14a Abs. 1 UStG for reverse charge), but NOT under the address:
+    // that block shows through a DIN 5008 window, which may hold nothing but the postal address.
+    [L.buyerVatId, buyer.vatId],
+    [L.registration, buyer.legalRegistrationId],
+    [L.contactPerson, buyer.contact?.name],
+    [L.phone, buyer.contact?.phone],
+    [L.email, buyer.contact?.email],
   ];
   const metaBox = Box({ bg: PANEL, padding: { x: 12, y: 10 }, radius: 4, width: 210 }, [
     Column(
@@ -161,15 +195,32 @@ function lineItemsTable(
     Text(s, { size: 9, bold: true, color: BRAND, align });
 
   const rows = invoice.lines.map((line, i) => {
+    const itemIds = [line.sellerItemId, line.buyerItemId, line.standardItemId]
+      .filter((s): s is string => Boolean(s))
+      .join(" · ");
+    // BT-97/BT-104: a discount has to say WHY. §14 Abs. 4 Nr. 7 wants an agreed reduction named.
+    const lineAdjustments = (line.allowancesCharges ?? []).map(
+      (ac) =>
+        `${ac.reason ?? (ac.isCharge ? L.charge : L.allowance)}  ${ac.isCharge ? "" : "-"}${fmt.money(ac.amount)}`,
+    );
+    const sub = (t: string) => Text(t, { size: 8, color: MUTED });
+
     const descr = Column({ gap: 1 }, [
       Text(line.name, { size: 9.5, color: INK }),
-      ...(line.description ? [Text(line.description, { size: 8, color: MUTED })] : []),
+      ...(line.description ? [sub(line.description)] : []),
+      ...(itemIds ? [sub(`${L.itemNumber} ${itemIds}`)] : []),
+      ...(line.note ? [sub(line.note)] : []), // BT-127
+      ...lineAdjustments.map(sub),
     ]);
     return [
       Text(line.id ?? String(i + 1), { size: 9.5, color: MUTED }),
       descr,
       right(`${fmt.number(line.quantity)} ${line.unit}`),
-      right(fmt.money(line.netUnitPrice)),
+      right(
+        line.priceBaseQuantity && line.priceBaseQuantity !== 1
+          ? `${fmt.money(line.netUnitPrice)} ${L.perQuantity} ${fmt.number(line.priceBaseQuantity)} ${line.unit}`
+          : fmt.money(line.netUnitPrice),
+      ),
       right(fmt.percent(line.vat.ratePercent ?? 0)),
       right(fmt.money(c.lineNets[i]), true),
     ];
@@ -195,6 +246,7 @@ function lineItemsTable(
 
 // --- totals + VAT breakdown, right-aligned ---
 function totals(
+  invoice: Invoice,
   c: ComputedInvoice,
   L: InvoiceLabels,
   fmt: Formatters,
@@ -205,8 +257,15 @@ function totals(
 
   if (hasDocAC) {
     lines.push(valueLine(L.subtotal, fmt.money(c.lineTotal)));
-    if (c.allowanceTotal > 0) lines.push(valueLine(L.allowance, `-${fmt.money(c.allowanceTotal)}`));
-    if (c.chargeTotal > 0) lines.push(valueLine(L.charge, fmt.money(c.chargeTotal)));
+    // One line EACH, carrying its reason (BT-97 / BT-104). Two anonymous sums hid why money moved.
+    for (const ac of invoice.allowancesCharges ?? []) {
+      lines.push(
+        valueLine(
+          ac.reason ?? (ac.isCharge ? L.charge : L.allowance),
+          `${ac.isCharge ? "" : "-"}${fmt.money(ac.amount)}`,
+        ),
+      );
+    }
   }
   lines.push(valueLine(L.netTotal, fmt.money(c.taxBasisTotal)));
 
@@ -242,17 +301,21 @@ function paymentPanel(invoice: Invoice, L: InvoiceLabels, fmt: Formatters): PDFE
     ...(invoice.dueDate
       ? [Text(`${L.payableBy} ${fmt.date(invoice.dueDate)}`, { size: 9, color: INK })]
       : []),
+    ...(p?.meansText ? [Text(`${L.paymentMeans}  ${p.meansText}`, { size: 9, color: INK })] : []),
     ...(p?.terms ? [Text(p.terms, { size: 9, color: MUTED })] : []),
   ];
   const right: PDFElement[] = [
     Text(L.bankDetails, { size: 10, bold: true, color: INK }),
+    ...(invoice.payeeName
+      ? [Text(`${L.payee}  ${invoice.payeeName}`, { size: 9, color: INK })]
+      : []),
     ...(p?.accountName ? [Text(p.accountName, { size: 9, color: INK })] : []),
     ...(p?.iban ? [Text(`IBAN  ${p.iban}`, { size: 9, color: INK })] : []),
     ...(p?.bic ? [Text(`BIC  ${p.bic}`, { size: 9, color: INK })] : []),
     Text(`${L.remittance}  ${reference}`, { size: 9, color: MUTED }),
   ];
 
-  return Box({ bg: PANEL, padding: { x: 14, y: 12 }, radius: 4 }, [
+  return Box({ bg: PANEL, padding: { x: 14, y: 12 }, radius: 4, keepTogether: true }, [
     Row({ gap: 24, align: "start" }, [
       Expanded({ flex: 1 }, Column({ gap: 2 }, left)),
       Expanded({ flex: 1 }, Column({ gap: 2 }, right)),
@@ -289,5 +352,12 @@ function legalFooter(seller: Seller, L: InvoiceLabels): PDFElement {
         seller.electronicAddress,
       ]),
     ]),
+    PageBuilder(({ pageNumber, pageCount }) =>
+      Text(`${L.page} ${pageNumber} ${L.pageOf} ${pageCount}`, {
+        size: 7.5,
+        color: MUTED,
+        align: "right",
+      }),
+    ),
   ]);
 }

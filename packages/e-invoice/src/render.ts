@@ -9,7 +9,7 @@ import { bundledFonts } from "./fonts.ts";
 import { facturxXmp } from "./xmp.ts";
 import { defaultInvoiceTemplate } from "./template.ts";
 import { InvoiceLabels, Locale, makeFormatters, resolveLabels } from "./i18n.ts";
-import { xrechnungProblems } from "./profile-check.ts";
+import { en16931Problems, xrechnungProblems } from "./profile-check.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ICC_PATH = path.resolve(__dirname, "..", "assets", "icc", "sRGB.icc");
@@ -47,6 +47,12 @@ export async function renderZugferd(
   options: RenderZugferdOptions = {},
 ): Promise<ZugferdResult> {
   const profile = options.profile ?? "en16931";
+  // Rules that hold in every profile (BR-AE-3 / BR-IC-3) - the official validator would reject the
+  // file anyway, so failing here names the missing field instead of returning a rule id later.
+  const universal = en16931Problems(invoice);
+  if (universal.length > 0 && profile !== "xrechnung") {
+    throw new Error(`Invoice is not EN 16931-ready:\n  - ${universal.join("\n  - ")}`);
+  }
   if (profile === "xrechnung") {
     // Catch the missing B2G-mandatory fields here, with guidance - not as a cryptic Schematron reject.
     const problems = xrechnungProblems(invoice);

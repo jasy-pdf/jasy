@@ -11,6 +11,15 @@ set -e
 # Release order matters (dependency chain): release pdf first, then its dependents - e-invoice -> cli, vue,
 # and nuxt (which needs pdf AND vue) - so their `workspace:*` deps resolve to the versions just released.
 
+# After the release just run in the console (!!! change the versions !!!):
+# OTP=<6-digit OTP code
+
+# npm dist-tag add @jasy/pdf@1.0.0-alpha.9       latest --otp=$OTP
+# npm dist-tag add @jasy/e-invoice@1.0.0-alpha.8 latest --otp=$OTP
+# npm dist-tag add @jasy/cli@1.0.0-alpha.8       latest --otp=$OTP
+# npm dist-tag add @jasy/vue@1.0.0-alpha.9       latest --otp=$OTP
+# npm dist-tag add @jasy/nuxt@1.0.0-alpha.8      latest --otp=$OTP
+
 usage() {
   echo "Usage: ./scripts/release.sh <package> <version>"
   echo "  package: pdf | e-invoice | cli | vue | nuxt"

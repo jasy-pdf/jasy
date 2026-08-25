@@ -5,6 +5,31 @@ import { Invoice } from "./invoice.ts";
 // the invoice ever reaches a KoSIT/Schematron gate that would reject it with a cryptic rule id.
 // This is a helper, not the authority: the official validator (KoSIT / veraPDF) stays the final gate.
 
+/**
+ * Problems that would make ANY profile fail, so they are checked whatever the user asked for.
+ *
+ * EN 16931 BR-AE-3 / BR-IC-3: an invoice carrying a reverse-charge (AE) or intra-community (K) VAT
+ * category must state BOTH VAT identifiers. German law says the same in §14a Abs. 1 UStG. Such a
+ * file is rejected by the official validator anyway - catching it here names the missing field
+ * instead of handing back a rule id.
+ */
+export function en16931Problems(invoice: Invoice): string[] {
+  const problems: string[] = [];
+  const categories = new Set(invoice.lines.map((l) => l.vat.category));
+  const needsBothVatIds = categories.has("AE") || categories.has("K");
+
+  if (needsBothVatIds) {
+    const which = categories.has("AE") ? "Reverse charge (AE)" : "Intra-community supply (K)";
+    if (!invoice.seller.vatId) {
+      problems.push(`${which} needs the seller VAT ID - set invoice.seller.vatId (BT-31).`);
+    }
+    if (!invoice.buyer.vatId) {
+      problems.push(`${which} needs the buyer VAT ID - set invoice.buyer.vatId (BT-48).`);
+    }
+  }
+  return problems;
+}
+
 /** Plain-language problems that would make `invoice` fail XRechnung. Empty array = good to go. */
 export function xrechnungProblems(invoice: Invoice): string[] {
   const problems: string[] = [];
@@ -12,6 +37,7 @@ export function xrechnungProblems(invoice: Invoice): string[] {
     if (!ok) problems.push(message);
   };
   const { seller, buyer, payment } = invoice;
+  problems.push(...en16931Problems(invoice));
 
   require(invoice.buyerReference, "XRechnung needs the Leitweg-ID - set invoice.buyerReference (BT-10).");
 
