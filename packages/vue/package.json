@@ -28,7 +28,8 @@
     "./node": {
       "types": "./dist/node.d.ts",
       "import": "./dist/node.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "scripts": {
     "build": "tsc",
