@@ -215,3 +215,73 @@ describe("reverse charge without both VAT ids", () => {
     await expect(renderZugferd(missing)).rejects.toThrow(/BT-48/);
   });
 });
+
+describe("a credit note must not call itself an invoice", () => {
+  // BT-3 reaches the XML either way; the PAPER used to say "Rechnung" regardless. A document that
+  // names itself wrong is not a cosmetic problem - §14 Abs. 4 Nr. 10 UStG is about what it is called.
+  const titleOf = (invoice: Invoice, locale: "de" | "en" = "de") =>
+    printedText(
+      defaultInvoiceTemplate(
+        invoice,
+        computeInvoice(invoice),
+        resolveLabels(locale),
+        makeFormatters(locale, invoice.currency),
+      ),
+      // the bare number also appears in the information block - the TITLE is the one that prefixes it
+    ).find((t) => t !== invoice.number && t.endsWith(invoice.number));
+
+  it("says Gutschrift for type 381", () => {
+    expect(titleOf({ ...maximal, type: 381 })).toMatch(/^Gutschrift /);
+  });
+
+  it("still says Rechnung for type 380 and for no type at all", () => {
+    expect(titleOf({ ...maximal, type: 380 })).toMatch(/^Rechnung /);
+    expect(titleOf({ ...maximal, type: undefined })).toMatch(/^Rechnung /);
+  });
+
+  it("follows the locale", () => {
+    expect(titleOf({ ...maximal, type: 381 }, "en")).toMatch(/^Credit note /);
+  });
+});
+
+describe("a category that charges no VAT has to say why", () => {
+  // Without this we emitted a file the official validator rejects (BR-AE-10 and its siblings), with
+  // no warning at all. Verified against the vendored KoSIT/EN 16931 schematron.
+  const withCategory = (category: "E" | "AE" | "K" | "G" | "O" | "S" | "Z"): Invoice => ({
+    ...maximal,
+    vatExemptionReasons: undefined,
+    lines: [
+      {
+        name: "Leistung",
+        quantity: 1,
+        unit: "C62",
+        netUnitPrice: 100,
+        vat: category === "S" ? { category, ratePercent: 19 } : { category },
+      },
+    ],
+  });
+
+  it.each(["E", "AE", "K", "G", "O"] as const)("demands a reason for %s", (category) => {
+    expect(en16931Problems(withCategory(category)).join(" ")).toMatch(
+      new RegExp(`Category ${category} needs an exemption reason`),
+    );
+  });
+
+  it.each(["S", "Z"] as const)("demands nothing for %s, which is taxed", (category) => {
+    expect(en16931Problems(withCategory(category))).toEqual([]);
+  });
+
+  it("is satisfied by the text alone", () => {
+    const ok = { ...withCategory("E"), vatExemptionReasons: { E: { text: "§4 Nr. 21 UStG" } } };
+    expect(en16931Problems(ok)).toEqual([]);
+  });
+
+  it("is satisfied by the code alone", () => {
+    const ok = { ...withCategory("E"), vatExemptionReasons: { E: { code: "VATEX-EU-132" } } };
+    expect(en16931Problems(ok)).toEqual([]);
+  });
+
+  it("refuses to render one, rather than emitting a file the validator rejects", async () => {
+    await expect(renderZugferd(withCategory("AE"))).rejects.toThrow(/BT-120/);
+  });
+});

@@ -27,8 +27,25 @@ export function en16931Problems(invoice: Invoice): string[] {
       problems.push(`${which} needs the buyer VAT ID - set invoice.buyer.vatId (BT-48).`);
     }
   }
+  // BR-E-10 / BR-AE-10 / BR-IC-10 / BR-G-10 / BR-O-10: every category that charges no (or zero) VAT
+  // must SAY why. Without it the official validator rejects the file, and the paper is legally
+  // deficient too - §14a Abs. 5 UStG prescribes the reverse-charge wording word for word.
+  const given = invoice.vatExemptionReasons ?? {};
+  for (const category of NEEDS_EXEMPTION_REASON) {
+    if (!categories.has(category)) continue;
+    const reason = given[category];
+    if (!reason?.text && !reason?.code) {
+      problems.push(
+        `Category ${category} needs an exemption reason - set invoice.vatExemptionReasons.${category}.text (BT-120) or .code (BT-121).`,
+      );
+    }
+  }
+
   return problems;
 }
+
+/** The VAT categories EN 16931 requires an exemption reason for. `S` and `Z` are taxed, so not those. */
+const NEEDS_EXEMPTION_REASON = ["E", "AE", "K", "G", "O"] as const;
 
 /** Plain-language problems that would make `invoice` fail XRechnung. Empty array = good to go. */
 export function xrechnungProblems(invoice: Invoice): string[] {

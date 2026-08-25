@@ -71,7 +71,11 @@ export function defaultInvoiceTemplate(
       },
       [
         recipientAndMeta(invoice, L, fmt),
-        Text(`${L.invoice} ${invoice.number}`, { size: 21, bold: true, color: INK }),
+        Text(`${invoice.type === 381 ? L.creditNote : L.invoice} ${invoice.number}`, {
+          size: 21,
+          bold: true,
+          color: INK,
+        }),
         ...deliverTo(invoice.delivery, L),
         ...notes(invoice),
         lineItemsTable(invoice, c, L, fmt),
@@ -269,22 +273,71 @@ function totals(
   }
   lines.push(valueLine(L.netTotal, fmt.money(c.taxBasisTotal)));
 
-  for (const v of c.vatBreakdown)
-    lines.push(valueLine(vatLabel(v, L, fmt), fmt.money(v.taxAmount)));
+  if (hasVatBreakdown(c)) {
+    lines.push(valueLine(L.vat, fmt.money(c.taxTotal)));
+  } else {
+    for (const v of c.vatBreakdown)
+      lines.push(valueLine(vatLabel(v, L, fmt), fmt.money(v.taxAmount)));
+  }
 
   lines.push(Divider({ color: HAIR, margin: { y: 2 } }));
   lines.push(valueLine(L.grandTotal, fmt.money(c.grandTotal), { strong: true, size: 11 }));
   if (c.paidAmount > 0) lines.push(valueLine(L.alreadyPaid, `-${fmt.money(c.paidAmount)}`));
   lines.push(valueLine(L.amountDue, fmt.money(c.duePayable), { strong: true, size: 12 }));
+  lines.push(
+    Text(`${L.amountsIn} ${fmt.currencyName()} (${invoice.currency})`, {
+      size: 7.5,
+      color: MUTED,
+      align: "right",
+    }),
+  );
 
+  return Row({ align: "start", gap: 16 }, [
+    Expanded({ flex: 1 }, Column({ gap: 2 }, vatBreakdown(c, L, fmt))),
+    Box({ width: 250 }, [Column({ gap: 3 }, lines)]),
+  ]);
+}
+
+/**
+ * The VAT breakdown (BG-23) as a block of its own, with each category's REASON directly beneath it.
+ *
+ * §14 Abs. 4 Nr. 8 UStG wants the rate and the tax amount on the entgelt; with two rates in play the
+ * running totals column cannot show the taxable base per rate, only the tax. A single ordinary rate
+ * needs none of this - the totals column already says everything - so the block appears only when it
+ * carries information: several rates, or a category (AE/K/E/…) whose exemption reason must be read.
+ */
+function vatBreakdown(c: ComputedInvoice, L: InvoiceLabels, fmt: Formatters): PDFElement[] {
   const exemptions = c.vatBreakdown
     .filter((v) => v.exemption?.text)
     .map((v) => Text(`${v.category}: ${v.exemption!.text}`, { size: 8, color: MUTED }));
 
-  return Row({ align: "start" }, [
-    Expanded({ flex: 1 }, Column({ gap: 2 }, exemptions)),
-    Box({ width: 250 }, [Column({ gap: 3 }, lines)]),
-  ]);
+  if (!hasVatBreakdown(c)) return exemptions;
+
+  const cell = (t: string, w: number, bold = false) =>
+    Box({ width: w }, [Text(t, { size: 8.5, color: bold ? INK : MUTED, bold, align: "right" })]);
+  const row = (label: string, base: string, tax: string, bold = false) =>
+    Row({ gap: 8, align: "start" }, [
+      Expanded({ flex: 1 }, Text(label, { size: 8.5, color: bold ? INK : MUTED, bold })),
+      cell(base, 74, bold),
+      cell(tax, 62, bold),
+    ]);
+
+  return [
+    Column({ gap: 3 }, [
+      Text(L.vatBreakdown, { size: 9, bold: true, color: INK }),
+      row("", L.taxableBase, L.taxAmount),
+      Divider({ color: HAIR }),
+      ...c.vatBreakdown.map((v) =>
+        row(vatLabel(v, L, fmt), fmt.money(v.taxableAmount), fmt.money(v.taxAmount), true),
+      ),
+      ...(exemptions.length > 0 ? [Box({ height: 2 }, []), ...exemptions] : []),
+    ]),
+  ];
+}
+
+/** Whether the breakdown earns its own block, rather than being said once in the totals column. */
+function hasVatBreakdown(c: ComputedInvoice): boolean {
+  return c.vatBreakdown.length > 1 || c.vatBreakdown.some((v) => v.category !== "S");
 }
 
 function vatLabel(v: VatBreakdownEntry, L: InvoiceLabels, fmt: Formatters): string {
