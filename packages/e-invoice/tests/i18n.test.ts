@@ -21,3 +21,30 @@ describe("i18n", () => {
     expect(en.date("2026-06-17")).toBe("06/17/2026");
   });
 });
+
+describe("the service period, for the eye", () => {
+  const de = makeFormatters("de", "EUR");
+  const en = makeFormatters("en", "EUR");
+
+  it("reads a whole calendar month AS that month - what §31 Abs. 4 UStDV allows", () => {
+    expect(de.period("2026-06-01", "2026-06-30")).toBe("Juni 2026");
+    expect(en.period("2026-06-01", "2026-06-30")).toBe("June 2026");
+  });
+
+  it("knows how long the month is, rather than assuming 30 or 31", () => {
+    expect(de.period("2026-02-01", "2026-02-28")).toBe("Februar 2026");
+    expect(de.period("2024-02-01", "2024-02-29")).toBe("Februar 2024"); // leap year
+    expect(de.period("2026-01-01", "2026-01-31")).toBe("Januar 2026");
+  });
+
+  it("shows both ends whenever it is NOT a whole month", () => {
+    expect(de.period("2026-06-02", "2026-06-30")).toBe("02.06.2026 - 30.06.2026"); // starts late
+    expect(de.period("2026-06-01", "2026-06-29")).toBe("01.06.2026 - 29.06.2026"); // ends early
+    expect(de.period("2026-06-01", "2026-07-31")).toBe("01.06.2026 - 31.07.2026"); // two months
+    expect(de.period("2025-06-01", "2026-06-30")).toBe("01.06.2025 - 30.06.2026"); // a whole year
+  });
+
+  it("does not drift across a timezone, like the plain date formatter", () => {
+    expect(de.period("2026-06-01", "2026-06-30")).not.toContain("Mai");
+  });
+});

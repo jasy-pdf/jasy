@@ -4,6 +4,8 @@ import { toUBL } from "../src/ubl";
 import { computeInvoice } from "../src/compute";
 import { xrechnungProblems } from "../src/profile-check";
 import { Invoice } from "../src/invoice";
+import { defaultInvoiceTemplate } from "../src/template";
+import { resolveLabels, makeFormatters } from "../src/i18n";
 
 // BG-14 (document) and BG-26 (line): the "Leistungszeitraum". German VAT law (§14 Abs. 4 Nr. 6 UStG)
 // wants a delivery DATE or a PERIOD, and for a recurring service the period is the truthful one - a
@@ -118,5 +120,60 @@ describe("the pre-check", () => {
       lines: [{ ...base.lines[0], period: { start: "2026-05-31", end: "2026-05-01" } }],
     };
     expect(xrechnungProblems(back).join(" ")).toMatch(/lines\[0\]\.period \(BG-26\)/);
+  });
+});
+
+describe("the period in the PRINTED invoice", () => {
+  // The point of BG-14 is that both halves of a ZUGFeRD file say the same thing. A period that lives
+  // only in the XML is the same defect as one that lives only in the text, just mirrored - which is
+  // exactly how the four rejected invoices that prompted this failed.
+  const printed = (i: Invoice, locale: "de" | "en" = "de"): string[] => {
+    const doc = defaultInvoiceTemplate(
+      i,
+      computeInvoice(i),
+      resolveLabels(locale),
+      makeFormatters(locale, i.currency),
+    );
+    const out: string[] = [];
+    const seen = new Set<unknown>();
+    const walk = (node: unknown): void => {
+      if (!node || typeof node !== "object" || seen.has(node)) return;
+      seen.add(node);
+      const props = (node as { getProps?: () => { content?: unknown } }).getProps?.();
+      if (typeof props?.content === "string") out.push(props.content);
+      for (const value of Object.values(node)) {
+        if (Array.isArray(value)) value.forEach(walk);
+        else walk(value);
+      }
+    };
+    walk(doc);
+    return out;
+  };
+
+  it("shows the period, labelled, on the document", () => {
+    const text = printed({ ...base, period });
+    expect(text).toContain("Leistungszeitraum");
+    expect(text).toContain("Mai 2026"); // a whole calendar month collapses to its name
+  });
+
+  it("shows both ends when the period is not a whole month", () => {
+    const text = printed({ ...base, period: { start: "2026-05-03", end: "2026-06-14" } });
+    expect(text).toContain("03.05.2026 - 14.06.2026");
+  });
+
+  it("says nothing at all when there is no period", () => {
+    expect(printed(base)).not.toContain("Leistungszeitraum");
+  });
+
+  it("shows a delivery date and a period side by side, since the XML carries both", () => {
+    const text = printed({ ...base, period, delivery: { date: "2026-05-31" } });
+    expect(text).toContain("Leistungszeitraum");
+    expect(text).toContain("Lieferdatum");
+  });
+
+  it("follows the locale", () => {
+    const text = printed({ ...base, period }, "en");
+    expect(text).toContain("Service period");
+    expect(text).toContain("May 2026");
   });
 });
