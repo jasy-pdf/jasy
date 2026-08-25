@@ -37,6 +37,14 @@ function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+/**
+ * The same, plus the quote: a `"` is fine in element TEXT but ends an attribute value early, and
+ * BT-82 is the first attribute we fill with free text. Kept separate so element output is untouched.
+ */
+function escAttr(s: string): string {
+  return esc(s).replace(/"/g, "&quot;");
+}
+
 /** A leaf element `<tag attrs>value</tag>`; returns "" when value is null/undefined/"". */
 function el(
   tag: string,
@@ -45,7 +53,7 @@ function el(
 ): string {
   if (value === undefined || value === null || value === "") return "";
   const a = Object.keys(attrs)
-    .map((k) => ` ${k}="${esc(attrs[k])}"`)
+    .map((k) => ` ${k}="${escAttr(attrs[k])}"`)
     .join("");
   return `<${tag}${a}>${esc(String(value))}</${tag}>`;
 }
