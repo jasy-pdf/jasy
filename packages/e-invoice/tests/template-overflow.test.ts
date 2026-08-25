@@ -67,6 +67,8 @@ describe("nothing is drawn outside the page", () => {
       },
     ],
     ["a long buyer name", { ...base, buyer: { ...base.buyer, name: LONG_NAME } }],
+    // A real one, from a real invoice: no space anywhere, so no line breaker can help it.
+    ["an unbreakable invoice number", { ...base, number: "INV-MRHG2EXG-2026/012-SD" }],
     [
       "everything long at once",
       {

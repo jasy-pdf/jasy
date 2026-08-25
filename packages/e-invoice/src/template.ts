@@ -128,6 +128,26 @@ function deliverTo(delivery: Delivery | undefined, L: InvoiceLabels): PDFElement
       ];
 }
 
+/**
+ * One label/value line of the information block.
+ *
+ * A long value gets its OWN line. Side by side it would take its natural single-line width and run
+ * back over the label - and a real invoice number like "INV-MRHG2EXG-2026/012-SD" carries no space,
+ * so no line breaker can help: there is nowhere to break. Stacking gives it the full panel width.
+ */
+function metaRow(label: string, value: string): PDFElement {
+  if (value.length > 18) {
+    return Column({ gap: 0 }, [
+      Text(label, { size: 9, color: MUTED }),
+      Text(value, { size: 9, color: INK, bold: true, align: "right" }),
+    ]);
+  }
+  return Row({ gap: 6, align: "start" }, [
+    Expanded({ flex: 1 }, Text(label, { size: 9, color: MUTED })),
+    Text(value, { size: 9, color: INK, bold: true, align: "right" }),
+  ]);
+}
+
 // --- recipient address (left, window-envelope position) + invoice meta (right) ---
 function recipientAndMeta(invoice: Invoice, L: InvoiceLabels, fmt: Formatters): PDFElement {
   const { seller, buyer } = invoice;
@@ -166,12 +186,7 @@ function recipientAndMeta(invoice: Invoice, L: InvoiceLabels, fmt: Formatters): 
       { gap: 3 },
       meta
         .filter((m): m is [string, string] => Boolean(m[1]))
-        .map(([label, value]) =>
-          Row({}, [
-            Expanded({ flex: 1 }, Text(label, { size: 9, color: MUTED })),
-            Text(value, { size: 9, color: INK, bold: true, align: "right" }),
-          ]),
-        ),
+        .map(([label, value]) => metaRow(label, value)),
     ),
   ]);
 
