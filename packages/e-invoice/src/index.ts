@@ -8,7 +8,7 @@ export type { ComputedInvoice, VatBreakdownEntry } from "./compute.ts";
 export { toCII } from "./cii.ts";
 export { toUBL } from "./ubl.ts";
 export type { CiiProfile } from "./cii.ts";
-export { xrechnungProblems } from "./profile-check.ts";
+export { en16931Problems, xrechnungProblems } from "./profile-check.ts";
 export { bundledFonts } from "./fonts.ts";
 export { facturxXmp } from "./xmp.ts";
 export type { XmpOptions } from "./xmp.ts";

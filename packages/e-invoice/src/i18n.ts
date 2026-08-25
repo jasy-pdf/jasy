@@ -8,6 +8,7 @@ export type Locale = "de" | "en" | "fr";
 /** Every label the default template draws. A custom language = supply a full `InvoiceLabels`. */
 export interface InvoiceLabels {
   invoice: string;
+  creditNote: string;
   position: string;
   description: string;
   quantity: string;
@@ -33,6 +34,21 @@ export interface InvoiceLabels {
   dueDate: string;
   customerReference: string;
   orderNumber: string;
+  contractReference: string;
+  buyerVatId: string;
+  deliverTo: string;
+  payee: string;
+  paymentMeans: string;
+  itemNumber: string;
+  perQuantity: string;
+  page: string;
+  pageOf: string;
+  contactPerson: string;
+  email: string;
+  vatBreakdown: string;
+  taxableBase: string;
+  taxAmount: string;
+  amountsIn: string;
   vatId: string;
   taxNumber: string;
   registration: string;
@@ -41,6 +57,7 @@ export interface InvoiceLabels {
 
 const de: InvoiceLabels = {
   invoice: "Rechnung",
+  creditNote: "Gutschrift",
   position: "Pos",
   description: "Beschreibung",
   quantity: "Menge",
@@ -66,6 +83,21 @@ const de: InvoiceLabels = {
   dueDate: "Fälligkeit",
   customerReference: "Kundenreferenz",
   orderNumber: "Bestellnummer",
+  contractReference: "Vertragsnummer",
+  buyerVatId: "USt-IdNr. Kunde",
+  deliverTo: "Lieferanschrift",
+  payee: "Zahlungsempfänger",
+  paymentMeans: "Zahlungsart",
+  itemNumber: "Art.-Nr.",
+  perQuantity: "je",
+  page: "Seite",
+  pageOf: "von",
+  contactPerson: "Ansprechpartner",
+  email: "E-Mail",
+  vatBreakdown: "Steueraufschlüsselung",
+  taxableBase: "Netto",
+  taxAmount: "Steuer",
+  amountsIn: "Alle Beträge in",
   vatId: "USt-IdNr",
   taxNumber: "Steuernr",
   registration: "Reg.",
@@ -74,6 +106,7 @@ const de: InvoiceLabels = {
 
 const en: InvoiceLabels = {
   invoice: "Invoice",
+  creditNote: "Credit note",
   position: "No.",
   description: "Description",
   quantity: "Qty",
@@ -99,6 +132,21 @@ const en: InvoiceLabels = {
   dueDate: "Due date",
   customerReference: "Customer reference",
   orderNumber: "Order no.",
+  contractReference: "Contract reference",
+  buyerVatId: "Buyer VAT ID",
+  deliverTo: "Delivery address",
+  payee: "Payee",
+  paymentMeans: "Payment method",
+  itemNumber: "Item no.",
+  perQuantity: "per",
+  page: "Page",
+  pageOf: "of",
+  contactPerson: "Contact",
+  email: "Email",
+  vatBreakdown: "VAT breakdown",
+  taxableBase: "Net",
+  taxAmount: "Tax",
+  amountsIn: "All amounts in",
   vatId: "VAT ID",
   taxNumber: "Tax no.",
   registration: "Reg.",
@@ -107,6 +155,7 @@ const en: InvoiceLabels = {
 
 const fr: InvoiceLabels = {
   invoice: "Facture",
+  creditNote: "Avoir",
   position: "N°",
   description: "Description",
   quantity: "Qté",
@@ -132,6 +181,21 @@ const fr: InvoiceLabels = {
   dueDate: "Échéance",
   customerReference: "Référence client",
   orderNumber: "N° de commande",
+  contractReference: "Référence du contrat",
+  buyerVatId: "N° TVA client",
+  deliverTo: "Adresse de livraison",
+  payee: "Bénéficiaire",
+  paymentMeans: "Mode de paiement",
+  itemNumber: "Réf. article",
+  perQuantity: "par",
+  page: "Page",
+  pageOf: "sur",
+  contactPerson: "Interlocuteur",
+  email: "E-mail",
+  vatBreakdown: "Détail de la TVA",
+  taxableBase: "Net",
+  taxAmount: "Taxe",
+  amountsIn: "Tous les montants en",
   vatId: "N° TVA",
   taxNumber: "N° fiscal",
   registration: "Immatriculation",
@@ -159,6 +223,8 @@ export interface Formatters {
   percent(ratePercent: number): string;
   /** An ISO date "YYYY-MM-DD" in the locale's short form (UTC, so no timezone drift). */
   date(iso: string): string;
+  /** The currency spelled out in the invoice language, e.g. "Euro" - BT-5 as a word, not a code. */
+  currencyName(): string;
   /**
    * A service period (BG-14/BG-26) for the eye. One covering exactly one whole calendar month reads
    * AS that month ("Juni 2026") - the form §31 Abs. 4 UStDV allows in place of a day. The XML is
@@ -180,11 +246,14 @@ export function makeFormatters(locale: Locale = "de", currency: string): Formatt
   });
   const month = new Intl.DateTimeFormat(tag, { year: "numeric", month: "long", timeZone: "UTC" });
   const utc = (iso: string) => new Date(`${iso}T00:00:00Z`);
+  // Intl knows the names in every locale; a table of our own would be one more thing to keep right.
+  const currencyNames = new Intl.DisplayNames([tag], { type: "currency" });
   return {
     money: (n) => money.format(n),
     number: (n) => number.format(n),
     percent: (ratePercent) => percent.format(ratePercent / 100),
     date: (iso) => date.format(utc(iso)),
+    currencyName: () => currencyNames.of(currency) ?? currency,
     period: (start, end) =>
       wholeMonth(start, end)
         ? month.format(utc(start))

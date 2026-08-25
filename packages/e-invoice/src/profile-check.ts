@@ -1,9 +1,77 @@
 import { Invoice } from "./invoice.ts";
+import { computeInvoice } from "./compute.ts";
 
 // A friendly pre-flight for the XRechnung (German B2G) profile: it lists, in plain language, the
 // fields XRechnung makes mandatory on top of EN16931 - so the user gets actionable guidance BEFORE
 // the invoice ever reaches a KoSIT/Schematron gate that would reject it with a cryptic rule id.
 // This is a helper, not the authority: the official validator (KoSIT / veraPDF) stays the final gate.
+
+/**
+ * Problems that would make ANY profile fail, so they are checked whatever the user asked for.
+ *
+ * The wording of each rule below was read out of the vendored EN 16931 schematron, not recalled:
+ * the alternatives it allows are load-bearing. Requiring a VAT id where the standard also accepts a
+ * tax number would REJECT a valid invoice, and this check throws - a false positive costs the user
+ * more than a missing one.
+ */
+export function en16931Problems(invoice: Invoice): string[] {
+  const problems: string[] = [];
+  const { seller, buyer } = invoice;
+
+  // The categories PRESENT, taken from the computed breakdown (BG-23) rather than from the lines:
+  // BR-AE-03 / BR-AE-04 apply to a document-level allowance or charge too, and those form their own
+  // breakdown group even when no line carries the category. Reading the breakdown is reading exactly
+  // what the rules are written against.
+  const categories = new Set(computeInvoice(invoice).vatBreakdown.map((v) => v.category));
+
+  // BR-AE-02/03/04: reverse charge. Both sides need AN identifier, and the standard accepts
+  // alternatives - the seller's tax number does, and so does the buyer's legal registration id.
+  if (categories.has("AE")) {
+    if (!seller.vatId && !seller.taxNumber) {
+      problems.push(
+        "Reverse charge (AE) needs a seller identifier - set invoice.seller.vatId (BT-31) or invoice.seller.taxNumber (BT-32).",
+      );
+    }
+    if (!buyer.vatId && !buyer.legalRegistrationId) {
+      problems.push(
+        "Reverse charge (AE) needs a buyer identifier - set invoice.buyer.vatId (BT-48) or invoice.buyer.legalRegistrationId (BT-47).",
+      );
+    }
+  }
+
+  // BR-IC-02: an intra-community supply is stricter - the buyer's VAT ID, and nothing else, will do.
+  if (categories.has("K")) {
+    if (!seller.vatId) {
+      problems.push(
+        "Intra-community supply (K) needs the seller VAT ID - set invoice.seller.vatId (BT-31).",
+      );
+    }
+    if (!buyer.vatId) {
+      problems.push(
+        "Intra-community supply (K) needs the buyer VAT ID - set invoice.buyer.vatId (BT-48); a legal registration id is not enough here.",
+      );
+    }
+  }
+
+  // BR-E-10 / BR-AE-10 / BR-IC-10 / BR-G-10 / BR-O-10: every category that charges no (or zero) VAT
+  // must SAY why. Without it the official validator rejects the file, and the paper is legally
+  // deficient too - §14a Abs. 5 UStG prescribes the reverse-charge wording word for word.
+  const given = invoice.vatExemptionReasons ?? {};
+  for (const category of NEEDS_EXEMPTION_REASON) {
+    if (!categories.has(category)) continue;
+    const reason = given[category];
+    if (!reason?.text && !reason?.code) {
+      problems.push(
+        `Category ${category} needs an exemption reason - set invoice.vatExemptionReasons.${category}.text (BT-120) or .code (BT-121).`,
+      );
+    }
+  }
+
+  return problems;
+}
+
+/** The VAT categories EN 16931 requires an exemption reason for. `S` and `Z` are taxed, so not those. */
+const NEEDS_EXEMPTION_REASON = ["E", "AE", "K", "G", "O"] as const;
 
 /** Plain-language problems that would make `invoice` fail XRechnung. Empty array = good to go. */
 export function xrechnungProblems(invoice: Invoice): string[] {
@@ -12,6 +80,7 @@ export function xrechnungProblems(invoice: Invoice): string[] {
     if (!ok) problems.push(message);
   };
   const { seller, buyer, payment } = invoice;
+  problems.push(...en16931Problems(invoice));
 
   require(invoice.buyerReference, "XRechnung needs the Leitweg-ID - set invoice.buyerReference (BT-10).");
 
