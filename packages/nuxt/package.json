@@ -21,7 +21,8 @@
     ".": {
       "types": "./dist/types.d.mts",
       "import": "./dist/module.mjs"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "scripts": {
     "prepack": "nuxt-module-build prepare && nuxt-module-build build",

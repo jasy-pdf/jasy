@@ -24,6 +24,14 @@ function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+/**
+ * The same, plus the quote: a `"` is fine in element TEXT but ends an attribute value early, and
+ * BT-82 is the first attribute we fill with free text. Kept separate so element output is untouched.
+ */
+function escAttr(s: string): string {
+  return esc(s).replace(/"/g, "&quot;");
+}
+
 /** A leaf `<tag attrs>value</tag>`; "" when value is null/undefined/"". */
 function el(
   tag: string,
@@ -32,7 +40,7 @@ function el(
 ): string {
   if (value === undefined || value === null || value === "") return "";
   const a = Object.keys(attrs)
-    .map((k) => ` ${k}="${esc(attrs[k])}"`)
+    .map((k) => ` ${k}="${escAttr(attrs[k])}"`)
     .join("");
   return `<${tag}${a}>${esc(String(value))}</${tag}>`;
 }
@@ -48,7 +56,12 @@ const money = (tag: string, n: number, currency: string) =>
   el(tag, n.toFixed(2), { currencyID: currency });
 
 function address(a: PostalAddress): string {
-  return wrap("cac:PostalAddress", [
+  return wrapAddress("cac:PostalAddress", a);
+}
+
+/** The same address body under a chosen tag: a Party has cac:PostalAddress, a Location cac:Address. */
+function wrapAddress(tag: string, a: PostalAddress): string {
+  return wrap(tag, [
     el("cbc:StreetName", a.line1), // BT-35 / BT-50
     el("cbc:AdditionalStreetName", a.line2), // BT-36 / BT-51
     el("cbc:CityName", a.city), // BT-37 / BT-52
@@ -89,6 +102,7 @@ function sellerParty(s: Seller): string {
       wrap("cac:PartyLegalEntity", [
         el("cbc:RegistrationName", s.name), // BT-27
         el("cbc:CompanyID", s.legalRegistrationId), // BT-30
+        el("cbc:CompanyLegalForm", s.additionalLegalInfo), // BT-33
       ]),
       contact(s.contact),
     ]),
@@ -144,6 +158,16 @@ function docAllowanceCharge(ac: AllowanceCharge, currency: string): string {
   ]);
 }
 
+/** A LINE-level allowance/charge (BG-27 / BG-28) - no tax category; the line's BT-151 governs. */
+function lineAllowanceCharge(ac: AllowanceCharge, currency: string): string {
+  return wrap("cac:AllowanceCharge", [
+    el("cbc:ChargeIndicator", String(ac.isCharge)),
+    el("cbc:AllowanceChargeReasonCode", ac.reasonCode), // BT-140 / BT-145
+    el("cbc:AllowanceChargeReason", ac.reason), // BT-139 / BT-144
+    money("cbc:Amount", ac.amount, currency), // BT-136 / BT-141
+  ]);
+}
+
 function taxSubtotal(g: VatBreakdownEntry, currency: string): string {
   return wrap("cac:TaxSubtotal", [
     money("cbc:TaxableAmount", g.taxableAmount, currency), // BT-116
@@ -169,11 +193,13 @@ function invoiceLine(l: InvoiceLine, net: number, index: number, currency: strin
     el("cbc:InvoicedQuantity", l.quantity, { unitCode: l.unit }), // BT-129 / BT-130
     money("cbc:LineExtensionAmount", net, currency), // BT-131
     invoicePeriod(l.period), // BG-26
+    ...(l.allowancesCharges ?? []).map((ac) => lineAllowanceCharge(ac, currency)), // BG-27 / BG-28
     wrap("cac:Item", [
       el("cbc:Description", l.description), // BT-154
       el("cbc:Name", l.name), // BT-153
-      l.sellerItemId ? wrap("cac:SellersItemIdentification", [el("cbc:ID", l.sellerItemId)]) : "", // BT-155
+      // BUYER before SELLER - the UBL ItemType sequence, which reads the other way round.
       l.buyerItemId ? wrap("cac:BuyersItemIdentification", [el("cbc:ID", l.buyerItemId)]) : "", // BT-156
+      l.sellerItemId ? wrap("cac:SellersItemIdentification", [el("cbc:ID", l.sellerItemId)]) : "", // BT-155
       l.standardItemId
         ? wrap("cac:StandardItemIdentification", [
             el("cbc:ID", l.standardItemId, { schemeID: "0160" }),
@@ -222,7 +248,8 @@ export function toUBL(
     d?.date || d?.recipientName || d?.address
       ? wrap("cac:Delivery", [
           el("cbc:ActualDeliveryDate", d?.date), // BT-72
-          d?.address ? wrap("cac:DeliveryLocation", [address(d.address)]) : "", // BG-15
+          // A LocationType holds cac:Address - `cac:PostalAddress` belongs to a Party, not here.
+          d?.address ? wrap("cac:DeliveryLocation", [wrapAddress("cac:Address", d.address)]) : "", // BG-15
           d?.recipientName
             ? wrap("cac:DeliveryParty", [wrap("cac:PartyName", [el("cbc:Name", d.recipientName)])])
             : "", // BT-70
@@ -233,7 +260,11 @@ export function toUBL(
   const paymentMeans =
     p && (p.iban || p.meansCode)
       ? wrap("cac:PaymentMeans", [
-          el("cbc:PaymentMeansCode", p.meansCode ?? "58"), // BT-81
+          el(
+            "cbc:PaymentMeansCode",
+            p.meansCode ?? "58",
+            p.meansText ? { name: p.meansText } : undefined,
+          ), // BT-81 + BT-82
           el("cbc:PaymentID", p.reference), // BT-83
           p.iban
             ? wrap("cac:PayeeFinancialAccount", [
@@ -264,6 +295,9 @@ export function toUBL(
     money("cbc:PayableAmount", computed.duePayable, cur), // BT-115
   ]);
 
+  const payee = invoice.payeeName // BT-59 / BG-10
+    ? wrap("cac:PayeeParty", [wrap("cac:PartyName", [el("cbc:Name", invoice.payeeName)])])
+    : "";
   const lines = invoice.lines.map((l, i) => invoiceLine(l, computed.lineNets[i], i, cur));
 
   return (
@@ -272,6 +306,7 @@ export function toUBL(
     head.filter(Boolean).join("") +
     sellerParty(invoice.seller) +
     buyerParty(invoice.buyer) +
+    payee +
     delivery +
     paymentMeans +
     paymentTerms +

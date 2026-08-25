@@ -17,6 +17,7 @@ const invoice = {
     vatId: "DE123456789",
     taxNumber: "147/815/12345",
     legalRegistrationId: "HRB 98765",
+    additionalLegalInfo: "Geschäftsführer: Erika Muster", // BT-33
     electronicAddress: "rechnung@muster.de",
     address: {
       line1: "Hauptstraße 1",
@@ -46,6 +47,14 @@ const invoice = {
       unit: "HUR",
       netUnitPrice: 100,
       vat: { category: "S" as const, ratePercent: 19 },
+      allowancesCharges: [
+        {
+          isCharge: false,
+          amount: 10,
+          vat: { category: "S" as const, ratePercent: 19 },
+          reason: "Treuerabatt",
+        },
+      ],
     },
     {
       name: "Hosting",
@@ -59,7 +68,8 @@ const invoice = {
     iban: "DE02120300000000202051",
     bic: "BYLADEM1001",
     accountName: "Muster Studio GmbH",
-    meansText: "SEPA",
+    meansText: 'SEPA "instant" & Giro <sofort>',
+    reference: "VZ-2026-014", // BT-83
     terms: "14 Tage netto",
   },
 };
@@ -185,5 +195,50 @@ describe("parse - allowances/charges + VAT exemptions (BG-20/21, BT-120/121)", (
     expect(toUBL(p, computeInvoice(p))).toBe(xml);
     expect(p.allowancesCharges).toHaveLength(2);
     expect(p.vatExemptionReasons?.AE?.code).toBe("VATEX-EU-AE");
+  });
+});
+
+describe("free text that would break the XML", () => {
+  // BT-82 rides in an ATTRIBUTE, where a double quote ends the value early - and `esc` handled only
+  // & < >. Element text and attribute text must survive the same characters, in both directions.
+  const nasty = 'SEPA "instant" & Giro <sofort>';
+
+  it("survives a CII round-trip", () => {
+    const invoice2 = { ...invoice, payment: { ...invoice.payment, meansText: nasty } };
+    expect(parseCII(cii(invoice2)).payment?.meansText).toBe(nasty);
+  });
+
+  it("survives a UBL round-trip, where it is an attribute", () => {
+    const invoice2 = { ...invoice, payment: { ...invoice.payment, meansText: nasty } };
+    const xml = ubl(invoice2);
+    expect(xml).toContain('name="SEPA &quot;instant&quot; &amp; Giro &lt;sofort&gt;"');
+    expect(parseUBL(xml).payment?.meansText).toBe(nasty);
+  });
+
+  it("keeps a standalone payment reference, with no means and no terms", () => {
+    // BT-83 is emitted on its own; a reader that only builds `payment` from means/terms drops it.
+    // Built from scratch, NOT spread from `invoice`: its dueDate alone produces PaymentTerms, which
+    // would make the condition true anyway and the test pass for the wrong reason.
+    const bare = {
+      number: "RE-BARE",
+      issueDate: "2026-08-25",
+      currency: "EUR",
+      seller: { name: "S", address: { country: "DE" as const } },
+      buyer: { name: "K", address: { country: "DE" as const } },
+      lines: [
+        {
+          name: "L",
+          quantity: 1,
+          unit: "C62",
+          netUnitPrice: 1,
+          vat: { category: "S" as const, ratePercent: 19 },
+        },
+      ],
+      payment: { reference: "VZ-ALLEIN" },
+    };
+    const xml = cii(bare);
+    expect(xml).not.toContain("SpecifiedTradeSettlementPaymentMeans");
+    expect(xml).not.toContain("SpecifiedTradePaymentTerms");
+    expect(parseCII(xml).payment?.reference).toBe("VZ-ALLEIN");
   });
 });

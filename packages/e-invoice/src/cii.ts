@@ -37,6 +37,14 @@ function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+/**
+ * The same, plus the quote: a `"` is fine in element TEXT but ends an attribute value early, and
+ * BT-82 is the first attribute we fill with free text. Kept separate so element output is untouched.
+ */
+function escAttr(s: string): string {
+  return esc(s).replace(/"/g, "&quot;");
+}
+
 /** A leaf element `<tag attrs>value</tag>`; returns "" when value is null/undefined/"". */
 function el(
   tag: string,
@@ -45,7 +53,7 @@ function el(
 ): string {
   if (value === undefined || value === null || value === "") return "";
   const a = Object.keys(attrs)
-    .map((k) => ` ${k}="${esc(attrs[k])}"`)
+    .map((k) => ` ${k}="${escAttr(attrs[k])}"`)
     .join("");
   return `<${tag}${a}>${esc(String(value))}</${tag}>`;
 }
@@ -75,6 +83,7 @@ function address(a: PostalAddress): string {
 function sellerParty(s: Seller): string {
   return wrap("ram:SellerTradeParty", [
     el("ram:Name", s.name), // BT-27
+    el("ram:Description", s.additionalLegalInfo), // BT-33
     wrap("ram:SpecifiedLegalOrganization", [
       el("ram:ID", s.legalRegistrationId), // BT-30
       el("ram:TradingBusinessName", s.tradingName), // BT-28
@@ -133,13 +142,28 @@ function docAllowanceCharge(ac: AllowanceCharge): string {
   return wrap("ram:SpecifiedTradeAllowanceCharge", [
     wrap("ram:ChargeIndicator", [el("udt:Indicator", String(ac.isCharge))]),
     el("ram:ActualAmount", amount(ac.amount)), // BT-92 / BT-99
-    el("ram:Reason", ac.reason), // BT-97 / BT-104
+    // CODE before REASON - the XSD sequence, which reads backwards from how one says it.
     el("ram:ReasonCode", ac.reasonCode), // BT-98 / BT-105
+    el("ram:Reason", ac.reason), // BT-97 / BT-104
     wrap("ram:CategoryTradeTax", [
       el("ram:TypeCode", "VAT"),
       el("ram:CategoryCode", ac.vat.category), // BT-95 / BT-102
       el("ram:RateApplicablePercent", ac.vat.ratePercent ?? 0), // BT-96 / BT-103
     ]),
+  ]);
+}
+
+/**
+ * A LINE-level allowance/charge (BG-27 / BG-28). Deliberately not the document helper: BG-27 carries
+ * no VAT category, because the line's own BT-151 governs it. Emitting one would be data the standard
+ * does not define there.
+ */
+function lineAllowanceCharge(ac: AllowanceCharge): string {
+  return wrap("ram:SpecifiedTradeAllowanceCharge", [
+    wrap("ram:ChargeIndicator", [el("udt:Indicator", String(ac.isCharge))]),
+    el("ram:ActualAmount", amount(ac.amount)), // BT-136 / BT-141
+    el("ram:ReasonCode", ac.reasonCode), // BT-140 / BT-145
+    el("ram:Reason", ac.reason), // BT-139 / BT-144
   ]);
 }
 
@@ -178,11 +202,11 @@ function line(l: InvoiceLine, net: number, index: number): string {
       l.note ? wrap("ram:IncludedNote", [el("ram:Content", l.note)]) : "", // BT-127
     ]),
     wrap("ram:SpecifiedTradeProduct", [
-      el("ram:SellerAssignedID", l.sellerItemId), // BT-155
-      el("ram:BuyerAssignedID", l.buyerItemId), // BT-156
       l.standardItemId
         ? el("ram:GlobalID", l.standardItemId, { schemeID: "0160" }) // BT-157 (GTIN)
         : "",
+      el("ram:SellerAssignedID", l.sellerItemId), // BT-155
+      el("ram:BuyerAssignedID", l.buyerItemId), // BT-156
       el("ram:Name", l.name), // BT-153
       el("ram:Description", l.description), // BT-154
     ]),
@@ -204,6 +228,10 @@ function line(l: InvoiceLine, net: number, index: number): string {
         el("ram:RateApplicablePercent", l.vat.ratePercent ?? 0), // BT-152
       ]),
       billingPeriod(l.period), // BG-26
+      // BG-27 / BG-28: the line's own allowances and charges. They were folded into BT-131 and never
+      // declared, so the XML showed a reduced amount with nothing to explain it - and BT-139/BT-145,
+      // the REASON, vanished entirely. The same shape as the document-level group.
+      ...(l.allowancesCharges ?? []).map(lineAllowanceCharge),
       wrap("ram:SpecifiedTradeSettlementLineMonetarySummation", [
         el("ram:LineTotalAmount", amount(net)), // BT-131
       ]),
@@ -294,11 +322,12 @@ export function toCII(
 
   const totals = wrap("ram:SpecifiedTradeSettlementHeaderMonetarySummation", [
     el("ram:LineTotalAmount", amount(computed.lineTotal)), // BT-106
-    invoice.allowancesCharges?.some((a) => !a.isCharge)
-      ? el("ram:AllowanceTotalAmount", amount(computed.allowanceTotal)) // BT-107
-      : "",
+    // CHARGE before ALLOWANCE - the XSD sequence, not the intuitive reading order.
     invoice.allowancesCharges?.some((a) => a.isCharge)
       ? el("ram:ChargeTotalAmount", amount(computed.chargeTotal)) // BT-108
+      : "",
+    invoice.allowancesCharges?.some((a) => !a.isCharge)
+      ? el("ram:AllowanceTotalAmount", amount(computed.allowanceTotal)) // BT-107
       : "",
     el("ram:TaxBasisTotalAmount", amount(computed.taxBasisTotal)), // BT-109
     el("ram:TaxTotalAmount", amount(computed.taxTotal), { currencyID: invoice.currency }), // BT-110
@@ -308,8 +337,9 @@ export function toCII(
   ]);
 
   const settlement = wrap("ram:ApplicableHeaderTradeSettlement", [
-    invoice.payeeName ? wrap("ram:PayeeTradeParty", [el("ram:Name", invoice.payeeName)]) : "", // BG-10
+    el("ram:PaymentReference", invoice.payment?.reference ?? invoice.number), // BT-83
     el("ram:InvoiceCurrencyCode", invoice.currency), // BT-5
+    invoice.payeeName ? wrap("ram:PayeeTradeParty", [el("ram:Name", invoice.payeeName)]) : "", // BG-10
     paymentMeans, // BG-16
     ...computed.vatBreakdown.map(tradeTax), // BG-23
     billingPeriod(invoice.period), // BG-14
