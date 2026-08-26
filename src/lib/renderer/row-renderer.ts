@@ -11,9 +11,7 @@ export class RowRenderer {
     if (children)
       for (const child of children) {
         const renderer = RendererRegistry.getRenderer(child);
-        if (renderer) {
-          nodes.push(...(await renderer(child, objectManager)));
-        }
+        nodes.push(...(await renderer(child, objectManager)));
       }
 
     return nodes;

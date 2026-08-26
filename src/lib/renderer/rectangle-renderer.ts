@@ -69,9 +69,7 @@ export class RectangleRenderer {
     if (children)
       for (const child of children) {
         const renderer = RendererRegistry.getRenderer(child);
-        if (renderer) {
-          nodes.push(...(await renderer(child, objectManager)));
-        }
+        nodes.push(...(await renderer(child, objectManager)));
       }
     if (clip) nodes.push({ type: "clip-pop" });
 

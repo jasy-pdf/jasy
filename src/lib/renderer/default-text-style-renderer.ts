@@ -12,6 +12,6 @@ export class DefaultTextStyleRenderer {
   ): Promise<IRNode[]> {
     const { child } = element.getProps();
     const renderer = RendererRegistry.getRenderer(child);
-    return renderer ? await renderer(child, objectManager) : [];
+    return renderer(child, objectManager);
   }
 }

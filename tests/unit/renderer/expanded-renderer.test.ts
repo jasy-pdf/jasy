@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { ExpandedRenderer } from "../../../src/lib/renderer/expanded-renderer";
-import { RendererRegistry } from "../../../src/lib/utils/renderer-registry";
+import { RendererRegistry, MissingRendererError } from "../../../src/lib/utils/renderer-registry";
 import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager";
 import { ExpandedElement } from "../../../src/lib/elements";
 import { PDFElement } from "../../../src/lib/elements/pdf-element";
@@ -46,15 +46,15 @@ describe("ExpandedRenderer", () => {
     expect(result).toEqual(["child-node"]);
   });
 
-  it("should return an empty string if there is no renderer for the child element", async () => {
-    // Mock child element
+  // Skipping an unrenderable child silently is what let a document come out blank (ISSUE-11); the
+  // registry's error must reach the caller.
+  it("propagates the error when the child has no renderer", async () => {
     const mockChild: PDFElement = {
       getProps: () => ({}),
       calculateLayout: vi.fn(),
       normalizeCoordinates: vi.fn(),
     } as unknown as PDFElement;
 
-    // Mock the ExpandedElement with a child
     const mockExpandedElement: ExpandedElement = {
       getProps: () => ({
         child: mockChild,
@@ -67,16 +67,14 @@ describe("ExpandedRenderer", () => {
       normalizeCoordinates: vi.fn(),
     } as unknown as ExpandedElement;
 
-    // Mock PDFObjectManager
     const mockObjectManager = {} as PDFObjectManager;
 
-    // Spy on RendererRegistry to return undefined for the child (no renderer found)
-    vi.spyOn(RendererRegistry, "getRenderer").mockReturnValue(undefined);
+    vi.spyOn(RendererRegistry, "getRenderer").mockImplementation(() => {
+      throw new MissingRendererError("FakeChild");
+    });
 
-    // Call the ExpandedRenderer's render method
-    const result = await ExpandedRenderer.render(mockExpandedElement, mockObjectManager);
-
-    // No renderer for the child -> empty display list.
-    expect(result).toEqual([]);
+    await expect(ExpandedRenderer.render(mockExpandedElement, mockObjectManager)).rejects.toThrow(
+      MissingRendererError,
+    );
   });
 });

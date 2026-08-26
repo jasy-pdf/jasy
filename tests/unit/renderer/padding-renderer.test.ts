@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { PaddingRenderer } from "../../../src/lib/renderer/padding-renderer";
 import { PaddingElement } from "../../../src/lib/elements/layout/padding-element";
 import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager";
-import { RendererRegistry } from "../../../src/lib/utils/renderer-registry";
+import { RendererRegistry, MissingRendererError } from "../../../src/lib/utils/renderer-registry";
 
 // Mock RendererRegistry.getRenderer method. Renderers now return an IRNode[];
 // "rendered child content" stands in for a node passed straight through.
@@ -39,11 +39,13 @@ describe("PaddingRenderer", () => {
     expect(result).toContain("rendered child content");
   });
 
-  it("should not render anything if no renderer is found", async () => {
-    // Override the mock to return undefined for the renderer
-    vi.spyOn(RendererRegistry, "getRenderer").mockImplementation(() => undefined);
+  // A child with no renderer used to yield an empty display list - silently. It is a bug either way,
+  // so the renderer now lets the registry's error through (ISSUE-11).
+  it("propagates the error when no renderer is found", async () => {
+    vi.spyOn(RendererRegistry, "getRenderer").mockImplementation(() => {
+      throw new MissingRendererError("FakeChild");
+    });
 
-    // Mock PaddingElement
     const mockPaddingElement = {
       getProps: vi.fn().mockReturnValue({
         child: {
@@ -61,12 +63,10 @@ describe("PaddingRenderer", () => {
       }),
     } as unknown as PaddingElement;
 
-    // Mock PDFObjectManager
     const mockObjectManager = {} as PDFObjectManager;
 
-    const result = await PaddingRenderer.render(mockPaddingElement, mockObjectManager);
-
-    expect(mockPaddingElement.getProps).toHaveBeenCalled();
-    expect(result).toEqual([]); // No renderer -> empty display list
+    await expect(PaddingRenderer.render(mockPaddingElement, mockObjectManager)).rejects.toThrow(
+      MissingRendererError,
+    );
   });
 });

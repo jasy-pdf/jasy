@@ -28,9 +28,7 @@ export class PageRenderer {
     const nodes: IRNode[] = [];
     for (const element of renderables) {
       const renderer = RendererRegistry.getRenderer(element);
-      if (renderer) {
-        nodes.push(...(await renderer(element, objectManager)));
-      }
+      nodes.push(...(await renderer(element, objectManager)));
     }
     // Accessible tagging: one struct context per page (allocates its StructParents index), threaded into
     // serialize so each drawable node is wrapped in marked content. Undefined = tagging off (byte-identical).

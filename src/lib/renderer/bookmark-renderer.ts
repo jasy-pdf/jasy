@@ -11,7 +11,7 @@ export class BookmarkRenderer {
     const { title, level, child, y } = element.getProps();
 
     const renderer = RendererRegistry.getRenderer(child);
-    const childNodes = renderer ? await renderer(child, objectManager) : [];
+    const childNodes = await renderer(child, objectManager);
 
     // The child draws normally; an Outline IR node carries the title + nesting + scroll target for the
     // page renderer to collect into the /Outlines tree (it produces no content-stream ops itself).

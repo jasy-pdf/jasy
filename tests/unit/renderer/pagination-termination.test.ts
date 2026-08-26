@@ -9,6 +9,8 @@ import { Orientation } from "../../../src/lib/renderer/pdf-config";
 import { BoxConstraints, Offset, Size } from "../../../src/lib/layout/box-constraints";
 import type { LayoutContext } from "../../../src/lib/elements/pdf-element";
 import type { FragmentResult } from "../../../src/lib/layout/fragmentation";
+import { RendererRegistry } from "../../../src/lib/utils/renderer-registry.ts";
+import { ContainerRenderer } from "../../../src/lib/renderer/container-renderer.ts";
 
 // The general pagination termination guarantee. A fragmentation step that does NOT shrink the region
 // (nothing fit even on a full page) must END the loop, not advance to an identical remainder forever.
@@ -27,6 +29,11 @@ class NeverShrinks extends ContainerElement {
     return { fitted: null, remainder: this };
   }
 }
+
+// The registry is keyed on the exact constructor, so a SUBCLASS of a registered element is not itself
+// registered and now throws. Deliberate: a subclass silently borrowing its parent's renderer would draw
+// the parent's idea of the element. So register the double explicitly, as a real custom element must.
+RendererRegistry.register(NeverShrinks, ContainerRenderer.render);
 
 const docWith = (policy: "error" | "ignore") =>
   class extends PDFDocument {

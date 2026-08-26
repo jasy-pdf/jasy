@@ -8,7 +8,7 @@ export class LinkRenderer {
     const { href, dest, child, x, y, width, height } = element.getProps();
 
     const renderer = RendererRegistry.getRenderer(child);
-    const childNodes = renderer ? await renderer(child, objectManager) : [];
+    const childNodes = await renderer(child, objectManager);
 
     // The child draws normally; a Link IR node carries the clickable rect + target (external href or
     // internal dest) for the page renderer to emit as a /Link annotation (no content-stream ops itself).
