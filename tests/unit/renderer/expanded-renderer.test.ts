@@ -1,6 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
 import { ExpandedRenderer } from "../../../src/lib/renderer/expanded-renderer";
-import { RendererRegistry, MissingRendererError } from "../../../src/lib/utils/renderer-registry";
+import {
+  RendererRegistry,
+  MissingRendererError,
+} from "../../../src/lib/utils/renderer-registry.ts";
 import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager";
 import { ExpandedElement } from "../../../src/lib/elements";
 import { PDFElement } from "../../../src/lib/elements/pdf-element";
