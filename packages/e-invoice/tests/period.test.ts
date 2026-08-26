@@ -177,3 +177,57 @@ describe("the period in the PRINTED invoice", () => {
     expect(text).toContain("May 2026");
   });
 });
+
+describe("the line period on the paper (BG-26)", () => {
+  // The document period was printed since 2026-08-25; a period on a single LINE reached the XML and
+  // stayed invisible. That is the half-a-document defect one level down - the case it matters for is
+  // an invoice whose lines cover DIFFERENT months, where the header period cannot speak for them.
+  const printed = (i: Invoice): string[] => {
+    const doc = defaultInvoiceTemplate(
+      i,
+      computeInvoice(i),
+      resolveLabels("de"),
+      makeFormatters("de", i.currency),
+    );
+    const out: string[] = [];
+    const seen = new Set<unknown>();
+    const walk = (node: unknown): void => {
+      if (!node || typeof node !== "object" || seen.has(node)) return;
+      seen.add(node);
+      const props = (node as { getProps?: () => { content?: unknown } }).getProps?.();
+      if (typeof props?.content === "string") out.push(props.content);
+      for (const value of Object.values(node)) {
+        if (Array.isArray(value)) value.forEach(walk);
+        else walk(value);
+      }
+    };
+    walk(doc);
+    return out;
+  };
+
+  const twoMonths: Invoice = {
+    ...base,
+    lines: [
+      { ...base.lines[0], name: "Mai", period: { start: "2026-05-01", end: "2026-05-31" } },
+      { ...base.lines[0], name: "Juni", period: { start: "2026-06-01", end: "2026-06-30" } },
+    ],
+  };
+
+  it("prints each line's own period", () => {
+    const text = printed(twoMonths).join("\n");
+    expect(text).toContain("Leistungszeitraum Mai 2026");
+    expect(text).toContain("Leistungszeitraum Juni 2026");
+  });
+
+  it("stays silent when the line repeats the document period", () => {
+    // Same span on the header and on every row is noise; the header already said it.
+    const same: Invoice = { ...base, period, lines: [{ ...base.lines[0], period }] };
+    const rows = printed(same).filter((t) => t.startsWith("Leistungszeitraum "));
+    expect(rows).toEqual([]); // the header uses a separate label/value pair, not this string
+  });
+
+  it("still prints a line period when the document has none", () => {
+    const lineOnly: Invoice = { ...base, lines: [{ ...base.lines[0], period }] };
+    expect(printed(lineOnly).join("\n")).toContain("Leistungszeitraum Mai 2026");
+  });
+});
