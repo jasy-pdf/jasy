@@ -12,6 +12,6 @@ export class PositionedRenderer {
     // after the frame's flow content, so it paints on top.
     const { child } = positionedElement.getProps();
     const renderer = RendererRegistry.getRenderer(child);
-    return renderer ? renderer(child, objectManager) : [];
+    return renderer(child, objectManager);
   }
 }

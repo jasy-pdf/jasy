@@ -12,7 +12,7 @@ import {
 } from "@nuxt/kit";
 
 export interface ModuleOptions {
-  /** Auto-register the jasy components (client) + the @jasy/pdf tree API (server) so they need no import. Default true. */
+  /** Auto-register the jasy components (client) + the @jasy/pdf element API (server) so they need no import. The render helpers stay available either way. Default true. */
   autoImport?: boolean;
   /** Component name prefix, e.g. "Pdf" -> <PdfDocument>, <PdfText>. Default none. */
   prefix?: string;
@@ -110,8 +110,17 @@ export default defineNuxtModule<ModuleOptions>({
   defaults: {
     autoImport: true,
   },
-  async setup(options) {
+  async setup(options, nuxt) {
     const resolver = createResolver(import.meta.url);
+
+    const pdfEntry = await resolvePath("@jasy/pdf");
+
+    // Nitro resolves our runtime and the user's server code separately, so a bare "@jasy/pdf" can end up
+    // as two instances in one build - and the element-to-renderer registry is keyed on constructors, so
+    // elements from one instance render as nothing. Pin the specifier for the whole Nitro build.
+    nuxt.options.nitro ||= {};
+    nuxt.options.nitro.alias ||= {};
+    nuxt.options.nitro.alias["@jasy/pdf"] = pdfEntry;
 
     if (options.autoImport) {
       const prefix = options.prefix ?? "";
@@ -135,7 +144,7 @@ export default defineNuxtModule<ModuleOptions>({
     // jimp is server-only. @jasy/pdf swaps node-image (jimp) -> browser-image (canvas) via its `browser`
     // field, but Nuxt's Vite skips that for the transitive dist, so force it. Nitro is a separate build,
     // keeps jimp.
-    const browserImage = join(dirname(await resolvePath("@jasy/pdf")), "platform/browser-image.js");
+    const browserImage = join(dirname(pdfEntry), "platform/browser-image.js");
     extendViteConfig((config) => {
       config.resolve ||= {};
       const existing = config.resolve.alias;
@@ -146,9 +155,10 @@ export default defineNuxtModule<ModuleOptions>({
       config.resolve.alias = alias;
 
       // image-helper also imports jimp directly (grayscale) - tree-shaken in the build, but the dev scanner
-      // still finds it, so exclude. fflate is the real client dep, pre-bundle it.
+      // still finds it, so exclude. fflate is the real client dep; pre-bundle it by its path through
+      // @jasy/pdf, since a transitive name does not resolve at the consumer's root under pnpm.
       config.optimizeDeps ||= {};
-      config.optimizeDeps.include = [...(config.optimizeDeps.include ?? []), "fflate"];
+      config.optimizeDeps.include = [...(config.optimizeDeps.include ?? []), "@jasy/pdf > fflate"];
       config.optimizeDeps.exclude = [...(config.optimizeDeps.exclude ?? []), "jimp"];
     });
   },

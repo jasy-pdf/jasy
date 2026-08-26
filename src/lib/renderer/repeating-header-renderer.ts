@@ -12,7 +12,7 @@ export class RepeatingHeaderRenderer {
     const nodes: IRNode[] = [];
     for (const child of [header, body]) {
       const renderer = RendererRegistry.getRenderer(child);
-      if (renderer) nodes.push(...(await renderer(child, objectManager)));
+      nodes.push(...(await renderer(child, objectManager)));
     }
     return nodes;
   }

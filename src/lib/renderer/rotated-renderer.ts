@@ -32,7 +32,7 @@ export class RotatedRenderer {
     ];
 
     const renderer = RendererRegistry.getRenderer(child);
-    const childNodes = renderer ? await renderer(child, objectManager) : [];
+    const childNodes = await renderer(child, objectManager);
 
     // Wrap the child's drawing between a push (apply the matrix) and a pop (restore).
     return [{ type: "transform-push", matrix }, ...childNodes, { type: "transform-pop" }];

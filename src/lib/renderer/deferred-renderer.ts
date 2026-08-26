@@ -11,6 +11,6 @@ export class DeferredRenderer {
     const { composed } = element.getProps();
     if (!composed) return [];
     const renderer = RendererRegistry.getRenderer(composed);
-    return renderer ? renderer(composed, objectManager) : [];
+    return renderer(composed, objectManager);
   }
 }

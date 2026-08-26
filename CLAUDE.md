@@ -145,6 +145,25 @@ That is a **rounded `FontBBox`**, not a guess. For embedded fonts it reads real 
 `line-metrics.ts` precisely so a glyph metric can never again be used as a line metric. **Do not invent a
 constant** — that is exactly how `BASELINE_RATIO = 683/1000` happened. `letterSpacing` is still to come.
 
+### The one identity-sensitive place in the engine — read before shipping a wrapper
+
+`RendererRegistry` (`utils/renderer-registry.ts`) is a `Map<Function, Function>` **keyed on the
+element's constructor**. Everything else in jasy survives two copies of the library being loaded -
+building elements, layout, font metrics, byte writing. This one does not.
+
+And it fails **silently**: seventeen call sites read `const renderer = getRenderer(el); if (renderer)
+{ … }` with no `else`. Two instances → every element is skipped → a valid PDF with embedded fonts and
+a one-byte content stream. It is the same hazard as "two copies of React", minus the error message.
+
+**This bit us for real** (2026-08-26, ISSUE-11): `@jasy/nuxt` injects auto-imports into the
+CONSUMER's code (`addServerImports({ from: "@jasy/pdf" })`), so under pnpm the consumer's route and
+the module's runtime resolved `@jasy/pdf` to two module records. Blank page in `nuxt dev`; `nuxt build`
+and the monorepo playground both hid it.
+
+**The rule that follows:** a package whose names you inject into someone else's code must be a
+**peer dependency**, or the injector must resolve the path itself and inject that. Exact version pins
+answer a different question - they fix VERSIONS, not module IDENTITY.
+
 ### State threading — explicit, no singleton (since roadmap Phase 2)
 
 There is **no global object manager** (the old `@InjectObjectManager` / `reflect-metadata` decorator is
@@ -804,3 +823,10 @@ more e-invoice profiles, framework bindings). See `todo.md` "⭐ Active" + "🔮
   SECURITY / LICENSE / issue+PR templates / FUNDING) all in. Branch `main`. Runtime deps: `jimp` (images), `fflate`
   (isomorphic deflate), `bidi-js` (UAX #9, behind the `text/bidi.ts` seam and slated to be replaced by
   our own - see `todo.md`); the old `reflect-metadata` DI is gone (decorator removed).
+
+## Open work — NOT pushed yet (ask Flo before pushing)
+
+- **`feat/line-period-bg-26`** — one commit, `010dcc3 feat: add line period (BG 26)`; **no upstream, never
+  pushed**. Contains the `@jasy/e-invoice` per-line invoicing period (BG-26) in `src/template.ts` +
+  `tests/period.test.ts`. Push/PR it only when Flo asks. Afterwards it releases as
+  `@jasy/e-invoice@1.0.0-alpha.11`.

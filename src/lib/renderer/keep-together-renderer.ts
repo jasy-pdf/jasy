@@ -14,6 +14,6 @@ export class KeepTogetherRenderer {
   ): Promise<IRNode[]> {
     const { child } = group.getProps();
     const renderer = RendererRegistry.getRenderer(child);
-    return renderer ? await renderer(child, objectManager) : [];
+    return renderer(child, objectManager);
   }
 }

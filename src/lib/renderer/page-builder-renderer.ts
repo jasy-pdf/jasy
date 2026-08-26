@@ -13,6 +13,6 @@ export class PageBuilderRenderer {
     if (!composed) return [];
 
     const renderer = RendererRegistry.getRenderer(composed);
-    return renderer ? renderer(composed, objectManager) : [];
+    return renderer(composed, objectManager);
   }
 }

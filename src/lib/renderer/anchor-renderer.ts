@@ -8,7 +8,7 @@ export class AnchorRenderer {
     const { name, child, y } = element.getProps();
 
     const renderer = RendererRegistry.getRenderer(child);
-    const childNodes = renderer ? await renderer(child, objectManager) : [];
+    const childNodes = await renderer(child, objectManager);
 
     // The child draws normally; an Anchor IR node carries the name + scroll target for the page renderer
     // to register as a named destination (it produces no content-stream ops itself).

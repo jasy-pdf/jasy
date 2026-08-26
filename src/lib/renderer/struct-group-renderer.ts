@@ -12,7 +12,7 @@ export class StructGroupRenderer {
     const { role, child } = group.getProps();
     const renderChild = async (): Promise<IRNode[]> => {
       const renderer = RendererRegistry.getRenderer(child);
-      return renderer ? await renderer(child, objectManager) : [];
+      return renderer(child, objectManager);
     };
     if (!objectManager.struct.enabled) return renderChild();
 

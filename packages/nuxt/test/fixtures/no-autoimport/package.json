@@ -1,0 +1,5 @@
+{
+  "name": "no-autoimport",
+  "private": true,
+  "type": "module"
+}

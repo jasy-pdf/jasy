@@ -11,6 +11,6 @@ export class ExpandedRenderer {
     const { child } = expandedElement.getProps();
 
     const renderer = RendererRegistry.getRenderer(child);
-    return renderer ? await renderer(child, objectManager) : [];
+    return renderer(child, objectManager);
   }
 }
