@@ -220,9 +220,18 @@ function lineItemsTable(
     );
     const sub = (t: string) => Text(t, { size: 8, color: MUTED });
 
+    // BG-26: the period THIS line covers, shown only when it says something the document period
+    // does not - repeating an identical span on every row is noise, and the header already has it.
+    const linePeriod =
+      line.period &&
+      (line.period.start !== invoice.period?.start || line.period.end !== invoice.period?.end)
+        ? `${L.servicePeriod} ${fmt.period(line.period.start, line.period.end)}`
+        : undefined;
+
     const descr = Column({ gap: 1 }, [
       Text(line.name, { size: 9.5, color: INK }),
       ...(line.description ? [sub(line.description)] : []),
+      ...(linePeriod ? [sub(linePeriod)] : []),
       ...(itemIds ? [sub(`${L.itemNumber} ${itemIds}`)] : []),
       ...(line.note ? [sub(line.note)] : []), // BT-127
       ...lineAdjustments.map(sub),
