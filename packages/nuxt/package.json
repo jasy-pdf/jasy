@@ -28,18 +28,19 @@
     "prepack": "nuxt-module-build prepare && nuxt-module-build build",
     "dev": "npm run dev:prepare && nuxt dev playground",
     "dev:build": "nuxt build playground",
-    "dev:prepare": "nuxt-module-build build --stub && nuxt-module-build prepare && nuxt prepare playground",
+    "dev:prepare": "nuxt-module-build build --stub && nuxt-module-build prepare && nuxt prepare playground && pnpm prepare:fixtures",
     "lint": "oxlint",
     "test": "vitest run",
     "test:watch": "vitest watch",
-    "test:types": "vue-tsc --noEmit && cd playground && vue-tsc --noEmit"
+    "test:types": "vue-tsc --noEmit && cd playground && vue-tsc --noEmit",
+    "prepare:fixtures": "nuxt prepare test/fixtures/basic && nuxt prepare test/fixtures/no-autoimport"
   },
   "dependencies": {
-    "@jasy/pdf": "workspace:*",
-    "@jasy/vue": "workspace:*",
     "@nuxt/kit": "^4.4.8"
   },
   "devDependencies": {
+    "@jasy/pdf": "workspace:*",
+    "@jasy/vue": "workspace:*",
     "@nuxt/devtools": "^3.2.4",
     "@nuxt/module-builder": "^1.0.2",
     "@nuxt/schema": "^4.4.8",
@@ -49,5 +50,9 @@
     "typescript": "~6.0.3",
     "vitest": "^4.1.8",
     "vue-tsc": "^3.3.3"
+  },
+  "peerDependencies": {
+    "@jasy/pdf": "workspace:^",
+    "@jasy/vue": "workspace:^"
   }
 }
