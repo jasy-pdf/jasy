@@ -35,7 +35,7 @@
     "validate": "tsc && node scripts/validate.mjs"
   },
   "dependencies": {
-    "@jasy/pdf": "workspace:*"
+    "@jasy/pdf": "workspace:^"
   },
   "devDependencies": {
     "@types/node": "^25.9.3"
