@@ -33,6 +33,12 @@ export interface ZugferdResult {
   bytes: Uint8Array;
   /** The generated EN-16931 CII XML (the embedded `factur-x.xml`), for inspection. */
   xml: string;
+  /**
+   * Characters no embedded font could draw. They were removed rather than written as `.notdef`, which
+   * PDF/A forbids - so the file stays conforming and the invoice still goes out. Show them to whoever
+   * created the invoice ("✓ was removed - the font cannot draw it"); empty for almost every document.
+   */
+  droppedCharacters: string[];
 }
 
 /**
@@ -68,7 +74,13 @@ export async function renderZugferd(
   const fmt = makeFormatters(options.locale, invoice.currency);
   const doc = options.pdf ?? defaultInvoiceTemplate(invoice, computed, labels, fmt);
 
+  // Characters no embedded font could draw. They are removed rather than emitted as `.notdef`, which
+  // PDF/A forbids - so the file stays conforming, and the caller can SAY what went missing instead of
+  // it vanishing into a server log. An invoice without a tick mark is usable; no invoice is not.
+  let droppedCharacters: string[] = [];
+
   const bytes = await renderToBytes(doc, {
+    onMissingGlyphs: (characters) => (droppedCharacters = characters),
     // The standard-14 names render as embedded Liberation substitutes (PDF/A needs all fonts in);
     // standardFonts:false drops the non-embeddable standard-14 so only embedded fonts remain.
     fonts: bundledFonts(),
@@ -92,5 +104,5 @@ export async function renderZugferd(
     documentId: true,
   });
 
-  return { bytes, xml };
+  return { bytes, xml, droppedCharacters };
 }

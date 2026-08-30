@@ -301,6 +301,23 @@ export class PDFObjectManager implements FontMetrics {
 
   // Overflow policy for unbreakable content taller than a page region (default "error"); the renderer
   // seeds it into the layout-context root so packChildren can act on it.
+  /**
+   * Code points no font in the document could draw, so they were removed rather than emitted as
+   * `.notdef` (which PDF/A forbids). Collected here because this object is the one thing threaded
+   * through BOTH passes; the caller gets them back with the bytes, so an application can say which
+   * character went missing instead of a server log nobody reads.
+   */
+  private readonly missingGlyphs = new Set<number>();
+
+  reportMissingGlyph(codePoints: number[]): void {
+    for (const cp of codePoints) this.missingGlyphs.add(cp);
+  }
+
+  /** The dropped code points, in the order first seen. Empty for a document that hit none. */
+  getMissingGlyphs(): number[] {
+    return [...this.missingGlyphs];
+  }
+
   setOverflowPolicy(policy: OverflowPolicy): void {
     this.overflowPolicy = policy;
   }
@@ -863,6 +880,22 @@ endstream`;
     const ttf = this.getCustomFont(fontFamily, fontStyle);
     if (ttf) return ttf.getGlyphIndex(codePoint) !== 0;
     return isWindows1252(codePoint);
+  }
+
+  /**
+   * Whether the document draws this code point through the colour-emoji path instead of the text
+   * font - a fallback emoji FONT, or an image source (`Document({ emoji })`). Such a code point is
+   * missing from the text font ON PURPOSE, so glyph coverage must leave it alone. Mirrors exactly
+   * what `getCharWidth` measures it as, or a dropped emoji would have been measured and not drawn.
+   */
+  rendersAsEmoji(codePoint: number, fontFamily: string, fontStyle: FontStyle): boolean {
+    const ttf = this.getCustomFont(fontFamily, fontStyle);
+    if (ttf && this.colorRenders(ttf, codePoint)) return true;
+    if (this.emojiFontName && this.emojiFontName !== fontFamily) {
+      const emoji = this.getColorFont(this.emojiFontName, fontStyle);
+      if (emoji && this.colorRenders(emoji, codePoint)) return true;
+    }
+    return this.emojiImage !== undefined && isEmojiCodePoint(codePoint);
   }
 
   private colorRenders(ttf: TTFParser, codePoint: number): boolean {

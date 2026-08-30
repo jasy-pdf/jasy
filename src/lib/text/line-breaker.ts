@@ -73,6 +73,11 @@ export function singleLineWidth(
   letterSpacing = 0,
   wordSpacing = 0,
 ): number {
+  // A hard break makes this several lines; the natural width is the widest of them.
+  if (text.includes("\n"))
+    return Math.max(
+      ...text.split("\n").map((p) => singleLineWidth(p, font, metrics, letterSpacing, wordSpacing)),
+    );
   const space = runAdvance(metrics, " ", font, letterSpacing) + wordSpacing;
   return text
     .split(" ")
@@ -104,44 +109,54 @@ export function wrapStringIntoLines(
   const lines: string[] = [];
 
   const font = { fontFamily, fontSize, fontStyle };
-  const words = text.split(" ");
-  words.forEach((word) => {
-    // Word and space advances come from the one shared primitive (`advance.ts`), the same one
-    // `naturalWidth` uses - so a bounded and an unbounded layout of the same text agree bit for bit.
-    const wordWidth = runAdvance(metrics, word, font, letterSpacing);
-    const spaceWidth = runAdvance(metrics, " ", font, letterSpacing) + wordSpacing;
-    // The FIRST line has the indent taken out of its room; every later one gets the full box.
-    const room = lines.length === 0 ? maxWidth - indent : maxWidth;
-
-    // Break before a word that won't fit - counting the SPACE that would join it, which the old test
-    // forgot. It went unnoticed on the first line, where the very first word added a space too many
-    // and cancelled the error out; after a break `currentWidth` is the bare word, so every following
-    // test was short by one space and the line could overrun its box by that much.
-    //
-    // A single word wider than maxWidth still sits on its (empty) line and overflows, rather than
-    // pushing a phantom empty line before it (which would over-count the height by a line).
-    const candidate = currentWidth + (spaceWidth + wordWidth);
-
-    if (currentLine === "") {
-      currentLine = word;
-      currentWidth = wordWidth;
-      gaps = 0;
-      // How much a JUSTIFIED line may be squeezed to keep one more word: the spaces already on the
-      // line plus the one that would join it, each giving up at most `shrink` of its width. Zero for
-      // every other alignment, where a squeezed line would simply overflow instead.
-      // ONE expression, used for the test AND for the running total. Adding the same three numbers in
-      // a different order gives a different last bit, and a line that lands exactly on `maxWidth` is
-      // then broken by that bit alone - which is how a footer sized to its own text wrapped.
-    } else if (candidate - (gaps + 1) * spaceWidth * shrink > room) {
+  // A `\n` is a HARD break: wrap each paragraph on its own, then cut. An EMPTY paragraph still has to
+  // produce a line, or a deliberate blank line between two blocks silently disappears.
+  text.split("\n").forEach((paragraph, paragraphIndex) => {
+    if (paragraphIndex > 0) {
       lines.push(currentLine.trim());
-      currentLine = word;
-      currentWidth = wordWidth;
+      currentLine = "";
+      currentWidth = 0;
       gaps = 0;
-    } else {
-      currentLine += " " + word;
-      currentWidth = candidate;
-      gaps += 1;
     }
+    const words = paragraph.split(" ");
+    words.forEach((word) => {
+      // Word and space advances come from the one shared primitive (`advance.ts`), the same one
+      // `naturalWidth` uses - so a bounded and an unbounded layout of the same text agree bit for bit.
+      const wordWidth = runAdvance(metrics, word, font, letterSpacing);
+      const spaceWidth = runAdvance(metrics, " ", font, letterSpacing) + wordSpacing;
+      // The FIRST line has the indent taken out of its room; every later one gets the full box.
+      const room = lines.length === 0 ? maxWidth - indent : maxWidth;
+
+      // Break before a word that won't fit - counting the SPACE that would join it, which the old test
+      // forgot. It went unnoticed on the first line, where the very first word added a space too many
+      // and cancelled the error out; after a break `currentWidth` is the bare word, so every following
+      // test was short by one space and the line could overrun its box by that much.
+      //
+      // A single word wider than maxWidth still sits on its (empty) line and overflows, rather than
+      // pushing a phantom empty line before it (which would over-count the height by a line).
+      const candidate = currentWidth + (spaceWidth + wordWidth);
+
+      if (currentLine === "") {
+        currentLine = word;
+        currentWidth = wordWidth;
+        gaps = 0;
+        // How much a JUSTIFIED line may be squeezed to keep one more word: the spaces already on the
+        // line plus the one that would join it, each giving up at most `shrink` of its width. Zero for
+        // every other alignment, where a squeezed line would simply overflow instead.
+        // ONE expression, used for the test AND for the running total. Adding the same three numbers in
+        // a different order gives a different last bit, and a line that lands exactly on `maxWidth` is
+        // then broken by that bit alone - which is how a footer sized to its own text wrapped.
+      } else if (candidate - (gaps + 1) * spaceWidth * shrink > room) {
+        lines.push(currentLine.trim());
+        currentLine = word;
+        currentWidth = wordWidth;
+        gaps = 0;
+      } else {
+        currentLine += " " + word;
+        currentWidth = candidate;
+        gaps += 1;
+      }
+    });
   });
 
   if (currentLine) lines.push(currentLine.trim());
@@ -192,44 +207,57 @@ export function breakSegmentsIntoLines(
     const letterSpacing = segment.letterSpacing ?? defaults.letterSpacing ?? 0;
     const font = { fontFamily: family, fontSize: size, fontStyle: style };
     const spaceWidth = runAdvance(metrics, " ", font, letterSpacing);
-    const words = segment.content.split(" ");
 
-    // Start this segment's piece empty; its content is filled word-by-word below. (Not
-    // the original content - otherwise a segment whose FIRST word overflows would carry
-    // its whole text into the line that just closed.)
-    lineSegments.push({ ...segment, fontFamily: family, content: "" });
-    combined = "";
-
-    words.forEach((word, wordIndex) => {
-      const wordWidth = runAdvance(metrics, word, font, letterSpacing);
-      // A space joins this word to what precedes it only INSIDE a segment; segments butt together
-      // with nothing between them, which is what `span("a") + span("b")` draws.
-      const joiner = wordIndex > 0 ? spaceWidth : 0;
-      // ONE expression for the test and for the running total, grouped exactly as `singleLineWidth`
-      // groups it - see the note there. A width built any other way can be a bit off the one the box
-      // was sized with, and the text wraps inside a box made to hold it.
-      const candidate = width + (joiner + wordWidth);
-
-      // Same guard as the string path: don't open a phantom empty line for an over-wide first word -
-      // place it (overflowing) on the current empty line instead.
-      if (candidate > maxWidth && width > 0) {
+    // A `\n` inside a span is a HARD break, exactly as in the string path: close the line where it
+    // sits, whatever else was already on it, and start the next one with this segment's style.
+    segment.content.split("\n").forEach((paragraph, paragraphIndex) => {
+      if (paragraphIndex > 0) {
         lines.push({ segments: lineSegments, width });
-        width = wordWidth;
+        width = 0;
         lineSegments = [];
-        combined = word;
-        lineSegments.push({ ...segment, content: combined });
-      } else {
-        combined += wordIndex === 0 ? word : " " + word;
-        width = candidate;
-        if (lineSegments.length === 0) {
-          lineSegments.push({ ...segment, fontFamily: family, content: combined });
-        }
-        lineSegments[lineSegments.length - 1].content = combined;
       }
+      const words = paragraph.split(" ");
+
+      // Start this segment's piece empty; its content is filled word-by-word below. (Not
+      // the original content - otherwise a segment whose FIRST word overflows would carry
+      // its whole text into the line that just closed.)
+      lineSegments.push({ ...segment, fontFamily: family, content: "" });
+      combined = "";
+
+      words.forEach((word, wordIndex) => {
+        const wordWidth = runAdvance(metrics, word, font, letterSpacing);
+        // A space joins this word to what precedes it only INSIDE a segment; segments butt together
+        // with nothing between them, which is what `span("a") + span("b")` draws.
+        const joiner = wordIndex > 0 ? spaceWidth : 0;
+        // ONE expression for the test and for the running total, grouped exactly as `singleLineWidth`
+        // groups it - see the note there. A width built any other way can be a bit off the one the box
+        // was sized with, and the text wraps inside a box made to hold it.
+        const candidate = width + (joiner + wordWidth);
+
+        // Same guard as the string path: don't open a phantom empty line for an over-wide first word -
+        // place it (overflowing) on the current empty line instead.
+        if (candidate > maxWidth && width > 0) {
+          lines.push({ segments: lineSegments, width });
+          width = wordWidth;
+          lineSegments = [];
+          combined = word;
+          lineSegments.push({ ...segment, content: combined });
+        } else {
+          combined += wordIndex === 0 ? word : " " + word;
+          width = candidate;
+          if (lineSegments.length === 0) {
+            lineSegments.push({ ...segment, fontFamily: family, content: combined });
+          }
+          lineSegments[lineSegments.length - 1].content = combined;
+        }
+      });
     });
   });
 
-  if (lineSegments.length > 0) {
+  // Only if something actually landed on it. The string path ends with `if (currentLine)`, so a text
+  // ending in `\n` is ONE line there - the two must not disagree about the same text. An empty
+  // paragraph in the MIDDLE still becomes a line; that one is pushed at the break, not here.
+  if (lineSegments.some((seg) => seg.content !== "")) {
     lines.push({ segments: lineSegments, width });
   }
 

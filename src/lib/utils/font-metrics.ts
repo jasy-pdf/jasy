@@ -39,6 +39,14 @@ export interface FontMetrics {
   /** Whether this family can draw the code point at all - what picks a face out of a fallback stack. */
   hasGlyph(codePoint: number, fontFamily: string, fontStyle: FontStyle): boolean;
 
+  /** Whether the document draws this code point as colour emoji rather than from the text font - it
+   *  is missing from that font on purpose, so glyph coverage must not touch it. */
+  rendersAsEmoji?(codePoint: number, fontFamily: string, fontStyle: FontStyle): boolean;
+
+  /** Told when a code point had to be removed because no font could draw it. Optional: a metrics
+   *  object used only for measuring (a test double) has nothing to report to. */
+  reportMissingGlyph?(codePoints: number[]): void;
+
   /** How many glyphs the run will DRAW, when a ligature made that differ from its code-point count.
    *  Absent or `undefined` means "the same", which is every Latin run. */
   shapedGlyphCount?(text: string, fontFamily?: string, fontStyle?: FontStyle): number | undefined;

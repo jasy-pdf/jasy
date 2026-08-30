@@ -29,6 +29,8 @@ import {
 } from "../text/orphans-widows.ts";
 import { lineBoxForSegmentLine, lineBoxForString } from "../text/line-metrics.ts";
 import { HorizontalAlignment, LayoutContext, SizedPDFElement } from "./pdf-element.ts";
+import { normalizeContent } from "../text/whitespace.ts";
+import { coverText } from "../text/glyph-coverage.ts";
 export interface TextSegment {
   content: string;
   fontStyle?: FontStyle;
@@ -209,7 +211,9 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     this.rawTextTransform = textTransform;
     this.rawWordSpacing = finitePoints(wordSpacing, "wordSpacing");
     this.rawTextIndent = finitePoints(textIndent, "textIndent");
-    this.content = content;
+    // Control characters have no glyph and would be DRAWN as .notdef boxes; `\n` survives
+    // because the breaker treats it as a hard break. See text/whitespace.ts.
+    this.content = normalizeContent(content);
     this.maxLines = maxLines;
     this.orphans = orphans;
     this.widows = widows;
@@ -235,7 +239,8 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     const anyStack =
       this.fontFallback.length > 0 ||
       (typeof cased !== "string" && cased.some((seg) => (seg.fontFallback?.length ?? 0) > 0));
-    if (!anyStack || !metrics) return cased;
+    if (!metrics) return cased;
+    if (!anyStack) return this.covered(cased, metrics);
     // Font fallback turns the content into spans - one per family - which every later pass already
     // knows how to handle. Nothing new downstream.
     const pieces = typeof cased === "string" ? [{ content: cased } as TextSegment] : cased;
@@ -252,7 +257,32 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       else
         for (const run of runs) out.push({ ...seg, content: run.text, fontFamily: run.fontFamily });
     }
-    return out;
+    return this.covered(out, metrics) as TextSegment[];
+  }
+
+  /**
+   * Drops or substitutes whatever the RESOLVED font cannot draw. Runs last, after the fallback stack
+   * has had its say, and before anything is measured - a character removed at draw time only would
+   * make the measured line and the drawn one disagree. A font that draws everything gets its input
+   * back unchanged, so an ordinary document is byte-identical.
+   */
+  private covered(content: string | TextSegment[], metrics: FontMetrics): string | TextSegment[] {
+    const report = (dropped: number[]) => metrics.reportMissingGlyph?.(dropped);
+    if (typeof content === "string") {
+      const { text, dropped } = coverText(content, this.fontFamily, this.fontStyle, metrics);
+      if (dropped.length > 0) report(dropped);
+      return text;
+    }
+    return content.map((seg) => {
+      const { text, dropped } = coverText(
+        seg.content,
+        seg.fontFamily ?? this.fontFamily,
+        seg.fontStyle ?? this.fontStyle,
+        metrics,
+      );
+      if (dropped.length > 0) report(dropped);
+      return text === seg.content ? seg : { ...seg, content: text };
+    });
   }
 
   /** The content with `text-transform` applied, and nothing else. */
