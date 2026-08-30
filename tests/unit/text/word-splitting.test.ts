@@ -4,6 +4,9 @@ import { wrapStringIntoLines, breakSegmentsIntoLines } from "../../../src/lib/te
 import { runAdvance } from "../../../src/lib/text/advance.ts";
 import { FontStyle } from "../../../src/lib/utils/pdf-object-manager.ts";
 import { testMetrics } from "../support/metrics.ts";
+import { Document, Page, Box, Text, Paragraph, span } from "../../../src/lib/api/index.ts";
+import { renderPdf } from "../../../src/lib/api/structure.ts";
+import type { PDFElement } from "../../../src/lib/elements/pdf-element.ts";
 
 // A word wider than its box used to stay on its line and draw over its neighbour. On an invoice that
 // means a §14 UStG mandatory field painted across its own label - not untidy, missing. Two layers now,
@@ -119,5 +122,48 @@ describe("both breakers agree, and report honest widths", () => {
     // ...and the width each line reports is the width it actually has.
     for (const line of spans)
       expect(line.width).toBeCloseTo(width(line.segments.map((s) => s.content).join("")), 5);
+  });
+});
+
+// The breakers were right and the RENDERER still did not split: `breakSegmentsIntoLines` is called from
+// three places, and two of them - the measure path and the draw path for styled spans - built their
+// `SegmentDefaults` without `splitting`. Same trap the comment beside `letterSpacing` already warns
+// about: an option that changes where a line ENDS has to travel with the defaults, or a paragraph is
+// measured at one line count and drawn at another. These go through the public API, which is the only
+// level that would have caught it.
+describe("through the public API", () => {
+  const lines = async (el: PDFElement) => {
+    const pdf = await renderPdf(Document([Page([el])]), { compress: false } as never);
+    const streams = (pdf.match(/stream\n([\s\S]*?)\nendstream/g) ?? []).join("");
+    return streams.match(/Td [^\n]*/g) ?? [];
+  };
+
+  it("splits inside a styled span, not only in a plain string", async () => {
+    const out = await lines(
+      Box({ width: 150 }, [
+        Paragraph([span("m.schellenberg@berghof-maschinenbau.example")], { breakWord: true }),
+      ]),
+    );
+    expect(out.length).toBeGreaterThan(1);
+  });
+
+  it("gives the pieces the full box, not the indented first-line width", async () => {
+    // The current line is closed before the pieces are emitted, so they land on lines that never had
+    // the indent taken out of them. Measuring against the reduced room made them needlessly short.
+    const indented = await lines(
+      Box({ width: 150 }, [
+        Text("kurz m.schellenberg@berghof-maschinenbau.example", {
+          breakWord: true,
+          textIndent: 40,
+        }),
+      ]),
+    );
+    const plain = await lines(
+      Box({ width: 150 }, [
+        Text("kurz m.schellenberg@berghof-maschinenbau.example", { breakWord: true }),
+      ]),
+    );
+    // Same number of lines either way: the indent shortens the FIRST line, not the split pieces.
+    expect(indented.length).toBe(plain.length);
   });
 });

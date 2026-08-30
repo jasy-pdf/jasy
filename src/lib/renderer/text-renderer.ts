@@ -67,8 +67,16 @@ export class TextRenderer {
       return lines.length * box.height;
     }
 
-    // Segments: each line's box comes from the fonts actually on it.
-    const defaults = { fontFamily, fontSize, fontStyle, letterSpacing };
+    // Segments: each line's box comes from the fonts actually on it. `splitting` has to travel with
+    // them for the same reason `letterSpacing` does: it changes where a line ENDS, so leaving it out
+    // measures a paragraph at one line count and draws it at another.
+    const defaults = {
+      fontFamily,
+      fontSize,
+      fontStyle,
+      letterSpacing,
+      splitting: lineOptions.splitting,
+    };
     const lines = breakSegmentsIntoLines(
       content,
       defaults,
@@ -741,7 +749,13 @@ export class TextRenderer {
     // The seam flips the whole thing to PDF space. `letterSpacing` MUST be in the defaults so a span
     // that does not override it wraps and aligns with the element's spacing - the same defaults the
     // measure path (calculateTextHeight) uses, or segmented spaced text mis-wraps (measured != drawn).
-    const defaults = { fontFamily, fontSize, fontStyle, letterSpacing };
+    const defaults = {
+      fontFamily,
+      fontSize,
+      fontStyle,
+      letterSpacing,
+      splitting: { breakWord, hyphenate },
+    };
     let top = yPosition;
     // Materialised, because justification has to know which line is the LAST one of the paragraph.
     const segmentLines = [

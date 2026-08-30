@@ -142,7 +142,11 @@ export function wrapStringIntoLines(
       // A word too wide for the box, split into pieces that fit (hyphenation first, break-word as the
       // floor). Every piece but the last closes a line; the last carries on as an ordinary word. Off by
       // default, so a document that asks for neither reaches the untouched path below.
-      const split = splitLongWord(word, room, font, metrics, letterSpacing, splitting);
+      // The pieces land on lines that are NOT the first one whenever the current line is closed below,
+      // so they get the full box - `room` only loses the indent while we are genuinely still filling
+      // the indented first line.
+      const splitRoom = lines.length === 0 && currentLine === "" ? room : maxWidth;
+      const split = splitLongWord(word, splitRoom, font, metrics, letterSpacing, splitting);
       if (split) {
         if (currentLine !== "") lines.push(currentLine.trim());
         for (const piece of split.slice(0, -1)) lines.push(piece);

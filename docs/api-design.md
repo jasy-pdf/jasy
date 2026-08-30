@@ -139,15 +139,18 @@ clockwise) and resolved against the box by the renderer.
 
 ### Content
 
-| Factory                            | Purpose                              | Key options                                                              | Maps to                   |
-| ---------------------------------- | ------------------------------------ | ------------------------------------------------------------------------ | ------------------------- |
-| `Text(content, opts)`              | `content` = string OR `Span[]`       | `size`, `font`, `bold`, `italic`, `color`, `align`, `orphans`, `widows`‡ | `TextElement`             |
-| `span(text, opts)`                 | inline run for mixed `Text`          | `size`, `font`, `bold`, `italic`, `color`                                | `TextSegment`             |
-| `Paragraph(content, opts)`         | `Text` with body defaults            | as `Text` (the same `TextOptions`, forwarded verbatim)                   | `TextElement`             |
-| `DefaultTextStyle(opts, children)` | cascaded text defaults for a subtree | `size`, `font`, `bold`, `italic`, `color`, `align`, `lineHeight`         | `DefaultTextStyleElement` |
-| `Image(src, opts)`                 | image                                | `fit`, **`radius`**, sizing†                                             | `ImageElement`            |
-| `Divider(opts?)`                   | horizontal rule                      | `color`, `thickness`, `margin`                                           | `LineElement`             |
-| `Line(opts)`                       | explicit line                        | `from`, `to`, `color`, `thickness`                                       | `LineElement`             |
+| Factory                            | Purpose                              | Key options                                                                                         | Maps to                   |
+| ---------------------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------- | ------------------------- |
+| `Text(content, opts)`              | `content` = string OR `Span[]`       | `size`, `font`, `bold`, `italic`, `color`, `align`, `orphans`, `widows`‡, `breakWord`, `hyphenate`§ | `TextElement`             |
+| `span(text, opts)`                 | inline run for mixed `Text`          | `size`, `font`, `bold`, `italic`, `color`                                                           | `TextSegment`             |
+| `Paragraph(content, opts)`         | `Text` with body defaults            | as `Text` (the same `TextOptions`, forwarded verbatim)                                              | `TextElement`             |
+| `DefaultTextStyle(opts, children)` | cascaded text defaults for a subtree | `size`, `font`, `bold`, `italic`, `color`, `align`, `lineHeight`, `breakWord`, `hyphenate`§         | `DefaultTextStyleElement` |
+| `Image(src, opts)`                 | image                                | `fit`, **`radius`**, sizing†                                                                        | `ImageElement`            |
+| `Divider(opts?)`                   | horizontal rule                      | `color`, `thickness`, `margin`                                                                      | `LineElement`             |
+| `Line(opts)`                       | explicit line                        | `from`, `to`, `color`, `thickness`                                                                  | `LineElement`             |
+
+§ **A word that does not fit** - `breakWord` and `hyphenate`, both off by default. See 6c. They are
+read per `Text`, not per `span`, which is why `span` does not list them.
 
 ‡ **Page-break behaviour of a paragraph.**
 
