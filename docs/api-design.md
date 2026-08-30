@@ -139,15 +139,18 @@ clockwise) and resolved against the box by the renderer.
 
 ### Content
 
-| Factory                            | Purpose                              | Key options                                                              | Maps to                   |
-| ---------------------------------- | ------------------------------------ | ------------------------------------------------------------------------ | ------------------------- |
-| `Text(content, opts)`              | `content` = string OR `Span[]`       | `size`, `font`, `bold`, `italic`, `color`, `align`, `orphans`, `widows`‡ | `TextElement`             |
-| `span(text, opts)`                 | inline run for mixed `Text`          | `size`, `font`, `bold`, `italic`, `color`                                | `TextSegment`             |
-| `Paragraph(content, opts)`         | `Text` with body defaults            | as `Text` (the same `TextOptions`, forwarded verbatim)                   | `TextElement`             |
-| `DefaultTextStyle(opts, children)` | cascaded text defaults for a subtree | `size`, `font`, `bold`, `italic`, `color`, `align`, `lineHeight`         | `DefaultTextStyleElement` |
-| `Image(src, opts)`                 | image                                | `fit`, **`radius`**, sizing†                                             | `ImageElement`            |
-| `Divider(opts?)`                   | horizontal rule                      | `color`, `thickness`, `margin`                                           | `LineElement`             |
-| `Line(opts)`                       | explicit line                        | `from`, `to`, `color`, `thickness`                                       | `LineElement`             |
+| Factory                            | Purpose                              | Key options                                                                                         | Maps to                   |
+| ---------------------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------- | ------------------------- |
+| `Text(content, opts)`              | `content` = string OR `Span[]`       | `size`, `font`, `bold`, `italic`, `color`, `align`, `orphans`, `widows`‡, `breakWord`, `hyphenate`§ | `TextElement`             |
+| `span(text, opts)`                 | inline run for mixed `Text`          | `size`, `font`, `bold`, `italic`, `color`                                                           | `TextSegment`             |
+| `Paragraph(content, opts)`         | `Text` with body defaults            | as `Text` (the same `TextOptions`, forwarded verbatim)                                              | `TextElement`             |
+| `DefaultTextStyle(opts, children)` | cascaded text defaults for a subtree | `size`, `font`, `bold`, `italic`, `color`, `align`, `lineHeight`, `breakWord`, `hyphenate`§         | `DefaultTextStyleElement` |
+| `Image(src, opts)`                 | image                                | `fit`, **`radius`**, sizing†                                                                        | `ImageElement`            |
+| `Divider(opts?)`                   | horizontal rule                      | `color`, `thickness`, `margin`                                                                      | `LineElement`             |
+| `Line(opts)`                       | explicit line                        | `from`, `to`, `color`, `thickness`                                                                  | `LineElement`             |
+
+§ **A word that does not fit** - `breakWord` and `hyphenate`, both off by default. See 6c. They are
+read per `Text`, not per `span`, which is why `span` does not list them.
 
 ‡ **Page-break behaviour of a paragraph.**
 
@@ -215,6 +218,7 @@ Shipping the full model in v1 (foundation work) so we never re-touch alignment.
 | 2026-07-08 → 07-11 | `Rotated` / `RotatedBox`, navigation, page numbers, `letterSpacing`, text decoration, page-break control                 |
 | 2026-07            | AcroForm fields; `@jasy/pdf/edit` for reading and filling an existing form                                               |
 | 2026-08-01         | the sizing set (`aspectRatio`, `min`/`max`), `%` insets, `alignSelf`, per-corner `radius`, gradients, `orphans`/`widows` |
+| 2026-08-30         | hard line breaks (`\n`), `breakWord`, `hyphenate`                                                                        |
 
 The component set HAS grown - `Positioned`, `Rotated`, `RotatedBox`, `Link`, `Anchor`, `Bookmark`,
 `PageBuilder`, `PageBreak`, `keepTogether`, the seven form fields and the gradient constructors are all
@@ -222,6 +226,44 @@ new factories beside the original ones. What is unchanged is what the lock was a
 **shape** of the API (a factory taking one options object plus children), the alignment model below, and
 the meaning of every option that was already there. Nothing in the list above reopened a decision - it
 added next to one.
+
+## 6c. Text that does not fit — `breakWord` and `hyphenate` (2026-08-30)
+
+A `\n` in a string is a **hard line break**, in a plain `Text` and inside a `span`. It breaks even where
+there is room, because it is an instruction and not wrapping. `\r\n`, a lone `\r` and U+2028/U+2029 fold
+into it; a tab becomes a space. (CSS would collapse `\n` to a space; a text COMPONENT breaks on it, as
+Flutter's `Text` and react-pdf do.)
+
+A word **wider than its box** used to stay on its line and draw over whatever was beside it. Two layers
+handle it now, stacked the way CSS stacks them, and **both are off by default** - without them a too-wide
+word still overflows, exactly as in CSS.
+
+```ts
+// The floor: split where the box ends, no hyphen. This is what an e-mail address, an IBAN or an
+// invoice number needs - they have no valid hyphenation point anywhere.
+Text(customer.email, { breakWord: true });
+```
+
+```ts
+// Language-aware splitting, with a hyphen drawn at the break. Bring your own patterns:
+import { hyphenateSync } from "hyphen/de";
+
+const german = (word: string) => hyphenateSync(word).split("\u00AD");
+
+Text(bodyCopy, { hyphenate: german }); // or on Document / DefaultTextStyle, it inherits
+```
+
+That adapter is the whole integration - `hyphen` (ISC, no dependencies) returns the word with soft
+hyphens and we split on them. It is executed by `tests/unit/text/hyphenation-integration.test.ts`, so it
+cannot quietly stop working.
+
+**Why no patterns ship with jasy.** German alone is 732 KB, which is against the character of a library
+that sells on "no headless browser, no JVM". And hyphenating without being told the language is worse
+than not hyphenating: react-pdf does it with the patterns it bundles, which means German split by
+English rules. The default is a position, not a gap - _we do not hyphenate until you name the language._
+
+With both set, hyphenation is tried first and `breakWord` catches what it cannot split. Known deviation
+from CSS: both are read per `Text`, not per `span` (todo.md, ISSUE-13).
 
 ## 7. Decisions — LOCKED (2026-06-11)
 

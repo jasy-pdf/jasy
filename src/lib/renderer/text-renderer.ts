@@ -31,6 +31,7 @@ import {
   strikethroughStroke,
   underlineStroke,
 } from "../text/text-decoration.ts";
+import type { Hyphenator } from "../text/word-splitting.ts";
 
 export class TextRenderer {
   // Measuring only needs metrics, not the full object manager. (The render pass below
@@ -66,8 +67,16 @@ export class TextRenderer {
       return lines.length * box.height;
     }
 
-    // Segments: each line's box comes from the fonts actually on it.
-    const defaults = { fontFamily, fontSize, fontStyle, letterSpacing };
+    // Segments: each line's box comes from the fonts actually on it. `splitting` has to travel with
+    // them for the same reason `letterSpacing` does: it changes where a line ENDS, so leaving it out
+    // measures a paragraph at one line count and draws it at another.
+    const defaults = {
+      fontFamily,
+      fontSize,
+      fontStyle,
+      letterSpacing,
+      splitting: lineOptions.splitting,
+    };
     const lines = breakSegmentsIntoLines(
       content,
       defaults,
@@ -107,6 +116,8 @@ export class TextRenderer {
       direction,
       wordSpacing,
       textIndent,
+      breakWord,
+      hyphenate,
       role,
     } = textElement.getProps();
 
@@ -134,6 +145,8 @@ export class TextRenderer {
       direction,
       wordSpacing,
       textIndent,
+      breakWord,
+      hyphenate,
     );
 
     // Accessible tagging: this whole text block is one structure element (a paragraph P, or a heading
@@ -378,6 +391,8 @@ export class TextRenderer {
     direction: Direction = "ltr",
     wordSpacing = 0,
     textIndent = 0,
+    breakWord = false,
+    hyphenate?: Hyphenator,
   ): { runs: TextRun[]; links: Link[]; decorations: Line[] } {
     const runs: TextRun[] = [];
     // /Link annotation rects for any `href` spans, collected as we place segments. Empty for the
@@ -598,6 +613,7 @@ export class TextRenderer {
           wordSpacing,
           indent: textIndent,
           shrink: align === HorizontalAlignment.justify ? MAX_SPACE_SHRINK : 0,
+          splitting: { breakWord, hyphenate },
         },
       );
       // yPosition is the top of the text box (top-left). The line box seats its own baseline; lines
@@ -733,7 +749,13 @@ export class TextRenderer {
     // The seam flips the whole thing to PDF space. `letterSpacing` MUST be in the defaults so a span
     // that does not override it wraps and aligns with the element's spacing - the same defaults the
     // measure path (calculateTextHeight) uses, or segmented spaced text mis-wraps (measured != drawn).
-    const defaults = { fontFamily, fontSize, fontStyle, letterSpacing };
+    const defaults = {
+      fontFamily,
+      fontSize,
+      fontStyle,
+      letterSpacing,
+      splitting: { breakWord, hyphenate },
+    };
     let top = yPosition;
     // Materialised, because justification has to know which line is the LAST one of the paragraph.
     const segmentLines = [

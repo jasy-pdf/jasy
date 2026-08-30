@@ -2,6 +2,7 @@ import { Color } from "../common/color.ts";
 import { FontStyle } from "../utils/pdf-object-manager.ts";
 import { HorizontalAlignment } from "../elements/pdf-element.ts";
 import type { Direction } from "./bidi.ts";
+import type { Hyphenator } from "./word-splitting.ts";
 
 /** CSS `text-transform`. `capitalize` upper-cases the first letter of every word, as CSS does. */
 export type TextTransform = "none" | "uppercase" | "lowercase" | "capitalize";
@@ -75,6 +76,14 @@ export interface ResolvedTextStyle {
   wordSpacing: number;
   /** CSS `text-indent`, in points: how far the FIRST line of a paragraph starts in. */
   textIndent: number;
+  /** CSS `overflow-wrap: break-word`: split a word that is wider than its box, anywhere, no hyphen.
+   *  The floor under `hyphenate` - it is what handles an e-mail, an IBAN or an invoice number, which
+   *  have no valid hyphenation point anywhere. Default off: a too-wide word overflows, as in CSS. */
+  breakWord: boolean;
+  /** Language-aware word splitting: given a word, return its parts (`["Rechts", "schutz", ...]`). A
+   *  hyphen is drawn at the break. Pluggable on purpose - no pattern data ships in this package, so
+   *  there is no licence question and nothing is added to a bundle that never asks for it. */
+  hyphenate?: Hyphenator;
 }
 
 /**
@@ -97,6 +106,8 @@ export const DEFAULT_TEXT_STYLE: ResolvedTextStyle = {
   textTransform: "none",
   wordSpacing: 0,
   textIndent: 0,
+  breakWord: false,
+  hyphenate: undefined,
 };
 
 /** Layers a partial override onto a complete style; an unset (undefined) field keeps the base. */
@@ -121,5 +132,7 @@ export function mergeTextStyle(
     textTransform: override.textTransform ?? base.textTransform,
     wordSpacing: override.wordSpacing ?? base.wordSpacing,
     textIndent: override.textIndent ?? base.textIndent,
+    breakWord: override.breakWord ?? base.breakWord,
+    hyphenate: override.hyphenate ?? base.hyphenate,
   };
 }
