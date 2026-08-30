@@ -12,8 +12,13 @@ import type { TextSegment } from "../elements/text-element.ts";
  * do, and it is what anyone writing `"a\nb"` expects.
  */
 
-/** Everything that MEANS a line break. U+2028/U+2029 are Unicode's own line and paragraph separators. */
-const LINE_BREAKS = /\r\n?|\u2028|\u2029/g;
+/**
+ * Everything that MEANS a line break, matched as a WHOLE so a two-character ending never becomes two
+ * breaks. `\n\r` is in here beside `\r\n` because it is what a mistyped CRLF looks like, and a stray
+ * blank line is a worse answer than reading it as the one break it was meant to be. U+2028/U+2029 are
+ * Unicode's own line and paragraph separators.
+ */
+const LINE_BREAKS = /\r\n|\n\r|\r|\u2028|\u2029/g;
 
 /**
  * Invisible and inert: a zero-width space and a byte-order mark carry no meaning we act on, so they are
