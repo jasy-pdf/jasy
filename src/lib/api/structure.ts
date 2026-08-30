@@ -18,6 +18,7 @@ import { Column, StackOptions } from "./layout.ts";
 import { loadFontFromUrl, type UrlFontSource } from "./font-url.ts";
 import { Insets, toEdges } from "./insets.ts";
 import { TextDefaults, toTextStyleOverride } from "./text.ts";
+import type { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 
 const MM_TO_PT = 72 / 25.4; // 1 mm in PDF points
 
@@ -280,6 +281,14 @@ export interface RenderOptions {
   /** What to do when content is taller than a page and cannot break: `"error"` throws (default),
    *  `"warn"` logs and clips, `"ignore"` clips silently. It is always clipped either way. */
   onOverflow?: OverflowPolicy;
+
+  /**
+   * Called once, after the render, with the characters no font could draw - they were removed rather
+   * than emitted as `.notdef`, which PDF/A forbids. Deliberately a callback and not a policy: a
+   * missing tick mark must never stop an invoice from being produced, but the application should be
+   * able to SAY which character went missing, where a server log would never be read.
+   */
+  onMissingGlyphs?: (characters: string[]) => void;
   /** Encrypt the PDF with a password (AES-256, the newest standard). NOT compatible with PDF/A
    *  (ZUGFeRD invoices) - encrypting one throws, since PDF/A forbids encryption. */
   encrypt?: EncryptOptions;
@@ -318,10 +327,14 @@ export async function renderPdf(doc: PDFDocumentElement, options?: RenderOptions
   // A throwaway PDFDocument whose build() yields this tree, reusing the engine's standard
   // font registration + config handling (the constructor does both). Custom fonts are
   // registered here, before layout/render, so both the metrics and the backend see them.
+  // Captured so the caller can be told what had to be dropped: `render()` is static and builds its own
+  // instance, so this is the only place the object manager surfaces.
+  let manager: PDFObjectManager | undefined;
   const Anon = class extends PDFDocument {
     constructor() {
       super(config);
       const om = this.objectManager;
+      manager = om;
       om.setCompress(options?.compress !== false); // FlateDecode streams by default
       om.setOverflowPolicy(options?.onOverflow ?? "error");
       om.setKerning(options?.kerning !== false); // on by default (experimental); `kerning:false` opts out
@@ -368,7 +381,10 @@ export async function renderPdf(doc: PDFDocumentElement, options?: RenderOptions
       return doc;
     }
   };
-  return Anon.render();
+  const pdf = await Anon.render();
+  const missing = manager?.getMissingGlyphs() ?? [];
+  if (missing.length > 0) options?.onMissingGlyphs?.(missing.map((cp) => String.fromCodePoint(cp)));
+  return pdf;
 }
 
 /** Renders a `Document(...)` tree to PDF bytes (e.g. for a download / save dialog). */

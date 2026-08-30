@@ -269,14 +269,18 @@ describe("font fallback", () => {
     ]);
   });
 
-  it("leaves a document without a stack exactly as it was", async () => {
+  // This used to assert `["ab漢字"]`: without a stack the CJK stayed with the Latin font and drew its
+  // `.notdef`, "as a browser does". PDF/A forbids referencing .notdef (ISO 19005-3, 6.2.11.8), so a
+  // document that did this was conforming only until someone validated it. A character no font can
+  // draw is now removed and reported instead - see text/glyph-coverage.ts.
+  it("removes what no font in the document can draw, rather than drawing .notdef", async () => {
     const el = new TextElement({ content: "ab漢字", fontSize: 10, fontFamily: "Latin" });
     const manager = stackMetrics();
     el.calculateLayout(BoxConstraints.tight(400, 400), { x: 0, y: 0 }, context(manager));
     const runs = (await TextRenderer.render(el, manager)).filter(
       (n): n is TextRun => n.type === "text",
     );
-    expect(runs.map((r) => r.text)).toEqual(["ab漢字"]);
+    expect(runs.map((r) => r.text)).toEqual(["ab"]);
   });
 });
 
