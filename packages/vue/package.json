@@ -37,10 +37,8 @@
     "play": "vite playground --open",
     "test": "vitest run"
   },
-  "dependencies": {
-    "@jasy/pdf": "workspace:*"
-  },
   "devDependencies": {
+    "@jasy/pdf": "workspace:*",
     "@types/node": "^25.9.3",
     "@vitejs/plugin-vue": "^5.2.1",
     "typescript": "^5.6.0",
@@ -49,6 +47,7 @@
     "vue-pdf-embed": "^2.1.5"
   },
   "peerDependencies": {
+    "@jasy/pdf": "workspace:^",
     "vue": "^3.4.0"
   }
 }
