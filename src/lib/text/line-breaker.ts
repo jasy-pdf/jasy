@@ -2,6 +2,7 @@ import type { FontStyle } from "../utils/pdf-object-manager.ts";
 import type { FontMetrics } from "../utils/font-metrics.ts";
 import type { TextSegment } from "../elements/text-element.ts";
 import { runAdvance } from "./advance.ts";
+import { splitLongWord, type WordSplitting } from "./word-splitting.ts";
 
 /**
  * How far a JUSTIFIED line's spaces may be squeezed to keep one more word on it.
@@ -25,6 +26,8 @@ export interface LineOptions {
   indent?: number;
   /** How far a justified line's spaces may be squeezed to keep one more word (0 = not justified). */
   shrink?: number;
+  /** How a word wider than its box is split - hyphenation, break-word, or neither (the default). */
+  splitting?: WordSplitting;
 }
 
 /** Default font for segments that don't override it. */
@@ -34,6 +37,8 @@ export interface SegmentDefaults {
   fontStyle: FontStyle;
   /** Extra space after every glyph, in points; a segment may override it. Default 0. */
   letterSpacing?: number;
+  /** Same knobs as the string path - see `LineOptions.splitting`. */
+  splitting?: WordSplitting;
 }
 
 /** What happens to text beyond `maxLines`: `"clip"` drops it, `"ellipsis"` ends the last kept line
@@ -102,7 +107,7 @@ export function wrapStringIntoLines(
   letterSpacing = 0,
   options: LineOptions = {},
 ): string[] {
-  const { wordSpacing = 0, indent = 0, shrink = 0 } = options;
+  const { wordSpacing = 0, indent = 0, shrink = 0, splitting = {} } = options;
   let currentLine = "";
   let currentWidth = 0;
   let gaps = 0; // spaces on the current line, which is what a justified line can squeeze
@@ -134,6 +139,19 @@ export function wrapStringIntoLines(
       //
       // A single word wider than maxWidth still sits on its (empty) line and overflows, rather than
       // pushing a phantom empty line before it (which would over-count the height by a line).
+      // A word too wide for the box, split into pieces that fit (hyphenation first, break-word as the
+      // floor). Every piece but the last closes a line; the last carries on as an ordinary word. Off by
+      // default, so a document that asks for neither reaches the untouched path below.
+      const split = splitLongWord(word, room, font, metrics, letterSpacing, splitting);
+      if (split) {
+        if (currentLine !== "") lines.push(currentLine.trim());
+        for (const piece of split.slice(0, -1)) lines.push(piece);
+        currentLine = split[split.length - 1]!;
+        currentWidth = runAdvance(metrics, currentLine, font, letterSpacing);
+        gaps = 0;
+        return;
+      }
+
       const candidate = currentWidth + (spaceWidth + wordWidth);
 
       if (currentLine === "") {
@@ -226,6 +244,41 @@ export function breakSegmentsIntoLines(
 
       words.forEach((word, wordIndex) => {
         const wordWidth = runAdvance(metrics, word, font, letterSpacing);
+
+        // Same treatment as the string path: a word too wide for the box is split into pieces that fit.
+        // Each finished piece closes the line it sits on, keeping this segment's style.
+        const split = splitLongWord(
+          word,
+          maxWidth,
+          font,
+          metrics,
+          letterSpacing,
+          defaults.splitting ?? {},
+        );
+        if (split) {
+          // Close whatever is already on the line FIRST. The pieces were measured against the full box,
+          // not against what is left of this line - appending the first one put a line 80 wide into a
+          // 50 box, and reported 50, which is exactly why it went unnoticed. The string path has always
+          // pushed its current line before splitting; this is the same move.
+          if (width > 0) {
+            lines.push({ segments: lineSegments, width });
+            lineSegments = [{ ...segment, fontFamily: family, content: "" }];
+            combined = "";
+          }
+          for (const piece of split.slice(0, -1)) {
+            lineSegments[lineSegments.length - 1]!.content = piece;
+            // The width a line REPORTS is what alignment and line-metrics work from: measure it.
+            lines.push({
+              segments: lineSegments,
+              width: runAdvance(metrics, piece, font, letterSpacing),
+            });
+            lineSegments = [{ ...segment, fontFamily: family, content: "" }];
+          }
+          combined = split[split.length - 1]!;
+          width = runAdvance(metrics, combined, font, letterSpacing);
+          lineSegments[lineSegments.length - 1]!.content = combined;
+          return;
+        }
         // A space joins this word to what precedes it only INSIDE a segment; segments butt together
         // with nothing between them, which is what `span("a") + span("b")` draws.
         const joiner = wordIndex > 0 ? spaceWidth : 0;

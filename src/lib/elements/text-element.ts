@@ -31,6 +31,7 @@ import { lineBoxForSegmentLine, lineBoxForString } from "../text/line-metrics.ts
 import { HorizontalAlignment, LayoutContext, SizedPDFElement } from "./pdf-element.ts";
 import { normalizeContent } from "../text/whitespace.ts";
 import { coverText } from "../text/glyph-coverage.ts";
+import type { Hyphenator } from "../text/word-splitting.ts";
 export interface TextSegment {
   content: string;
   fontStyle?: FontStyle;
@@ -107,6 +108,10 @@ interface TextElementParams {
   wordSpacing?: number;
   /** CSS `text-indent`, in points: how far the first line starts in. */
   textIndent?: number;
+  /** CSS `overflow-wrap: break-word` - split a word wider than its box, anywhere. */
+  breakWord?: boolean;
+  /** Language-aware splitting; a hyphen is drawn at the break. See text/word-splitting.ts. */
+  hyphenate?: Hyphenator;
   /** Accessibility role for the tagged structure tree (heading level or paragraph; default `"p"`). */
   role?: TextRole;
 }
@@ -141,6 +146,8 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
   private readonly rawTextTransform?: TextTransform;
   private readonly rawWordSpacing?: number;
   private readonly rawTextIndent?: number;
+  private readonly rawBreakWord?: boolean;
+  private readonly rawHyphenate?: Hyphenator;
 
   // Resolved style (raw -> inherited -> built-in default). Seeded to the built-in default in the
   // constructor so the element is self-sufficient, then refined against the cascade at layout time.
@@ -162,6 +169,8 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
   private textTransform!: TextTransform;
   private wordSpacing!: number;
   private textIndent!: number;
+  private breakWord!: boolean;
+  private hyphenate?: Hyphenator;
 
   private content: string | TextSegment[];
   private maxLines?: number;
@@ -191,6 +200,8 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     textTransform,
     wordSpacing,
     textIndent,
+    breakWord,
+    hyphenate,
     role,
   }: TextElementParams) {
     super({ x: 0, y: 0 });
@@ -211,6 +222,8 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     this.rawTextTransform = textTransform;
     this.rawWordSpacing = finitePoints(wordSpacing, "wordSpacing");
     this.rawTextIndent = finitePoints(textIndent, "textIndent");
+    this.rawBreakWord = breakWord;
+    this.rawHyphenate = hyphenate;
     // Control characters have no glyph and would be DRAWN as .notdef boxes; `\n` survives
     // because the breaker treats it as a hard break. See text/whitespace.ts.
     this.content = normalizeContent(content);
@@ -304,6 +317,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     return {
       wordSpacing: this.wordSpacing,
       indent: this.textIndent,
+      splitting: { breakWord: this.breakWord, hyphenate: this.hyphenate },
       // Justified lines may be squeezed to keep a word; every other alignment gets no slack.
       shrink: this.textAlignment === HorizontalAlignment.justify ? MAX_SPACE_SHRINK : 0,
     };
@@ -325,6 +339,8 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     this.textTransform = this.rawTextTransform ?? ts.textTransform;
     this.wordSpacing = this.rawWordSpacing ?? ts.wordSpacing;
     this.textIndent = this.rawTextIndent ?? ts.textIndent;
+    this.breakWord = this.rawBreakWord ?? ts.breakWord;
+    this.hyphenate = this.rawHyphenate ?? ts.hyphenate;
   }
 
   /**
@@ -567,6 +583,8 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       direction: this.direction,
       wordSpacing: this.wordSpacing,
       textIndent: this.textIndent,
+      breakWord: this.breakWord,
+      hyphenate: this.hyphenate,
       role: this.role,
     };
   }

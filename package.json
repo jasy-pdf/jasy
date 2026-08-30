@@ -62,6 +62,7 @@
     "@jimp/types": "^1.6.0",
     "@types/node": "^25.9.3",
     "@vitest/coverage-v8": "^2.1.1",
+    "hyphen": "^1.14.1",
     "ncp": "^2.0.0",
     "oxfmt": "^0.55.0",
     "oxlint": "^1.70.0",

@@ -131,20 +131,32 @@ function deliverTo(delivery: Delivery | undefined, L: InvoiceLabels): PDFElement
 /**
  * One label/value line of the information block.
  *
- * A long value gets its OWN line. Side by side it would take its natural single-line width and run
- * back over the label - and a real invoice number like "INV-MRHG2EXG-2026/012-SD" carries no space,
- * so no line breaker can help: there is nowhere to break. Stacking gives it the full panel width.
+ * These are §14 UStG mandatory particulars - an invoice number or a VAT ID that is cut off is not
+ * untidy, it is MISSING, and the recipient can lose the input-tax deduction over it. So the rule here
+ * is absolute: never truncate. A value that does not fit beside its label takes the next line and
+ * stays whole.
+ *
+ * It used to decide by counting characters (`value.length > 18`), which measures the wrong thing:
+ * eighteen narrow digits fit easily and eighteen capitals do not, so a wide value slipped past the
+ * threshold and drew straight over its label.
+ *
+ * The value is `Expanded` because a bare `Text` takes its natural SINGLE-LINE width - there is no
+ * maxWidth to break against, so it would run over the label however the row is configured. Given the
+ * leftover width it wraps at its spaces, both lines stay right-aligned on the same edge, and no
+ * threshold is needed at all.
+ *
+ * `breakWord` covers the rest: a value with no space at all - an e-mail address, an IBAN, an invoice
+ * number - has nowhere to break, and would otherwise draw straight over its label. Here completeness
+ * outranks typography: a §14 field split mid-word is readable, a field painted over its neighbour is
+ * not. Hyphenation is deliberately NOT switched on for these - one does not hyphenate an e-mail.
  */
 function metaRow(label: string, value: string): PDFElement {
-  if (value.length > 18) {
-    return Column({ gap: 0 }, [
-      Text(label, { size: 9, color: MUTED }),
-      Text(value, { size: 9, color: INK, bold: true, align: "right" }),
-    ]);
-  }
   return Row({ gap: 6, align: "start" }, [
-    Expanded({ flex: 1 }, Text(label, { size: 9, color: MUTED })),
-    Text(value, { size: 9, color: INK, bold: true, align: "right" }),
+    Text(label, { size: 9, color: MUTED }),
+    Expanded(
+      { flex: 1 },
+      Text(value, { size: 9, color: INK, bold: true, align: "right", breakWord: true }),
+    ),
   ]);
 }
 

@@ -31,6 +31,7 @@ import {
   strikethroughStroke,
   underlineStroke,
 } from "../text/text-decoration.ts";
+import type { Hyphenator } from "../text/word-splitting.ts";
 
 export class TextRenderer {
   // Measuring only needs metrics, not the full object manager. (The render pass below
@@ -107,6 +108,8 @@ export class TextRenderer {
       direction,
       wordSpacing,
       textIndent,
+      breakWord,
+      hyphenate,
       role,
     } = textElement.getProps();
 
@@ -134,6 +137,8 @@ export class TextRenderer {
       direction,
       wordSpacing,
       textIndent,
+      breakWord,
+      hyphenate,
     );
 
     // Accessible tagging: this whole text block is one structure element (a paragraph P, or a heading
@@ -378,6 +383,8 @@ export class TextRenderer {
     direction: Direction = "ltr",
     wordSpacing = 0,
     textIndent = 0,
+    breakWord = false,
+    hyphenate?: Hyphenator,
   ): { runs: TextRun[]; links: Link[]; decorations: Line[] } {
     const runs: TextRun[] = [];
     // /Link annotation rects for any `href` spans, collected as we place segments. Empty for the
@@ -598,6 +605,7 @@ export class TextRenderer {
           wordSpacing,
           indent: textIndent,
           shrink: align === HorizontalAlignment.justify ? MAX_SPACE_SHRINK : 0,
+          splitting: { breakWord, hyphenate },
         },
       );
       // yPosition is the top of the text box (top-left). The line box seats its own baseline; lines

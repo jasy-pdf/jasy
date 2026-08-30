@@ -10,6 +10,7 @@ import { TextOverflow } from "../text/line-breaker.ts";
 import type { Direction } from "../text/bidi.ts";
 import { ResolvedTextStyle, type TextTransform } from "../text/text-style.ts";
 import { ColorInput, toColor } from "./color.ts";
+import type { Hyphenator } from "../text/word-splitting.ts";
 
 export type { TextOverflow };
 
@@ -44,6 +45,13 @@ export interface TextStyle {
   wordSpacing?: number;
   /** CSS `text-indent`, in points: how far the FIRST line of a paragraph starts in. */
   textIndent?: number;
+  /** Split a word that is wider than its box, anywhere, no hyphen (CSS `overflow-wrap:
+   *  break-word`). The floor under `hyphenate`: an e-mail, an IBAN or an invoice number has no
+   *  valid hyphenation point anywhere. Off by default - a too-wide word overflows, as in CSS. */
+  breakWord?: boolean;
+  /** Language-aware splitting: given a word, return its parts. A hyphen is drawn at the break.
+   *  Pluggable, so no pattern data ships here: pass `hyphen`, `hyphenopoly`, or your own. */
+  hyphenate?: Hyphenator;
   /** CSS `vertical-align` for a SPAN: raises a footnote marker or lowers an index. It shifts the
    *  baseline only - pass a smaller `size` too if you want the browser's `<sup>` look. */
   verticalAlign?: VerticalTextAlign;
@@ -185,6 +193,8 @@ export function Text(content: string | TextSegment[], opts: TextOptions = {}): T
     textTransform: opts.textTransform,
     wordSpacing: opts.wordSpacing,
     textIndent: opts.textIndent,
+    breakWord: opts.breakWord,
+    hyphenate: opts.hyphenate,
     role: opts.role,
   });
 }
@@ -220,6 +230,13 @@ export interface TextDefaults {
   wordSpacing?: number;
   /** CSS `text-indent`, in points: how far the FIRST line of a paragraph starts in. */
   textIndent?: number;
+  /** Split a word that is wider than its box, anywhere, no hyphen (CSS `overflow-wrap:
+   *  break-word`). The floor under `hyphenate`: an e-mail, an IBAN or an invoice number has no
+   *  valid hyphenation point anywhere. Off by default - a too-wide word overflows, as in CSS. */
+  breakWord?: boolean;
+  /** Language-aware splitting: given a word, return its parts. A hyphen is drawn at the break.
+   *  Pluggable, so no pattern data ships here: pass `hyphen`, `hyphenopoly`, or your own. */
+  hyphenate?: Hyphenator;
 }
 
 /** Maps the `Text`-style option names onto a partial engine `ResolvedTextStyle` (only the set
@@ -245,5 +262,7 @@ export function toTextStyleOverride(opts: TextDefaults): Partial<ResolvedTextSty
   if (opts.textTransform !== undefined) style.textTransform = opts.textTransform;
   if (opts.wordSpacing !== undefined) style.wordSpacing = opts.wordSpacing;
   if (opts.textIndent !== undefined) style.textIndent = opts.textIndent;
+  if (opts.breakWord !== undefined) style.breakWord = opts.breakWord;
+  if (opts.hyphenate !== undefined) style.hyphenate = opts.hyphenate;
   return style;
 }
