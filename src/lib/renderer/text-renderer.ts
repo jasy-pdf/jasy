@@ -76,6 +76,7 @@ export class TextRenderer {
       fontStyle,
       letterSpacing,
       splitting: lineOptions.splitting,
+      ligatures: lineOptions.ligatures,
     };
     const lines = breakSegmentsIntoLines(
       content,
@@ -118,6 +119,7 @@ export class TextRenderer {
       textIndent,
       breakWord,
       hyphenate,
+      ligatures,
       role,
     } = textElement.getProps();
 
@@ -147,6 +149,7 @@ export class TextRenderer {
       textIndent,
       breakWord,
       hyphenate,
+      ligatures,
     );
 
     // Accessible tagging: this whole text block is one structure element (a paragraph P, or a heading
@@ -393,6 +396,7 @@ export class TextRenderer {
     textIndent = 0,
     breakWord = false,
     hyphenate?: Hyphenator,
+    ligatures = true,
   ): { runs: TextRun[]; links: Link[]; decorations: Line[] } {
     const runs: TextRun[] = [];
     // /Link annotation rects for any `href` spans, collected as we place segments. Empty for the
@@ -585,7 +589,14 @@ export class TextRenderer {
       family: string,
       style: FontStyle,
     ): { text: string; glyphs?: number[] } => {
-      const shaped = objectManager.shapeText(part.logical, family, style);
+      // The run's OWN setting, not the default: measuring asked with it (`runAdvance` -> RunFont), and
+      // drawing has to ask the same question or the line is measured one width and drawn another.
+      const shaped = objectManager.shapeText(
+        part.logical,
+        family,
+        style,
+        ligatures ? undefined : [],
+      );
       if (!shaped) return { text: part.text };
       const ordered = part.rtl ? [...shaped].reverse() : shaped;
       return { text: part.logical, glyphs: ordered.map((g) => g.glyph) };
@@ -593,7 +604,7 @@ export class TextRenderer {
 
     // The advance the viewer will use: plain glyph widths (a `Tj` never kerns) plus one
     // `letterSpacing` per code point (the `Tc` operator), from the one shared `advance.ts` primitive.
-    const font = { fontFamily, fontSize, fontStyle };
+    const font = { fontFamily, fontSize, fontStyle, ligatures };
 
     // --- Plain string: one run per wrapped line. ---
     if (typeof content === "string") {
@@ -614,6 +625,7 @@ export class TextRenderer {
           indent: textIndent,
           shrink: align === HorizontalAlignment.justify ? MAX_SPACE_SHRINK : 0,
           splitting: { breakWord, hyphenate },
+          ligatures,
         },
       );
       // yPosition is the top of the text box (top-left). The line box seats its own baseline; lines
@@ -755,6 +767,7 @@ export class TextRenderer {
       fontStyle,
       letterSpacing,
       splitting: { breakWord, hyphenate },
+      ligatures,
     };
     let top = yPosition;
     // Materialised, because justification has to know which line is the LAST one of the paragraph.

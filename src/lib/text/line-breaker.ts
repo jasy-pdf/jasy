@@ -28,6 +28,8 @@ export interface LineOptions {
   shrink?: number;
   /** How a word wider than its box is split - hyphenation, break-word, or neither (the default). */
   splitting?: WordSplitting;
+  /** Whether the run gets the font's ligatures. Changes which glyphs are drawn, hence the width. */
+  ligatures?: boolean;
 }
 
 /** Default font for segments that don't override it. */
@@ -39,6 +41,7 @@ export interface SegmentDefaults {
   letterSpacing?: number;
   /** Same knobs as the string path - see `LineOptions.splitting`. */
   splitting?: WordSplitting;
+  ligatures?: boolean;
 }
 
 /** What happens to text beyond `maxLines`: `"clip"` drops it, `"ellipsis"` ends the last kept line
@@ -107,13 +110,13 @@ export function wrapStringIntoLines(
   letterSpacing = 0,
   options: LineOptions = {},
 ): string[] {
-  const { wordSpacing = 0, indent = 0, shrink = 0, splitting = {} } = options;
+  const { wordSpacing = 0, indent = 0, shrink = 0, splitting = {}, ligatures } = options;
   let currentLine = "";
   let currentWidth = 0;
   let gaps = 0; // spaces on the current line, which is what a justified line can squeeze
   const lines: string[] = [];
 
-  const font = { fontFamily, fontSize, fontStyle };
+  const font = { fontFamily, fontSize, fontStyle, ligatures };
   // A `\n` is a HARD break: wrap each paragraph on its own, then cut. An EMPTY paragraph still has to
   // produce a line, or a deliberate blank line between two blocks silently disappears.
   text.split("\n").forEach((paragraph, paragraphIndex) => {
@@ -198,6 +201,7 @@ export function wrapStringIntoLines(
       metrics,
       letterSpacing,
       wordSpacing,
+      ligatures,
     );
   }
   return kept;
@@ -227,7 +231,12 @@ export function breakSegmentsIntoLines(
     const size = segment.fontSize || defaults.fontSize;
     const style = segment.fontStyle || defaults.fontStyle;
     const letterSpacing = segment.letterSpacing ?? defaults.letterSpacing ?? 0;
-    const font = { fontFamily: family, fontSize: size, fontStyle: style };
+    const font = {
+      fontFamily: family,
+      fontSize: size,
+      fontStyle: style,
+      ligatures: defaults.ligatures,
+    };
     const spaceWidth = runAdvance(metrics, " ", font, letterSpacing);
 
     // A `\n` inside a span is a HARD break, exactly as in the string path: close the line where it
@@ -356,8 +365,9 @@ function ellipsize(
   metrics: FontMetrics,
   letterSpacing = 0,
   wordSpacing = 0,
+  ligatures?: boolean,
 ): string {
-  const font = { fontFamily, fontSize, fontStyle };
+  const font = { fontFamily, fontSize, fontStyle, ligatures };
   // Measured through `singleLineWidth`, so the ellipsised line is judged by the same sum that decides
   // every other line - word-spacing included.
   const fits = (s: string): boolean =>

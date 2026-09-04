@@ -27,6 +27,9 @@ export interface RunFont {
   fontFamily: string;
   fontSize: number;
   fontStyle: FontStyle;
+  /** Whether this run gets the font's ligatures. Part of the FONT, because it changes which glyphs are
+   *  drawn and therefore how wide the run is - measuring without it would not match the drawing. */
+  ligatures?: boolean;
 }
 
 /** Number of Unicode code points (not UTF-16 units): an astral char is ONE, so it takes one
@@ -45,16 +48,24 @@ export function runAdvance(
   font: RunFont,
   letterSpacing = 0,
 ): number {
-  let advance = metrics.getStringWidth(text, font.fontFamily, font.fontSize, font.fontStyle);
+  let advance = metrics.getStringWidth(
+    text,
+    font.fontFamily,
+    font.fontSize,
+    font.fontStyle,
+    font.ligatures,
+  );
   if (letterSpacing !== 0) {
     // Per DRAWN glyph, which is what `Tc` applies to; only a ligature makes that differ.
     const glyphs =
-      metrics.shapedGlyphCount?.(text, font.fontFamily, font.fontStyle) ?? codePointCount(text);
+      metrics.shapedGlyphCount?.(text, font.fontFamily, font.fontStyle, font.ligatures) ??
+      codePointCount(text);
     advance += glyphs * letterSpacing;
   }
   if (metrics.kerningEnabled) {
     let units = 0;
-    for (const k of metrics.getKernPairs(text, font.fontFamily, font.fontStyle)) units += k;
+    for (const k of metrics.getKernPairs(text, font.fontFamily, font.fontStyle, font.ligatures))
+      units += k;
     advance += (units / 1000) * font.fontSize; // kern units are em/1000
   }
   return advance;

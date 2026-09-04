@@ -49,6 +49,9 @@ export interface TextStyle {
    *  break-word`). The floor under `hyphenate`: an e-mail, an IBAN or an invoice number has no
    *  valid hyphenation point anywhere. Off by default - a too-wide word overflows, as in CSS. */
   breakWord?: boolean;
+  /** The ligatures the font's designer drew (`fi`, `fl`, `ffi`). ON by default, like kerning -
+   *  `false` opts this text out. Embedded fonts only; the standard-14 have no GSUB. */
+  ligatures?: boolean;
   /** Language-aware splitting: given a word, return its parts. A hyphen is drawn at the break.
    *  Pluggable, so no pattern data ships here: pass `hyphen`, `hyphenopoly`, or your own. */
   hyphenate?: Hyphenator;
@@ -194,6 +197,7 @@ export function Text(content: string | TextSegment[], opts: TextOptions = {}): T
     wordSpacing: opts.wordSpacing,
     textIndent: opts.textIndent,
     breakWord: opts.breakWord,
+    ligatures: opts.ligatures,
     hyphenate: opts.hyphenate,
     role: opts.role,
   });
@@ -234,6 +238,9 @@ export interface TextDefaults {
    *  break-word`). The floor under `hyphenate`: an e-mail, an IBAN or an invoice number has no
    *  valid hyphenation point anywhere. Off by default - a too-wide word overflows, as in CSS. */
   breakWord?: boolean;
+  /** The ligatures the font's designer drew (`fi`, `fl`, `ffi`). ON by default, like kerning -
+   *  `false` opts this text out. Embedded fonts only; the standard-14 have no GSUB. */
+  ligatures?: boolean;
   /** Language-aware splitting: given a word, return its parts. A hyphen is drawn at the break.
    *  Pluggable, so no pattern data ships here: pass `hyphen`, `hyphenopoly`, or your own. */
   hyphenate?: Hyphenator;
@@ -263,6 +270,7 @@ export function toTextStyleOverride(opts: TextDefaults): Partial<ResolvedTextSty
   if (opts.wordSpacing !== undefined) style.wordSpacing = opts.wordSpacing;
   if (opts.textIndent !== undefined) style.textIndent = opts.textIndent;
   if (opts.breakWord !== undefined) style.breakWord = opts.breakWord;
+  if (opts.ligatures !== undefined) style.ligatures = opts.ligatures;
   if (opts.hyphenate !== undefined) style.hyphenate = opts.hyphenate;
   return style;
 }

@@ -9,6 +9,14 @@ import { mergeSpans, TTFParser } from "./ttf-parser.ts";
 import { isWoff, woffToSfnt } from "./woff.ts";
 import { subsetTTF } from "./ttf-subsetter.ts";
 import { shapeRun, type ShapedGlyph } from "../text/shape.ts";
+
+/** What Latin text is shaped with unless a run says otherwise: the ligatures a font's designer
+ *  drew for it. On by default like kerning - CSS, browsers and every other renderer do the same,
+ *  and nobody should have to know the word to get text that is set properly. */
+const LATIN_FEATURES = ["liga"] as const;
+
+/** What a run is shaped with. Arabic joining is unconditional; this is only the Latin part. */
+const features = (ligatures: boolean): readonly string[] => (ligatures ? LATIN_FEATURES : []);
 import { getArrayBuffer, isWindows1252 } from "./utf8-to-windows1252-encoder.ts";
 import type { SecurityHandler } from "../crypto/security-handler.ts";
 import type { Gradient, GradientStop } from "../ir/display-list.ts";
@@ -916,8 +924,13 @@ endstream`;
 
   /** How many glyphs a run draws - its code-point count unless a ligature merged some. `letterSpacing`
    *  is per glyph (`Tc`), so this is what it multiplies. */
-  shapedGlyphCount(text: string, fontFamily?: string, fontStyle?: FontStyle): number | undefined {
-    return this.shapeText(text, fontFamily, fontStyle)?.length;
+  shapedGlyphCount(
+    text: string,
+    fontFamily?: string,
+    fontStyle?: FontStyle,
+    ligatures = true,
+  ): number | undefined {
+    return this.shapeText(text, fontFamily, fontStyle, features(ligatures))?.length;
   }
 
   /**
@@ -925,10 +938,15 @@ endstream`;
    * decided, so measuring and drawing cannot disagree. Memoised: a paragraph is measured several
    * times (layout, pagination, drawing).
    */
-  shapeText(text: string, fontFamily?: string, fontStyle: FontStyle = FontStyle.Normal) {
+  shapeText(
+    text: string,
+    fontFamily?: string,
+    fontStyle: FontStyle = FontStyle.Normal,
+    features: readonly string[] = LATIN_FEATURES,
+  ) {
     const resolved = this.resolveCustomStyle(fontFamily, fontStyle);
     if (!resolved) return undefined;
-    const key = `${this.customKey(fontFamily!, resolved)}\u0000${text}`;
+    const key = `${this.customKey(fontFamily!, resolved)}\u0000${features.join(",")}\u0000${text}`;
     const cached = this.shapeCache.get(key);
     if (cached !== undefined) return cached ?? undefined;
     const ttf = this.customFonts.get(fontFamily!)!.get(resolved)!;
@@ -936,6 +954,7 @@ endstream`;
       shapeRun(
         [...text].map((c) => c.codePointAt(0)!),
         ttf,
+        features,
       ) ?? null;
     this.shapeCache.set(key, shaped);
     if (shaped) {
@@ -969,7 +988,12 @@ endstream`;
 
   // Encodes text as a hex Identity-H string for an embedded font's Tj operator: each codepoint
   // becomes its 2-byte glyph id (CID == GID under /CIDToGIDMap /Identity).
-  encodeCustomText(name: string, text: string, style: FontStyle = FontStyle.Normal): string {
+  encodeCustomText(
+    name: string,
+    text: string,
+    style: FontStyle = FontStyle.Normal,
+    shape = true,
+  ): string {
     const resolved = this.resolveCustomStyle(name, style);
     if (!resolved) return "";
     this.ensureEmitted(name, resolved);
@@ -979,7 +1003,9 @@ endstream`;
     const hex4 = (gid: number) => gid.toString(16).padStart(4, "0").toUpperCase();
 
     // The SAME shaped run the measuring path used, so the glyphs drawn are the glyphs measured.
-    const shaped = this.shapeText(text, name, style);
+    // `shape: false` is for a caller that has ALREADY decided the run is unshaped - the renderer puts
+    // shaped glyphs in the IR node, so the backend's text path is the unshaped one by definition.
+    const shaped = shape ? this.shapeText(text, name, style) : undefined;
     if (shaped) {
       let out = "";
       for (const g of shaped) {
@@ -1149,13 +1175,33 @@ endstream`;
    * Standard-14 answers from the AFM `KPX` pairs. An embedded font has no kerning yet (its `kern` /
    * `GPOS` tables are unparsed), so it returns zeros - never a wrong value, just no adjustment.
    */
-  getKernPairs(text: string, fontFamily: string, fontStyle: FontStyle): number[] {
+  /** Kerning between adjacent GLYPHS - what a shaped run needs, and what the backend already holds.
+   *  Same lookup as the character path; `getKerning` is keyed by glyph id either way. */
+  getGlyphKernPairs(glyphs: readonly number[], fontFamily: string, fontStyle: FontStyle): number[] {
+    const ttf = this.getCustomFont(fontFamily, fontStyle);
+    if (!ttf) return [];
+    const pairs: number[] = [];
+    for (let i = 0; i < glyphs.length - 1; i++) {
+      pairs.push(ttf.getKerning(glyphs[i]!, glyphs[i + 1]!));
+    }
+    return pairs;
+  }
+
+  getKernPairs(text: string, fontFamily: string, fontStyle: FontStyle, ligatures = true): number[] {
     const chars = [...text];
     if (chars.length < 2) return [];
-    // A shaped run does not kern here: these pairs are keyed by the UNSHAPED glyphs, and the `TJ`
-    // path would re-shape each chunk on its own, turning every letter isolated. Arabic kerning is in
-    // GPOS, applied during shaping - not built (`todo.md`).
-    if (this.shapeText(text, fontFamily, fontStyle)) return [];
+    // A shaped run kerns over its SHAPED glyphs, not its characters: after shaping there may be fewer
+    // glyphs than code points (a ligature), and the pairs that matter are the ones actually drawn.
+    // `getKerning` is keyed by glyph id anyway, so this is the same lookup - and the backend now emits
+    // a `TJ` over glyph chunks, which is what used to be missing. One adjustment per adjacent DRAWN
+    // pair, either path, so `runAdvance` measures exactly what is drawn.
+    const shaped = this.shapeText(text, fontFamily, fontStyle, features(ligatures));
+    if (shaped)
+      return this.getGlyphKernPairs(
+        shaped.map((g) => g.glyph),
+        fontFamily,
+        fontStyle,
+      );
     const out: number[] = [];
     // An embedded font kerns by GLYPH id (kern table / GPOS); a standard-14 one by character (AFM).
     const ttf = this.getCustomFont(fontFamily, fontStyle);
@@ -1223,10 +1269,11 @@ endstream`;
     fontFamily: string,
     fontSize: number,
     fontStyle: FontStyle,
+    ligatures = true,
   ): number {
     // Shaping first: a joined run is narrower than the same letters apart, so measuring the unshaped
     // form while drawing the shaped one would break every line. Both sides ask `shapeText`.
-    const shaped = this.shapeText(text, fontFamily, fontStyle);
+    const shaped = this.shapeText(text, fontFamily, fontStyle, features(ligatures));
     if (shaped) {
       const ttf = this.getCustomFont(fontFamily, fontStyle)!;
       return shaped.reduce((w, g) => w + ttf.unitsToPoints(g.advance, fontSize), 0);
