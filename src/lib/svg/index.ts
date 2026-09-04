@@ -153,8 +153,15 @@ export function svgSize(source: string): SvgSize {
 export function svgToIr(source: string, target: SvgTarget): IRNode[] {
   const root = rootOf(source);
   const { matrix } = rootMapping(root, target);
-  const out: IRNode[] = [{ type: "transform-push", matrix }];
+  // The outermost <svg> is a VIEWPORT: it clips to itself (CSS `overflow: hidden` on the root svg).
+  // Without this a shape that pokes past the viewBox - a stroke on the edge, a rounded cap - bleeds
+  // into whatever sits beside the drawing in the layout. Measured against headless Chrome, which
+  // clips exactly here.
+  const out: IRNode[] = [
+    { type: "clip-push", x: target.x, y: target.y, width: target.width, height: target.height },
+    { type: "transform-push", matrix },
+  ];
   for (const child of elements(root)) walk(child, ROOT_STYLE, out);
-  out.push({ type: "transform-pop" });
+  out.push({ type: "transform-pop" }, { type: "clip-pop" });
   return out;
 }

@@ -105,7 +105,9 @@ describe("transforms ride in the graphics state", () => {
     // Root mapping, then the group's own - and both are popped again.
     expect(nodes.filter((n) => n.type === "transform-push")).toHaveLength(2);
     expect(nodes.filter((n) => n.type === "transform-pop")).toHaveLength(2);
-    expect(nodes[1]).toMatchObject({ type: "transform-push", matrix: [2, 0, 0, 2, 5, 5] });
+    // The group's own push is the second one - the first maps the viewBox onto the target box.
+    const pushes = nodes.filter((n) => n.type === "transform-push");
+    expect(pushes[1]).toMatchObject({ matrix: [2, 0, 0, 2, 5, 5] });
   });
 
   it("emits nothing for an identity transform", () => {
@@ -116,7 +118,20 @@ describe("transforms ride in the graphics state", () => {
   it("maps the viewBox onto the target box, scaling uniformly", () => {
     // A 200-wide viewBox into a 100-wide target halves everything.
     const nodes = svgToIr(`<svg viewBox="0 0 200 200"><rect width="1" height="1"/></svg>`, BOX);
-    expect(nodes[0]).toMatchObject({ matrix: [0.5, 0, 0, 0.5, 0, 0] });
+    expect(nodes.find((n) => n.type === "transform-push")).toMatchObject({
+      matrix: [0.5, 0, 0, 0.5, 0, 0],
+    });
+  });
+});
+
+describe("the root <svg> is a viewport", () => {
+  it("clips to its box, as the browser does", () => {
+    // An <svg> element has `overflow: hidden`. Without this a stroke sitting on the viewBox edge -
+    // or a rounded cap - bleeds into whatever is laid out beside the drawing. Found by comparing
+    // against headless Chrome, which cut exactly the parts we were still painting.
+    const nodes = svgToIr(`<svg viewBox="0 0 10 10"><rect width="9" height="9"/></svg>`, BOX);
+    expect(nodes[0]).toEqual({ type: "clip-push", x: 0, y: 0, width: 100, height: 100 });
+    expect(nodes.at(-1)).toEqual({ type: "clip-pop" });
   });
 });
 

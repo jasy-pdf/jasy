@@ -8,3 +8,4 @@ export * from "./text-renderer.ts";
 export * from "./expanded-renderer.ts";
 export * from "./line-renderer.ts";
 export * from "./row-renderer.ts";
+export * from "./svg-renderer.ts";

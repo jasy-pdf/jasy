@@ -18,6 +18,7 @@ import {
   RadiusInput,
   toRadius,
 } from "./dimension.ts";
+import { SvgElement, type SvgSource } from "../elements/svg-element.ts";
 
 /** A horizontal rule (locked §4). */
 export interface DividerOptions {
@@ -52,6 +53,14 @@ export function Divider(opts: DividerOptions = {}): PDFElement {
   });
 }
 
+/** Options for `Svg`. The same sizing and bounds as an image; `fit` and `radius` do not apply yet. */
+export interface SvgOptions extends BoundsInput {
+  width?: SizeInput;
+  height?: SizeInput;
+  /** Alternate text (tagged PDF). With it the drawing is a `Figure`; without it, decoration. */
+  alt?: string;
+}
+
 /** An image source: a local file path (Node), raw bytes (e.g. a browser fetch/upload), or a `CustomImage`. */
 export type ImageSource = string | Uint8Array | CustomImage;
 
@@ -81,10 +90,68 @@ export interface ImageOptions extends BoundsInput {
 }
 
 /**
+ * A vector drawing from SVG. `source` is markup, a file path (Node) or the file's bytes. It is read
+ * and parsed HERE, not at render time, so a broken file fails on the line that named it.
+ *
+ * With no size it draws at its intrinsic size; pin one axis and the other follows the `viewBox`. The
+ * drawing is scaled uniformly and centred inside its box - SVG's own `preserveAspectRatio` default,
+ * which is `fit: "contain"` by another name.
+ */
+export function Svg(source: SvgSource, opts: SvgOptions = {}): SvgElement {
+  const w = opts.width !== undefined ? toDimension(opts.width) : undefined;
+  const h = opts.height !== undefined ? toDimension(opts.height) : undefined;
+  return new SvgElement({
+    source,
+    width: w?.points,
+    height: h?.points,
+    widthFactor: w?.factor,
+    heightFactor: h?.factor,
+    ...toBounds(opts),
+    alt: opts.alt,
+  })
+    .withAlignSelf(opts.alignSelf)
+    .withOrder(opts.order)
+    .withFlexShrink(opts.flexShrink) as SvgElement;
+}
+
+/** SVG is recognised by its extension or by its own opening bytes - never by a caller having to say. */
+function isSvg(src: ImageSource): src is string | Uint8Array {
+  if (typeof src === "string") {
+    return /\.svgz?$/i.test(src.trim()) || /^\s*[<\ufeff]/.test(src);
+  }
+  if (src instanceof Uint8Array) {
+    const head = new TextDecoder().decode(src.subarray(0, 200)).trimStart();
+    return head.startsWith("<?xml") || head.startsWith("<svg");
+  }
+  return false;
+}
+
+/**
  * An image. `src` is a local file path (wrapped in a `CustomLocalImage`) or a ready
  * `CustomImage` for non-filesystem sources. Maps to an `ImageElement`.
+ *
+ * An SVG source is routed to `Svg` instead, so `Image({ src: "logo.svg" })` just works and a logo
+ * stays a VECTOR in the PDF rather than becoming a bitmap.
  */
-export function Image(src: ImageSource, opts: ImageOptions = {}): ImageElement {
+export function Image(src: ImageSource, opts: ImageOptions = {}): ImageElement | SvgElement {
+  if (isSvg(src)) {
+    if (opts.fit !== undefined && opts.fit !== "contain") {
+      throw new Error(
+        `@jasy/pdf: fit: "${opts.fit}" is not supported for an SVG yet - it is always drawn ` +
+          `contained, which is SVG's own default. Remove the fit, or rasterise the file.`,
+      );
+    }
+    if (opts.radius !== undefined) {
+      throw new Error(
+        "@jasy/pdf: radius is not supported for an SVG yet - wrap it in a Box instead.",
+      );
+    }
+    return Svg(src, opts);
+  }
+  return rasterImage(src, opts);
+}
+
+function rasterImage(src: ImageSource, opts: ImageOptions = {}): ImageElement {
   const w = opts.width !== undefined ? toDimension(opts.width) : undefined;
   const h = opts.height !== undefined ? toDimension(opts.height) : undefined;
   // ANY explicit size scales the image into the box (fit: fill), which is what `<img width height>`
