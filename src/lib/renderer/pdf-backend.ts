@@ -182,20 +182,22 @@ export class PdfBackend {
    * Builds the `[ ... ]` operand of a `TJ` from a run and its per-gap kern adjustments (em/1000, the
    * sign the font declares). Generic over the UNIT so the same chunking serves both paths: characters
    * for a WinAnsi run, glyph ids for a shaped one - a shaped run cannot be expressed as text.
-   * sign the font declares - negative tightens). A `TJ` number moves the pen LEFT, so it is the
-   * NEGATED kern. Consecutive un-kerned glyphs stay in one encoded chunk, so `[(T) 40 (otal)]` rather
-   * than one chunk per glyph. `kerns[i]` is the adjustment AFTER code point `i`.
+   * A `TJ` number moves the pen LEFT, so it is the NEGATED kern. Consecutive un-kerned glyphs stay in
+   * one encoded chunk, so `[(T) 40 (otal)]` rather than one chunk per glyph. `kerns[i]` is the
+   * adjustment AFTER code point `i`.
    */
   static kernedArray<T>(
     units: readonly T[],
     kerns: number[],
     encode: (chunk: T[]) => string,
   ): string {
-    if (units.length > 0 && kerns.length !== units.length - 1) {
+    const gaps = Math.max(0, units.length - 1);
+    if (kerns.length !== gaps) {
       // The loop walks the GAPS, so a short list would drop the units past it - silently, and only the
-      // last glyph, which is exactly the kind of thing nobody notices until a word reads wrong.
+      // last glyph, which is exactly the kind of thing nobody notices until a word reads wrong. An
+      // empty run has no gaps at all, so any adjustment for one is a disagreement too.
       throw new Error(
-        `@jasy/pdf: ${kerns.length} kern adjustments for ${units.length} units - expected ${units.length - 1}.`,
+        `@jasy/pdf: ${kerns.length} kern adjustments for ${units.length} units - expected ${gaps}.`,
       );
     }
     let out = "";

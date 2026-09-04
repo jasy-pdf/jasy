@@ -32,4 +32,12 @@ describe("the TJ operand", () => {
   it("handles a single unit, which has no gaps at all", () => {
     expect(PdfBackend.kernedArray([7], [], glyphs)).toBe("[<0007>]");
   });
+
+  it("refuses a kern count that does not match the gaps", () => {
+    // The guard is the whole point: the loop walks the gaps, so a short list drops the last unit
+    // silently. An empty run has no gaps either, and used to slip past the check entirely.
+    expect(() => PdfBackend.kernedArray([1, 2, 3], [0], glyphs)).toThrow(/expected 2/);
+    expect(() => PdfBackend.kernedArray([], [-10], glyphs)).toThrow(/expected 0/);
+    expect(PdfBackend.kernedArray([], [], glyphs)).toBe("[<>]");
+  });
 });
