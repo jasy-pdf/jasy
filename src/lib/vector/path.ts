@@ -32,3 +32,33 @@ export function quadToCubic(
     y,
   };
 }
+
+/**
+ * Applies an affine to every point of a command list, BAKING the transform into the coordinates.
+ *
+ * Normally a transform belongs in the graphics state, so a stroke scales with the drawing. A clip has
+ * no stroke and is set from a path in the CURRENT space, so a `<clipPath>` whose children carry their
+ * own `transform` has to have it folded in here instead.
+ */
+export function transformCommands(
+  commands: readonly PathCommand[],
+  [a, b, c, d, e, f]: readonly [number, number, number, number, number, number],
+): PathCommand[] {
+  const mx = (x: number, y: number) => a * x + c * y + e;
+  const my = (x: number, y: number) => b * x + d * y + f;
+  return commands.map((cmd) => {
+    if (cmd.op === "z") return cmd;
+    if (cmd.op === "c") {
+      return {
+        op: "c" as const,
+        x1: mx(cmd.x1, cmd.y1),
+        y1: my(cmd.x1, cmd.y1),
+        x2: mx(cmd.x2, cmd.y2),
+        y2: my(cmd.x2, cmd.y2),
+        x: mx(cmd.x, cmd.y),
+        y: my(cmd.x, cmd.y),
+      };
+    }
+    return { op: cmd.op, x: mx(cmd.x, cmd.y), y: my(cmd.x, cmd.y) };
+  });
+}

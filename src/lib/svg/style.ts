@@ -58,7 +58,7 @@ interface StrokeParts {
 
 export type Attributes = Record<string, string | number | undefined>;
 
-/** Splits a `style=""` bag into declarations. It wins over the presentation attributes, as in CSS. */
+/** Splits a `style=""` bag into declarations. It wins over both other sources, as in CSS. */
 function styleBag(value: string | number | undefined): Record<string, string> {
   if (typeof value !== "string") return {};
   const out: Record<string, string> = {};
@@ -100,10 +100,16 @@ function paint(value: string, current: Color): Color | undefined {
  * paint of each leaf. That differs from a browser for a `<g opacity>` whose children OVERLAP (a real
  * group needs one transparency group), and is the one approximation in this file.
  */
-export function resolveStyle(parent: SvgStyle, attributes: Attributes): SvgStyle {
+export function resolveStyle(
+  parent: SvgStyle,
+  attributes: Attributes,
+  css: Record<string, string> = {},
+): SvgStyle {
   const bag = styleBag(attributes["style"]);
+  // The three sources, in CSS order: a presentation attribute is the weakest, a `<style>` rule beats
+  // it, and the inline `style=""` bag beats both.
   const read = (name: string): string | undefined => {
-    const value = bag[name] ?? attributes[name];
+    const value = bag[name] ?? css[name] ?? attributes[name];
     return value === undefined ? undefined : String(value);
   };
 

@@ -293,6 +293,17 @@ export interface Path {
   tag?: StructTag;
 }
 
+/**
+ * Clips to an arbitrary path until the matching `clip-pop` - what SVG's `<clipPath>` needs, and what
+ * `ClipPush` cannot express, being a rectangle. The commands are in the same space as a `Path`'s.
+ */
+export interface ClipPathPush {
+  type: "clip-path-push";
+  commands: PathCommand[];
+  /** `evenodd` maps to `W*`; absent = nonzero. SVG spells this `clip-rule`. */
+  fillRule?: "nonzero" | "evenodd";
+}
+
 /** The closed set of primitives the PDF backend knows how to draw. */
 export type IRNode =
   | TextRun
@@ -300,6 +311,7 @@ export type IRNode =
   | Line
   | Image
   | ClipPush
+  | ClipPathPush
   | ClipPop
   | Path
   | Link

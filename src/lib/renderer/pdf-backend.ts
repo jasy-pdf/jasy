@@ -1,4 +1,10 @@
-import { IRNode, Radii, isRounded, type StrokeStyle } from "../ir/display-list.ts";
+import {
+  IRNode,
+  Radii,
+  isRounded,
+  type PathCommand,
+  type StrokeStyle,
+} from "../ir/display-list.ts";
 import { Color } from "../common/color.ts";
 import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 import type { PageStructContext } from "../utils/struct-tree.ts";
@@ -50,6 +56,18 @@ export class PdfBackend {
           }
           return flipped;
         }
+        case "clip-path-push":
+          // Its commands live in the same space as a Path's, so they flip the same way.
+          return {
+            ...node,
+            commands: node.commands.map((c) => {
+              if (c.op === "z") return c;
+              if (c.op === "c") {
+                return { ...c, y1: pageHeight - c.y1, y2: pageHeight - c.y2, y: pageHeight - c.y };
+              }
+              return { ...c, y: pageHeight - c.y };
+            }),
+          };
         case "clip-push":
           // Flip the clip rect around its bottom edge, like a rect.
           return { ...node, y: pageHeight - node.y - node.height };
@@ -153,6 +171,7 @@ export class PdfBackend {
         if (
           !struct ||
           node.type === "clip-push" ||
+          node.type === "clip-path-push" ||
           node.type === "clip-pop" ||
           node.type === "transform-push" ||
           node.type === "transform-pop" ||
@@ -211,6 +230,20 @@ export class PdfBackend {
       }
     }
     return `[${out}${encode(chunk)}]`;
+  }
+
+  /** The path-construction operators for a command list. Shared by a filled path and by a clip. */
+  private static pathOps(commands: readonly PathCommand[]): string {
+    const f = (n: number) => n.toFixed(3);
+    let out = "";
+    for (const c of commands) {
+      if (c.op === "m") out += `${f(c.x)} ${f(c.y)} m\n`;
+      else if (c.op === "l") out += `${f(c.x)} ${f(c.y)} l\n`;
+      else if (c.op === "c")
+        out += `${f(c.x1)} ${f(c.y1)} ${f(c.x2)} ${f(c.y2)} ${f(c.x)} ${f(c.y)} c\n`;
+      else out += `h\n`;
+    }
+    return out;
   }
 
   /**
@@ -463,15 +496,7 @@ export class PdfBackend {
       case "path": {
         // A vector path: a color-glyph layer (fill only) or an SVG shape (fill and/or stroke). Emit
         // the subpath ops once, then pick the painting operator from what the node actually carries.
-        const f = (n: number) => n.toFixed(3);
-        let path = "";
-        for (const c of node.commands) {
-          if (c.op === "m") path += `${f(c.x)} ${f(c.y)} m\n`;
-          else if (c.op === "l") path += `${f(c.x)} ${f(c.y)} l\n`;
-          else if (c.op === "c")
-            path += `${f(c.x1)} ${f(c.y1)} ${f(c.x2)} ${f(c.y2)} ${f(c.x)} ${f(c.y)} c\n`;
-          else path += `h\n`;
-        }
+        const path = PdfBackend.pathOps(node.commands);
         // The even-odd variants of the fill and clip operators are the same letter plus a star.
         const star = node.fillRule === "evenodd" ? "*" : "";
         const stroke = node.stroke;
@@ -511,6 +536,11 @@ export class PdfBackend {
         const body = `${node.fill!.toPDFColorString()} rg\n${path}f${star}\n`;
         const gs = PdfBackend.alphaPrefix(om, node.fill!.getAlpha(), 1);
         return gs ? `q\n${gs}${body}Q\n` : body;
+      }
+      case "clip-path-push": {
+        // `W n` sets the clip from the current path without painting it; the q is closed by clip-pop.
+        const star = node.fillRule === "evenodd" ? "*" : "";
+        return `q\n${PdfBackend.pathOps(node.commands)}W${star} n\n`;
       }
       case "clip-pop":
         return `Q\n`;
