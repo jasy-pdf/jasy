@@ -869,7 +869,11 @@ prefixed components; custom fonts + images load as `Uint8Array` (`<JasyDocument 
 components; **`@jasy/vue@1.0.0-alpha.2`** — the `jasyVue` GLOBAL plugin was **REMOVED** (global registration
 never resolves in `renderToPdf`'s fresh app; plain Vue = explicit imports, prefix is Nuxt-only). The
 **`@jasy/nuxt` Nuxt module shipped** (`@1.0.0-alpha.1` — client OR server, zero-config; see Repo facts +
-`packages/nuxt`). A `style`-object CSS layer + `@media` are **won't-do** (props + `DefaultTextStyle` cover styling;
+`packages/nuxt`). **Its typed props are held to the engine by a test** (2026-09-04): the components forward
+`{ ...attrs, ...props }`, so an undeclared prop still WORKS - which is why eight text options drifted
+in unnoticed over four features. `packages/vue/tests/text-props.test.ts` reads the option names out of
+`src/lib/api/text.ts` (following `extends` and `Omit`) and fails per component, so a new text style
+cannot ship without its prop. A `style`-object CSS layer + `@media` are **won't-do** (props + `DefaultTextStyle` cover styling;
 media queries are meaningless for a fixed-size PDF). **✅ Relative/percentage sizing DONE (2026-07-05)**:
 `width`/`height` as `"50%"`/pt on Box/Column/Row/Image, image aspect auto-size, and `%` children in flex
 containers resolved against `line − gaps` (so N columns at (100/N)%+gaps fit exactly - better than

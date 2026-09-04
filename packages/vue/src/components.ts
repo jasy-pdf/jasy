@@ -2,21 +2,31 @@ import { defineComponent, h, type PropType } from "vue";
 import type {
   ButtonActionInput,
   ColorInput,
+  Direction,
+  Hyphenator,
   Insets,
   ImageSource,
   FontSource,
   PageSizeInput,
   ColumnWidth,
+  TextOverflow,
+  TextRole,
+  TextTransform,
+  VerticalTextAlign,
 } from "@jasy/pdf";
 
 const colorProp = [String, Number, Object] as PropType<ColorInput>;
 const insetsProp = [Number, Object, Array] as PropType<Insets>;
+// A family name, or a STACK: each code point is drawn by the first family that has a glyph for it.
+const fontProp = [String, Array] as PropType<string | string[]>;
+// Text-internal alignment. Shared, because it is spread into four prop bags and drifted apart once.
+const alignProp = String as PropType<"left" | "center" | "right" | "justify">;
 
 // `bold`/`italic` use `default: undefined` so an unset flag stays undefined (and inherits the
 // DefaultTextStyle) while `<Text bold>` still coerces to true.
 const textStyleProps = {
   size: Number,
-  font: String,
+  font: fontProp,
   bold: { type: Boolean, default: undefined },
   italic: { type: Boolean, default: undefined },
   color: colorProp,
@@ -25,6 +35,20 @@ const textStyleProps = {
   /** Step the underline around descenders. Needs an embedded font. */
   skipInk: { type: Boolean, default: undefined },
   letterSpacing: Number,
+  /** Base writing direction (CSS `direction`): `"rtl"` starts the line on the right. */
+  direction: String as PropType<Direction>,
+  /** CSS `text-transform`: recase the text. */
+  textTransform: String as PropType<TextTransform>,
+  /** CSS `word-spacing`, in points: extra advance at every space. */
+  wordSpacing: Number,
+  /** CSS `text-indent`, in points: how far the FIRST line starts in. */
+  textIndent: Number,
+  /** Split a word wider than its box, anywhere, no hyphen (CSS `overflow-wrap: break-word`). */
+  breakWord: { type: Boolean, default: undefined },
+  /** The ligatures the font's designer drew (`fi`, `fl`, `ffi`). On by default; `false` opts out. */
+  ligatures: { type: Boolean, default: undefined },
+  /** Language-aware splitting: given a word, return its parts. Bring your own (`hyphen`, ...). */
+  hyphenate: Function as PropType<Hyphenator>,
 };
 // A link target. Shared by `<Text>`/`<Paragraph>` (links the whole run) and `<Span>` (links just that
 // run). NOT part of `textStyleProps`: `<Document>` and `<DefaultTextStyle>` set defaults, they cannot link.
@@ -35,13 +59,24 @@ const linkTargetProps = {
   /** The `name` of an `<Anchor>` elsewhere in the document. */
   to: String,
 };
+// `vertical-align` belongs to ONE run, not to a document's defaults - same reason as linkTargetProps.
+const spanOnlyProps = {
+  /** CSS `vertical-align`: raises a footnote marker or lowers an index. Shifts the baseline only -
+   *  pass a smaller `size` too for the browser's `<sup>` look. */
+  verticalAlign: String as PropType<VerticalTextAlign>,
+};
 const textProps = {
   ...textStyleProps,
   ...linkTargetProps,
-  align: String as PropType<"left" | "center" | "right">,
+  align: alignProp,
   lineHeight: Number,
   maxLines: Number,
-  overflow: String as PropType<"clip" | "ellipsis">,
+  overflow: String as PropType<TextOverflow>,
+  /** Minimum lines left behind at / carried over a page break (CSS `orphans`/`widows`, both 2). */
+  orphans: Number,
+  widows: Number,
+  /** Accessibility role for the tagged structure tree: `"h1"`..`"h6"` or `"p"`. Semantic only. */
+  role: String as PropType<TextRole>,
 };
 const stackProps = {
   gap: Number,
@@ -88,7 +123,7 @@ const pageProps = {
 };
 const documentProps = {
   ...textStyleProps,
-  align: String as PropType<"left" | "center" | "right">,
+  align: alignProp,
   lineHeight: Number,
   meta: Object as PropType<{ title?: string; author?: string }>,
   fonts: Object as PropType<Record<string, FontSource>>,
@@ -106,7 +141,7 @@ const positionedProps = {
 };
 const defaultTextStyleProps = {
   ...textStyleProps,
-  align: String as PropType<"left" | "center" | "right">,
+  align: alignProp,
   lineHeight: Number,
 };
 
@@ -225,7 +260,7 @@ export const Paragraph = defineComponent({
 export const Span = defineComponent({
   name: "JasySpan",
   inheritAttrs: false,
-  props: { ...textStyleProps, ...linkTargetProps },
+  props: { ...textStyleProps, ...linkTargetProps, ...spanOnlyProps },
   setup: fwd("span"),
 });
 // `<Table :columns>` holds `<TableRow>`s (mark one `header` to repeat it per page) of `<TableCell>`s.
@@ -307,7 +342,7 @@ export const RotatedBox = defineComponent({
 // The current page / the document total, as text. Usable anywhere, not just in a `#footer`. `offset` is
 // added to the number - use `-1` when a cover page should not count.
 // (`PageBuilder` from the core is not exposed: it takes a closure, which a template cannot express.)
-const pageNumberProps = { ...textStyleProps, align: String, lineHeight: Number, offset: Number };
+const pageNumberProps = { ...textStyleProps, align: alignProp, lineHeight: Number, offset: Number };
 export const PageNumber = defineComponent({
   name: "JasyPageNumber",
   inheritAttrs: false,
