@@ -257,14 +257,38 @@ export interface RadialGradient {
 export type Gradient = LinearGradient | RadialGradient;
 
 /**
- * A filled vector path - one or more closed subpaths sharing a single fill, using the nonzero
- * winding rule (so a glyph's inner contour cuts a hole). This is what a color glyph's layers draw
- * onto: each COLR layer is one `Path` filled with a solid `Color` (v0) or a `Gradient` (v1).
+ * How a path's outline is stroked. The names are SVG's, the semantics are the PDF operators they map
+ * to (`w`, `J`, `j`, `M`, `d`), and the defaults are SVG's initial values - not PDF's, which differ on
+ * the miter limit. Opacity rides on the `Color`, as everywhere else in the IR.
+ */
+export interface StrokeStyle {
+  color: Color;
+  width: number;
+  /** `J`. Default `butt`. */
+  cap?: "butt" | "round" | "square";
+  /** `j`. Default `miter`. */
+  join?: "miter" | "round" | "bevel";
+  /** `M`. Default 4 (SVG); PDF's own default is 10, so we always emit it when a join can miter. */
+  miterLimit?: number;
+  /** `d`: dash lengths in points, plus the phase to start at. Absent or empty = solid. */
+  dash?: number[];
+  dashOffset?: number;
+}
+
+/**
+ * A vector path - one or more subpaths that share one fill and/or one stroke. `fill` uses the nonzero
+ * winding rule unless `fillRule` says otherwise, so a glyph's inner contour cuts a hole by default.
+ * A color glyph's layer is one `Path` filled with a solid `Color` (COLR v0) or a `Gradient` (v1); an
+ * SVG shape is one `Path` that may also carry a stroke, or carry ONLY a stroke.
  */
 export interface Path {
   type: "path";
   commands: PathCommand[];
-  fill: Color | Gradient;
+  /** Absent = not filled (a stroke-only outline). */
+  fill?: Color | Gradient;
+  /** `evenodd` maps to the `*` operators; absent = nonzero, which is what glyphs need. */
+  fillRule?: "nonzero" | "evenodd";
+  stroke?: StrokeStyle;
   /** Accessibility structure tag (absent = drawn as an artifact); color-emoji layers stay untagged. */
   tag?: StructTag;
 }

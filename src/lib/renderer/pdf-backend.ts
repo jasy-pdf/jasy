@@ -1,4 +1,4 @@
-import { IRNode, Radii, isRounded } from "../ir/display-list.ts";
+import { IRNode, Radii, isRounded, type StrokeStyle } from "../ir/display-list.ts";
 import { Color } from "../common/color.ts";
 import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 import type { PageStructContext } from "../utils/struct-tree.ts";
@@ -67,7 +67,7 @@ export class PdfBackend {
           // A gradient fill carries its own page-space anchor points; flip their y too (radii and
           // x stay). A solid Color fill has no geometry.
           const fill =
-            node.fill instanceof Color
+            node.fill === undefined || node.fill instanceof Color
               ? node.fill
               : { ...node.fill, y0: pageHeight - node.fill.y0, y1: pageHeight - node.fill.y1 };
           return { ...node, commands, fill };
@@ -211,6 +211,27 @@ export class PdfBackend {
       }
     }
     return `[${out}${encode(chunk)}]`;
+  }
+
+  /**
+   * The graphics-state operators for a stroke, in the order a content stream wants them. Only what
+   * differs from the PDF default is emitted, EXCEPT the miter limit: SVG's initial value is 4 and
+   * PDF's is 10, so a mitered join has to say so or a sharp corner grows a spike the source never had.
+   * The caller isolates these in a q/Q - `d` in particular would otherwise dash every later stroke.
+   */
+  private static strokeState(stroke: StrokeStyle): string {
+    const CAPS = { butt: 0, round: 1, square: 2 };
+    const JOINS = { miter: 0, round: 1, bevel: 2 };
+    let ops = `${stroke.width} w\n${stroke.color.toPDFColorString()} RG\n`;
+    if (stroke.cap && stroke.cap !== "butt") ops += `${CAPS[stroke.cap]} J\n`;
+    const join = stroke.join ?? "miter";
+    if (join !== "miter") ops += `${JOINS[join]} j\n`;
+    else ops += `${stroke.miterLimit ?? 4} M\n`;
+    // A dash array of all zeros means "solid" in SVG but is an error in PDF, so it is dropped.
+    if (stroke.dash && stroke.dash.length > 0 && stroke.dash.some((n) => n > 0)) {
+      ops += `[${stroke.dash.join(" ")}] ${stroke.dashOffset ?? 0} d\n`;
+    }
+    return ops;
   }
 
   /**
@@ -440,8 +461,8 @@ export class PdfBackend {
         return `q\n${path}\nW n\n`;
       }
       case "path": {
-        // A filled vector path (one color-glyph layer). Emit the subpath ops, then either a solid
-        // nonzero fill (a Color) or, for a gradient, clip to the path and paint a shading inside it.
+        // A vector path: a color-glyph layer (fill only) or an SVG shape (fill and/or stroke). Emit
+        // the subpath ops once, then pick the painting operator from what the node actually carries.
         const f = (n: number) => n.toFixed(3);
         let path = "";
         for (const c of node.commands) {
@@ -451,16 +472,44 @@ export class PdfBackend {
             path += `${f(c.x1)} ${f(c.y1)} ${f(c.x2)} ${f(c.y2)} ${f(c.x)} ${f(c.y)} c\n`;
           else path += `h\n`;
         }
-        if (!(node.fill instanceof Color)) {
+        // The even-odd variants of the fill and clip operators are the same letter plus a star.
+        const star = node.fillRule === "evenodd" ? "*" : "";
+        const stroke = node.stroke;
+
+        if (node.fill !== undefined && !(node.fill instanceof Color)) {
           // Gradient: clip to the path (W n keeps it as the clip without painting it), then paint
           // the registered shading across that clip. The q/Q isolates the clip. Note: per-stop alpha
           // is not represented (a DeviceRGB shading has no alpha channel - that would need a soft-mask
           // group); COLR gradient stops are opaque in real fonts, so they render correctly.
+          // A stroke cannot share that q/Q: the clip would cut the outline in half, because a stroke
+          // straddles the edge. So it is drawn afterwards, over the same path.
           const shading = om.registerShading(node.fill);
-          return `q\n${path}W n\n/${shading} sh\nQ\n`;
+          const filled = `q\n${path}W${star} n\n/${shading} sh\nQ\n`;
+          if (!stroke) return filled;
+          const gsStroke = PdfBackend.alphaPrefix(om, 1, stroke.color.getAlpha());
+          return `${filled}q\n${gsStroke}${PdfBackend.strokeState(stroke)}${path}S\nQ\n`;
         }
-        const body = `${node.fill.toPDFColorString()} rg\n${path}f\n`;
-        const gs = PdfBackend.alphaPrefix(om, node.fill.getAlpha(), 1);
+
+        // No fill and no stroke: a shape that paints nothing. Emitting the path without an operator
+        // would leave it pending in the content stream and swallow whatever is drawn next.
+        if (node.fill === undefined && !stroke) return "";
+
+        if (stroke) {
+          // A stroked path always gets its own q/Q. Unlike a rect it can set `J`, `j`, `M` and `d`,
+          // and those would otherwise stay on for every later stroke on the page - a dash pattern
+          // leaking into the next table rule. Existing IR carries no stroke, so nothing moves.
+          const paint = node.fill !== undefined ? `B${star}` : "S";
+          const color = node.fill !== undefined ? `${node.fill.toPDFColorString()} rg\n` : "";
+          const gs = PdfBackend.alphaPrefix(
+            om,
+            node.fill !== undefined ? node.fill.getAlpha() : 1,
+            stroke.color.getAlpha(),
+          );
+          return `q\n${gs}${color}${PdfBackend.strokeState(stroke)}${path}${paint}\nQ\n`;
+        }
+
+        const body = `${node.fill!.toPDFColorString()} rg\n${path}f${star}\n`;
+        const gs = PdfBackend.alphaPrefix(om, node.fill!.getAlpha(), 1);
         return gs ? `q\n${gs}${body}Q\n` : body;
       }
       case "clip-pop":

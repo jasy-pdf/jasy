@@ -32,6 +32,7 @@ import {
   underlineStroke,
 } from "../text/text-decoration.ts";
 import type { Hyphenator } from "../text/word-splitting.ts";
+import { quadToCubic } from "../vector/path.ts";
 
 export class TextRenderer {
   // Measuring only needs metrics, not the full object manager. (The render pass below
@@ -301,19 +302,9 @@ export class TextRenderer {
         curY = mapY(cmd.x, cmd.y);
         out.push({ op: "l", x: curX, y: curY });
       } else if (cmd.type === "Q") {
-        const ctrlX = mapX(cmd.cx, cmd.cy);
-        const ctrlY = mapY(cmd.cx, cmd.cy);
         const endX = mapX(cmd.x, cmd.y);
         const endY = mapY(cmd.x, cmd.y);
-        out.push({
-          op: "c",
-          x1: curX + (2 / 3) * (ctrlX - curX),
-          y1: curY + (2 / 3) * (ctrlY - curY),
-          x2: endX + (2 / 3) * (ctrlX - endX),
-          y2: endY + (2 / 3) * (ctrlY - endY),
-          x: endX,
-          y: endY,
-        });
+        out.push(quadToCubic(curX, curY, mapX(cmd.cx, cmd.cy), mapY(cmd.cx, cmd.cy), endX, endY));
         curX = endX;
         curY = endY;
       } else {
