@@ -36,16 +36,21 @@ const FORM_FEATURES: Record<JoiningForm, string> = {
 /**
  * Shape a run, or `undefined` when there is nothing to do - so untouched documents keep their path.
  *
- * `rlig` (required ligatures - lam-alef, wrong when drawn apart) but not `liga`, which is
- * discretionary and would change how existing Latin text looks.
+ * Arabic always applies `rlig` - lam-alef is wrong when drawn apart. Latin applies whatever `features`
+ * asks for, which is `liga` today; the list is the seam a general `fontFeatures` would use.
  */
 export function shapeRun(
   codePoints: readonly number[],
   font: ShapingFont,
+  features: readonly string[] = [],
 ): ShapedGlyph[] | undefined {
-  if (!needsJoining(codePoints)) return undefined;
   const gsub = font.gsub();
-  if (!gsub || !gsub.hasScript("arab")) return undefined;
+  if (!gsub) return undefined;
+  if (!needsJoining(codePoints)) {
+    // Latin: no joining, only the substitutions the caller asked for.
+    return features.length > 0 ? shapeLatin(codePoints, font, gsub, features) : undefined;
+  }
+  if (!gsub.hasScript("arab")) return undefined;
 
   const forms = joiningForms(codePoints);
   let glyphs: ShapedGlyph[] = codePoints.map((cp, i) => {
@@ -65,13 +70,42 @@ export function shapeRun(
     return { glyph, advance: font.getAdvanceWidth(glyph), codePoints: [cp] };
   });
 
-  glyphs = applyLigatures(glyphs, gsub, font);
+  glyphs = applyLigatures(glyphs, gsub, font, "arab", "rlig");
   return glyphs;
 }
 
-/** Collapse required ligatures, longest match first, carrying every component's code points along. */
-function applyLigatures(glyphs: ShapedGlyph[], gsub: GsubTable, font: ShapingFont): ShapedGlyph[] {
-  const lookups = gsub.lookups("arab", "rlig");
+/**
+ * Latin: no joining, only ligatures. Returns undefined when the font offers none, so a document that
+ * asks for them but uses a font without them keeps the plain path and stays byte-identical.
+ */
+function shapeLatin(
+  codePoints: readonly number[],
+  font: ShapingFont,
+  gsub: GsubTable,
+  features: readonly string[],
+): ShapedGlyph[] | undefined {
+  if (!gsub.hasScript("latn")) return undefined;
+  const wanted = features.filter((f) => gsub.lookups("latn", f).length > 0);
+  if (wanted.length === 0) return undefined;
+  const plain = codePoints.map((cp) => {
+    const glyph = font.getGlyphIndex(cp);
+    return { glyph, advance: font.getAdvanceWidth(glyph), codePoints: [cp] };
+  });
+  let shaped = plain;
+  for (const feature of wanted) shaped = applyLigatures(shaped, gsub, font, "latn", feature);
+  // Nothing merged: hand back undefined so the caller measures and draws the untouched run.
+  return shaped.length === plain.length ? undefined : shaped;
+}
+
+/** Collapse ligatures, longest match first, carrying every component's code points along. */
+function applyLigatures(
+  glyphs: ShapedGlyph[],
+  gsub: GsubTable,
+  font: ShapingFont,
+  script: string,
+  feature: string,
+): ShapedGlyph[] {
+  const lookups = gsub.lookups(script, feature);
   if (lookups.length === 0) return glyphs;
 
   const ids = glyphs.map((g) => g.glyph);

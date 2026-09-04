@@ -1,3 +1,4 @@
+import { buildGsub, coverage1, ligature } from "../support/gsub-builder.ts";
 // A minimal but valid TTF with the 5 metric tables and 4 glyphs (.notdef, 'A', 'B', ' ')
 // and known advance widths, so tests can assert exact metrics without an MB-sized font.
 // Pass `advances` to mint a distinct variant (e.g. a wider "bold") - default is A=500, B=700.
@@ -513,4 +514,32 @@ function assembleTtf(tables: [string, Buffer][]): Buffer {
   });
 
   return Buffer.concat([offsetTable, dir, ...body]);
+}
+
+// A font that SHAPES and KERNS: GSUB `latn`/`liga` merges A(1)+B(2) into glyph 4, and a `kern` table
+// kerns that ligature against the space (3). Both halves together, because kerning a shaped run reads
+// the pairs off the glyphs shaping produced, not off the characters.
+export function buildLigatureTtf(kernValue = -80): Buffer {
+  const gsub = Buffer.from(
+    buildGsub(
+      [{ tag: "liga", lookups: [0] }],
+      [{ type: 4, subtables: [ligature(coverage1([1]), [[[4, 2]]])] }],
+      false,
+      "latn",
+    ),
+  );
+
+  // kern: one pair, the ligature (4) before the space (3).
+  const kern = Buffer.alloc(24);
+  kern.writeUInt16BE(0, 0);
+  kern.writeUInt16BE(1, 2);
+  kern.writeUInt16BE(0, 4);
+  kern.writeUInt16BE(20, 6);
+  kern.writeUInt16BE(0x0001, 8);
+  kern.writeUInt16BE(1, 10);
+  kern.writeUInt16BE(4, 18);
+  kern.writeUInt16BE(3, 20);
+  kern.writeInt16BE(kernValue, 22);
+
+  return assembleTtf([...baseTables([0, 500, 700, 250, 600]), ["GSUB", gsub], ["kern", kern]]);
 }

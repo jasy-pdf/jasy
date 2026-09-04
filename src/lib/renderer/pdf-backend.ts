@@ -180,20 +180,34 @@ export class PdfBackend {
 
   /**
    * Builds the `[ ... ]` operand of a `TJ` from a run and its per-gap kern adjustments (em/1000, the
-   * sign the font declares - negative tightens). A `TJ` number moves the pen LEFT, so it is the
-   * NEGATED kern. Consecutive un-kerned glyphs stay in one encoded chunk, so `[(T) 40 (otal)]` rather
-   * than one chunk per glyph. `kerns[i]` is the adjustment AFTER code point `i`.
+   * sign the font declares). Generic over the UNIT so the same chunking serves both paths: characters
+   * for a WinAnsi run, glyph ids for a shaped one - a shaped run cannot be expressed as text.
+   * A `TJ` number moves the pen LEFT, so it is the NEGATED kern. Consecutive un-kerned glyphs stay in
+   * one encoded chunk, so `[(T) 40 (otal)]` rather than one chunk per glyph. `kerns[i]` is the
+   * adjustment AFTER code point `i`.
    */
-  static kernedArray(text: string, kerns: number[], encode: (chunk: string) => string): string {
-    const chars = [...text];
+  static kernedArray<T>(
+    units: readonly T[],
+    kerns: number[],
+    encode: (chunk: T[]) => string,
+  ): string {
+    const gaps = Math.max(0, units.length - 1);
+    if (kerns.length !== gaps) {
+      // The loop walks the GAPS, so a short list would drop the units past it - silently, and only the
+      // last glyph, which is exactly the kind of thing nobody notices until a word reads wrong. An
+      // empty run has no gaps at all, so any adjustment for one is a disagreement too.
+      throw new Error(
+        `@jasy/pdf: ${kerns.length} kern adjustments for ${units.length} units - expected ${gaps}.`,
+      );
+    }
     let out = "";
-    let chunk = chars[0] ?? "";
+    let chunk: T[] = units.length > 0 ? [units[0]!] : [];
     for (let i = 0; i < kerns.length; i++) {
       if (kerns[i] === 0) {
-        chunk += chars[i + 1];
+        chunk.push(units[i + 1]!);
       } else {
         out += encode(chunk) + ` ${-kerns[i]} `;
-        chunk = chars[i + 1];
+        chunk = [units[i + 1]!];
       }
     }
     return `[${out}${encode(chunk)}]`;
@@ -350,7 +364,7 @@ export class PdfBackend {
           : om.registerFont(node.fontFamily, node.fontStyle);
         const encode = (t: string): string =>
           isCustom
-            ? `<${om.encodeCustomText(node.fontFamily, t, node.fontStyle)}>`
+            ? `<${om.encodeCustomText(node.fontFamily, t, node.fontStyle, false)}>`
             : `(${PdfBackend.escapePdfString(t)})`;
         // A shaped run brings its own glyphs, already in drawing order - they cannot be derived from
         // the text here.
@@ -361,14 +375,26 @@ export class PdfBackend {
         // Kerning (if the document has it on): a `TJ` array with the font's per-pair adjustments
         // between glyph chunks, measured into the layout by the SAME numbers (runAdvance). A plain
         // `Tj` when the run has no kerning, byte-identical.
-        const kerns = om.kerningEnabled
-          ? om.getKernPairs(node.text, node.fontFamily, node.fontStyle)
-          : [];
-        const showOp = shapedHex
-          ? `<${shapedHex}> Tj`
-          : kerns.some((k) => k !== 0)
-            ? `${PdfBackend.kernedArray(node.text, kerns, encode)} TJ`
-            : `${encode(node.text)} Tj`;
+        // A shaped run brings its glyphs along, so kern those directly rather than re-deriving them
+        // from the text - which would also have to guess the run's ligature setting.
+        const kerns = !om.kerningEnabled
+          ? []
+          : node.glyphs && isCustom
+            ? om.getGlyphKernPairs(node.glyphs, node.fontFamily, node.fontStyle)
+            : // No glyph list means the run was NOT shaped, whatever the document asks for - so take the
+              // character path explicitly. Letting it default would shape here, and a pair count that
+              // does not match the character count silently drops the last one.
+              om.getKernPairs(node.text, node.fontFamily, node.fontStyle, false);
+        // A shaped run kerns too, over its SHAPED glyphs - `getKernPairs` returns one adjustment per
+        // adjacent drawn pair either way, so both paths use the same numbers `runAdvance` measured.
+        const showOp =
+          node.glyphs && isCustom
+            ? kerns.some((k) => k !== 0)
+              ? `${PdfBackend.kernedArray(node.glyphs, kerns, (chunk) => `<${om.registerGlyphs(node.fontFamily, chunk, node.fontStyle)}>`)} TJ`
+              : `<${shapedHex}> Tj`
+            : kerns.some((k) => k !== 0)
+              ? `${PdfBackend.kernedArray([...node.text], kerns, (chunk) => encode(chunk.join("")))} TJ`
+              : `${encode(node.text)} Tj`;
         // letterSpacing is the `Tc` operator: extra advance after EVERY glyph (an embedded
         // Identity-H font too - that is `Tw`, word spacing, which only touches single-byte code 32).
         const spacing = node.letterSpacing ? `${node.letterSpacing.toFixed(3)} Tc\n` : "";

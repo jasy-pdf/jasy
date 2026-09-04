@@ -151,9 +151,13 @@ constant** — that is exactly how `BASELINE_RATIO = 683/1000` happened. `letter
 element's constructor**. Everything else in jasy survives two copies of the library being loaded -
 building elements, layout, font metrics, byte writing. This one does not.
 
-And it fails **silently**: seventeen call sites read `const renderer = getRenderer(el); if (renderer)
-{ … }` with no `else`. Two instances → every element is skipped → a valid PDF with embedded fonts and
-a one-byte content stream. It is the same hazard as "two copies of React", minus the error message.
+It used to fail **silently**: seventeen call sites read `const renderer = getRenderer(el); if
+(renderer) { … }` with no `else`. Two instances → every element skipped → a valid PDF with embedded
+fonts and an empty content stream. Same hazard as "two copies of React", minus the error message.
+**Since 2026-08-26 it THROWS** (`MissingRendererError`), and the message names both causes - an
+unregistered element, or two copies of `@jasy/pdf`. The dead guards are gone. Note the corollary: the
+registry keys on the EXACT constructor, so a SUBCLASS of a registered element is not registered either
+and now throws - deliberate, because silently borrowing the parent's renderer would draw the parent.
 
 **This bit us for real** (2026-08-26, ISSUE-11): `@jasy/nuxt` injects auto-imports into the
 CONSUMER's code (`addServerImports({ from: "@jasy/pdf" })`), so under pnpm the consumer's route and
@@ -163,6 +167,13 @@ and the monorepo playground both hid it.
 **The rule that follows:** a package whose names you inject into someone else's code must be a
 **peer dependency**, or the injector must resolve the path itself and inject that. Exact version pins
 answer a different question - they fix VERSIONS, not module IDENTITY.
+
+**Fixed 2026-08-26**, and the mechanism was NOT what it looked like: there was one physical copy on
+disk. Nitro resolves the CONSUMER's server code and the module's own runtime separately, so one server
+build held two module records. `nitro.alias` on the resolved path pins them together; `@jasy/pdf` and
+`@jasy/vue` became peer dependencies of `@jasy/nuxt` so a consumer cannot install a second copy either.
+Two things measured along the way that are worth NOT re-testing: `nitro.externals.inline` does not fix
+it, and the `browser` field is not involved (the main entry has no browser condition).
 
 ### State threading — explicit, no singleton (since roadmap Phase 2)
 
@@ -249,7 +260,7 @@ rendering. This is the standing visual check; prefer it over one-off `scripts/ru
 - `pnpm test` — Vitest (watch). `pnpm exec vitest run` for a one-shot CI-style run.
   `pnpm run test:coverage` for coverage. Unit tests live in **`tests/unit/`**, mirroring the `src/lib/`
   structure (`tests/unit/{common,elements,renderer,utils}/…`). `src/` is pure production code — the
-  build (`tsconfig.json` includes only `src/**`) therefore keeps `dist/` test-free. **1066 tests, green** —
+  build (`tsconfig.json` includes only `src/**`) therefore keeps `dist/` test-free. **1407 tests, green** —
   what the root run covers: core 908, `@jasy/cli` 37, `@jasy/vue` 33, `@jasy/e-invoice` 38. `@jasy/nuxt`
   is excluded from it (`vitest.config.ts`) and runs on its own.
 - `pnpm run build` — `tsc` → `dist/`.
@@ -699,6 +710,69 @@ wordWidth > maxWidth` and forgot the SPACE that would join the word. It went uns
   the spec twice. Found while auditing four rejected SumUp invoices for Flo: none carried BT-72 or
   BG-14, the period was free text in the item description only.
 
+- ✅ **Text that cannot be drawn - the invisible class** (2026-08-30). A character with no glyph is
+  still ENCODED and DRAWN: it comes out as the font's `.notdef` box, and veraPDF rejects the file for
+  referencing it (ISO 19005-3, 6.2.11.8). Found on a real invoice whose service description carried its
+  own line breaks - the first string that reached jasy from OUTSIDE instead of being composed line by
+  line in our own code. Two separate faults, one symptom:
+  - **`\n` is a HARD line break** now (`text/whitespace.ts` + both breakers). It breaks even where there
+    is room, because it is an instruction, not wrapping. `\r\n`, a lone `\r`, `\n\r` and U+2028/U+2029
+    fold into it; a tab becomes a space; C0/C1, U+200B and U+FEFF are dropped. U+200C/D and U+200E/F are
+    KEPT - they drive Arabic shaping and bidi, and removing them would silently change correct text.
+    Normalised once in the `TextElement` constructor, the one place every text enters.
+  - **A code point no font can draw is removed and REPORTED** (`text/glyph-coverage.ts`). The check is
+    DYNAMIC against the resolved font - which characters are missing is a property of the FONT, not of
+    Unicode (`@jasy/e-invoice` embeds Liberation, whose gaps look arbitrary: "→" draws, "⇒" does not).
+    A plain equivalent is substituted where one means the same, because dropping U+2011 would turn
+    `E-Rechnung` into `ERechnung`. Everything else is dropped and handed back: `renderToBytes` gained
+    `onMissingGlyphs`, `renderZugferd` returns `droppedCharacters`. Deliberately no policy option - a
+    missing tick must never stop an invoice being produced, and a server log is not a report. Colour
+    emoji is exempt (`rendersAsEmoji`): it is missing from the text font by design.
+  - This REVERSED a documented decision: an undrawable code point used to stay and show `.notdef`,
+    "as a browser does". PDF/A forbids it, so completeness now outranks browser parity.
+
+- ✅ **A word that does not fit** (2026-08-30, `text/word-splitting.ts`). It used to stay on its line and
+  draw over its neighbour - on an invoice, a §14 UStG mandatory field painted across its own label.
+  Two layers, stacked as CSS stacks them, **both off by default** (so a too-wide word still overflows,
+  as in CSS, and every existing document is byte-identical):
+  - **`Text({ breakWord })`** splits where the box ends, no hyphen. The floor - it is what an e-mail, an
+    IBAN or an invoice number needs, having no valid hyphenation point anywhere.
+  - **`Text({ hyphenate })`** splits at a valid point and draws the hyphen. **A HOOK, not bundled data**:
+    German patterns alone are 732 KB, against the character of a library that sells on "no headless
+    browser, no JVM". `hyphen` (ISC) returns a word with soft hyphens, so the adapter is one line -
+    documented in `docs/api-design.md` 6c and EXECUTED by
+    `tests/unit/text/hyphenation-integration.test.ts`, because a documented integration nobody runs
+    rots. **No `@jasy/hyphenation` package is planned** (reasoning in `todo.md`).
+  - The default is a POSITION, not a gap: _we do not hyphenate until you name the language._ react-pdf
+    hyphenates with no configuration using the patterns it ships - German split by English rules, in the
+    market we care about.
+  - Both are read per `Text`, not per `span` - known deviation from CSS, `todo.md` ISSUE-13.
+  - The two traps this feature walked into, both caught by tests written afterwards: the SEGMENT breaker
+    appended the first piece to the line it was already filling (a 50pt box got an 80pt line, and
+    REPORTED 50), and the renderer built its `SegmentDefaults` without `splitting`, so spans never split
+    at all. Same shape as the older bugs - one path right, the other wrong; measured ≠ drawn.
+
+- ✅ **Latin ligatures, and kerning for a shaped run** (2026-08-30). `fi`, `fl`, `ffi` become one glyph,
+  read from the font's GSUB. **ON by default**, like kerning - the font's designer drew them, CSS and
+  every other renderer apply them, and nobody should need the word to get text set properly. An
+  inheritable text style, so `ligatures: false` opts out on a `Text`, a `DefaultTextStyle` subtree or the
+  whole `Document`. Embedded fonts only (the standard-14 have no GSUB). Internally the run carries a
+  FEATURE LIST, not a boolean - that is the seam a general `fontFeatures` would use; react-pdf exposes
+  `fontFeatureSettings`, which we do not copy because our GSUB reader only executes lookup types 1, 4
+  and 7 and promising the rest would be a promise we cannot keep.
+  - **It needed kerning for shaped runs first**, which did not exist: `getKernPairs` returned `[]` on
+    sight of a shaped run, because the pairs were keyed by unshaped glyphs and the `TJ` operand was
+    built from TEXT. Shipping `liga` on top of that would have traded every kern for a few ligatures -
+    DejaVu kerns `To` by **-170**. Now `getGlyphKernPairs` kerns the drawn glyphs (`getKerning` is glyph-
+    keyed anyway) and `PdfBackend.kernedArray` is generic over its unit, so ONE chunking serves
+    characters and glyph ids. Arabic gains the same, closing a `todo.md` gap.
+  - **Four bugs on the way, all the same shape - measured ≠ drawn.** The renderer shaped at DRAW time
+    with the default setting; the backend asked `getKernPairs` without the run's setting, so it shaped
+    internally and returned 11 pairs for 13 characters; `kernedArray` walks the GAPS, so a short list
+    silently dropped the last unit ("Verpflichtung" lost its g); and `encodeCustomText` shaped on its
+    own although the renderer had already decided. The unit tests were green through all of it - only
+    the rendered PDF showed it. `kernedArray` now throws on a length mismatch.
+
 Genuine remaining gaps / deferred:
 
 1. **Absolute positioning — Stages 1+2 built** (2026-06-21). CSS-style: `Box({ relative: true })` is a
@@ -769,13 +843,17 @@ starting work. Working agreement: **phase by phase, Flo approves each gate, Clau
 unprompted, comments English + sensible, don't break the font math.**
 
 Status: **LAUNCHED 2026-06-27**, still shipping alpha increments (no beta/rc/stable until the feature set is
-complete — see `todo.md`). All five packages live on npm; **published as of 2026-07-30: `@jasy/pdf`@alpha.7,
-`@jasy/zugferd`@alpha.4 (the OLD name - `@jasy/e-invoice` has not been published yet, see the rename
-below), `@jasy/cli`@alpha.6, `@jasy/vue`@alpha.7, `@jasy/nuxt`@alpha.6** (the alpha.7 cascade =
-page-break control — the termination guard, `PageBreak`, `breakBefore`/`breakAfter`, `keepTogether` — plus
-kerning turned on by default). Repo public + locked, full CI + changelog +
+complete — see `todo.md`). All five packages live on npm; **as of 2026-08-30: `@jasy/pdf`@alpha.12,
+`@jasy/e-invoice`@alpha.13, `@jasy/vue`@alpha.11, `@jasy/cli`@alpha.10, `@jasy/nuxt`@alpha.9**.
+
+**The release cascade is short now** (2026-08-30). `@jasy/vue`, `@jasy/e-invoice` and `@jasy/cli` depend
+on their siblings by RANGE (`workspace:^` → `^1.0.0-alpha.N`, which matches later alphas) instead of the
+exact pin `workspace:*` produced, and `@jasy/pdf` is a **peer** dependency of `@jasy/vue` as it already
+was of `@jasy/nuxt`. So a patch to the engine needs ONE release, not five - the others pull it on the
+user's next install. The peer part is not convenience: it is what stops a consumer ending up with two
+copies of the engine, which is the failure that made a Nuxt route render a blank page (ISSUE-11). Repo public + locked, full CI + changelog +
 bots in place (see Repo facts). The engine is **feature-complete for the alpha** — inheritance, `onOverflow`,
-custom formats, the line-breaker fixes; **1066 tests green** (the root run, i.e. everything but
+custom formats, the line-breaker fixes; **1407 tests green** (the root run, i.e. everything but
 `@jasy/nuxt`). The **landing**
 (`~/projects/jasy-landing` → **jasy.dev**) is built: showroom (12 cards), validator, docs, a home-page
 roadmap section, and a full **SEO + AI-discoverability layer** (OG image, JSON-LD, `robots.txt`,
@@ -812,8 +890,8 @@ more e-invoice profiles, framework bindings). See `todo.md` "⭐ Active" + "🔮
   Content 3). It has its **own CLAUDE.md + HARD RULES: never start/stop its dev server (Flo runs it),
   only Flo commits.** Package links there use **npmx.dev** (Daniel Roe's registry browser), not npmjs.com.
 - License MIT, author Florian Heuberger. **Launched 2026-06-27** (Bluesky + npm; landed with the Vue/Nuxt core
-  crew). npm current (alpha + latest dist-tags): `@jasy/pdf`@alpha.7, `@jasy/e-invoice`@alpha.4, `@jasy/cli`@alpha.6,
-  `@jasy/vue`@alpha.7, `@jasy/nuxt`@alpha.6 (released via `scripts/release.sh <pkg> <version>` → `<pkg>-v*` tag →
+  crew). npm current (alpha + latest dist-tags): `@jasy/pdf`@alpha.12, `@jasy/e-invoice`@alpha.13, `@jasy/cli`@alpha.10,
+  `@jasy/vue`@alpha.11, `@jasy/nuxt`@alpha.9 (released via `scripts/release.sh <pkg> <version>` → `<pkg>-v*` tag →
   CI publish; order matters, deps `workspace:*` pin EXACT so dependents re-release when a dep does; the tag also
   builds the GitHub Release notes via `scripts/gh-release.mjs` — changelogen groups + per-commit contributors,
   idempotent upsert). `latest` dist-tag points at the newest alpha per package.
@@ -823,10 +901,3 @@ more e-invoice profiles, framework bindings). See `todo.md` "⭐ Active" + "🔮
   SECURITY / LICENSE / issue+PR templates / FUNDING) all in. Branch `main`. Runtime deps: `jimp` (images), `fflate`
   (isomorphic deflate), `bidi-js` (UAX #9, behind the `text/bidi.ts` seam and slated to be replaced by
   our own - see `todo.md`); the old `reflect-metadata` DI is gone (decorator removed).
-
-## Open work — NOT pushed yet (ask Flo before pushing)
-
-- **`feat/line-period-bg-26`** — one commit, `010dcc3 feat: add line period (BG 26)`; **no upstream, never
-  pushed**. Contains the `@jasy/e-invoice` per-line invoicing period (BG-26) in `src/template.ts` +
-  `tests/period.test.ts`. Push/PR it only when Flo asks. Afterwards it releases as
-  `@jasy/e-invoice@1.0.0-alpha.11`.

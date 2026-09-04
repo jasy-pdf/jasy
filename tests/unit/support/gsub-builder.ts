@@ -88,6 +88,7 @@ export function buildGsub(
   features: { tag: string; lookups: number[] }[],
   lookups: LookupSpec[],
   named = false,
+  scriptTag = "arab",
 ): Uint8Array {
   // --- LookupList
   const lookupBlobs = lookups.map((l) => {
@@ -149,7 +150,7 @@ export function buildGsub(
   const script = named
     ? [...be16(0), ...be16(1), ...tag("ARA "), ...be16(4 + 6), ...langSys]
     : [...be16(4), ...be16(0), ...langSys];
-  const scriptList = [...be16(1), ...tag("arab"), ...be16(2 + 6), ...script];
+  const scriptList = [...be16(1), ...tag(scriptTag), ...be16(2 + 6), ...script];
 
   const headerSize = 10;
   return Uint8Array.from([

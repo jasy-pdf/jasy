@@ -76,6 +76,10 @@ export interface ResolvedTextStyle {
   wordSpacing: number;
   /** CSS `text-indent`, in points: how far the FIRST line of a paragraph starts in. */
   textIndent: number;
+  /** The ligatures the font's designer drew (`fi`, `fl`, `ffi`), from its GSUB. ON, like kerning: CSS,
+   *  browsers and every other renderer apply them, and nobody should need the word to get text set
+   *  properly. `false` opts a document, a subtree or one `Text` out. Embedded fonts only. */
+  ligatures: boolean;
   /** CSS `overflow-wrap: break-word`: split a word that is wider than its box, anywhere, no hyphen.
    *  The floor under `hyphenate` - it is what handles an e-mail, an IBAN or an invoice number, which
    *  have no valid hyphenation point anywhere. Default off: a too-wide word overflows, as in CSS. */
@@ -106,6 +110,7 @@ export const DEFAULT_TEXT_STYLE: ResolvedTextStyle = {
   textTransform: "none",
   wordSpacing: 0,
   textIndent: 0,
+  ligatures: true,
   breakWord: false,
   hyphenate: undefined,
 };
@@ -132,6 +137,7 @@ export function mergeTextStyle(
     textTransform: override.textTransform ?? base.textTransform,
     wordSpacing: override.wordSpacing ?? base.wordSpacing,
     textIndent: override.textIndent ?? base.textIndent,
+    ligatures: override.ligatures ?? base.ligatures,
     breakWord: override.breakWord ?? base.breakWord,
     hyphenate: override.hyphenate ?? base.hyphenate,
   };

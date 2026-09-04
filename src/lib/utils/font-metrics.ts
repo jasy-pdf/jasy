@@ -10,7 +10,13 @@ import type { FontDecoration } from "../text/text-decoration.ts";
  * touching layout code.
  */
 export interface FontMetrics {
-  getStringWidth(text: string, fontFamily: string, fontSize: number, fontStyle: FontStyle): number;
+  getStringWidth(
+    text: string,
+    fontFamily: string,
+    fontSize: number,
+    fontStyle: FontStyle,
+    ligatures?: boolean,
+  ): number;
 
   getCharWidth(
     char: string,
@@ -34,7 +40,12 @@ export interface FontMetrics {
 
   /** Per-adjacent-pair kerning of `text`, in em/1000 (negative tightens); length `codePoints - 1`,
    *  zero next to a space. Only meaningful when `kerningEnabled`. */
-  getKernPairs(text: string, fontFamily: string, fontStyle: FontStyle): number[];
+  getKernPairs(
+    text: string,
+    fontFamily: string,
+    fontStyle: FontStyle,
+    ligatures?: boolean,
+  ): number[];
 
   /** Whether this family can draw the code point at all - what picks a face out of a fallback stack. */
   hasGlyph(codePoint: number, fontFamily: string, fontStyle: FontStyle): boolean;
@@ -49,5 +60,10 @@ export interface FontMetrics {
 
   /** How many glyphs the run will DRAW, when a ligature made that differ from its code-point count.
    *  Absent or `undefined` means "the same", which is every Latin run. */
-  shapedGlyphCount?(text: string, fontFamily?: string, fontStyle?: FontStyle): number | undefined;
+  shapedGlyphCount?(
+    text: string,
+    fontFamily?: string,
+    fontStyle?: FontStyle,
+    ligatures?: boolean,
+  ): number | undefined;
 }
