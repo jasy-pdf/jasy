@@ -12,7 +12,9 @@ import { ResolvedTextStyle, type TextTransform } from "../text/text-style.ts";
 import { ColorInput, toColor } from "./color.ts";
 import type { Hyphenator } from "../text/word-splitting.ts";
 
-export type { TextOverflow };
+// The types of the public text options, so a consumer (a framework binding, a typed wrapper) can name
+// them. `Hyphenator` in particular IS the contract of `Text({ hyphenate })`.
+export type { TextOverflow, Direction, TextTransform, Hyphenator };
 
 /** Text styling shared by `Text`, `Paragraph` and `span`. `bold`/`italic` are booleans
  *  (locked §7.3) and combine into one engine `FontStyle`. */
@@ -66,7 +68,10 @@ export interface TextStyle {
   to?: string;
 }
 
-export interface TextOptions extends TextStyle {
+// `verticalAlign` is NOT inherited from `TextStyle`: it raises ONE run, and `Text` is the whole block -
+// CSS `vertical-align` is inert on a block for the same reason. It was in the type and silently dropped
+// by the factory below; put it on a `span(...)` instead.
+export interface TextOptions extends Omit<TextStyle, "verticalAlign"> {
   /** Text-internal alignment (left/center/right) - independent of a parent's `cross` (§5). */
   align?: "left" | "center" | "right" | "justify";
   /** Cap the number of wrapped lines (default: unlimited - the text grows down as far as it needs,
