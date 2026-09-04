@@ -32,12 +32,16 @@ function optionsOf(name: string): string[] {
 
 const declared = (component: { props?: object }) => Object.keys(component.props ?? {});
 
-const cases: [string, { props?: object }, string[]][] = [
-  ["Text", Text, optionsOf("TextOptions")],
-  ["Paragraph", Paragraph, optionsOf("TextOptions")],
-  ["Span", Span, optionsOf("TextStyle")],
-  ["Document", Document, optionsOf("TextDefaults")],
-  ["DefaultTextStyle", DefaultTextStyle, optionsOf("TextDefaults")],
+// [component, the options it must declare, props it may have BESIDE them]. The extras are named one by
+// one on purpose: a prop that is in neither list is a typo (`textIndentation`) or a leftover, and both
+// are invisible otherwise - the forwarding passes anything through.
+const cases: [string, { props?: object }, string[], string[]][] = [
+  ["Text", Text, optionsOf("TextOptions"), []],
+  ["Paragraph", Paragraph, optionsOf("TextOptions"), []],
+  ["Span", Span, optionsOf("TextStyle"), []],
+  // `meta` and `fonts` are document-level, not text options.
+  ["Document", Document, optionsOf("TextDefaults"), ["meta", "fonts"]],
+  ["DefaultTextStyle", DefaultTextStyle, optionsOf("TextDefaults"), []],
 ];
 
 describe("every public text option is a declared prop", () => {
@@ -51,8 +55,21 @@ describe("every public text option is a declared prop", () => {
     expect(optionsOf("TextStyle")).toContain("verticalAlign");
   });
 
-  it.each(cases)("%s", (_name, component, options) => {
-    const props = declared(component);
-    expect(options.filter((option) => !props.includes(option))).toEqual([]);
+  it.each(cases)(
+    "%s declares every option and nothing else",
+    (_name, component, options, extra) => {
+      const props = declared(component);
+      expect(options.filter((option) => !props.includes(option))).toEqual([]);
+      expect(props.filter((prop) => !options.includes(prop) && !extra.includes(prop))).toEqual([]);
+    },
+  );
+
+  // The one place a text style is deliberately NOT uniform: `vertical-align` raises a single run, so it
+  // belongs to a span. `Text` is the block, and CSS ignores it there too - hence the Omit in TextOptions.
+  it("keeps verticalAlign on the span and off the block", () => {
+    expect(declared(Span)).toContain("verticalAlign");
+    for (const block of [Text, Paragraph, Document, DefaultTextStyle]) {
+      expect(declared(block)).not.toContain("verticalAlign");
+    }
   });
 });
