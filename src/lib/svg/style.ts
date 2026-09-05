@@ -81,6 +81,25 @@ function styleBag(value: string | number | undefined): Record<string, string> {
   return out;
 }
 
+/**
+ * Reads a property from all three sources, in CSS order: a presentation attribute is the weakest, a
+ * matching `<style>` rule beats it, and the inline `style=""` bag beats both.
+ *
+ * Exported because anything that INSPECTS a property has to see the same value the style resolver
+ * would - `filter="url(#f)"` and `style="filter:url(#f)"` are the same instruction, and checking only
+ * the attribute lets the second one through unnoticed.
+ */
+export function cascadedReader(
+  attributes: Attributes,
+  css: Record<string, string> = {},
+): (name: string) => string | undefined {
+  const bag = styleBag(attributes["style"]);
+  return (name) => {
+    const value = bag[name] ?? css[name] ?? attributes[name];
+    return value === undefined ? undefined : String(value);
+  };
+}
+
 const dashNumbers = (list: string): number[] => {
   const found = list.match(/[+-]?(?:\d*\.\d+|\d+\.?)(?:[eE][+-]?\d+)?/g);
   return found ? found.map(Number) : [];
@@ -134,13 +153,7 @@ export function resolveStyle(
   attributes: Attributes,
   css: Record<string, string> = {},
 ): SvgStyle {
-  const bag = styleBag(attributes["style"]);
-  // The three sources, in CSS order: a presentation attribute is the weakest, a `<style>` rule beats
-  // it, and the inline `style=""` bag beats both.
-  const read = (name: string): string | undefined => {
-    const value = bag[name] ?? css[name] ?? attributes[name];
-    return value === undefined ? undefined : String(value);
-  };
+  const read = cascadedReader(attributes, css);
 
   const color = read("color") !== undefined ? svgColor(read("color")!) : parent.color;
   // `Number("50%")` is NaN and `Number("")` is 0, both of which travel silently into the paint.

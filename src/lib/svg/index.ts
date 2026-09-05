@@ -10,6 +10,7 @@ import { declarationsFor, parseStylesheet, type CssRule } from "./css.ts";
 import {
   ROOT_STYLE,
   isPaintRef,
+  cascadedReader,
   paintAlpha,
   resolveStyle,
   type Attributes,
@@ -156,12 +157,12 @@ const REFUSED_ATTRIBUTES: Record<string, string> = {
   filter: "Filters are pixel operations; rasterise that part to a PNG instead.",
 };
 
-function refuseAttributes(tagName: string, attributes: Attributes): void {
+function refuseAttributes(tagName: string, read: (name: string) => string | undefined): void {
   for (const [name, hint] of Object.entries(REFUSED_ATTRIBUTES)) {
-    const value = attributes[name];
+    const value = read(name);
     // `none` is the explicit absence of one, which is nothing to refuse.
-    if (value !== undefined && String(value).trim() !== "none") {
-      throw new SvgUnsupportedError(`the "${name}" attribute on <${tagName}>`, hint);
+    if (value !== undefined && value.trim() !== "none") {
+      throw new SvgUnsupportedError(`"${name}" on <${tagName}>`, hint);
     }
   }
 }
@@ -270,15 +271,15 @@ function walk(
   if (tagName === "clipPath") return;
 
   const attributes = attributesOf(node);
-  refuseAttributes(tagName, attributes);
-  const style = resolveStyle(
-    parentStyle,
-    attributes,
-    declarationsFor(rules, tagName, {
-      class: attributes["class"] === undefined ? undefined : String(attributes["class"]),
-      id: attributes["id"] === undefined ? undefined : String(attributes["id"]),
-    }),
-  );
+  const css = declarationsFor(rules, tagName, {
+    class: attributes["class"],
+    id: attributes["id"],
+  });
+  // Everything below reads through the cascade, not the raw attributes: `filter="url(#f)"` and
+  // `style="filter:url(#f)"` are the same instruction, and a `<style>` rule can set either.
+  const read = cascadedReader(attributes, css);
+  refuseAttributes(tagName, read);
+  const style = resolveStyle(parentStyle, attributes, css);
   const transform = attributes["transform"]
     ? parseTransform(String(attributes["transform"]))
     : IDENTITY;
@@ -287,7 +288,7 @@ function walk(
 
   // The clip is pushed INSIDE the element's own transform, because that is the space its `url(#id)`
   // reference is written in - the same rule SVG states for userSpaceOnUse.
-  const clipValue = attributes["clip-path"] === undefined ? "" : String(attributes["clip-path"]);
+  const clipValue = read("clip-path") ?? "";
   const clipId = clipValue.trim() === "none" ? null : referenceId(clipValue);
   const clip = clipId === null ? undefined : clips.get(clipId);
   if (clipId !== null && clip === undefined) {
@@ -398,16 +399,13 @@ export function svgToIr(source: string, target: SvgTarget): IRNode[] {
   // `fill="none"` there - the Figma export default. Skipping them filled every shape that has no
   // fill of its own with BLACK, which covered the drawing underneath.
   const rootAttributes = attributesOf(root);
+  const rootCss = declarationsFor(rules, "svg", {
+    class: rootAttributes["class"],
+    id: rootAttributes["id"],
+  });
   // The root is held to the same rule as its children: a filter or mask on it changes the picture.
-  refuseAttributes("svg", rootAttributes);
-  const rootStyle = resolveStyle(
-    ROOT_STYLE,
-    rootAttributes,
-    declarationsFor(rules, "svg", {
-      class: rootAttributes["class"],
-      id: rootAttributes["id"],
-    }),
-  );
+  refuseAttributes("svg", cascadedReader(rootAttributes, rootCss));
+  const rootStyle = resolveStyle(ROOT_STYLE, rootAttributes, rootCss);
   for (const child of elements(root)) walk(child, rootStyle, rules, clips, gradients, out, 1);
   out.push({ type: "transform-pop" }, { type: "clip-pop" });
   return out;

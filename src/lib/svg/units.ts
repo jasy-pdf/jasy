@@ -50,7 +50,12 @@ export function length(value: string | undefined, where: string, fallback = 0): 
   const parts = WITH_UNIT.exec(value.trim());
   if (parts) {
     const factor = ABSOLUTE[parts[2]!.toLowerCase()];
-    if (factor !== undefined) return Number(parts[1]) * factor;
+    if (factor !== undefined) {
+      // The conversion itself can overflow (`1e308in`), and a non-finite number reaches the content
+      // stream as the literal text `Infinity`.
+      const converted = Number(parts[1]) * factor;
+      return Number.isFinite(converted) ? converted : fallback;
+    }
     throw new SvgUnsupportedError(
       `the length "${value.trim()}" on ${where}`,
       "Only absolute units (px, pt, pc, in, cm, mm, q) and plain numbers are resolved.",

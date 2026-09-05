@@ -109,17 +109,52 @@ describe("gradient stops are kept inside what a PDF function accepts", () => {
 });
 
 describe("what the root and the outer API refuse", () => {
+  /** Both halves matter: the TYPE is what a caller catches, the hint is what they act on. */
+  const expectNamed = (run: () => unknown, feature: RegExp, hint: RegExp) => {
+    expect(run).toThrow(SvgUnsupportedError);
+    expect(run).toThrow(feature);
+    expect(run).toThrow(hint);
+  };
+
   it("holds the root <svg> to the same attribute rules as its children", () => {
-    expect(() => svgToIr(`<svg viewBox="0 0 10 10" filter="url(#f)"><rect/></svg>`, BOX)).toThrow(
-      /filter/,
+    expectNamed(
+      () => svgToIr(`<svg viewBox="0 0 10 10" filter="url(#f)"><rect/></svg>`, BOX),
+      /"filter" on <svg>/,
+      /rasterise that part to a PNG/,
     );
   });
 
   it("names a nested <svg>, which is a viewport and not a group", () => {
     // Walking it as a group would place and scale its children wrong, in silence.
-    expect(() => first(`<svg x="10" y="10"><rect width="5" height="5"/></svg>`)).toThrow(
+    expectNamed(
+      () => first(`<svg x="10" y="10"><rect width="5" height="5"/></svg>`),
       /nested <svg>/,
+      /Flatten it into the outer drawing/,
     );
+  });
+
+  it("sees a refused effect through the cascade, not just as a raw attribute", () => {
+    // `filter="url(#f)"` and `style="filter:url(#f)"` are the same instruction, and a <style> rule
+    // can set either - checking only the attribute let the other two through unnoticed.
+    expect(() => first(`<g style="filter:url(#f)"><rect width="9" height="9"/></g>`)).toThrow(
+      SvgUnsupportedError,
+    );
+    expect(() =>
+      first(`<style>.a{mask:url(#m)}</style><rect class="a" width="9" height="9"/>`),
+    ).toThrow(SvgUnsupportedError);
+  });
+
+  it("applies a clip set through the cascade too", () => {
+    const nodes = svgToIr(
+      `<svg viewBox="0 0 10 10"><clipPath id="c"><rect width="5" height="5"/></clipPath>` +
+        `<rect style="clip-path:url(#c)" width="9" height="9"/></svg>`,
+      BOX,
+    );
+    expect(nodes.some((n) => n.type === "clip-path-push")).toBe(true);
+  });
+
+  it("returns the fallback when a unit conversion overflows", () => {
+    expect(first(`<rect width="1e308in" height="10"/>`)).toBeUndefined();
   });
 
   it("names an .svgz, which is gzipped and not markup", () => {
