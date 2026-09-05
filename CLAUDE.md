@@ -851,9 +851,15 @@ Genuine remaining gaps / deferred:
    DONE too: `platform/browser-image.ts` decodes via OffscreenCanvas (transparency → `/SMask`), swapped for the
    jimp path by the `browser` field. Nice-to-haves left: compact-AFM (size), `addFontFromUrl()`. See todo.md.
 4. `manual-test` has hard-coded machine-specific paths.
-5. Font gaps: TTF / TrueType-flavoured OTF **and WOFF1** are parsed; OTF/CFF and **WOFF2** are not.
-   WOFF2 needs Brotli (which `fflate` does not do) and additionally TRANSFORMS `glyf`/`loca` rather than
-   merely deflating them - a different piece of work, not a bigger version of WOFF1. (TrueType kerning is
+5. Font gaps: TTF / TrueType-flavoured OTF, **WOFF1 and WOFF2** are parsed; OTF/CFF is not.
+   **WOFF2 landed 2026-09-05** (`utils/woff2.ts`): the container and the `glyf`/`loca` transform are
+   ours - WOFF2 does not merely deflate that table, it REWRITES it, points triplet-encoded across five
+   streams - and only Brotli is bought (`brotli`, imported LAZILY so a document without a WOFF2 never
+   loads it; fontkit, react-pdf's font engine, depends on the same package). Verified the way WOFF1
+   was: the same font in both containers, and all 6,253 DejaVu glyph outlines reconstruct identically.
+   The rendered page is pixel-identical to the `.ttf`'s; the PDF BYTES are not, because WOFF2 restores
+   geometry rather than the original glyph ENCODING. Unwrapped in `renderPdf`, not in
+   `registerCustomFont`, because the lazy Brotli import makes it async and that constructor is not. (TrueType kerning is
    DONE - `kern` table + GPOS, on by default since 2026-07-11; this line used to claim otherwise.)
    Bold/italic resolve via registered family variants with a clean fallback to `normal` (no faux styles).
    Color-emoji deferred (none blocking): COLR v1 **rotate/skew** transforms (24-31 —

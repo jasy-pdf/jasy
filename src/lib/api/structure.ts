@@ -19,6 +19,7 @@ import { loadFontFromUrl, type UrlFontSource } from "./font-url.ts";
 import { Insets, toEdges } from "./insets.ts";
 import { TextDefaults, toTextStyleOverride } from "./text.ts";
 import type { PDFObjectManager } from "../utils/pdf-object-manager.ts";
+import { isWoff2, woff2ToSfnt } from "../utils/woff2.ts";
 
 const MM_TO_PT = 72 / 25.4; // 1 mm in PDF points
 
@@ -167,6 +168,31 @@ const docFonts = new WeakMap<PDFDocumentElement, Map<string, FontBytes | FontFam
 // The document's color-emoji fallback source, kept beside the element and applied at render time.
 const docEmoji = new WeakMap<PDFDocumentElement, EmojiSource>();
 
+/**
+ * Unwraps a WOFF2 into plain sfnt bytes. WOFF1 is left alone - `registerCustomFont` handles it
+ * synchronously, having no dependency to load - so only the async case needs to happen up here.
+ */
+async function unwrapFontContainers(
+  fonts: Record<string, FontBytes | FontFamily>,
+): Promise<Record<string, FontBytes | FontFamily>> {
+  const convert = async (bytes: FontBytes): Promise<FontBytes> =>
+    isWoff2(bytes) ? await woff2ToSfnt(bytes) : bytes;
+
+  const out: Record<string, FontBytes | FontFamily> = {};
+  for (const [name, value] of Object.entries(fonts)) {
+    if (isFontBytes(value)) {
+      out[name] = await convert(value);
+      continue;
+    }
+    const family: FontFamily = { normal: await convert(value.normal) };
+    if (value.bold) family.bold = await convert(value.bold);
+    if (value.italic) family.italic = await convert(value.italic);
+    if (value.boldItalic) family.boldItalic = await convert(value.boldItalic);
+    out[name] = family;
+  }
+  return out;
+}
+
 /** Reads any path sources to bytes, leaving bytes / families as-is. */
 function resolveFontSource(source: FontSource): FontBytes | FontFamily {
   const read = (s: FontFileSource): FontBytes => (typeof s === "string" ? readFileBytes(s) : s);
@@ -313,10 +339,13 @@ export async function renderPdf(doc: PDFDocumentElement, options?: RenderOptions
   };
   // Fonts registered via doc.addFont(...) plus any passed in options (options win on a name clash).
   const registered = docFonts.get(doc);
-  const fonts: Record<string, FontBytes | FontFamily> = {
+  // Containers are unwrapped HERE, before the (synchronous) document constructor registers anything.
+  // WOFF2 needs Brotli, which is imported lazily and is therefore async - and this is the last async
+  // point every font passes through, whether it came from `addFont`, a URL, or these options.
+  const fonts = await unwrapFontContainers({
     ...Object.fromEntries(registered ?? []),
     ...options?.fonts,
-  };
+  });
   const attachments = options?.attachments ?? [];
   // The security handler's key derivation is async (WebCrypto), so build it here, before the sync
   // PDFDocument constructor wires it into the object manager.

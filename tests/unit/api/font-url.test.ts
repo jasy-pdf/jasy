@@ -77,7 +77,6 @@ describe("it refuses by name, never by failing deep inside the parser", () => {
     // `missing required table "head"`, which tells the user nothing about what they actually linked.
     for (const [tag, expected] of [
       ["OTTO", /OpenType\/CFF/],
-      ["wOF2", /WOFF2/],
       ["ttcf", /TrueType Collection/],
     ] as const) {
       stubFetch(() => ok(fontLike(tag)));
@@ -85,10 +84,13 @@ describe("it refuses by name, never by failing deep inside the parser", () => {
     }
   });
 
-  it("accepts a WOFF, which is only a wrapper around the same sfnt", async () => {
-    // Not a refusal case any more: the wrapper is unpacked when the font is registered.
-    stubFetch(() => ok(fontLike("wOFF")));
-    await expect(loadFontFromUrl("https://x.example/f.woff")).resolves.toBeInstanceOf(Uint8Array);
+  it("accepts both WOFF containers - each is a wrapper around the same sfnt", async () => {
+    // Neither is a refusal case: WOFF1 is unpacked when the font is registered, WOFF2 one step
+    // earlier in `renderPdf` (its Brotli decoder is loaded lazily, which makes it async).
+    for (const tag of ["wOFF", "wOF2"] as const) {
+      stubFetch(() => ok(fontLike(tag)));
+      await expect(loadFontFromUrl("https://x.example/f")).resolves.toBeInstanceOf(Uint8Array);
+    }
   });
 
   it("spots the classic mistake - a URL that returns an error PAGE", async () => {
@@ -185,7 +187,7 @@ describe("it refuses by name, never by failing deep inside the parser", () => {
   });
 
   it("throws a named error type, so a caller can tell it apart", async () => {
-    stubFetch(() => ok(fontLike("wOF2")));
+    stubFetch(() => ok(fontLike("OTTO")));
     await expect(loadFontFromUrl("https://x.example/f.ttf")).rejects.toBeInstanceOf(FontUrlError);
   });
 });

@@ -6,7 +6,8 @@ import { zlibSync } from "fflate";
 import { bytesFromLatin1, latin1FromBytes } from "./bytes.ts";
 import { AFMParser } from "./afm-parser.ts";
 import { mergeSpans, TTFParser } from "./ttf-parser.ts";
-import { isWoff, woffToSfnt } from "./woff.ts";
+import { WoffError, isWoff, woffToSfnt } from "./woff.ts";
+import { isWoff2 } from "./woff2.ts";
 import { subsetTTF } from "./ttf-subsetter.ts";
 import { shapeRun, type ShapedGlyph } from "../text/shape.ts";
 
@@ -746,6 +747,15 @@ endstream`;
     // A WOFF is the same sfnt behind a small wrapper, so it is unpacked HERE - the one place every
     // font path meets (a file, raw bytes, a URL, a browser upload) - and TTFParser never learns a
     // second container format.
+    // WOFF2 cannot be unwrapped here: its Brotli decoder is imported lazily, which makes it async,
+    // and this is a synchronous constructor path. `renderPdf` unwraps it one step earlier - so the
+    // only way to arrive here still packed is by calling the engine directly.
+    if (isWoff2(data)) {
+      throw new WoffError(
+        "a WOFF2 font reached the object manager still packed. Register it through addFont/Document " +
+          "({ fonts }) - unpacking WOFF2 needs Brotli, which is loaded asynchronously.",
+      );
+    }
     byStyle.set(style, new TTFParser(isWoff(data) ? woffToSfnt(data) : data));
     this.verticalsCache.delete(name); // this family now answers from the .ttf, not from an AFM
     this.decorationCache.delete(name);
