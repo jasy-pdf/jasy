@@ -111,7 +111,15 @@ export function Canvas(opts: CanvasOptions, paint: CanvasPaint): CanvasElement;
 export function Canvas(paint: CanvasPaint): CanvasElement;
 export function Canvas(a: CanvasOptions | CanvasPaint, b?: CanvasPaint): CanvasElement {
   const opts = typeof a === "function" ? {} : a;
-  const paint = typeof a === "function" ? a : b!;
+  const paint = typeof a === "function" ? a : b;
+  // Without it the renderer would call `undefined` and hand back a bare "paint is not a function",
+  // which says nothing about WHICH element or what to pass. A framework binding cannot cover this:
+  // Vue's `required: true` only warns, it still renders.
+  if (typeof paint !== "function") {
+    throw new Error(
+      "@jasy/pdf: Canvas needs a paint callback - Canvas({ width, height }, (c, size) => …).",
+    );
+  }
   const w = opts.width !== undefined ? toDimension(opts.width) : undefined;
   const h = opts.height !== undefined ? toDimension(opts.height) : undefined;
   return new CanvasElement({

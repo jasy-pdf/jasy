@@ -45,7 +45,7 @@ pnpm add @jasy/vue @jasy/pdf vue
 ## Components
 
 `Document` · `Page` · `Column` · `Row` · `Box` · `Padding` · `Expanded` · `Spacer` · `Divider` ·
-`Image` · `Svg` · `Text` · `Paragraph` · `Span` · `Table` / `TableRow` / `TableCell`.
+`Image` · `Svg` · `Canvas` · `Text` · `Paragraph` · `Span` · `Table` / `TableRow` / `TableCell`.
 
 ```vue
 <template>
@@ -130,6 +130,37 @@ zoom, and a fraction of a bitmap's size. `<Image>` recognises an SVG source by i
 With no size it draws at its intrinsic size; pin one axis and the other follows the `viewBox`. What the
 engine cannot express (`<text>`, filters, masks) is a NAMED error with a fix - never a silently wrong
 logo. See the [`@jasy/pdf` docs](https://jasy.dev) for the supported subset.
+
+## Drawing by hand
+
+`<Canvas :paint>` is the escape hatch for what no component covers - a sparkline, a seal, a chart.
+The callback is handed the size the layout resolved, so the same drawing works at any width:
+
+```vue
+<script setup lang="ts">
+import type { CanvasPainter } from "@jasy/pdf";
+
+const months = [12, 19, 14, 27, 22, 31];
+function sparkline(c: CanvasPainter, { width, height }: { width: number; height: number }) {
+  const max = Math.max(...months);
+  c.move(0, height - (months[0] / max) * height);
+  months
+    .slice(1)
+    .forEach((v, i) =>
+      c.line(((i + 1) / (months.length - 1)) * width, height - (v / max) * height),
+    );
+  c.stroke("#1450aa", { width: 1.5, cap: "round" });
+}
+</script>
+
+<template>
+  <Canvas :height="46" :paint="sparkline" />
+</template>
+```
+
+Typed to the value (`cap: "round"` autocompletes), no hidden state to reset, and one coordinate
+system - top-left, like every other element. A canvas is a block IN the layout, not a way around it:
+text still belongs in `<Text>`.
 
 ## API
 
