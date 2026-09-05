@@ -218,6 +218,7 @@ shared state.
 | `KeepTogetherElement`   | `elements/layout/keep-together-element.ts`   | `KeepTogetherRenderer` | transparent wrapper; vetoes a page-split (break-inside: avoid), degrades if > 1 page      |
 | form fields (6 classes) | `elements/forms/*.ts`                        | `FormFieldRenderer`    | AcroForm widgets; reserve a rect, emit a widget annotation. Shared spec: `forms/field.ts` |
 | `SvgElement`            | `elements/svg-element.ts`                    | `SvgRenderer`          | an SVG drawing; parsed at construction, `svg/` turns it into `Path` IR                    |
+| `CanvasElement`         | `elements/canvas-element.ts`                 | `CanvasRenderer`       | a box drawn by a callback; `canvas/painter.ts` records into `Path` IR                     |
 
 Every renderer's `render()` returns `Promise<IRNode[]>` (since roadmap Phase 1). Adding an element =
 new element + renderer that returns IR + (if it draws something new) a primitive in `ir/display-list.ts`
@@ -808,6 +809,20 @@ wordWidth > maxWidth` and forgot the SPACE that would join the word. It went uns
     the root `<svg>` is a VIEWPORT and clips to itself, and **its own presentation attributes were
     never read** - `fill="none"` sits there in 778 of the 10,819 files (the Figma export default), so
     every shape without its own fill came out BLACK and covered what was underneath.
+
+- ✅ **Canvas** (2026-09-05) - `Canvas({ width, height }, (c, size) => …)`, the imperative escape hatch.
+  The SECOND producer of the vector layer, so it needed no new IR and no backend change: everything it
+  draws is a `Path` node, which means it tags, paginates and runs in the browser like anything else.
+  Surface is react-pdf's painter feature for feature (`move line curve quad close rect circle ellipse
+polygon path fill stroke fillAndStroke group clipped`), with three deliberate differences that are
+  the whole reason to have our own: **typed to the value** (theirs is `painter: any`), **no hidden
+  state** (no `lineWidth(2)` a later `stroke()` picks up, no `save`/`restore` to forget - a transform
+  or clip is a SCOPE that closes itself), and **one coordinate system** (top-left, like every element
+  and like SVG). `c.path(d)` reuses the SVG path reader, and a gradient resolves against the shape's
+  own bounding box exactly as `objectBoundingBox` does. It is a block IN the layout, never a way around
+  it - no text layout, no pagination inside. What is beyond it but still expressible in PDF (text
+  render modes, blend modes, tiling patterns, CMYK/spot, soft masks, optional content) is in `todo.md`
+  under Roadmap to 1.1.
 
 Genuine remaining gaps / deferred:
 

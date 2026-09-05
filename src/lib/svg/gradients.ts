@@ -5,6 +5,7 @@ import type { Affine } from "../utils/ttf-parser.ts";
 import { SvgUnsupportedError } from "./errors.ts";
 import { IDENTITY, isIdentity, parseTransform } from "./transform.ts";
 import { svgColor, type Attributes } from "./style.ts";
+import { boundsOf } from "../vector/path.ts";
 import { ratio } from "./units.ts";
 import type { XmlElement, XmlNode } from "./xml.ts";
 
@@ -122,40 +123,6 @@ function inherited(
     current = current.href === undefined ? undefined : defs.get(current.href);
   }
   return { attributes, stops, opacities };
-}
-
-/** The bounding box of a shape, for `objectBoundingBox` units. Control points are included, which
- *  overstates a curve slightly - the same approximation every renderer makes here. */
-function boundsOf(commands: readonly PathCommand[]): {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-} {
-  let minX = Infinity,
-    minY = Infinity,
-    maxX = -Infinity,
-    maxY = -Infinity;
-  for (const c of commands) {
-    const points =
-      c.op === "c"
-        ? ([
-            [c.x1, c.y1],
-            [c.x2, c.y2],
-            [c.x, c.y],
-          ] as const)
-        : c.op === "z"
-          ? ([] as const)
-          : ([[c.x, c.y]] as const);
-    for (const [x, y] of points) {
-      minX = Math.min(minX, x);
-      maxX = Math.max(maxX, x);
-      minY = Math.min(minY, y);
-      maxY = Math.max(maxY, y);
-    }
-  }
-  if (!Number.isFinite(minX)) return { x: 0, y: 0, width: 0, height: 0 };
-  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
 }
 
 const SPREAD: Record<string, Gradient["extend"]> = {

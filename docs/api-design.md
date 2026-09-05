@@ -147,11 +147,15 @@ clockwise) and resolved against the box by the renderer.
 | `DefaultTextStyle(opts, children)` | cascaded text defaults for a subtree | `size`, `font`, `bold`, `italic`, `color`, `align`, `lineHeight`, `breakWord`, `hyphenate`§         | `DefaultTextStyleElement` |
 | `Image(src, opts)`                 | image; an SVG source routes to `Svg` | `fit`, **`radius`**, sizing†                                                                        | `ImageElement`            |
 | `Svg(source, opts)`                | vector drawing from SVG¶             | sizing†, `alt`                                                                                      | `SvgElement`              |
+| `Canvas(opts?, paint)`             | a box you draw into yourself‖        | sizing†, `alt`                                                                                      | `CanvasElement`           |
 | `Divider(opts?)`                   | horizontal rule                      | `color`, `thickness`, `margin`                                                                      | `LineElement`             |
 | `Line(opts)`                       | explicit line                        | `from`, `to`, `color`, `thickness`                                                                  | `LineElement`             |
 
 § **A word that does not fit** - `breakWord` and `hyphenate`, both off by default. See 6c. They are
 read per `Text`, not per `span`, which is why `span` does not list them.
+
+‖ **Canvas** - see 6e. The escape hatch for what no component covers; it is a block IN the layout,
+not a way around it.
 
 ¶ **SVG** - see 6d. `Image` recognises an SVG source itself, so `Image("logo.svg")` keeps a logo a
 VECTOR instead of turning it into a bitmap.
@@ -303,6 +307,47 @@ already worked. Going the other way would change existing output.
 **Measured against 10,819 real SVG files** from a working machine: 96.4% render. Correctness is
 checked against headless Chrome, not against our own reasoning - which is how the viewport clip, the
 `<svg fill="none">` inheritance and `svg-parser`'s id corruption were all found.
+
+---
+
+## 6e. Canvas - the imperative escape hatch (2026-09-05)
+
+```ts
+Canvas({ width: 300, height: 46 }, (c, { width, height }) => {
+  c.move(0, height)
+    .line(20, 12)
+    .line(60, 22)
+    .line(width, 4)
+    .stroke("#1450aa", { width: 1.5, cap: "round" });
+
+  c.circle(width - 4, 4, 2.5).fill(linearGradient({ angle: 180, stops: ["#1450aa", "#7aa5e8"] }));
+});
+```
+
+The surface is react-pdf's painter, feature for feature: `move line curve quad close rect circle
+ellipse polygon path fill stroke fillAndStroke group clipped`. Three things are deliberately
+different, and they are the whole argument for having our own:
+
+1. **Typed to the value.** `cap: "round"` autocompletes and a wrong one is a compile error.
+   react-pdf's callback receives `painter: any` - no help on the one thing you use.
+2. **No hidden state.** No `lineWidth(2)` that a later `stroke()` happens to pick up, and no
+   `save()`/`restore()` pair to forget: a transform or a clip is a SCOPE that closes itself
+   (`group({ rotate }, c => …)`, `clipped(build, draw)`).
+3. **One coordinate system.** Top-left, y down, points - the same as every element and the same as
+   SVG. `0,0` is the canvas box's own corner.
+
+With no size it FILLS the box it is offered (there is no intrinsic size to derive), and the callback
+is handed that resolved size, so a drawing written against `size.width` works at any width. It is
+clipped to its own box, tags as a `Figure` with `alt`, and paginates as one unbreakable block.
+
+**It is a block IN the layout, never a way around it.** Text belongs in `Text` - a canvas has no line
+breaking, no pagination inside it, and no structure tree of its own. That line is what keeps a
+document that uses one still reflow-able and still accessible.
+
+`Canvas` and `Svg` are the two producers of the same vector layer, so anything one can draw the other
+can. What is beyond both but still expressible in PDF - text render modes, blend modes, tiling
+patterns, CMYK and spot colours, soft masks, optional-content layers - is listed in `todo.md` under
+Roadmap to 1.1, each one independently shippable.
 
 ---
 

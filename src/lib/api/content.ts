@@ -19,6 +19,7 @@ import {
   toRadius,
 } from "./dimension.ts";
 import { SvgElement, type SvgSource } from "../elements/svg-element.ts";
+import { CanvasElement, type CanvasPaint } from "../elements/canvas-element.ts";
 
 /** A horizontal rule (locked §4). */
 export interface DividerOptions {
@@ -87,6 +88,44 @@ export interface ImageOptions extends BoundsInput {
   /** Alternate text for accessibility (tagged PDF): describes the image for screen readers. With `alt`
    *  the image is a `Figure`; without it (and when rendered `accessible`) it counts as decoration. */
   alt?: string;
+}
+
+/** Options for `Canvas`. Sizing only - what is drawn is entirely the callback's business. */
+export interface CanvasOptions extends BoundsInput {
+  width?: SizeInput;
+  height?: SizeInput;
+  /** Alternate text (tagged PDF). With it the drawing is a `Figure`; without it, decoration. */
+  alt?: string;
+}
+
+/**
+ * A box you draw into yourself - the escape hatch for what the declarative layer has no component
+ * for: a sparkline, a seal, a chart, a signature flourish.
+ *
+ * With no size it FILLS the box it is offered, because there is nothing to derive an intrinsic size
+ * from. The callback is handed that resolved size, so a drawing written against `size.width` works
+ * at any width. It is clipped to its own box: a canvas is a block IN the layout, never a way around
+ * it - text still belongs in `Text`, and this still paginates as one unbreakable block.
+ */
+export function Canvas(opts: CanvasOptions, paint: CanvasPaint): CanvasElement;
+export function Canvas(paint: CanvasPaint): CanvasElement;
+export function Canvas(a: CanvasOptions | CanvasPaint, b?: CanvasPaint): CanvasElement {
+  const opts = typeof a === "function" ? {} : a;
+  const paint = typeof a === "function" ? a : b!;
+  const w = opts.width !== undefined ? toDimension(opts.width) : undefined;
+  const h = opts.height !== undefined ? toDimension(opts.height) : undefined;
+  return new CanvasElement({
+    paint,
+    width: w?.points,
+    height: h?.points,
+    widthFactor: w?.factor,
+    heightFactor: h?.factor,
+    ...toBounds(opts),
+    alt: opts.alt,
+  })
+    .withAlignSelf(opts.alignSelf)
+    .withOrder(opts.order)
+    .withFlexShrink(opts.flexShrink) as CanvasElement;
 }
 
 /**

@@ -7,6 +7,7 @@ import {
   ExpandedElement,
   ImageElement,
   LineElement,
+  CanvasElement,
   PaddingElement,
   SvgElement,
   TextElement,
@@ -24,6 +25,7 @@ import { DefaultTextStyleRenderer } from "./default-text-style-renderer.ts";
 import { ImageRenderer } from "./image-renderer.ts";
 import { LineRenderer } from "./line-renderer.ts";
 import { SvgRenderer } from "./svg-renderer.ts";
+import { CanvasRenderer } from "./canvas-renderer.ts";
 import { RepeatingHeaderElement } from "../elements/layout/repeating-header-element.ts";
 import { RepeatingHeaderRenderer } from "./repeating-header-renderer.ts";
 import { DeferredElement } from "../elements/layout/deferred-element.ts";
@@ -84,6 +86,7 @@ export class PDFRenderer {
     RendererRegistry.register(ImageElement, ImageRenderer.render);
     RendererRegistry.register(LineElement, LineRenderer.render);
     RendererRegistry.register(SvgElement, SvgRenderer.render);
+    RendererRegistry.register(CanvasElement, CanvasRenderer.render);
     RendererRegistry.register(RepeatingHeaderElement, RepeatingHeaderRenderer.render);
     RendererRegistry.register(DeferredElement, DeferredRenderer.render);
     RendererRegistry.register(PositionedElement, PositionedRenderer.render);
