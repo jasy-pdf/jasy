@@ -8,6 +8,7 @@ import type {
   ImageSource,
   FontSource,
   PageSizeInput,
+  CanvasPaint,
   ColumnWidth,
   TextOverflow,
   TextRole,
@@ -119,6 +120,15 @@ const imageProps = {
 // which is its own default, and asking for anything else is a named error in the engine.
 const svgProps = {
   src: [String, Object] as PropType<string | Uint8Array>,
+  width: Number,
+  height: Number,
+  /** Alternate text (tagged PDF). With it the drawing is a `Figure`; without it, decoration. */
+  alt: String,
+};
+// `<JasyCanvas :paint="fn">` - a function is a prop like any other value. With no size the canvas
+// FILLS the box it is offered, and the callback is handed that resolved size.
+const canvasProps = {
+  paint: Function as PropType<CanvasPaint>,
   width: Number,
   height: Number,
   /** Alternate text (tagged PDF). With it the drawing is a `Figure`; without it, decoration. */
@@ -254,6 +264,12 @@ export const Image = defineComponent({
   inheritAttrs: false,
   props: imageProps,
   setup: fwd("image"),
+});
+export const Canvas = defineComponent({
+  name: "JasyCanvas",
+  inheritAttrs: false,
+  props: canvasProps,
+  setup: fwd("canvas"),
 });
 export const Svg = defineComponent({
   name: "JasySvg",
