@@ -33,7 +33,7 @@ function describeSignature(bytes: Uint8Array): { ok: boolean; what: string } {
   if (tag === "OTTO")
     return { ok: false, what: "an OpenType/CFF font, which jasy does not parse yet" };
   if (tag === "wOFF") return { ok: true, what: "WOFF" };
-  if (tag === "wOF2") return { ok: false, what: "a WOFF2 font, which jasy does not parse yet" };
+  if (tag === "wOF2") return { ok: true, what: "WOFF2" };
   if (tag === "ttcf")
     return { ok: false, what: "a TrueType Collection, which jasy does not parse yet" };
   if (tag.startsWith("<") || tag === "%PDF") return { ok: false, what: "not a font at all" };
@@ -127,7 +127,8 @@ async function fetchFont(url: string): Promise<Uint8Array> {
   const { ok, what } = describeSignature(bytes);
   if (!ok) {
     throw new FontUrlError(
-      `the file at ${url} is ${what}. jasy embeds TrueType-flavoured fonts (.ttf and .woff)`,
+      `the file at ${url} is ${what}. jasy embeds TrueType-flavoured fonts ` +
+        `(.ttf, .woff and .woff2)`,
     );
   }
   return bytes;
