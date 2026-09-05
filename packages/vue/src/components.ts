@@ -114,6 +114,16 @@ const imageProps = {
   fit: String as PropType<"none" | "contain" | "cover" | "fill">,
   radius: Number,
 };
+// `<JasySvg>` takes the same three source shapes as the factory: markup, a file path (Node only) or
+// the file's bytes. `fit` and `radius` are deliberately absent - an SVG is always drawn contained,
+// which is its own default, and asking for anything else is a named error in the engine.
+const svgProps = {
+  src: [String, Object] as PropType<string | Uint8Array>,
+  width: Number,
+  height: Number,
+  /** Alternate text (tagged PDF). With it the drawing is a `Figure`; without it, decoration. */
+  alt: String,
+};
 const dividerProps = { color: colorProp, thickness: Number, margin: insetsProp };
 const pageProps = {
   size: [String, Object] as PropType<PageSizeInput>,
@@ -244,6 +254,12 @@ export const Image = defineComponent({
   inheritAttrs: false,
   props: imageProps,
   setup: fwd("image"),
+});
+export const Svg = defineComponent({
+  name: "JasySvg",
+  inheritAttrs: false,
+  props: svgProps,
+  setup: fwd("svg"),
 });
 export const Text = defineComponent({
   name: "JasyText",

@@ -19,7 +19,7 @@ import {
   Rotated,
   RotatedBox,
 } from "./layout.ts";
-import { Divider, Image } from "./content.ts";
+import { Divider, Image, Svg } from "./content.ts";
 import { Page, Document, DefaultTextStyle } from "./structure.ts";
 import { PageNumber, PageCount } from "./page-builder.ts";
 import { Table, Cell } from "./table.ts";
@@ -137,6 +137,8 @@ const REGISTRY: Record<string, ElementFactory> = {
   "keep-together": (_props, children) => keepTogether(elementChildren(children)),
   divider: (props) => Divider(props),
   image: (props) => Image(props.src, props),
+  // `src` is markup, a path or bytes - the same three the factory takes.
+  svg: (props) => Svg(props.src, props),
   text: (props, children) => Text(textContent(children), props),
   paragraph: (props, children) => Paragraph(textContent(children), props),
   // `<Table>` reads its `<TableRow>`/`<TableCell>` structure raw; one row may be marked `header`.
