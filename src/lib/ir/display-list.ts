@@ -239,6 +239,9 @@ export interface LinearGradient {
   y1: number;
   stops: GradientStop[];
   extend: "pad" | "repeat" | "reflect";
+  /** One opacity for the whole shading (0-1). A PDF shading is DeviceRGB and has no alpha channel,
+   *  so a PER-STOP alpha is not representable - but a uniform one is, as an ExtGState. */
+  alpha?: number;
 }
 
 /** A radial gradient between two circles, in absolute page coordinates. */
@@ -252,6 +255,9 @@ export interface RadialGradient {
   r1: number;
   stops: GradientStop[];
   extend: "pad" | "repeat" | "reflect";
+  /** One opacity for the whole shading (0-1). A PDF shading is DeviceRGB and has no alpha channel,
+   *  so a PER-STOP alpha is not representable - but a uniform one is, as an ExtGState. */
+  alpha?: number;
 }
 
 export type Gradient = LinearGradient | RadialGradient;

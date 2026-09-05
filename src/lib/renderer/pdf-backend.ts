@@ -377,7 +377,8 @@ export class PdfBackend {
           node.fill !== undefined && !(node.fill instanceof Color) ? node.fill : undefined;
         if (gradient) {
           const shading = om.registerShading(gradient);
-          let out = `q\n${path} W n\n/${shading} sh\nQ\n`;
+          const gsFill = PdfBackend.alphaPrefix(om, gradient.alpha ?? 1, 1);
+          let out = `q\n${gsFill}${path} W n\n/${shading} sh\nQ\n`;
           if (doStroke) {
             const gsStroke = PdfBackend.alphaPrefix(om, 1, node.stroke!.getAlpha());
             const stroke =
@@ -509,7 +510,8 @@ export class PdfBackend {
           // A stroke cannot share that q/Q: the clip would cut the outline in half, because a stroke
           // straddles the edge. So it is drawn afterwards, over the same path.
           const shading = om.registerShading(node.fill);
-          const filled = `q\n${path}W${star} n\n/${shading} sh\nQ\n`;
+          const gsFill = PdfBackend.alphaPrefix(om, node.fill.alpha ?? 1, 1);
+          const filled = `q\n${gsFill}${path}W${star} n\n/${shading} sh\nQ\n`;
           if (!stroke) return filled;
           const gsStroke = PdfBackend.alphaPrefix(om, 1, stroke.color.getAlpha());
           return `${filled}q\n${gsStroke}${PdfBackend.strokeState(stroke)}${path}S\nQ\n`;

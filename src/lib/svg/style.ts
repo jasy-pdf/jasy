@@ -11,9 +11,16 @@ import { SvgUnsupportedError } from "./errors.ts";
  * `<g>`. A `<style>` block with class selectors is a third way and is not resolved yet - it is a
  * NAMED error, not a silent loss, because that is exactly the case that leaves a logo blank.
  */
+/** A paint is a colour, or a `url(#id)` reference that only the SHAPE can resolve - a gradient in
+ *  the default `objectBoundingBox` units is positioned on the bounding box of the thing it fills. */
+export type PaintRef = { ref: string };
+export type SvgPaint = Color | PaintRef;
+export const isPaintRef = (paint: SvgPaint | undefined): paint is PaintRef =>
+  paint !== undefined && !(paint instanceof Color);
+
 export interface SvgStyle {
-  /** Absent = `fill="none"`. The RAW colour - see `paintAlpha` for why the opacity is not in it. */
-  fill?: Color;
+  /** Absent = `fill="none"`. The RAW paint - see `paintAlpha` for why the opacity is not in it. */
+  fill?: SvgPaint;
   fillRule: "nonzero" | "evenodd";
   stroke?: StrokeStyle;
   /** `currentColor` resolves to this; set by the `color` attribute, black at the root. */
@@ -56,7 +63,9 @@ interface StrokeParts {
   dashOffset?: number;
 }
 
-export type Attributes = Record<string, string | number | undefined>;
+/** Raw attributes, exactly as written. Our own XML reader never coerces them (`svg-parser` did,
+ *  turning `id="58310095e0"` into a number). */
+export type Attributes = Record<string, string | undefined>;
 
 /** Splits a `style=""` bag into declarations. It wins over both other sources, as in CSS. */
 function styleBag(value: string | number | undefined): Record<string, string> {
@@ -81,14 +90,18 @@ const numbers = (list: string): number[] => {
  * with `fill="none"` and a stroke draws its outline only. A `url(#...)` reference means a gradient or
  * pattern, which we do not resolve yet and therefore name.
  */
-function paint(value: string, current: Color): Color | undefined {
+function paint(value: string, current: Color): SvgPaint | undefined {
   const v = value.trim();
   if (v === "none") return undefined;
   if (v === "currentColor") return current;
+  const reference = /^url\(\s*#([^)\s]+)\s*\)/.exec(v);
+  // A paint reference may name a fallback after it (`url(#g) red`), which is what a renderer uses
+  // when the reference is broken - so it is kept as the reference, and resolution decides.
+  if (reference) return { ref: reference[1]! };
   if (v.startsWith("url(")) {
     throw new SvgUnsupportedError(
-      `a "${v}" paint reference (gradient or pattern)`,
-      "Flatten it to a solid colour, or wait for gradient support.",
+      `the paint "${v}"`,
+      "Only a `url(#id)` reference to a gradient is resolved.",
     );
   }
   return toColor(v);
@@ -120,8 +133,17 @@ export function resolveStyle(
   const strokeValue = read("stroke");
   const dashValue = read("stroke-dasharray");
 
+  const strokePaint = strokeValue !== undefined ? paint(strokeValue, color) : parent.stroke?.color;
+  if (isPaintRef(strokePaint)) {
+    // PDF strokes with a colour, never with a shading; painting the outline solid would be a colour
+    // the file did not name.
+    throw new SvgUnsupportedError(
+      "a gradient on a stroke",
+      "PDF strokes with a colour only. Use a solid stroke, or convert the outline to a filled shape.",
+    );
+  }
   const parts: StrokeParts = {
-    color: strokeValue !== undefined ? paint(strokeValue, color) : parent.stroke?.color,
+    color: strokePaint,
     width: Number(read("stroke-width") ?? parent.stroke?.width ?? 1),
     cap: (read("stroke-linecap") as StrokeStyle["cap"]) ?? parent.stroke?.cap,
     join: (read("stroke-linejoin") as StrokeStyle["join"]) ?? parent.stroke?.join,

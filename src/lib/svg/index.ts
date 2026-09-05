@@ -1,5 +1,5 @@
 import { parseXml, type XmlElement, type XmlNode } from "./xml.ts";
-import type { IRNode } from "../ir/display-list.ts";
+import type { Gradient, IRNode } from "../ir/display-list.ts";
 import type { Affine } from "../utils/ttf-parser.ts";
 import { SvgParseError, SvgUnsupportedError } from "./errors.ts";
 import { IDENTITY, isIdentity, multiply, parseTransform } from "./transform.ts";
@@ -7,7 +7,15 @@ import { shapeOf } from "./shapes.ts";
 import { transformCommands } from "../vector/path.ts";
 import type { PathCommand } from "../ir/display-list.ts";
 import { declarationsFor, parseStylesheet, type CssRule } from "./css.ts";
-import { ROOT_STYLE, paintAlpha, resolveStyle, type Attributes, type SvgStyle } from "./style.ts";
+import {
+  ROOT_STYLE,
+  isPaintRef,
+  paintAlpha,
+  resolveStyle,
+  type Attributes,
+  type SvgStyle,
+} from "./style.ts";
+import { gradientsOf, resolveSvgGradient, type GradientDef } from "./gradients.ts";
 
 export { SvgParseError, SvgUnsupportedError } from "./errors.ts";
 
@@ -33,7 +41,15 @@ export interface SvgSize {
  * collected BEFOREHAND (see `stylesheetOf`); skipping it without reading it turned an Illustrator
  * export black.
  */
-const IGNORED = new Set(["defs", "title", "desc", "metadata", "style"]);
+const IGNORED = new Set([
+  "defs",
+  "title",
+  "desc",
+  "metadata",
+  "style",
+  "linearGradient",
+  "radialGradient",
+]);
 
 /** What each unsupported element should tell the user to do instead. */
 const HINTS: Record<string, string> = {
@@ -199,6 +215,23 @@ function clipPathsOf(node: XmlNode, into = new Map<string, ClipShape>()): Map<st
   return into;
 }
 
+/** The shape's own `fill-opacity`/`opacity` multiply into the gradient's, exactly as they do into a
+ *  solid colour's alpha. */
+const gradientWithAlpha = (gradient: Gradient, alpha: number): Gradient =>
+  alpha >= 1 ? gradient : { ...gradient, alpha: (gradient.alpha ?? 1) * alpha };
+
+/** A referenced gradient, or a named error - SVG says an unresolvable paint reference is invalid. */
+function gradientDef(defs: ReadonlyMap<string, GradientDef>, id: string): GradientDef {
+  const def = defs.get(id);
+  if (!def) {
+    throw new SvgUnsupportedError(
+      `fill="url(#${id})" - no gradient with that id in this file`,
+      "It may be a <pattern>, which is not supported, or a broken reference.",
+    );
+  }
+  return def;
+}
+
 /** The id inside a `url(#id)` reference, or null if the value is not one. */
 function referenceId(value: string): string | null {
   return /^url\(\s*#([^)\s]+)\s*\)$/.exec(value.trim())?.[1] ?? null;
@@ -209,6 +242,7 @@ function walk(
   parentStyle: SvgStyle,
   rules: readonly CssRule[],
   clips: ReadonlyMap<string, ClipShape>,
+  gradients: ReadonlyMap<string, GradientDef>,
   out: IRNode[],
 ): void {
   const tagName = localName(node.tagName);
@@ -250,7 +284,7 @@ function walk(
   }
 
   if (tagName === "g" || tagName === "svg") {
-    for (const child of elements(node)) walk(child, style, rules, clips, out);
+    for (const child of elements(node)) walk(child, style, rules, clips, gradients, out);
   } else {
     const commands = shapeOf(tagName, attributes);
     if (commands === null) {
@@ -262,11 +296,20 @@ function walk(
     // A shape with neither fill nor stroke, or with no geometry, paints nothing - and an empty Path
     // node would only cost bytes.
     if (commands.length > 0 && (style.fill || style.stroke)) {
+      // A gradient is resolved HERE too, and for the same reason: in its default units its anchors
+      // are fractions of the SHAPE's bounding box, which only exists at this point.
+      const shapeAlpha = style.fillOpacity * style.opacity;
+      const fill = isPaintRef(style.fill)
+        ? gradientWithAlpha(
+            resolveSvgGradient(gradientDef(gradients, style.fill.ref), gradients, commands),
+            shapeAlpha,
+          )
+        : style.fill && paintAlpha(style.fill, shapeAlpha);
       // The opacities are applied HERE, once, on the shape that paints - see `paintAlpha`.
       out.push({
         type: "path",
         commands,
-        fill: style.fill && paintAlpha(style.fill, style.fillOpacity * style.opacity),
+        fill,
         fillRule: style.fillRule,
         stroke: style.stroke && {
           ...style.stroke,
@@ -320,7 +363,20 @@ export function svgToIr(source: string, target: SvgTarget): IRNode[] {
   ];
   const rules = parseStylesheet(stylesheetOf(root).join("\n"));
   const clips = clipPathsOf(root);
-  for (const child of elements(root)) walk(child, ROOT_STYLE, rules, clips, out);
+  const gradients = gradientsOf(root);
+  // The root <svg> carries presentation attributes of its own, and 778 of 10,819 real files put
+  // `fill="none"` there - the Figma export default. Skipping them filled every shape that has no
+  // fill of its own with BLACK, which covered the drawing underneath.
+  const rootAttributes = attributesOf(root);
+  const rootStyle = resolveStyle(
+    ROOT_STYLE,
+    rootAttributes,
+    declarationsFor(rules, "svg", {
+      class: rootAttributes["class"],
+      id: rootAttributes["id"],
+    }),
+  );
+  for (const child of elements(root)) walk(child, rootStyle, rules, clips, gradients, out);
   out.push({ type: "transform-pop" }, { type: "clip-pop" });
   return out;
 }
