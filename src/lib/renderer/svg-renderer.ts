@@ -9,7 +9,7 @@ import { svgToIr } from "../svg/index.ts";
  * that colour emoji already draw through carries it.
  */
 export class SvgRenderer {
-  static async render(element: SvgElement, _objectManager: PDFObjectManager): Promise<IRNode[]> {
+  static async render(element: SvgElement, objectManager: PDFObjectManager): Promise<IRNode[]> {
     const { x, y, width, height, source, alt } = element.getProps();
     const nodes = svgToIr(source, {
       x: x ?? 0,
@@ -17,9 +17,14 @@ export class SvgRenderer {
       width: width ?? 0,
       height: height ?? 0,
     });
-    if (alt === undefined) return nodes;
-    // With alt text the whole drawing is one Figure; without it, decoration (an Artifact).
-    const tag = { role: "Figure", key: element.structId, alt };
+    // Accessible tagging: a drawing WITH alt text is one Figure - every path of it belongs to the
+    // same struct element, which is what `openElement` keyed on `structId` gives us. Without alt it
+    // stays untagged and the backend treats it as decoration (an Artifact).
+    if (!alt || !objectManager.struct.enabled) return nodes;
+    const tag = {
+      role: "Figure",
+      key: objectManager.struct.openElement(element.structId, "Figure", { alt }),
+    };
     return nodes.map((node) => (node.type === "path" ? { ...node, tag } : node));
   }
 }

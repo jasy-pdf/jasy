@@ -1,10 +1,10 @@
 import { Color } from "../common/color.ts";
-import { toColor } from "../api/color.ts";
+
 import type { Gradient, GradientStop, PathCommand } from "../ir/display-list.ts";
 import type { Affine } from "../utils/ttf-parser.ts";
 import { SvgUnsupportedError } from "./errors.ts";
 import { IDENTITY, isIdentity, parseTransform } from "./transform.ts";
-import type { Attributes } from "./style.ts";
+import { svgColor, type Attributes } from "./style.ts";
 import type { XmlElement, XmlNode } from "./xml.ts";
 
 /**
@@ -61,7 +61,7 @@ function readStop(element: XmlElement): { stop: GradientStop; opacity: number } 
   return {
     stop: {
       offset: num(read("offset"), 0),
-      color: colorText === "currentColor" ? new Color(0, 0, 0) : toColor(colorText),
+      color: colorText === "currentColor" ? new Color(0, 0, 0) : svgColor(colorText),
     },
     opacity,
   };
@@ -71,8 +71,11 @@ function readStop(element: XmlElement): { stop: GradientStop; opacity: number } 
 export function gradientsOf(
   node: XmlNode,
   into = new Map<string, GradientDef>(),
+  depth = 0,
 ): Map<string, GradientDef> {
-  if (node.type !== "element") return into;
+  // Bounded like the walk in `index.ts`: this recurses, and a pathological file must not blow the
+  // call stack with a raw RangeError.
+  if (node.type !== "element" || depth > 256) return into;
   const name = localName(node.tagName);
   if (name === "linearGradient" || name === "radialGradient") {
     const id = node.attributes["id"];
@@ -91,7 +94,7 @@ export function gradientsOf(
     }
     return into;
   }
-  for (const child of node.children) gradientsOf(child, into);
+  for (const child of node.children) gradientsOf(child, into, depth + 1);
   return into;
 }
 

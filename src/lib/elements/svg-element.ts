@@ -1,5 +1,5 @@
 import { readFileBytes } from "../platform/node-fs.ts";
-import { svgSize, type SvgSize } from "../svg/index.ts";
+import { SvgParseError, svgSize, svgToIr, type SvgSize } from "../svg/index.ts";
 import {
   BoxConstraints,
   Offset,
@@ -26,6 +26,23 @@ interface SvgElementParams extends SizingParams {
 const looksLikeMarkup = (value: string): boolean => /^\s*[<﻿]/.test(value);
 
 /**
+ * Reads the file, or says what went wrong in the caller's terms. A string that is neither markup nor
+ * a readable path would otherwise surface as a bare `ENOENT`, which never mentions that the argument
+ * was taken as a PATH in the first place.
+ */
+function readSource(path: string): Uint8Array {
+  try {
+    return readFileBytes(path);
+  } catch (error) {
+    const shown = path.length > 80 ? `${path.slice(0, 77)}...` : path;
+    throw new SvgParseError(
+      `could not read "${shown}" as an SVG file. It does not start with "<", so it was taken as a ` +
+        `path: ${(error as Error).message}`,
+    );
+  }
+}
+
+/**
  * An SVG drawing placed in the layout like an image.
  *
  * Unlike a bitmap it needs no decoder, so its intrinsic size is known SYNCHRONOUSLY, in the
@@ -50,10 +67,14 @@ export class SvgElement extends SizedPDFElement {
       typeof source === "string"
         ? looksLikeMarkup(source)
           ? source
-          : new TextDecoder().decode(readFileBytes(source))
+          : new TextDecoder().decode(readSource(source))
         : new TextDecoder().decode(source);
-    // Parsed here on purpose: an unreadable file is an error where it was named.
+    // Parsed here on purpose: an unreadable file is an error where it was NAMED, not inside a render
+    // three call frames later. The whole document is walked, not just its root, so an element outside
+    // the subset surfaces here too - which is what makes the error predictable rather than a lottery
+    // between construction and render time. A logo parses in well under a millisecond.
     this.intrinsic = svgSize(this.source);
+    svgToIr(this.source, { x: 0, y: 0, width: 1, height: 1 });
     this.alt = alt;
     this.sizing = sizing;
     this.requested = { width: params.width, height: params.height };

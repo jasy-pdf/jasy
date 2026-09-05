@@ -83,14 +83,15 @@ function localName(tagName: string): string | null {
  * The text of every `<style>` block in the document, wherever it sits - commonly inside `<defs>`,
  * which the walk skips, so it has to be gathered in its own pass over the whole tree.
  */
-function stylesheetOf(node: XmlNode, out: string[] = []): string[] {
+function stylesheetOf(node: XmlNode, out: string[] = [], depth = 0): string[] {
+  if (depth > MAX_DEPTH) return out;
   if (node.type === "element" && localName(node.tagName) === "style") {
     for (const child of node.children ?? []) {
       if (child.type === "text") out.push(child.value);
     }
     return out;
   }
-  for (const child of elements(node)) stylesheetOf(child, out);
+  for (const child of elements(node)) stylesheetOf(child, out, depth + 1);
   return out;
 }
 
@@ -177,7 +178,12 @@ interface ClipShape {
  * A child's own `transform` is baked into the coordinates rather than left in the graphics state: a
  * clip is set from the path in the CURRENT space, so there is no state to put it in.
  */
-function clipPathsOf(node: XmlNode, into = new Map<string, ClipShape>()): Map<string, ClipShape> {
+function clipPathsOf(
+  node: XmlNode,
+  into = new Map<string, ClipShape>(),
+  depth = 0,
+): Map<string, ClipShape> {
+  if (depth > MAX_DEPTH) return into;
   if (node.type === "element" && localName(node.tagName) === "clipPath") {
     const attributes = attributesOf(node);
     const id = attributes["id"] === undefined ? undefined : String(attributes["id"]);
@@ -211,7 +217,7 @@ function clipPathsOf(node: XmlNode, into = new Map<string, ClipShape>()): Map<st
     }
     return into;
   }
-  for (const child of elements(node)) clipPathsOf(child, into);
+  for (const child of elements(node)) clipPathsOf(child, into, depth + 1);
   return into;
 }
 
@@ -237,6 +243,13 @@ function referenceId(value: string): string | null {
   return /^url\(\s*#([^)\s]+)\s*\)$/.exec(value.trim())?.[1] ?? null;
 }
 
+/**
+ * How deep the element tree may nest. The walk is recursive, so a pathological file - generated,
+ * corrupt, or hostile - would otherwise blow the call stack with a raw `RangeError` instead of an
+ * error the caller can act on. Real drawings nest a couple of dozen deep at most.
+ */
+const MAX_DEPTH = 256;
+
 function walk(
   node: XmlElement,
   parentStyle: SvgStyle,
@@ -244,7 +257,13 @@ function walk(
   clips: ReadonlyMap<string, ClipShape>,
   gradients: ReadonlyMap<string, GradientDef>,
   out: IRNode[],
+  depth = 0,
 ): void {
+  if (depth > MAX_DEPTH) {
+    throw new SvgParseError(
+      `the SVG nests more than ${MAX_DEPTH} levels deep - it is not a drawing.`,
+    );
+  }
   const tagName = localName(node.tagName);
   if (tagName === null || IGNORED.has(tagName)) return;
   // A clipPath's own children are geometry for the clip, never ink.
@@ -284,7 +303,7 @@ function walk(
   }
 
   if (tagName === "g" || tagName === "svg") {
-    for (const child of elements(node)) walk(child, style, rules, clips, gradients, out);
+    for (const child of elements(node)) walk(child, style, rules, clips, gradients, out, depth + 1);
   } else {
     const commands = shapeOf(tagName, attributes);
     if (commands === null) {
@@ -376,7 +395,7 @@ export function svgToIr(source: string, target: SvgTarget): IRNode[] {
       id: rootAttributes["id"],
     }),
   );
-  for (const child of elements(root)) walk(child, rootStyle, rules, clips, gradients, out);
+  for (const child of elements(root)) walk(child, rootStyle, rules, clips, gradients, out, 1);
   out.push({ type: "transform-pop" }, { type: "clip-pop" });
   return out;
 }

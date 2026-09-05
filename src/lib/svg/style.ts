@@ -1,7 +1,7 @@
 import { Color } from "../common/color.ts";
 import { toColor } from "../api/color.ts";
 import type { StrokeStyle } from "../ir/display-list.ts";
-import { SvgUnsupportedError } from "./errors.ts";
+import { SvgParseError, SvgUnsupportedError } from "./errors.ts";
 
 /**
  * The presentation style of one element, resolved against its parent's.
@@ -104,7 +104,22 @@ function paint(value: string, current: Color): SvgPaint | undefined {
       "Only a `url(#id)` reference to a gradient is resolved.",
     );
   }
-  return toColor(v);
+  return svgColor(v);
+}
+
+/**
+ * A colour, with the value quoted in the message. `toColor` throws a bare `Unknown color: "x"`, which
+ * inside a 900-element logo says nothing about WHERE - and a malformed file reaches here with pieces
+ * of its own markup as the value, so the raw error is actively misleading.
+ */
+export function svgColor(value: string): Color {
+  try {
+    return toColor(value);
+  } catch {
+    throw new SvgParseError(
+      `"${value}" is not a colour this SVG can use - expected a name, #hex, rgb() or hsl().`,
+    );
+  }
 }
 
 /**
@@ -126,7 +141,7 @@ export function resolveStyle(
     return value === undefined ? undefined : String(value);
   };
 
-  const color = read("color") !== undefined ? toColor(read("color")!) : parent.color;
+  const color = read("color") !== undefined ? svgColor(read("color")!) : parent.color;
   const opacity = parent.opacity * Number(read("opacity") ?? 1);
 
   const fillValue = read("fill");
