@@ -128,7 +128,7 @@ const svgProps = {
 // `<JasyCanvas :paint="fn">` - a function is a prop like any other value. With no size the canvas
 // FILLS the box it is offered, and the callback is handed that resolved size.
 const canvasProps = {
-  paint: Function as PropType<CanvasPaint>,
+  paint: { type: Function as PropType<CanvasPaint>, required: true as const },
   width: Number,
   height: Number,
   /** Alternate text (tagged PDF). With it the drawing is a `Figure`; without it, decoration. */

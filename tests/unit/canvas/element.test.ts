@@ -45,6 +45,14 @@ describe("the box", () => {
   });
 });
 
+describe("a Canvas without a callback", () => {
+  it("says what is missing, instead of `paint is not a function`", () => {
+    // A framework binding cannot cover this on its own: Vue's `required: true` only WARNS, it still
+    // renders - so the guard has to sit where the element is named.
+    expect(() => Canvas({ width: 10, height: 10 } as never)).toThrow(/needs a paint callback/);
+  });
+});
+
 describe("what it draws reaches the page", () => {
   it("writes the fill colour into the content stream", async () => {
     const pdf = await render(

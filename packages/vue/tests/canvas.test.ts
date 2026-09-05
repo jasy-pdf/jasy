@@ -30,6 +30,11 @@ describe("<JasyCanvas>", () => {
     expect(page.children[0]!.props["paint"]).toBe(draw);
   });
 
+  it("marks paint as required, so a missing one is a type error and a dev warning", () => {
+    const prop = (Canvas as { props: { paint: { required?: boolean } } }).props.paint;
+    expect(prop.required).toBe(true);
+  });
+
   it("renders what the callback drew", async () => {
     const pdf = await renderToPdfString(
       comp(() =>
