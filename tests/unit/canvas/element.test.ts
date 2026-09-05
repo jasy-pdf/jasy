@@ -22,6 +22,21 @@ describe("the box", () => {
     expect(seen).toBe(200);
   });
 
+  it("keeps the clip on the LAYOUT box even if the callback writes to its size", async () => {
+    // The painter, the callback and the clip used to share one object, so `size.width = 999` moved
+    // the clip away from the box the layout had reserved.
+    const pdf = await render(
+      Canvas({ width: 50, height: 20 }, (c, size) => {
+        size.width = 999;
+        (c as unknown as { size: { height: number } }).size.height = 999;
+        c.rect(0, 0, 5, 5).fill();
+      }),
+    );
+    // The clip rect the backend writes: "<x> <y> <w> <h> re".
+    const clip = /([-\d.]+) ([-\d.]+) ([-\d.]+) ([-\d.]+) re/.exec(pdf);
+    expect(clip?.slice(3, 5)).toEqual(["50", "20"]);
+  });
+
   it("clips to its own box, so a drawing cannot bleed into the layout beside it", async () => {
     const pdf = await render(
       Canvas({ width: 50, height: 20 }, (c) => void c.rect(0, 0, 5, 5).fill()),
