@@ -326,7 +326,10 @@ interface Outlines {
  */
 function rebuildOutlines(data: Uint8Array): Outlines {
   const head = new Reader(data);
-  head.u32(); // version
+  head.u16(); // reserved
+  // Bit 0 says a bitmap follows the seven streams, marking the simple glyphs whose contours OVERLAP.
+  // It is a rasterizer hint, not geometry - but dropping it would quietly change what the file says.
+  const optionFlags = head.u16();
   const numGlyphs = head.u16();
   const indexFormat = head.u16();
   const sizes = [0, 0, 0, 0, 0, 0, 0].map(() => head.u32());
@@ -346,9 +349,15 @@ function rebuildOutlines(data: Uint8Array): Outlines {
   const composites = slice(compositeSize);
   const bboxes = slice(bboxSize);
   const instructions = slice(instructionSize);
+  // Whatever is left is the overlap bitmap, so its padding rule does not have to be guessed at.
+  const overlapBitmap = optionFlags & 1 ? data.subarray(at) : undefined;
+  const overlaps = (i: number): boolean =>
+    overlapBitmap !== undefined && ((overlapBitmap[i >> 3] ?? 0) >> (7 - (i & 7))) % 2 === 1;
 
-  // The bbox stream opens with one bit per glyph: is its bounding box stored, or to be computed?
-  const bitmapBytes = Math.ceil(numGlyphs / 8);
+  // The bbox stream opens with one bit per glyph: is its bounding box stored, or to be computed? The
+  // bitmap is PADDED to a four-byte boundary - reading only ceil(numGlyphs/8) leaves up to three
+  // bytes behind and every following bbox is read shifted, which no outline test would ever notice.
+  const bitmapBytes = 4 * Math.ceil(numGlyphs / 32);
   const bitmap = bboxes.take(bitmapBytes);
   const hasBbox = (i: number): boolean => ((bitmap[i >> 3]! >> (7 - (i & 7))) & 1) === 1;
 
@@ -434,7 +443,7 @@ function rebuildOutlines(data: Uint8Array): Outlines {
     for (const end of endPoints) glyf.u16(end);
     glyf.u16(instructionLength);
     glyf.bytes(instructions.take(instructionLength));
-    writePoints(glyf, xs, ys, onCurve);
+    writePoints(glyf, xs, ys, onCurve, overlaps(g));
     glyf.align();
     offsets.push(glyf.length);
   }
@@ -483,7 +492,13 @@ function writeBbox(
 }
 
 /** The sfnt point encoding: run-length flags, then x deltas, then y deltas. */
-function writePoints(out: Writer, xs: number[], ys: number[], onCurve: boolean[]): void {
+function writePoints(
+  out: Writer,
+  xs: number[],
+  ys: number[],
+  onCurve: boolean[],
+  overlap = false,
+): void {
   const flags: number[] = [];
   const dxs: number[] = [];
   const dys: number[] = [];
@@ -503,6 +518,8 @@ function writePoints(out: Writer, xs: number[], ys: number[], onCurve: boolean[]
     dxs.push(dx);
     dys.push(dy);
   }
+  // OVERLAP_SIMPLE rides on the FIRST point of the glyph and nowhere else.
+  if (overlap && flags.length > 0) flags[0]! |= 0x40;
   for (const f of flags) out.u8(f);
   for (let i = 0; i < dxs.length; i++) {
     const f = flags[i]!;
@@ -613,6 +630,16 @@ function assemble(flavor: number, tables: Map<string, Uint8Array>): Uint8Array {
   const tags = [...tables.keys()].sort();
   const count = tags.length;
   if (count === 0) throw new WoffError("the WOFF2 produced no tables at all");
+
+  // `head` is checksummed with its `checkSumAdjustment` field ZEROED - that field is written last and
+  // covers the whole file, so it cannot be part of its own table's sum. Zero it before anything is
+  // computed, on a copy: the table is a view into the decompressed buffer, not ours to write to.
+  const head = tables.get("head");
+  if (head && head.length >= 12) {
+    const copy = head.slice();
+    copy.set([0, 0, 0, 0], 8);
+    tables.set("head", copy);
+  }
   const entrySelector = Math.floor(Math.log2(count));
   const searchRange = 2 ** entrySelector * 16;
 
@@ -634,8 +661,10 @@ function assemble(flavor: number, tables: Map<string, Uint8Array>): Uint8Array {
 
   for (const { tag, offset: at, length } of placed) {
     for (let i = 0; i < 4; i++) out.u8(tag.charCodeAt(i));
-    out.u16(0);
-    out.u16(0); // checksum: readers we care about do not verify it, and WOFF2 does not carry it
+    // WOFF2 does not carry checksums, so they are recomputed - an sfnt with zeros there is not one.
+    const sum = checksum(tables.get(tag)!);
+    out.u16(Math.floor(sum / 0x10000));
+    out.u16(sum & 0xffff);
     out.u16(Math.floor(at / 0x10000));
     out.u16(at & 0xffff);
     out.u16(Math.floor(length / 0x10000));
@@ -646,5 +675,38 @@ function assemble(flavor: number, tables: Map<string, Uint8Array>): Uint8Array {
     out.bytes(tables.get(tag)!);
     out.align();
   }
-  return out.done();
+
+  const sfnt = out.done();
+  // The field depends on the WHOLE file, so it is written last - the magic constant minus the sum of
+  // everything, with the field itself already zero.
+  const headEntry = placed.find((p) => p.tag === "head");
+  if (headEntry && headEntry.length >= 12) {
+    const at = headEntry.offset + 8;
+    const total = checksum(sfnt);
+    const adjustment = (0xb1b0afba - total) >>> 0;
+    sfnt.set(
+      [
+        (adjustment >>> 24) & 0xff,
+        (adjustment >>> 16) & 0xff,
+        (adjustment >>> 8) & 0xff,
+        adjustment & 0xff,
+      ],
+      at,
+    );
+  }
+  return sfnt;
+}
+
+/** The sfnt checksum: the table read as big-endian u32s, zero-padded, summed modulo 2^32. */
+function checksum(data: Uint8Array): number {
+  let sum = 0;
+  for (let i = 0; i < data.length; i += 4) {
+    const word =
+      (data[i] ?? 0) * 0x1000000 +
+      (data[i + 1] ?? 0) * 0x10000 +
+      (data[i + 2] ?? 0) * 0x100 +
+      (data[i + 3] ?? 0);
+    sum = (sum + word) % 0x100000000;
+  }
+  return sum;
 }

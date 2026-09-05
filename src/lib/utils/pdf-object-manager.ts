@@ -752,8 +752,9 @@ endstream`;
     // only way to arrive here still packed is by calling the engine directly.
     if (isWoff2(data)) {
       throw new WoffError(
-        "a WOFF2 font reached the object manager still packed. Register it through addFont/Document " +
-          "({ fonts }) - unpacking WOFF2 needs Brotli, which is loaded asynchronously.",
+        "a WOFF2 font reached the object manager still packed. Pass it through " +
+          "renderToBytes(doc, { fonts }) or doc.addFont(...) - unpacking WOFF2 needs Brotli, which " +
+          "is loaded asynchronously, so it happens one step earlier in renderPdf.",
       );
     }
     byStyle.set(style, new TTFParser(isWoff(data) ? woffToSfnt(data) : data));
