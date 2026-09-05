@@ -5,6 +5,7 @@ import type { Affine } from "../utils/ttf-parser.ts";
 import { SvgUnsupportedError } from "./errors.ts";
 import { IDENTITY, isIdentity, parseTransform } from "./transform.ts";
 import { svgColor, type Attributes } from "./style.ts";
+import { ratio } from "./units.ts";
 import type { XmlElement, XmlNode } from "./xml.ts";
 
 /**
@@ -54,13 +55,13 @@ function readStop(element: XmlElement): { stop: GradientStop; opacity: number } 
   }
   const read = (name: string): string | undefined => style[name] ?? attributes[name];
 
-  const raw = read("stop-opacity");
-  const parsed = raw === undefined ? 1 : Number.parseFloat(raw);
-  const opacity = Number.isFinite(parsed) ? parsed : 1;
+  const opacity = ratio(read("stop-opacity"));
   const colorText = read("stop-color") ?? "#000000";
   return {
     stop: {
-      offset: num(read("offset"), 0),
+      // Both are clamped: a PDF stitching function needs its bounds inside [0,1] and increasing, so
+      // a malformed file must not be able to produce one that a reader rejects.
+      offset: Math.max(0, Math.min(1, num(read("offset"), 0))),
       color: colorText === "currentColor" ? new Color(0, 0, 0) : svgColor(colorText),
     },
     opacity,
@@ -191,6 +192,13 @@ export function resolveSvgGradient(
       "a gradient whose stops have DIFFERENT stop-opacity values",
       "A PDF shading has no alpha channel; only one opacity for the whole gradient is expressible.",
     );
+  }
+
+  // SVG says an offset lower than the one before it is raised to match; a decreasing pair would
+  // otherwise become an invalid Domain in the shading function.
+  let previous = 0;
+  for (const stop of stops) {
+    stop.offset = previous = Math.max(previous, stop.offset);
   }
 
   const box = boundsOf(commands);

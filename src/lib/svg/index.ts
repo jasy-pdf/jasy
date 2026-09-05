@@ -302,7 +302,17 @@ function walk(
     out.push({ type: "clip-path-push", commands: clip.commands, fillRule: clip.fillRule });
   }
 
-  if (tagName === "g" || tagName === "svg") {
+  if (tagName === "svg") {
+    // A nested <svg> establishes its own viewport: x/y/width/height plus a viewBox, and it clips.
+    // Walking it as a plain group would place and scale its children wrong, silently. None of the
+    // 10,819 files measured contains one, so it is named rather than built.
+    throw new SvgUnsupportedError(
+      "a nested <svg> element",
+      "It establishes its own viewport. Flatten it into the outer drawing in your editor.",
+    );
+  }
+
+  if (tagName === "g") {
     for (const child of elements(node)) walk(child, style, rules, clips, gradients, out, depth + 1);
   } else {
     const commands = shapeOf(tagName, attributes);
@@ -348,6 +358,7 @@ function rootOf(source: string): XmlElement {
   // extension. Say so here rather than let the parser die on the binary with a TypeError.
   if (!/<svg[\s>]/i.test(source)) {
     throw new SvgParseError(
+      // oxlint-disable-next-line no-control-regex -- spotting control bytes is the whole point here.
       /[\u0000-\u0008\u000E-\u001F]/.test(source.slice(0, 200))
         ? "this is not an SVG file - it starts with binary data."
         : "no <svg> element found - is this really an SVG file?",
@@ -387,6 +398,8 @@ export function svgToIr(source: string, target: SvgTarget): IRNode[] {
   // `fill="none"` there - the Figma export default. Skipping them filled every shape that has no
   // fill of its own with BLACK, which covered the drawing underneath.
   const rootAttributes = attributesOf(root);
+  // The root is held to the same rule as its children: a filter or mask on it changes the picture.
+  refuseAttributes("svg", rootAttributes);
   const rootStyle = resolveStyle(
     ROOT_STYLE,
     rootAttributes,

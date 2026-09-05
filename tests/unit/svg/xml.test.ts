@@ -73,6 +73,14 @@ describe("the reader", () => {
     expect((root.children[0] as XmlElement).children).toHaveLength(1);
   });
 
+  it("does not end a tag at a '>' inside an attribute value", () => {
+    // Legal XML: only `<` and `&` must be escaped in an attribute, `>` need not be.
+    const root = first(`<svg><path d="M0 0>10" fill="red"/></svg>`);
+    const path = root.children[0] as XmlElement;
+    expect(path.attributes["d"]).toBe("M0 0>10");
+    expect(path.attributes["fill"]).toBe("red");
+  });
+
   it("says so when there is no XML at all", () => {
     expect(() => parseXml("just words")).toThrow(/no XML elements/);
   });

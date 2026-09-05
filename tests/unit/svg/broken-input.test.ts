@@ -17,8 +17,12 @@ describe("it degrades instead of failing", () => {
     expect(paths('<svg viewBox="0 0 10 10"><g><rect width="5" height="5"/>')).toHaveLength(1);
   });
 
-  it("drops a path whose `d` is nonsense rather than drawing a guess", () => {
-    expect(paths('<svg viewBox="0 0 10 10"><path d="M zz 0 L !! 9"/></svg>')).toHaveLength(0);
+  it("names a `d` it cannot read, instead of drawing nothing in silence", () => {
+    // svgpath REPORTS a malformed `d` on the instance rather than throwing, so an unchecked call
+    // just yields no segments and the shape disappears.
+    expect(() => paths('<svg viewBox="0 0 10 10"><path d="M zz 0 L !! 9"/></svg>')).toThrow(
+      /path data could not be read/,
+    );
   });
 
   it("treats an unreadable dimension as absent, not as NaN", () => {

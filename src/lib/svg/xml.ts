@@ -73,6 +73,25 @@ function parseAttributes(text: string): Record<string, string> {
  * recover, and a logo that draws is worth more than a purist error. An unclosed element simply ends
  * at the end of the document.
  */
+/**
+ * The index of the `>` that ends a tag, skipping any inside a quoted attribute value - `d="M0 0>10"`
+ * is legal XML, and a plain `indexOf(">")` would cut the tag in half there.
+ */
+function tagEnd(source: string, from: number): number {
+  let quote = "";
+  for (let i = from + 1; i < source.length; i++) {
+    const ch = source[i]!;
+    if (quote) {
+      if (ch === quote) quote = "";
+    } else if (ch === '"' || ch === "'") {
+      quote = ch;
+    } else if (ch === ">") {
+      return i;
+    }
+  }
+  return -1;
+}
+
 export function parseXml(source: string): XmlElement[] {
   const roots: XmlElement[] = [];
   const stack: XmlElement[] = [];
@@ -127,7 +146,7 @@ export function parseXml(source: string): XmlElement[] {
       continue;
     }
 
-    const close = source.indexOf(">", open);
+    const close = tagEnd(source, open);
     if (close === -1) break;
     const inner = source.slice(open + 1, close);
 

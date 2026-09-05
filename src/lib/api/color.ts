@@ -77,19 +77,30 @@ function fromFunction(name: string, body: string, original: ColorInput): Color {
   return new Color(r, g, bl, alpha);
 }
 
+const NUMERIC = /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
+
+/**
+ * One component of a colour function. `Number.parseFloat` stops at the first character it cannot use
+ * and returns what it had, so `rgb(20abc, 90, 170)` would silently become `rgb(20, 90, 170)` - a
+ * colour nobody wrote. The whole token has to be a number.
+ */
 function number(text: string, original: ColorInput): number {
-  const n = Number.parseFloat(text);
-  if (!Number.isFinite(n)) throw new Error(`Unknown color: "${String(original)}"`);
-  return n;
+  const t = text.trim();
+  if (!NUMERIC.test(t)) throw new Error(`Unknown color: "${String(original)}"`);
+  return Number(t);
 }
 
 /** An rgb channel: 0-255, or a percentage of 255. */
 const channel = (text: string, original: ColorInput): number =>
-  text.endsWith("%") ? (number(text, original) / 100) * 255 : number(text, original);
+  text.trim().endsWith("%")
+    ? (number(text.trim().slice(0, -1), original) / 100) * 255
+    : number(text, original);
 
 /** A 0..1 ratio written either as a number or as a percentage (alpha, saturation, lightness). */
 const ratio = (text: string, original: ColorInput): number =>
-  text.endsWith("%") ? number(text, original) / 100 : number(text, original);
+  text.trim().endsWith("%")
+    ? number(text.trim().slice(0, -1), original) / 100
+    : number(text, original);
 
 /** CSS hue-saturation-lightness to 0-255 channels. */
 function hslToRgb(hue: number, s: number, l: number): [number, number, number] {

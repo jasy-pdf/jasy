@@ -86,7 +86,10 @@ export function parseStylesheet(css: string): CssRule[] {
   while (i < text.length) {
     const open = text.indexOf("{", i);
     if (open === -1) break;
-    const prelude = text.slice(i, open).trim();
+    // A statement at-rule (`@import "a";`) ends at its semicolon. Taking everything up to the next
+    // brace as one prelude would swallow the rule that follows it.
+    const head = text.slice(i, open);
+    const prelude = head.slice(head.lastIndexOf(";") + 1).trim();
 
     let depth = 1;
     let j = open + 1;
@@ -102,8 +105,14 @@ export function parseStylesheet(css: string): CssRule[] {
       // (prefers-color-scheme)` or a `@keyframes` that can never apply to a static page, and
       // refusing them meant those files did not render at all.
       // The exception is a query that always holds for print, whose rules DO apply.
-      const [at, ...query] = prelude.split(/\s+/);
-      const applies = at === "@media" && ["print", "all", ""].includes(query.join(" ").trim());
+      const [at, ...rest] = prelude.split(/\s+/);
+      // A media list applies if ANY of its components does - `@media print, screen` is for print too.
+      const applies =
+        at === "@media" &&
+        rest
+          .join(" ")
+          .split(",")
+          .some((q) => ["print", "all", ""].includes(q.trim()));
       if (applies) {
         // Its body is a nested stylesheet; parse it in place so the rules keep their source order.
         for (const rule of parseStylesheet(text.slice(open + 1, j - 1))) {

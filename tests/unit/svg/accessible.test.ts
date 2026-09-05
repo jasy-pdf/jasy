@@ -11,7 +11,7 @@ const render = (alt?: string) =>
     accessible: true,
     title: "t",
     lang: "en",
-  } as never);
+  });
 
 describe("an SVG in an accessible document", () => {
   it("becomes a Figure carrying its alt text", async () => {

@@ -37,6 +37,20 @@ describe("CSS at-rules", () => {
     expect(css(`@keyframes spin{from{fill:red}}`)).toHaveLength(1);
   });
 
+  it("applies a media LIST if any component does - `print, screen` is for print too", () => {
+    expect(css(`@media print, screen{.a{fill:#1450aa}}`)[0]!.fill?.toPDFColorString()).toBe(
+      "0.078 0.314 0.667",
+    );
+  });
+
+  it("does not let a statement at-rule swallow the rule after it", () => {
+    // `@import "x";` ends at its SEMICOLON. Taking everything up to the next brace as one prelude
+    // made the following rule part of it, so it was dropped along with the at-rule.
+    expect(css(`@import "x"; .a{fill:#1450aa}`)[0]!.fill?.toPDFColorString()).toBe(
+      "0.078 0.314 0.667",
+    );
+  });
+
   it("but a print query DOES apply, because it holds here", () => {
     expect(css(`@media print{.a{fill:#1450aa}}`)[0]!.fill?.toPDFColorString()).toBe(
       "0.078 0.314 0.667",

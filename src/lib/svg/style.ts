@@ -2,6 +2,7 @@ import { Color } from "../common/color.ts";
 import { toColor } from "../api/color.ts";
 import type { StrokeStyle } from "../ir/display-list.ts";
 import { SvgParseError, SvgUnsupportedError } from "./errors.ts";
+import { length, ratio } from "./units.ts";
 
 /**
  * The presentation style of one element, resolved against its parent's.
@@ -80,7 +81,7 @@ function styleBag(value: string | number | undefined): Record<string, string> {
   return out;
 }
 
-const numbers = (list: string): number[] => {
+const dashNumbers = (list: string): number[] => {
   const found = list.match(/[+-]?(?:\d*\.\d+|\d+\.?)(?:[eE][+-]?\d+)?/g);
   return found ? found.map(Number) : [];
 };
@@ -142,7 +143,8 @@ export function resolveStyle(
   };
 
   const color = read("color") !== undefined ? svgColor(read("color")!) : parent.color;
-  const opacity = parent.opacity * Number(read("opacity") ?? 1);
+  // `Number("50%")` is NaN and `Number("")` is 0, both of which travel silently into the paint.
+  const opacity = parent.opacity * ratio(read("opacity"));
 
   const fillValue = read("fill");
   const strokeValue = read("stroke");
@@ -159,17 +161,25 @@ export function resolveStyle(
   }
   const parts: StrokeParts = {
     color: strokePaint,
-    width: Number(read("stroke-width") ?? parent.stroke?.width ?? 1),
+    width: length(read("stroke-width"), 'the "stroke-width" attribute', parent.stroke?.width ?? 1),
     cap: (read("stroke-linecap") as StrokeStyle["cap"]) ?? parent.stroke?.cap,
     join: (read("stroke-linejoin") as StrokeStyle["join"]) ?? parent.stroke?.join,
-    miterLimit: Number(read("stroke-miterlimit") ?? parent.stroke?.miterLimit ?? 4),
+    miterLimit: length(
+      read("stroke-miterlimit"),
+      'the "stroke-miterlimit" attribute',
+      parent.stroke?.miterLimit ?? 4,
+    ),
     dash:
       dashValue !== undefined
         ? dashValue.trim() === "none"
           ? undefined
-          : numbers(dashValue)
+          : dashNumbers(dashValue)
         : parent.stroke?.dash,
-    dashOffset: Number(read("stroke-dashoffset") ?? parent.stroke?.dashOffset ?? 0),
+    dashOffset: length(
+      read("stroke-dashoffset"),
+      'the "stroke-dashoffset" attribute',
+      parent.stroke?.dashOffset ?? 0,
+    ),
   };
 
   return {
@@ -190,8 +200,8 @@ export function resolveStyle(
           }
         : undefined,
     color,
-    fillOpacity: Number(read("fill-opacity") ?? parent.fillOpacity),
-    strokeOpacity: Number(read("stroke-opacity") ?? parent.strokeOpacity),
+    fillOpacity: ratio(read("fill-opacity"), parent.fillOpacity),
+    strokeOpacity: ratio(read("stroke-opacity"), parent.strokeOpacity),
     opacity,
   };
 }

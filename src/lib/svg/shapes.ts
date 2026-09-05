@@ -3,6 +3,7 @@ import type { PathCommand } from "../ir/display-list.ts";
 import { quadToCubic } from "../vector/path.ts";
 import { SvgParseError } from "./errors.ts";
 import type { Attributes } from "./style.ts";
+import { length } from "./units.ts";
 
 /**
  * Every drawable SVG shape becomes one list of path commands, so the rest of the pipeline knows about
@@ -13,12 +14,8 @@ import type { Attributes } from "./style.ts";
  * to Béziers is the SVG spec's own appendix, and a subtly wrong version looks ALMOST right.
  */
 
-const num = (attributes: Attributes, name: string, fallback = 0): number => {
-  const value = attributes[name];
-  if (value === undefined || value === "") return fallback;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-};
+const num = (attributes: Attributes, name: string, fallback = 0): number =>
+  length(attributes[name], `the "${name}" attribute`, fallback);
 
 /** Four cubic arcs approximating a full ellipse. The constant is the standard circle-to-Bézier one. */
 const KAPPA = 0.5522847498307936;
@@ -101,7 +98,14 @@ export function pathData(d: string): PathCommand[] {
   let [cx, cy] = [0, 0];
   let [startX, startY] = [0, 0];
   try {
-    svgpath(d)
+    const parsed = svgpath(d);
+    // svgpath REPORTS a malformed `d` on the instance instead of throwing, so an unchecked call
+    // quietly yields an empty path - the shape simply disappears.
+    // Its bundled types omit `err`, though it IS the API: svgpath never throws on malformed input,
+    // it records the reason and yields no segments - so the shape would just disappear.
+    const err = (parsed as unknown as { err?: string }).err;
+    if (err) throw new SvgParseError(`path data could not be read: ${err}`);
+    parsed
       .abs()
       .unshort()
       .unarc()
