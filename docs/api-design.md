@@ -145,12 +145,16 @@ clockwise) and resolved against the box by the renderer.
 | `span(text, opts)`                 | inline run for mixed `Text`          | `size`, `font`, `bold`, `italic`, `color`                                                           | `TextSegment`             |
 | `Paragraph(content, opts)`         | `Text` with body defaults            | as `Text` (the same `TextOptions`, forwarded verbatim)                                              | `TextElement`             |
 | `DefaultTextStyle(opts, children)` | cascaded text defaults for a subtree | `size`, `font`, `bold`, `italic`, `color`, `align`, `lineHeight`, `breakWord`, `hyphenate`§         | `DefaultTextStyleElement` |
-| `Image(src, opts)`                 | image                                | `fit`, **`radius`**, sizing†                                                                        | `ImageElement`            |
+| `Image(src, opts)`                 | image; an SVG source routes to `Svg` | `fit`, **`radius`**, sizing†                                                                        | `ImageElement`            |
+| `Svg(source, opts)`                | vector drawing from SVG¶             | sizing†, `alt`                                                                                      | `SvgElement`              |
 | `Divider(opts?)`                   | horizontal rule                      | `color`, `thickness`, `margin`                                                                      | `LineElement`             |
 | `Line(opts)`                       | explicit line                        | `from`, `to`, `color`, `thickness`                                                                  | `LineElement`             |
 
 § **A word that does not fit** - `breakWord` and `hyphenate`, both off by default. See 6c. They are
 read per `Text`, not per `span`, which is why `span` does not list them.
+
+¶ **SVG** - see 6d. `Image` recognises an SVG source itself, so `Image("logo.svg")` keeps a logo a
+VECTOR instead of turning it into a bitmap.
 
 ‡ **Page-break behaviour of a paragraph.**
 
@@ -264,6 +268,43 @@ English rules. The default is a position, not a gap - _we do not hyphenate until
 
 With both set, hyphenation is tried first and `breakWord` catches what it cannot split. Known deviation
 from CSS: both are read per `Text`, not per `span` (todo.md, ISSUE-13).
+
+## 6d. SVG — `Svg()` and `Image("logo.svg")` (2026-09-04)
+
+```ts
+Svg(markup); // drawn at its intrinsic size (width/height, else the viewBox)
+Svg(source, { width: 120 }); // one axis pinned, the other follows the viewBox
+Image("logo.svg", { width: 120 }); // the same thing - Image recognises SVG by itself
+```
+
+`source` is markup, a file path (Node) or the file's bytes. It is read and parsed **at construction**,
+so a broken file fails on the line that named it rather than inside a later render - the bargain
+`addFont` already makes. Sizing is the `Image` contract; `viewBox` and `preserveAspectRatio` are only
+inputs to it, and the drawing is scaled uniformly and centred (SVG's own default).
+
+**SVG is a document format, not a graphics format** - it carries CSS, text layout, filters, masks and
+animation. Filters and masks are PIXEL operations, so no vector backend can express them: anything
+that renders SVG _completely_ owns a rasterizer, which is why every PDF library ships a subset. Ours:
+
+| resolved                                                                                    | named error, never a silent skip                            |
+| ------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `path` (incl. arcs, shorthands), `rect`, `circle`, `ellipse`, `line`, `polyline`, `polygon` | `<text>` / `<tspan>` - convert to outlines                  |
+| `g`, `defs`, `use`-free nesting, `viewBox`, all `transform` functions                       | `<use>`, `<symbol>`                                         |
+| presentation attributes, `style=""`, and `<style>` blocks with flat selectors               | a combinator, pseudo-class or `!important` in CSS           |
+| `fill`, `stroke` (+ width, cap, join, miter, dasharray), `fill-rule`, opacity               | `filter`, `<mask>` - pixel operations                       |
+| `<clipPath>` (`userSpaceOnUse`, `clip-rule`, a child's own transform)                       | `clipPathUnits="objectBoundingBox"`                         |
+| `<linearGradient>` / `<radialGradient>`, `href` chains, both unit systems                   | a gradient on a STROKE; stops with DIFFERING `stop-opacity` |
+
+**The edge of the subset is a named error with a fix, never a silent skip.** Two reasons, and the
+second is the one that matters: a dropped element leaves a logo that renders and is quietly wrong,
+and supporting something later turns an error into a picture - which can never break a document that
+already worked. Going the other way would change existing output.
+
+**Measured against 10,819 real SVG files** from a working machine: 96.4% render. Correctness is
+checked against headless Chrome, not against our own reasoning - which is how the viewport clip, the
+`<svg fill="none">` inheritance and `svg-parser`'s id corruption were all found.
+
+---
 
 ## 7. Decisions — LOCKED (2026-06-11)
 

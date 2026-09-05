@@ -39,7 +39,85 @@ export function toColor(input: ColorInput): Color {
   const named = CSS_COLORS[s];
   if (named) return new Color(named[0], named[1], named[2], named[3] ?? 1);
 
+  const call = /^([a-z-]+)\(([^)]*)\)$/.exec(s);
+  if (call) return fromFunction(call[1]!, call[2]!, input);
+
   throw new Error(`Unknown color: "${input}"`);
+}
+
+/**
+ * The CSS colour FUNCTIONS. `rgb()`/`rgba()` and `hsl()`/`hsla()` are the sRGB family, so they convert
+ * exactly and are supported; a wide-gamut function (`color()`, `lab()`, `oklch()`) is named and
+ * refused rather than silently squashed into sRGB, since the result would be a colour nobody chose.
+ *
+ * Both syntaxes are accepted, because both occur in the wild: the legacy comma form
+ * `rgb(20, 90, 170)` and the modern space form with an optional slash-alpha `rgb(20 90 170 / 50%)`.
+ */
+function fromFunction(name: string, body: string, original: ColorInput): Color {
+  if (name !== "rgb" && name !== "rgba" && name !== "hsl" && name !== "hsla") {
+    throw new Error(
+      `Unsupported color function "${name}()" in "${String(original)}". ` +
+        `Use a hex value, a CSS colour name, rgb()/rgba() or hsl()/hsla().`,
+    );
+  }
+  const [main, alphaPart] = body.split("/");
+  const parts = main!
+    .trim()
+    .split(/[\s,]+/)
+    .filter(Boolean);
+  const alphaText = alphaPart !== undefined ? alphaPart.trim() : parts[3];
+  if (parts.length < 3) throw new Error(`Unknown color: "${String(original)}"`);
+
+  const alpha = alphaText === undefined ? 1 : ratio(alphaText, original);
+  const [a, b, c] = parts as [string, string, string];
+  if (name === "rgb" || name === "rgba") {
+    return new Color(channel(a, original), channel(b, original), channel(c, original), alpha);
+  }
+  const [r, g, bl] = hslToRgb(number(a, original), ratio(b, original), ratio(c, original));
+  return new Color(r, g, bl, alpha);
+}
+
+const NUMERIC = /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
+
+/**
+ * One component of a colour function. `Number.parseFloat` stops at the first character it cannot use
+ * and returns what it had, so `rgb(20abc, 90, 170)` would silently become `rgb(20, 90, 170)` - a
+ * colour nobody wrote. The whole token has to be a number.
+ */
+function number(text: string, original: ColorInput): number {
+  const t = text.trim();
+  if (!NUMERIC.test(t)) throw new Error(`Unknown color: "${String(original)}"`);
+  return Number(t);
+}
+
+/** An rgb channel: 0-255, or a percentage of 255. */
+const channel = (text: string, original: ColorInput): number =>
+  text.trim().endsWith("%")
+    ? (number(text.trim().slice(0, -1), original) / 100) * 255
+    : number(text, original);
+
+/** A 0..1 ratio written either as a number or as a percentage (alpha, saturation, lightness). */
+const ratio = (text: string, original: ColorInput): number =>
+  text.trim().endsWith("%")
+    ? number(text.trim().slice(0, -1), original) / 100
+    : number(text, original);
+
+/** CSS hue-saturation-lightness to 0-255 channels. */
+function hslToRgb(hue: number, s: number, l: number): [number, number, number] {
+  const h = ((hue % 360) + 360) % 360;
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = l - c / 2;
+  const sector = Math.floor(h / 60) % 6;
+  const rgbPrime: [number, number, number] = [
+    [c, x, 0],
+    [x, c, 0],
+    [0, c, x],
+    [0, x, c],
+    [x, 0, c],
+    [c, 0, x],
+  ][sector] as [number, number, number];
+  return rgbPrime.map((v) => Math.round((v + m) * 255)) as [number, number, number];
 }
 
 /** Flutter ARGB: 0xAARRGGBB, alpha FIRST. A 6-digit number has alpha 0x00 = transparent. */

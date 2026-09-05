@@ -217,6 +217,7 @@ shared state.
 | `PageBreakElement`      | `elements/layout/page-break-element.ts`      | `PageBreakRenderer`    | forced page break; zero-size, packer cuts at it (`forceBreak` bubbles up)                 |
 | `KeepTogetherElement`   | `elements/layout/keep-together-element.ts`   | `KeepTogetherRenderer` | transparent wrapper; vetoes a page-split (break-inside: avoid), degrades if > 1 page      |
 | form fields (6 classes) | `elements/forms/*.ts`                        | `FormFieldRenderer`    | AcroForm widgets; reserve a rect, emit a widget annotation. Shared spec: `forms/field.ts` |
+| `SvgElement`            | `elements/svg-element.ts`                    | `SvgRenderer`          | an SVG drawing; parsed at construction, `svg/` turns it into `Path` IR                    |
 
 Every renderer's `render()` returns `Promise<IRNode[]>` (since roadmap Phase 1). Adding an element =
 new element + renderer that returns IR + (if it draws something new) a primitive in `ir/display-list.ts`
@@ -773,6 +774,41 @@ wordWidth > maxWidth` and forgot the SPACE that would join the word. It went uns
     own although the renderer had already decided. The unit tests were green through all of it - only
     the rendered PDF showed it. `kernedArray` now throws on a length mismatch.
 
+- ✅ **SVG** (2026-09-04) - `Svg(markup | path | bytes)` and `Image("logo.svg")`, which recognises an SVG
+  source itself so a logo stays a VECTOR instead of becoming a bitmap. Built in three layers, and only
+  the bottom one is new engine capability:
+  - **The vector layer.** `Path` IR was fill-only, because its one producer was a colour glyph. It now
+    carries `stroke` (colour, width, cap, join, miterLimit, dash), `fillRule`, an optional `fill` (a
+    stroke-only outline) and a `ClipPathPush` node for an arbitrary clip; the backend picks `f`/`f*`/
+    `S`/`B`/`B*` from what the node holds. A stroked path always gets its own `q`/`Q` - `d`, `J`, `j`
+    and `M` would otherwise dash every later stroke on the page. The quad→cubic maths moved out of
+    `TextRenderer._glyphToPath` into `vector/path.ts`, since a TrueType outline and SVG's `Q` need the
+    same conversion. **Canvas would be the second producer of this layer** and needs no parser.
+  - **`src/lib/svg/`** - `xml.ts` (our own reader), `css.ts`, `style.ts`, `shapes.ts`, `transform.ts`,
+    `gradients.ts`, `index.ts` (the walk). Transforms stay in the GRAPHICS STATE rather than being
+    baked into coordinates, so a stroke inside a scaled group scales with it, as SVG specifies; SVG's
+    `matrix(a b c d e f)` is literally our `TransformPush.matrix` and PDF's `cm`, both top-left, so
+    nothing needs a sign flip. A clip is the exception: it is set from a path in the CURRENT space, so
+    a `<clipPath>` child's own transform is baked in.
+  - **`svgpath`** is the one dependency (zero-dep, typed): `.abs().unshort().unarc()` does the fiddly
+    half of `d`. **We wrote the XML reader ourselves** after `svg-parser` was found to COERCE any
+    attribute that looks numeric - `id="58310095e0"` came back as the number 58310095, `id="1e999"` as
+    `Infinity` - which silently broke `url(#id)` resolution, the one thing an id is for.
+  - **The edge of the subset is a NAMED error, never a silent skip**, and that is what keeps every
+    later stage a minor: supporting something new turns an error into a picture, which cannot break a
+    document that worked. Refused with a fix: `<text>`, `<use>`/`<symbol>`, `filter`, `<mask>`, a
+    gradient on a stroke, stops with differing `stop-opacity`, a CSS combinator, a non-default
+    `preserveAspectRatio`.
+  - **Measured against 10,819 real SVGs** off a working machine: 95.3% → **96.4%** render, and the
+    corpus is what found the bugs no unit test could. Four in our own code: `toColor` had **no `rgb()`
+    branch at all** though the doc table promised one (a released bug, nothing to do with SVG); CSS
+    at-rules were fatal though a `@media (prefers-color-scheme)` can never apply to a static page;
+    an element in a foreign namespace (`sodipodi:`) was fatal though it draws nothing; a non-SVG file
+    died with a TypeError. And two silent ones, both caught only by comparing against headless Chrome:
+    the root `<svg>` is a VIEWPORT and clips to itself, and **its own presentation attributes were
+    never read** - `fill="none"` sits there in 778 of the 10,819 files (the Figma export default), so
+    every shape without its own fill came out BLACK and covered what was underneath.
+
 Genuine remaining gaps / deferred:
 
 1. **Absolute positioning — Stages 1+2 built** (2026-06-21). CSS-style: `Box({ relative: true })` is a
@@ -903,5 +939,7 @@ more e-invoice profiles, framework bindings). See `todo.md` "⭐ Active" + "🔮
   else = issues + fork PRs. **CodeRabbit** (`.coderabbit.yaml`) reviews PRs; **Renovate** (`renovate.json`, app
   bypass-listed in the ruleset) opens weekly dependency PRs. Community-health files (CONTRIBUTING / CODE_OF_CONDUCT /
   SECURITY / LICENSE / issue+PR templates / FUNDING) all in. Branch `main`. Runtime deps: `jimp` (images), `fflate`
-  (isomorphic deflate), `bidi-js` (UAX #9, behind the `text/bidi.ts` seam and slated to be replaced by
-  our own - see `todo.md`); the old `reflect-metadata` DI is gone (decorator removed).
+  (isomorphic deflate), `svgpath` (the fiddly half of SVG path data - arcs and shorthands), `bidi-js`
+  (UAX #9, behind the `text/bidi.ts` seam and slated to be replaced by our own - see `todo.md`); the
+  old `reflect-metadata` DI is gone (decorator removed). The SVG XML reader is our OWN
+  (`svg/xml.ts`): `svg-parser` coerced any numeric-looking attribute, so an id came back as a number.
