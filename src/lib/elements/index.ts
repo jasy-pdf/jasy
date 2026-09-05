@@ -25,3 +25,4 @@ export * from "./layout/rotated-box-element.ts";
 export * from "./line-element.ts";
 export * from "./row-element.ts";
 export * from "./svg-element.ts";
+export * from "./canvas-element.ts";

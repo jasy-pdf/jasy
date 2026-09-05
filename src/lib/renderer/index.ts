@@ -9,3 +9,4 @@ export * from "./expanded-renderer.ts";
 export * from "./line-renderer.ts";
 export * from "./row-renderer.ts";
 export * from "./svg-renderer.ts";
+export * from "./canvas-renderer.ts";

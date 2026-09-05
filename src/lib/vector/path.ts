@@ -62,3 +62,39 @@ export function transformCommands(
     return { op: cmd.op, x: mx(cmd.x, cmd.y), y: my(cmd.x, cmd.y) };
   });
 }
+
+/**
+ * The bounding box of a command list. Control points are included, which overstates a curve slightly -
+ * the approximation every renderer makes for `objectBoundingBox` units and for a canvas gradient.
+ */
+export function boundsOf(commands: readonly PathCommand[]): {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+} {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const c of commands) {
+    const points =
+      c.op === "c"
+        ? [
+            [c.x1, c.y1],
+            [c.x2, c.y2],
+            [c.x, c.y],
+          ]
+        : c.op === "z"
+          ? []
+          : [[c.x, c.y]];
+    for (const [x, y] of points) {
+      minX = Math.min(minX, x!);
+      maxX = Math.max(maxX, x!);
+      minY = Math.min(minY, y!);
+      maxY = Math.max(maxY, y!);
+    }
+  }
+  if (!Number.isFinite(minX)) return { x: 0, y: 0, width: 0, height: 0 };
+  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+}
