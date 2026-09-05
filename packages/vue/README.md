@@ -45,7 +45,7 @@ pnpm add @jasy/vue @jasy/pdf vue
 ## Components
 
 `Document` · `Page` · `Column` · `Row` · `Box` · `Padding` · `Expanded` · `Spacer` · `Divider` ·
-`Image` · `Text` · `Paragraph` · `Span` · `Table` / `TableRow` / `TableCell`.
+`Image` · `Svg` · `Text` · `Paragraph` · `Span` · `Table` / `TableRow` / `TableCell`.
 
 ```vue
 <template>
@@ -87,10 +87,10 @@ import { Document, Page, Text } from "@jasy/vue";
 
 // 2. Namespace - no collisions at all
 import * as Pdf from "@jasy/vue"; // <Pdf.Document> <Pdf.Text>
-
-// 3. Plugin with a prefix - global, no per-file imports
-app.use(jasyVue, { prefix: "Pdf" }); // <PdfDocument> <PdfText>
 ```
+
+A prefix without per-file imports is [`@jasy/nuxt`](https://npmx.dev/@jasy/nuxt), which auto-imports
+every component under one (`<JasyDocument>`, `<JasyText>`, …).
 
 ## Custom fonts and images (bytes)
 
@@ -111,6 +111,26 @@ const props = defineProps<{ font: Uint8Array; logo: Uint8Array }>();
 </template>
 ```
 
+## Vector drawings
+
+`<Svg>` takes markup, a file path (Node) or the file's bytes, and keeps a logo a VECTOR - sharp at any
+zoom, and a fraction of a bitmap's size. `<Image>` recognises an SVG source by itself, so either works:
+
+```vue
+<template>
+  <Document>
+    <Page>
+      <Svg :src="logoMarkup" :width="120" alt="Acme" />
+      <Image src="./logo.svg" :width="120" />
+    </Page>
+  </Document>
+</template>
+```
+
+With no size it draws at its intrinsic size; pin one axis and the other follows the `viewBox`. What the
+engine cannot express (`<text>`, filters, masks) is a NAMED error with a fix - never a silently wrong
+logo. See the [`@jasy/pdf` docs](https://jasy.dev) for the supported subset.
+
 ## API
 
 - `renderToPdf(root, props?, options?) => Promise<Uint8Array>` - the PDF bytes. Browser or Node.
@@ -120,7 +140,6 @@ const props = defineProps<{ font: Uint8Array; logo: Uint8Array }>();
   `fonts`, `compress`, `onOverflow`, …).
 - `toDocumentDescriptor(root, props?)` - the framework-agnostic descriptor (the seam a Node service can
   receive from the browser).
-- `jasyVue` - the global-registration plugin (`{ prefix }`).
 
 ## Try it
 
