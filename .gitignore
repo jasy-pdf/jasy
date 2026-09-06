@@ -19,5 +19,3 @@ packages/playground/*.png
 # npm pack / release tarballs
 *.tgz
 
-# Benchmark harness - lives here, shown on the landing later, not committed yet
-bench/
