@@ -1,6 +1,6 @@
 {
   "name": "@jasy/vue",
-  "version": "1.0.0-alpha.11",
+  "version": "1.0.0-beta.1",
   "description": "Author PDFs as Vue components - a thin Vue custom renderer over @jasy/pdf.",
   "keywords": [
     "declarative",
