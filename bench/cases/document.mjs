@@ -33,6 +33,7 @@ const row = (i) => [
   `${(120 + i * 3).toFixed(2)} EUR`,
 ];
 const HEAD = ["Ref", "Description", "Qty", "Amount"];
+const FOOTER_LINE = 8 * 1.1; // the footer is 8pt at the page line height
 const W = [70, 250, 40, 90];
 
 export const name = "document";
@@ -88,7 +89,9 @@ export const reactPdf = () =>
       null,
       React.createElement(
         RPage,
-        { style: { padding: 40, fontSize: 10, lineHeight: 1.1 } },
+        // paddingBottom reserves the fixed footer's line. Without it the flow runs underneath it and
+        // the two engines would be laying out different body heights.
+        { style: { padding: 40, paddingBottom: 40 + FOOTER_LINE, fontSize: 10, lineHeight: 1.1 } },
         React.createElement(
           View,
           { fixed: true, style: { flexDirection: "row", alignItems: "center", marginBottom: 8 } },

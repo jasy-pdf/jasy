@@ -2,6 +2,7 @@
 // GSUB and no embedded kern table, so `liga` is a no-op there and the pairs come from the AFM. Here both
 // engines read the real tables out of the same .ttf, subset it, and embed it.
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { Document, Page, Column, Paragraph, renderToBytes } from "@jasy/pdf";
 import React from "react";
 import {
@@ -34,7 +35,7 @@ const TEXTS = Array.from({ length: PARAS }, (_, i) => {
   return out.join(" ") + ".";
 });
 
-Font.register({ family: "Liberation", src: TTF.pathname });
+Font.register({ family: "Liberation", src: fileURLToPath(TTF) });
 
 export const name = "typography";
 export const about = `${PARAS} paragraphs in an embedded TrueType - real kerning + ligatures`;

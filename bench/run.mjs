@@ -46,8 +46,13 @@ for (const c of cases) {
         `${String(r.pages).padStart(3)} pages  ${(r.bytes / 1024).toFixed(0).padStart(5)} KB`,
     );
   }
-  const pages = [...new Set(Object.values(results).map((r) => r.pages))];
-  if (pages.length > 1) {
+  const counts = Object.values(results).map((r) => r.pages);
+  const pages = [...new Set(counts)];
+  if (counts.some((p) => p <= 0)) {
+    // `pageCount` returns -1 when poppler is missing. Two unknowns are not a match, and nothing else
+    // holds the two documents to the same shape - so say so and print no ratio.
+    console.log("  !! page counts unavailable (install poppler-utils) - not comparing");
+  } else if (pages.length > 1) {
     console.log(`  !! page counts differ (${pages.join(" vs ")}) - these are DIFFERENT documents`);
   } else if (results.jasy && results.reactPdf) {
     const x = results.reactPdf.median / results.jasy.median;
