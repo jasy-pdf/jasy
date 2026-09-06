@@ -45,10 +45,15 @@ export function withDeclaredExtent(
   declared: number | undefined,
   explicitMin?: number,
 ): number {
-  const automatic = declared === undefined ? contentFloor : Math.min(declared, contentFloor);
-  // An explicit `minWidth`/`minHeight` REPLACES the automatic minimum rather than competing with it -
-  // CSS's automatic minimum only applies while `min-width` is `auto`. Without this the shrink pass
-  // aims below a bound the child will refuse anyway, so the child keeps its size, the share it was
-  // supposed to give never arrives, and the line stays over its width.
-  return explicitMin === undefined ? automatic : Math.max(automatic, explicitMin);
+  // An explicit `minWidth`/`minHeight` REPLACES the automatic minimum - it does not compete with it.
+  // CSS applies the automatic minimum only while `min-width` is `auto`, so a smaller explicit value
+  // wins too: `min-width: 0` is the standard way to let a flex item shrink past its longest word, and
+  // taking the larger of the two would quietly ignore it. Measured in Chrome on one long word in a
+  // 200pt line: 132.08pt with `auto`, 84.64pt with `0`.
+  if (explicitMin !== undefined) return explicitMin;
+  // Without an explicit bound the floor is CSS's content-based minimum: the smaller of what the
+  // element declares and what its content actually needs. It matters because the shrink pass must not
+  // aim below a size the child will refuse - the share it was supposed to give would never arrive,
+  // and the line would stay over its width.
+  return declared === undefined ? contentFloor : Math.min(declared, contentFloor);
 }

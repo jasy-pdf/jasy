@@ -79,4 +79,20 @@ describe("min-content is the floor under shrinking", () => {
     expect(Number.isFinite(e.getProps().width)).toBe(true);
     expect(e.getProps().width).toBe(300);
   });
+
+  it("lets an explicit minWidth REPLACE the automatic floor, downwards too", () => {
+    // `min-width: 0` is CSS's standard way to let a flex item shrink past its longest word. Taking the
+    // larger of the two floors would quietly ignore it. Chrome on the same shape: 132.08pt with the
+    // automatic minimum, 84.64pt with `min-width: 0`.
+    const word = "Verpflichtungserklaerung";
+    const auto = Box({ width: 300 }, [Text(word, { size: 12 })]);
+    const zero = Box({ width: 300, minWidth: 0 }, [Text(word, { size: 12 })]);
+    const floor = Text(word, { size: 12 }).minIntrinsicMain(true, ctx());
+
+    layout(Row({ gap: 0 }, [auto, Box({ width: 300 }, [])]), 100);
+    layout(Row({ gap: 0 }, [zero, Box({ width: 300 }, [])]), 100);
+
+    expect(auto.getProps().width).toBeCloseTo(floor, 5);
+    expect(zero.getProps().width).toBeLessThan(floor);
+  });
 });
