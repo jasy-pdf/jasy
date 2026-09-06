@@ -335,28 +335,71 @@ export class FlexLayoutHelper {
     );
     const overflow = fixedMain + totalBasis + totalGap - mainAvail;
     if (shrinkers.length > 0 && Number.isFinite(mainAvail) && overflow > 0) {
-      const weight = (c: PDFElement) => c.flexShrink * axis.mainOf(fixedSize.get(c)!);
-      const totalWeight = shrinkers.reduce((n, c) => n + weight(c), 0);
-      if (totalWeight > 0) {
-        for (const child of shrinkers) {
-          const natural = axis.mainOf(fixedSize.get(child)!);
-          // Never below zero: when the GAPS alone outgrow the line, a proportional share asks for more
-          // than a child has. No test can tell this clamp apart from its absence - `constrainWidth`
-          // floors at 0 further down either way - but handing out a negative constraint is nonsense,
-          // and the next reader should not have to work out that it happens to be harmless.
-          const target = Math.max(0, natural - (weight(child) / totalWeight) * overflow);
-          shrunkCap.set(child, target);
-          // Re-measure NOW, not in pass 2: a narrower child may wrap to more lines, and the line's
-          // cross extent is settled just below.
-          const size = child.calculateLayout(
-            axis.measureConstraints(crossAvail, target),
-            axis.offsetAt(mainStart, crossOrigin),
-            ctx,
-          );
-          fixedMain += axis.mainOf(size) - natural;
-          crossUsed = Math.max(crossUsed, axis.crossOf(size));
-          fixedSize.set(child, size);
+      // Every child is floored at what it can actually hold - its `min-content` extent, which is CSS's
+      // automatic `min-width` on a flex item. Without it a badly overflowing line would grind a
+      // paragraph down to one word per line: the box gets narrow, the text gets tall, and nothing is
+      // gained. Past that floor a child overflows again, which is what a browser does too.
+      const naturalOf = (c: PDFElement) => axis.mainOf(fixedSize.get(c)!);
+      const floorOf = new Map<PDFElement, number>(
+        shrinkers.map((c) => [
+          c,
+          // Never above its natural size: the shrink pass may only take space away, never hand it out.
+          // Never below zero either - when the GAPS alone outgrow the line a proportional share asks
+          // for more than a child has, and a negative constraint is nonsense even though
+          // `constrainWidth` would floor it further down anyway.
+          Math.min(naturalOf(c), Math.max(0, c.minIntrinsicMain(axis.mainHorizontal, ctx))),
+        ]),
+      );
+
+      // CSS resolves this iteratively (Flexbox 9.7): a child that lands on its floor is FROZEN there
+      // and the share it could not absorb is handed to the rest. A single pass would leave that share
+      // unspent, so one unsqueezable child would keep the whole line overflowing while its neighbours
+      // still had room to give.
+      const target = new Map<PDFElement, number>(shrinkers.map((c) => [c, naturalOf(c)]));
+      const frozen = new Set<PDFElement>();
+      let flexible = [...shrinkers];
+      // What the frozen ones took off the overflow; the rest is always shared out from scratch, never
+      // from what a previous round already assigned.
+      let absorbedByFrozen = 0;
+      while (flexible.length > 0) {
+        const toAbsorb = overflow - absorbedByFrozen;
+        if (toAbsorb <= 1e-9) break;
+        const weight = (c: PDFElement) => c.flexShrink * naturalOf(c);
+        const totalWeight = flexible.reduce((n, c) => n + weight(c), 0);
+        if (totalWeight <= 0) break;
+        const froze: PDFElement[] = [];
+        for (const child of flexible) {
+          const natural = naturalOf(child);
+          const floor = floorOf.get(child)!;
+          const wanted = natural - (weight(child) / totalWeight) * toAbsorb;
+          if (wanted < floor) {
+            target.set(child, floor);
+            froze.push(child);
+            absorbedByFrozen += natural - floor;
+          } else {
+            target.set(child, wanted);
+          }
         }
+        if (froze.length === 0) break;
+        for (const c of froze) frozen.add(c);
+        flexible = flexible.filter((c) => !frozen.has(c));
+      }
+
+      for (const child of shrinkers) {
+        const natural = naturalOf(child);
+        const capped = target.get(child)!;
+        if (capped >= natural) continue;
+        shrunkCap.set(child, capped);
+        // Re-measure NOW, not in pass 2: a narrower child may wrap to more lines, and the line's
+        // cross extent is settled just below.
+        const size = child.calculateLayout(
+          axis.measureConstraints(crossAvail, capped),
+          axis.offsetAt(mainStart, crossOrigin),
+          ctx,
+        );
+        fixedMain += axis.mainOf(size) - natural;
+        crossUsed = Math.max(crossUsed, axis.crossOf(size));
+        fixedSize.set(child, size);
       }
     }
 
@@ -414,7 +457,11 @@ export class FlexLayoutHelper {
       const stretch = align === "stretch";
       let mainExtent: number;
       if (child instanceof FlexiblePDFElement) {
-        mainExtent = child.getBasis(percentBase) + (child.getFlex() / totalFlex) * remaining;
+        // `totalFlex` is 0 when every flex child asked for `flex: 0` (a pure `flexBasis` slot). The
+        // share is then 0/0 - a NaN that becomes the offset of every later sibling, which is the
+        // shape of the old Spacer bug. Such a child simply takes its basis.
+        const share = totalFlex > 0 ? (child.getFlex() / totalFlex) * remaining : 0;
+        mainExtent = child.getBasis(percentBase) + share;
         // A flex child fills the MAIN axis, and its cross size is only known after layout - there is
         // nothing to align against. So alignSelf is a no-op here, and that has to hold for the CROSS
         // CONSTRAINT too: reading the per-child alignment would hand an `alignSelf: "start"` flex child

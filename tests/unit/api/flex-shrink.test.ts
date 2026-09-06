@@ -6,8 +6,9 @@ import { BoxConstraints } from "../../../src/lib/layout/box-constraints.ts";
 import { LayoutContext } from "../../../src/lib/elements/pdf-element.ts";
 
 // `flexShrink` gives main-axis space back when the line overflows, weighted by the child's OWN size -
-// so a wide item yields more than a narrow one. Default 0, deliberately unlike CSS's 1: shrinking
-// changes what a document looks like, and every document written before this must lay out unchanged.
+// so a wide item yields more than a narrow one. Default 1, as in CSS; `0` opts a child out and keeps
+// it at its natural size. An empty Box has nothing it must hold, so it can be squeezed to nothing -
+// the min-content floor that stops a real child is covered in `flex-shrink-floor.test.ts`.
 
 const ctx = {} as LayoutContext;
 const tile = (width: number, opts: Record<string, unknown> = {}) =>
@@ -21,17 +22,22 @@ const widths = (children: unknown[], line = 400) => {
   );
 };
 
-describe("nothing shrinks unless it says so", () => {
-  it("leaves an overflowing line alone by default", () => {
-    // 3 x 200 in a 400pt line: it overflows, and that is exactly what it did before this existed.
-    expect(widths([tile(200), tile(200), tile(200)])).toEqual([200, 200, 200]);
+describe("an overflowing line pulls its children back in", () => {
+  it("shrinks them all by default, in proportion to their own size", () => {
+    // 3 x 200 in a 400pt line: 200 too much, shared equally because the three are the same size.
+    expect(widths([tile(200), tile(200), tile(200)])).toEqual([400 / 3, 400 / 3, 400 / 3]);
+  });
+
+  it("leaves a child alone when it opts out", () => {
+    // The first refuses, so the other two carry the whole 200pt overflow between them.
+    expect(widths([tile(200, { flexShrink: 0 }), tile(200), tile(200)])).toEqual([200, 100, 100]);
   });
 });
 
 describe("giving space back", () => {
-  it("shrinks the one child that volunteered, by the whole overflow", () => {
-    // 200 + 300 = 500 in a 400pt line: 100 too much, and only the second offered.
-    expect(widths([tile(200), tile(300, { flexShrink: 1 })])).toEqual([200, 200]);
+  it("shrinks the one child that has not opted out, by the whole overflow", () => {
+    // 200 + 300 = 500 in a 400pt line: 100 too much, and only the second is willing.
+    expect(widths([tile(200, { flexShrink: 0 }), tile(300)])).toEqual([200, 200]);
   });
 
   it("weights the share by each child's own size, as CSS does", () => {
@@ -86,7 +92,7 @@ describe("an Image is a flex child like any other", () => {
     expect(b!).toBeCloseTo(160, 5);
   });
 
-  it("still leaves an Image alone without it", () => {
-    expect(widths([pic(300), pic(300)])).toEqual([300, 300]);
+  it("leaves an Image alone when it opts out", () => {
+    expect(widths([pic(300, { flexShrink: 0 }), pic(300, { flexShrink: 0 })])).toEqual([300, 300]);
   });
 });

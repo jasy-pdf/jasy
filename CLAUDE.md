@@ -546,9 +546,9 @@ agree: true })` → declarative values, not object mutation. Save is an **increm
   `order`, `reverse` on `Row`/`Column`. This closes the last react-pdf parity gap in layout (Yoga gives
   them that set for free). `FlexLayoutHelper.layout()` now dispatches: the untouched single-line engine
   is `layoutLine()`, and `layoutWrapped()` splits into lines, measures each, then places the BLOCK of
-  lines by `alignContent`. Two defaults deviate from CSS ON PURPOSE — `flexShrink` is **0** (CSS says 1)
-  so no existing layout moves, and `alignContent` is `start`. All of it is off by default, which is why
-  the 30 gallery cases before it stayed byte-identical.
+  lines by `alignContent`. `flexShrink` shipped as **0** so no existing layout would move, and
+  `alignContent` as `start`; the 30 gallery cases before it stayed byte-identical. **`flexShrink` became
+  1 (the CSS default) on 2026-09-05** — see the entry below.
   **The trap that cost a real bug:** a line's `%` children resolve against **the line minus its gaps**
   (our documented relative-sizing rule, so N columns at (100/N)% fit exactly). The wrap pass has to use
   the SAME base — it first measured against the full line, making each child a few points too wide, and
@@ -823,6 +823,31 @@ polygon path fill stroke fillAndStroke group clipped`), with three deliberate di
   it - no text layout, no pagination inside. What is beyond it but still expressible in PDF (text
   render modes, blend modes, tiling patterns, CMYK/spot, soft masks, optional content) is in `todo.md`
   under Roadmap to 1.1.
+
+- ✅ **`flexShrink` is 1, and has a floor** (2026-09-05) — the CSS default, flipped while still in alpha
+  so it costs nobody a major. An overflowing flex line now pulls its children back inside instead of
+  letting them run past the edge; `flexShrink: 0` opts out. **The measurement is the argument**: four of
+  the 36 gallery cases were overflowing their page margin without anyone noticing (`26-corner-radius` and
+  `27-gradients` by 70px, `08-colors` by 50, `24-percentage-insets` by 26, against a content box ending
+  at 728px). Nothing ever pulled them back, so nothing ever complained. The fifth changed case is
+  `31-flexbox` itself, whose whole point was the contrast — it now demonstrates opting OUT.
+  **No pagination case moved**, which was the real worry: a Column's main axis is vertical, and squeezing
+  children there instead of paginating them would have been catastrophic. It does not happen.
+  - **The floor is the other half, and without it the flip would be half a rule.** `PDFElement.minIntrinsicMain(horizontal, ctx)`
+    is CSS's `min-content` (`layout/min-intrinsic.ts`), built like `needsBoundedMain`: default 0, `TextElement`
+    answers its longest word (a single CHARACTER when `breakWord`/`hyphenate` is on, as CSS does for
+    `word-break: break-all`), and the containers recurse — along their own axis the floors ADD UP plus the
+    gaps, across it the widest wins, and a wrapping stack adds up nothing since it may put every child on
+    its own line. An element's declared extent folds in as CSS's "specified size suggestion": the SMALLER
+    of the two, so a `Box({ width: 400 })` around 50pt of content may still be squeezed to 50.
+    Without it a badly overflowing line grinds a paragraph down to one word per line — measured before it
+    was built: a text capped at 12pt came back 60pt tall, trading a wide box for a tall one and gaining
+    nothing.
+  - **Distribution is iterative** (CSS Flexbox 9.7): a child that lands on its floor is FROZEN there and
+    the share it could not absorb is handed to the rest. One pass would leave that share unspent, so a
+    single unsqueezable child would keep the whole line overflowing while its neighbours still had room.
+  - The floor changed **no** gallery output — it only binds in extreme overflow. That is the point: it is
+    a safety net, not a second behaviour change.
 
 Genuine remaining gaps / deferred:
 

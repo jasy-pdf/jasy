@@ -9,6 +9,7 @@ import {
   extentSpecs,
   resolveSize,
 } from "../layout/box-constraints.ts";
+import { stackMinIntrinsic, withDeclaredExtent } from "../layout/min-intrinsic.ts";
 import {
   Fragmentable,
   FragmentResult,
@@ -220,6 +221,17 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
       : [this.sizeMemory.height, this.sizeMemory.heightFactor];
     if (requested.some((v) => v !== undefined)) return false;
     return this.children.some((c) => c.needsBoundedMain(horizontal));
+  }
+
+  /** A Box stacks its children vertically inside its border, which is on both sides of the axis. */
+  override minIntrinsicMain(horizontal: boolean, ctx: LayoutContext): number {
+    const content =
+      stackMinIntrinsic(this.children, 0, !horizontal, horizontal, ctx) + 2 * this.borderWidth;
+    return withDeclaredExtent(
+      content,
+      horizontal ? this.sizeMemory.width : this.sizeMemory.height,
+      horizontal ? this.sizeMemory.minWidth : this.sizeMemory.minHeight,
+    );
   }
 
   calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {

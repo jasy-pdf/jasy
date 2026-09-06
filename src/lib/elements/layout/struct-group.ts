@@ -20,6 +20,11 @@ export class StructGroup extends PDFElement implements Fragmentable {
     this.child = child;
   }
 
+  /** Layout-transparent: the floor is whatever the wrapped child needs. */
+  override minIntrinsicMain(horizontal: boolean, ctx: LayoutContext): number {
+    return this.child.minIntrinsicMain(horizontal, ctx);
+  }
+
   calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
     return this.child.calculateLayout(constraints, offset, ctx);
   }

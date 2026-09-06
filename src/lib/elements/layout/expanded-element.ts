@@ -24,6 +24,11 @@ export class ExpandedElement extends FlexiblePDFElement implements Fragmentable 
     this.child = child;
   }
 
+  /** Layout-transparent: the floor is whatever the wrapped child needs. */
+  override minIntrinsicMain(horizontal: boolean, ctx: LayoutContext): number {
+    return this.child.minIntrinsicMain(horizontal, ctx);
+  }
+
   calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
     if (constraints.hasBoundedWidth) this.width = constraints.maxWidth;
     // Absolute placement from the parent; assignment (not +=) so re-layout is idempotent.

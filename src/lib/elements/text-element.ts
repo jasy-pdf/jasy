@@ -11,6 +11,7 @@ import { BoxConstraints, Offset, Size } from "../layout/box-constraints.ts";
 import type { Direction } from "../text/bidi.ts";
 import { applyTextTransform, type TextTransform } from "../text/text-style.ts";
 import { splitByFont } from "../text/font-fallback.ts";
+import { runAdvance } from "../text/advance.ts";
 import { Fragmentable, FragmentResult } from "../layout/fragmentation.ts";
 import {
   type LineOptions,
@@ -564,6 +565,65 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
           seg.letterSpacing ?? this.letterSpacing,
         ),
       indent,
+    );
+  }
+
+  /**
+   * The widest piece of this text that cannot be broken - CSS's `min-content` width. A shrinking flex
+   * parent floors the width it hands us here, so a squeezed paragraph stops at its longest word
+   * instead of becoming one word per line.
+   *
+   * With `breakWord` or `hyphenate` on, the text may be cut mid-word, so the unbreakable piece is a
+   * single character - the same reasoning CSS applies to `word-break: break-all`.
+   */
+  override minIntrinsicMain(horizontal: boolean, ctx: LayoutContext): number {
+    // Only the width is a question here: the height of a text is whatever its lines add up to, and a
+    // column squeezing it vertically is the paginator's business, not the shrink pass's.
+    if (!horizontal) return 0;
+    this.resolveStyle(ctx);
+    const metrics = ctx.metrics;
+    const widest = (
+      text: string,
+      family: string,
+      size: number,
+      style: FontStyle,
+      letterSpacing: number,
+    ): number => {
+      // `ligatures` belongs to the FONT: it decides which glyphs are drawn and therefore how wide the
+      // piece is. Leaving it out here would measure a floor the drawing never matches.
+      const font = {
+        fontFamily: family,
+        fontSize: size,
+        fontStyle: style,
+        ligatures: this.ligatures,
+      };
+      // Split on the same boundaries the breaker uses - a hard break ends a line too.
+      const pieces = this.breakWord || this.hyphenate ? [...text] : text.split(/[ \n]/);
+      return pieces.reduce(
+        (max, piece) => Math.max(max, runAdvance(metrics, piece, font, letterSpacing)),
+        0,
+      );
+    };
+    const content = this.display(metrics);
+    if (typeof content === "string") {
+      return widest(content, this.fontFamily, this.fontSize, this.fontStyle, this.letterSpacing);
+    }
+    // Segments join without a space, so a word may straddle two of them; taking the widest piece per
+    // segment can therefore UNDER-estimate. That errs towards squeezing a little too far, which lands
+    // back on the old overflow behaviour rather than on something new.
+    return content.reduce(
+      (max, seg) =>
+        Math.max(
+          max,
+          widest(
+            seg.content,
+            seg.fontFamily ?? this.fontFamily,
+            seg.fontSize ?? this.fontSize,
+            seg.fontStyle ?? this.fontStyle,
+            seg.letterSpacing ?? this.letterSpacing,
+          ),
+        ),
+      0,
     );
   }
 
