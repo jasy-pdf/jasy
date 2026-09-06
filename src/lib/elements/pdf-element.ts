@@ -115,6 +115,20 @@ export abstract class PDFElement {
   }
 
   /**
+   * The smallest main-axis extent this element can be squeezed into and still hold its content - CSS's
+   * `min-content` size, which is what an automatic `min-width` resolves to on a flex item. The shrink
+   * pass floors every child at this value, so a line that overflows badly stops squeezing rather than
+   * grinding a paragraph down to one word per line (which would only trade a wide box for a tall one).
+   *
+   * `horizontal` = the width. Default 0: an element with no opinion may be squeezed to nothing, which
+   * is what an empty box or a plain drawing can do without harm. Text and the layout containers
+   * override it; containers recurse, since a Row is only as unsqueezable as its children.
+   */
+  minIntrinsicMain(_horizontal: boolean, _ctx: LayoutContext): number {
+    return 0;
+  }
+
+  /**
    * Whether this element IS a forced page break (a `PageBreak`). The pagination packer cuts the flow
    * at such a marker: everything before it stays, everything after starts a new page. Default: no.
    */
@@ -172,11 +186,16 @@ export abstract class PDFElement {
 
   /**
    * How willingly this child gives up main-axis space when the line overflows (CSS `flex-shrink`),
-   * weighted by its own size as CSS does. **Default 0, deliberately unlike CSS's 1**: shrinking is a
-   * change of what a document LOOKS like, and every document written before this existed must keep
-   * laying out exactly as it did. Opt in per child.
+   * weighted by its own size as CSS does. Default 1, as in CSS: an overflowing line squeezes its
+   * children back inside instead of letting them run past the edge of the box. `0` opts out and keeps
+   * a child at its natural size.
+   *
+   * This was 0 until the alpha, so that adding flexShrink could not move an existing layout. That
+   * caution outlived its use: four of the gallery cases turned out to be overflowing their page
+   * margin without anyone noticing, because nothing ever pulled them back. Shrinking is bounded from
+   * below by `minIntrinsicMain`, so a child is never squeezed past what it can actually hold.
    */
-  flexShrink = 0;
+  flexShrink = 1;
 
   /** Sets `flexShrink` and returns the element. */
   withFlexShrink(shrink: number | undefined): this {

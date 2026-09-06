@@ -7,6 +7,7 @@ import {
   resolveSize,
 } from "../layout/box-constraints.ts";
 import { FlexLayoutHelper, HORIZONTAL_AXIS, MainAlign, CrossAlign } from "../utils/flex-layout.ts";
+import { stackMinIntrinsic, withDeclaredExtent } from "../layout/min-intrinsic.ts";
 import {
   FlexiblePDFElement,
   LayoutContext,
@@ -123,6 +124,19 @@ export class RowElement extends SizedPDFElement {
     if (requested.some((v) => v !== undefined)) return false;
     const ownFlexChild = horizontal && this.children.some((c) => c instanceof FlexiblePDFElement);
     return ownFlexChild || this.children.some((c) => c.needsBoundedMain(horizontal));
+  }
+
+  /** A Row lays out side by side, so widths add up (gaps included) and heights overlap. */
+  override minIntrinsicMain(horizontal: boolean, ctx: LayoutContext): number {
+    const content = stackMinIntrinsic(
+      this.children,
+      this.gap,
+      horizontal,
+      horizontal,
+      ctx,
+      this.wrap,
+    );
+    return withDeclaredExtent(content, horizontal ? this.requested.width : this.requested.height);
   }
 
   calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {

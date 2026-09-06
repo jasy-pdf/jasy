@@ -7,7 +7,8 @@ import { LayoutContext } from "../../../src/lib/elements/pdf-element.ts";
 // unchanged and simply runs once per line - which is what keeps every non-wrapping document identical.
 
 const ctx = {} as LayoutContext;
-const tile = (w: number, h = 20) => Box({ borderWidth: 0, width: w, height: h }, []);
+const tile = (w: number, h = 20, opts: Record<string, unknown> = {}) =>
+  Box({ borderWidth: 0, width: w, height: h, ...opts }, []);
 
 /** Where each child ended up: [x, y] per child, in tree order. */
 const places = (row: ReturnType<typeof Row>, w = 300, h = 400) => {
@@ -17,9 +18,21 @@ const places = (row: ReturnType<typeof Row>, w = 300, h = 400) => {
   );
 };
 
-describe("without wrap nothing changes", () => {
-  it("keeps overflowing on one line, as it always did", () => {
+describe("without wrap everything stays on one line", () => {
+  it("squeezes the children back inside instead of opening a second line", () => {
+    // 2 x 200 in a 300pt line: no wrap, so they shrink to 150 each and stay side by side.
     const row = Row({ width: 300 }, [tile(200), tile(200)]);
+    expect(places(row)).toEqual([
+      [0, 0],
+      [150, 0],
+    ]);
+  });
+
+  it("still overflows on one line when the children refuse to shrink", () => {
+    const row = Row({ width: 300 }, [
+      tile(200, 20, { flexShrink: 0 }),
+      tile(200, 20, { flexShrink: 0 }),
+    ]);
     expect(places(row)).toEqual([
       [0, 0],
       [200, 0],
@@ -46,10 +59,14 @@ describe("wrapping", () => {
     ]);
   });
 
-  it("lets a child wider than the line OVERFLOW rather than squashing it", () => {
-    // CSS does not shrink an item to make it fit - that is what `flexShrink` is for, and it is off by
-    // default. The child keeps its width, takes a line of its own, and runs past the edge.
-    const row = Row({ width: 100, wrap: true }, [tile(50), tile(400), tile(50)]);
+  it("lets a child wider than the line OVERFLOW when it refuses to shrink", () => {
+    // Wrapping puts a too-wide child on a line of its own; whether it then fits is `flexShrink`'s
+    // business. Opted out, it keeps its width and runs past the edge.
+    const row = Row({ width: 100, wrap: true }, [
+      tile(50),
+      tile(400, 20, { flexShrink: 0 }),
+      tile(50),
+    ]);
     row.calculateLayout(BoxConstraints.loose(100, 400), { x: 0, y: 0 }, ctx);
     const kids = (row as unknown as { children: { getProps(): { width?: number; y: number } }[] })
       .children;

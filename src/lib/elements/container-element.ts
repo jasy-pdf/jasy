@@ -1,4 +1,5 @@
 import { FlexLayoutHelper, VERTICAL_AXIS, MainAlign, CrossAlign } from "../utils/flex-layout.ts";
+import { stackMinIntrinsic, withDeclaredExtent } from "../layout/min-intrinsic.ts";
 import {
   BoxConstraints,
   Offset,
@@ -186,6 +187,19 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
     if (requested.some((v) => v !== undefined)) return false;
     const ownFlexChild = !horizontal && this.children.some((c) => c instanceof FlexiblePDFElement);
     return ownFlexChild || this.children.some((c) => c.needsBoundedMain(horizontal));
+  }
+
+  /** A Column stacks vertically, so widths overlap and heights add up. */
+  override minIntrinsicMain(horizontal: boolean, ctx: LayoutContext): number {
+    const content = stackMinIntrinsic(
+      this.children,
+      this.gap,
+      !horizontal,
+      horizontal,
+      ctx,
+      this.wrap,
+    );
+    return withDeclaredExtent(content, horizontal ? this.requested.width : this.requested.height);
   }
 
   calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {

@@ -62,6 +62,17 @@ export class PaddingElement extends SizedPDFElement implements Fragmentable {
     return new PaddingElement({ margin: this.margin, child });
   }
 
+  /**
+   * The child plus our own insets. A PERCENTAGE inset counts as zero here: it resolves against a width
+   * that is not decided yet, which is exactly how CSS treats a percentage when sizing intrinsically.
+   */
+  override minIntrinsicMain(horizontal: boolean, ctx: LayoutContext): number {
+    const [top, right, bottom, left] = resolveEdges(this.margin, 0);
+    return (
+      this.child.minIntrinsicMain(horizontal, ctx) + (horizontal ? left + right : top + bottom)
+    );
+  }
+
   calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
     // Padding takes the width it is offered; its height shrink-wraps the child.
     if (constraints.hasBoundedWidth) this.width = constraints.maxWidth;

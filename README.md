@@ -116,9 +116,11 @@ const pdf = await renderToBytes(
 );
 ```
 
-Real text layout (Adobe AFM metrics, kerning, word-wrap), flexbox-style `gap` / `justify` / `align`,
-boxes with radius and alpha, images, custom TrueType fonts, **AES-256 password encryption**, and **real
-pagination** - content that overflows flows onto the next page, headers and footers repeat.
+Real text layout (real font metrics, kerning, ligatures, word-wrap), full flexbox (`gap` / `justify` /
+`align`, wrap, `flexBasis`, `flexShrink`, `order`), boxes with per-corner radius, gradients and alpha, images and
+**SVG**, a `Canvas` to draw into, custom fonts from a file, bytes or a URL, AcroForm fields,
+**AES-256 password encryption**, tagged PDFs for screen readers, and **real pagination** - content that
+overflows flows onto the next page, headers and footers repeat, and a block can refuse to be split.
 
 ---
 
@@ -140,9 +142,19 @@ verify all of it:
 - **PDF/A-3, matched not approximated.** The conformance graph is hand-built and **passes veraPDF**, the
   official ISO 19005 validator.
 - **Byte-exact round-trips.** Generate and parse are inverses: `generate → parse → regenerate` reproduces
-  the identical XML. Over 900 tests hold the line across the workspace.
+  the identical XML. Over 1,600 tests hold the line across the workspace.
 - **Schematron, local.** The official EN-16931 + XRechnung rules run via saxon-js (the real XSLT, in pure
   JS) - no Java, no upload.
+- **Vectors, not bitmaps.** `Image("logo.svg")` keeps a logo a VECTOR - our own SVG reader and our own
+  XML parser, checked against 10,819 real files and compared pixel for pixel with headless Chrome. Need
+  a chart instead? `Canvas` hands you a typed pen for the same vector layer.
+- **Fonts, whatever the container.** `.ttf`, `.woff` and `.woff2` are the same thing at the call site.
+  The WOFF2 container and its `glyf` transform are ours; only Brotli is a dependency, and it is loaded
+  only if a WOFF2 actually turns up.
+- **Byte-stable output.** The same document rendered twice is byte-identical, PDF/A and ZUGFeRD
+  included, across separate processes. An archived invoice stays re-derivable and hashable years later.
+- **Accessible if you ask.** `renderToBytes(doc, { accessible })` emits a full tagged structure tree,
+  verified `isCompliant` by veraPDF against PDF/UA-1.
 
 ---
 
@@ -153,12 +165,14 @@ verify all of it:
 | **[@jasy/e-invoice](https://npmx.dev/@jasy/e-invoice)** | ZUGFeRD / XRechnung: your data → PDF/A-3 + EN-16931 XML, with local validation. **The prize.** |
 | **[@jasy/cli](https://npmx.dev/@jasy/cli)**             | the `jasy` terminal: read · validate · export, headless **and** interactive                    |
 | **[@jasy/pdf](https://npmx.dev/@jasy/pdf)**             | the declarative, Flutter-style PDF layout engine that powers them                              |
+| **[@jasy/vue](https://npmx.dev/@jasy/vue)**             | author PDFs as Vue components - and render them in the browser                                 |
+| **[@jasy/nuxt](https://npmx.dev/@jasy/nuxt)**           | the Nuxt module: zero-config PDFs, client **or** server                                        |
 
 ---
 
 ## Why you can trust it
 
-- **Over 900 tests, green** across the workspace (850 in the engine alone). The generator and the parser
+- **Over 1,600 tests, green** across the workspace (1,190 in the engine alone). The generator and the parser
   are **byte-exact inverses**: `generate → parse → regenerate` reproduces the identical XML. Nothing is
   silently lost.
 - **The same rules the authorities use** - the official KoSIT EN-16931 + XRechnung Schematron, and the
@@ -170,10 +184,14 @@ verify all of it:
 
 ## Honest scope
 
-jasy targets the documents that matter here: invoices, reports, quotes, datasheets. It is **not** a
-LaTeX / WeasyPrint replacement - no microtypography, hyphenation or bidi, and arbitrary multi-page flow
-of _any_ content is still maturing. For e-invoices (a table, totals, a footer) it is complete - they
-even paginate. We would rather under-promise and over-deliver in the demo above.
+jasy targets the documents that matter here: invoices, reports, quotes, datasheets - and it now sets
+text properly: kerning and Latin ligatures from the font's own tables, justification, pluggable
+hyphenation, right-to-left and Arabic shaping, underlines that step around descenders. Pagination is
+real: text splits at line boxes, `keepTogether` moves a card whole, orphans and widows are honoured.
+
+It is still **not** a LaTeX or WeasyPrint replacement, and does not try to be: no automatic
+microtypography, no floats, no CSS engine. What it will not draw, it **names** - an SVG filter, a font
+without the glyph, a word that cannot be split - rather than quietly drawing something else.
 
 > **Status:** young and pre-1.0. The API can still shift between minor versions. Everything shown here
 > works and is tested.

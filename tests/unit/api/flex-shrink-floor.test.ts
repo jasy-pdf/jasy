@@ -1,0 +1,62 @@
+// The floor under `flexShrink`: a squeezed child stops at its `min-content` extent - CSS's automatic
+// `min-width` on a flex item - instead of being ground down to one word per line.
+import { describe, it, expect } from "vitest";
+import { Box, Row } from "../../../src/lib/api/layout.ts";
+import { Text } from "../../../src/lib/api/text.ts";
+import { BoxConstraints } from "../../../src/lib/layout/box-constraints.ts";
+import { testMetrics } from "../support/metrics.ts";
+
+const ctx = () =>
+  ({ metrics: testMetrics(), pageConfig: { width: 595, height: 842, margin: 0 } }) as never;
+
+const layout = (el: ReturnType<typeof Row>, width: number) =>
+  el.calculateLayout(BoxConstraints.loose(width, Infinity), { x: 0, y: 0 }, ctx());
+
+describe("min-content is the floor under shrinking", () => {
+  it("a Text reports its longest word, not its whole line", () => {
+    const t = Text("short Verpflichtungserklaerung short", { size: 12 });
+    const whole = t.minIntrinsicMain(true, ctx());
+    const shorter = Text("short short short", { size: 12 }).minIntrinsicMain(true, ctx());
+    expect(whole).toBeGreaterThan(shorter);
+    // The long word alone, measured on its own, is exactly what came back.
+    expect(whole).toBeCloseTo(
+      Text("Verpflichtungserklaerung", { size: 12 }).minIntrinsicMain(true, ctx()),
+      6,
+    );
+  });
+
+  it("breakWord lowers the floor to a single character", () => {
+    const opts = { size: 12 } as const;
+    const plain = Text("Verpflichtungserklaerung", opts).minIntrinsicMain(true, ctx());
+    const broken = Text("Verpflichtungserklaerung", { ...opts, breakWord: true }).minIntrinsicMain(
+      true,
+      ctx(),
+    );
+    expect(broken).toBeLessThan(plain / 5);
+  });
+
+  it("stops squeezing a paragraph at its longest word instead of stacking it up", () => {
+    const para = () =>
+      Text("A paragraph with one Verpflichtungserklaerung inside it", { size: 12 });
+    const floor = para().minIntrinsicMain(true, ctx());
+    const child = Box({ width: 600 }, [para()]);
+    // Offer far less than the floor: the child must stop there and overflow, not keep wrapping.
+    layout(Row([child]), Math.round(floor / 3));
+    expect(child.getProps().width as number).toBeGreaterThanOrEqual(floor - 0.01);
+  });
+
+  it("hands an unsqueezable child's share to the ones that can still give", () => {
+    // Two children, 300pt each, in a 400pt line: 200pt has to go. The first cannot go below its long
+    // word, so the second must absorb more than its own half.
+    const wall = Box({ width: 300 }, [
+      Text("Verpflichtungserklaerungsbescheinigung", { size: 14 }),
+    ]);
+    const soft = Box({ width: 300 });
+    const row = Row({ gap: 0 }, [wall, soft]);
+    layout(row, 400);
+    const [a, b] = [wall.getProps().width as number, soft.getProps().width as number];
+    expect(a + b).toBeLessThanOrEqual(400.01);
+    expect(a).toBeGreaterThan(150); // it kept its word
+    expect(b).toBeLessThan(150); // so the other gave up more than half
+  });
+});

@@ -50,8 +50,9 @@ export interface BoundsInput {
   order?: number;
   /**
    * How willingly this child gives up main-axis space when the line overflows (CSS `flex-shrink`),
-   * weighted by its own size. **Default 0, deliberately unlike CSS's 1** - shrinking changes what a
-   * document looks like, so it is opted into per child rather than applied to everything at once.
+   * weighted by its own size. Default 1, as in CSS: an overflowing line pulls its children back inside
+   * instead of letting them run past the edge. Set `0` to keep a child at its natural size and let it
+   * overflow. A child is never squeezed below what it can hold - a text stops at its longest word.
    */
   flexShrink?: number;
   minWidth?: SizeInput;
