@@ -199,7 +199,11 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
       ctx,
       this.wrap,
     );
-    return withDeclaredExtent(content, horizontal ? this.requested.width : this.requested.height);
+    return withDeclaredExtent(
+      content,
+      horizontal ? this.requested.width : this.requested.height,
+      horizontal ? this.requested.minWidth : this.requested.minHeight,
+    );
   }
 
   calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {

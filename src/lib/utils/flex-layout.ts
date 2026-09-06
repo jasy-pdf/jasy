@@ -457,7 +457,11 @@ export class FlexLayoutHelper {
       const stretch = align === "stretch";
       let mainExtent: number;
       if (child instanceof FlexiblePDFElement) {
-        mainExtent = child.getBasis(percentBase) + (child.getFlex() / totalFlex) * remaining;
+        // `totalFlex` is 0 when every flex child asked for `flex: 0` (a pure `flexBasis` slot). The
+        // share is then 0/0 - a NaN that becomes the offset of every later sibling, which is the
+        // shape of the old Spacer bug. Such a child simply takes its basis.
+        const share = totalFlex > 0 ? (child.getFlex() / totalFlex) * remaining : 0;
+        mainExtent = child.getBasis(percentBase) + share;
         // A flex child fills the MAIN axis, and its cross size is only known after layout - there is
         // nothing to align against. So alignSelf is a no-op here, and that has to hold for the CROSS
         // CONSTRAINT too: reading the per-child alignment would hand an `alignSelf: "start"` flex child

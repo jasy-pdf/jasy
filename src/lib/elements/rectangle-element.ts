@@ -227,7 +227,11 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
   override minIntrinsicMain(horizontal: boolean, ctx: LayoutContext): number {
     const content =
       stackMinIntrinsic(this.children, 0, !horizontal, horizontal, ctx) + 2 * this.borderWidth;
-    return withDeclaredExtent(content, horizontal ? this.sizeMemory.width : this.sizeMemory.height);
+    return withDeclaredExtent(
+      content,
+      horizontal ? this.sizeMemory.width : this.sizeMemory.height,
+      horizontal ? this.sizeMemory.minWidth : this.sizeMemory.minHeight,
+    );
   }
 
   calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {

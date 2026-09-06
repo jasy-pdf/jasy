@@ -589,7 +589,14 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       style: FontStyle,
       letterSpacing: number,
     ): number => {
-      const font = { fontFamily: family, fontSize: size, fontStyle: style };
+      // `ligatures` belongs to the FONT: it decides which glyphs are drawn and therefore how wide the
+      // piece is. Leaving it out here would measure a floor the drawing never matches.
+      const font = {
+        fontFamily: family,
+        fontSize: size,
+        fontStyle: style,
+        ligatures: this.ligatures,
+      };
       // Split on the same boundaries the breaker uses - a hard break ends a line too.
       const pieces = this.breakWord || this.hyphenate ? [...text] : text.split(/[ \n]/);
       return pieces.reduce(

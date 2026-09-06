@@ -40,6 +40,15 @@ export function stackMinIntrinsic(
  * around content needing 500 cannot go below 400. An extent given as a fraction is not a suggestion
  * at all - it has no size of its own until the parent is known - so it is ignored here.
  */
-export function withDeclaredExtent(contentFloor: number, declared: number | undefined): number {
-  return declared === undefined ? contentFloor : Math.min(declared, contentFloor);
+export function withDeclaredExtent(
+  contentFloor: number,
+  declared: number | undefined,
+  explicitMin?: number,
+): number {
+  const automatic = declared === undefined ? contentFloor : Math.min(declared, contentFloor);
+  // An explicit `minWidth`/`minHeight` REPLACES the automatic minimum rather than competing with it -
+  // CSS's automatic minimum only applies while `min-width` is `auto`. Without this the shrink pass
+  // aims below a bound the child will refuse anyway, so the child keeps its size, the share it was
+  // supposed to give never arrives, and the line stays over its width.
+  return explicitMin === undefined ? automatic : Math.max(automatic, explicitMin);
 }

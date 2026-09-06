@@ -1,7 +1,7 @@
 // The floor under `flexShrink`: a squeezed child stops at its `min-content` extent - CSS's automatic
 // `min-width` on a flex item - instead of being ground down to one word per line.
 import { describe, it, expect } from "vitest";
-import { Box, Row } from "../../../src/lib/api/layout.ts";
+import { Box, Row, Expanded } from "../../../src/lib/api/layout.ts";
 import { Text } from "../../../src/lib/api/text.ts";
 import { BoxConstraints } from "../../../src/lib/layout/box-constraints.ts";
 import { testMetrics } from "../support/metrics.ts";
@@ -58,5 +58,25 @@ describe("min-content is the floor under shrinking", () => {
     expect(a + b).toBeLessThanOrEqual(400.01);
     expect(a).toBeGreaterThan(150); // it kept its word
     expect(b).toBeLessThan(150); // so the other gave up more than half
+  });
+
+  it("treats an explicit minWidth as the floor, and hands the rest to the neighbour", () => {
+    // 2 x 300 in a 400pt line: 200 has to go. An equal split would put both at 200, but the first
+    // refuses to go under 250 - so the second has to give up 150, not 100, or the line still overflows.
+    const a = Box({ width: 300, minWidth: 250 }, []);
+    const b = Box({ width: 300 }, []);
+    layout(Row({ gap: 0 }, [a, b]), 400);
+    expect(a.getProps().width).toBe(250);
+    expect(b.getProps().width).toBe(150);
+  });
+
+  it("a flex child asking for a basis but no growth keeps its basis, not NaN", () => {
+    // `flex: 0` with a basis makes `totalFlex` zero, and the share used to be 0/0. A NaN there becomes
+    // the offset of every later sibling - the shape of the Spacer bug (#10).
+    const e = Expanded({ flex: 0, flexBasis: 300 }, Box({ height: 20 }, []));
+    const f = Box({ width: 300, height: 20 }, []);
+    layout(Row({ gap: 0 }, [e, f]), 400);
+    expect(Number.isFinite(e.getProps().width)).toBe(true);
+    expect(e.getProps().width).toBe(300);
   });
 });

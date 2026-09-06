@@ -154,7 +154,7 @@ verify all of it:
 - **Byte-stable output.** The same document rendered twice is byte-identical, PDF/A and ZUGFeRD
   included, across separate processes. An archived invoice stays re-derivable and hashable years later.
 - **Accessible if you ask.** `renderToBytes(doc, { accessible })` emits a full tagged structure tree,
-  verified `isCompliant` by veraPDF against PDF/UA-1.
+  and the output passes veraPDF's machine-verifiable PDF/UA-1 checks.
 
 ---
 
