@@ -80,4 +80,24 @@ describe("the run-advance memo", () => {
     epoch = 1;
     expect(runAdvance(m, TEXT, font)).toBeCloseTo(before + 1000, 10);
   });
+
+  it("forgets what it measured when kerning is switched off", () => {
+    // `setKerning` runs on every render, and a document keeps its metrics object - so the same
+    // document rendered twice with different options flips this under a warm cache.
+    let kerning = true;
+    const m = testMetrics({
+      getStringWidth: (text, _f, size) => text.length * size,
+      getKernPairs: (text) => [...text].slice(1).map(() => -50),
+    });
+    Object.defineProperty(m, "kerningEnabled", { get: () => kerning });
+    const font = COMBOS[0]!;
+
+    const kerned = runAdvance(m, TEXT, font);
+    kerning = false;
+    const plain = runAdvance(m, TEXT, font);
+    kerning = true;
+
+    expect(plain).toBeGreaterThan(kerned); // the pairs are negative, so dropping them widens the run
+    expect(runAdvance(m, TEXT, font)).toBeCloseTo(kerned, 10);
+  });
 });

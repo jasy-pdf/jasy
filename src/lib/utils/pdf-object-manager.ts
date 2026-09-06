@@ -18,12 +18,14 @@ const LATIN_FEATURES = ["liga"] as const;
 /** Stable, so `features(false)` does not allocate per call. */
 const NO_FEATURES: readonly string[] = [];
 
-/** A feature set's cache key, joined once per distinct array rather than per lookup. */
-const FEATURE_KEYS = new WeakMap<readonly string[], string>();
+/** A feature set's cache key. Memoised only for the two arrays this module owns - a caller's array is
+ *  joined every time, since holding on to its key would outlive a mutation of it. */
+const OWN_FEATURE_KEYS = new Map<readonly string[], string>([
+  [LATIN_FEATURES, LATIN_FEATURES.join(",")],
+  [NO_FEATURES, ""],
+]);
 export function featureKey(f: readonly string[]): string {
-  let key = FEATURE_KEYS.get(f);
-  if (key === undefined) FEATURE_KEYS.set(f, (key = f.join(",")));
-  return key;
+  return OWN_FEATURE_KEYS.get(f) ?? f.join(",");
 }
 
 const features = (ligatures: boolean): readonly string[] =>

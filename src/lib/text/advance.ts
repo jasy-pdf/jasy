@@ -47,14 +47,16 @@ export function codePointCount(text: string): number {
  * Keyed by nested maps on primitives, never a composed string key: building one allocates per call,
  * which costs more than the lookup saves.
  *
- * Not in the key: `letterSpacing` (added outside, so a spaced and an unspaced run share the width) and
- * kerning (a document-level flag, and the outer WeakMap is already per document). Font size IS in it -
- * scaling a cached em width drifts in the last bit, which is enough to move a line break.
+ * `letterSpacing` is not in the key: it is added outside, so a spaced and an unspaced run share the
+ * width. Font size IS in it - scaling a cached em width drifts in the last bit, which is enough to
+ * move a line break. Kerning is a flag on the metrics rather than a key, so the entry records it and
+ * is thrown away when it flips; the same document can be rendered twice with different options.
  */
 const ADVANCE_CACHE = new WeakMap<
   FontMetrics,
   {
     epoch: number;
+    kerning: boolean;
     byFamily: Map<string, Map<FontStyle, Map<unknown, Map<number, Map<string, number>>>>>;
   }
 >();
@@ -62,9 +64,11 @@ const ADVANCE_CACHE = new WeakMap<
 function baseAdvance(metrics: FontMetrics, text: string, font: RunFont): number {
   let entry = ADVANCE_CACHE.get(metrics);
   const epoch = metrics.fontEpoch ?? 0;
-  if (!entry || entry.epoch !== epoch) {
-    // A face was registered since we measured, so a family name may mean something else now.
-    entry = { epoch, byFamily: new Map() };
+  const kerning = metrics.kerningEnabled;
+  // A face registered since we measured makes a family name mean something else; a flipped kerning
+  // flag makes every width wrong. Either way the answers are stale.
+  if (!entry || entry.epoch !== epoch || entry.kerning !== kerning) {
+    entry = { epoch, kerning, byFamily: new Map() };
     ADVANCE_CACHE.set(metrics, entry);
   }
   let byStyle = entry.byFamily.get(font.fontFamily);
