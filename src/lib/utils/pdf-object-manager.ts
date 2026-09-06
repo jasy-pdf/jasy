@@ -15,9 +15,21 @@ import { shapeRun, type ShapedGlyph } from "../text/shape.ts";
  *  drew for it. On by default like kerning - CSS, browsers and every other renderer do the same,
  *  and nobody should have to know the word to get text that is set properly. */
 const LATIN_FEATURES = ["liga"] as const;
+/** Stable, so `features(false)` does not allocate per call. */
+const NO_FEATURES: readonly string[] = [];
 
-/** What a run is shaped with. Arabic joining is unconditional; this is only the Latin part. */
-const features = (ligatures: boolean): readonly string[] => (ligatures ? LATIN_FEATURES : []);
+/** A feature set's cache key. Memoised only for the two arrays this module owns - a caller's array is
+ *  joined every time, since holding on to its key would outlive a mutation of it. */
+const OWN_FEATURE_KEYS = new Map<readonly string[], string>([
+  [LATIN_FEATURES, LATIN_FEATURES.join(",")],
+  [NO_FEATURES, ""],
+]);
+export function featureKey(f: readonly string[]): string {
+  return OWN_FEATURE_KEYS.get(f) ?? f.join(",");
+}
+
+const features = (ligatures: boolean): readonly string[] =>
+  ligatures ? LATIN_FEATURES : NO_FEATURES;
 import { getArrayBuffer, isWindows1252 } from "./utf8-to-windows1252-encoder.ts";
 import type { SecurityHandler } from "../crypto/security-handler.ts";
 import type { Gradient, GradientStop } from "../ir/display-list.ts";
@@ -224,7 +236,13 @@ export class PDFObjectManager implements FontMetrics {
   >();
 
   // Shaped runs, keyed by font + text; `null` means "asked, and there was nothing to shape".
-  private shapeCache = new Map<string, ShapedGlyph[] | null>();
+  /** Shaped runs, cached face -> feature set -> text. Nested, not one map under a composed key: that
+   *  key would carry the whole run's text, so every lookup would copy it into a fresh string. */
+  private shapeCache = new Map<TTFParser, Map<string, Map<string, ShapedGlyph[] | null>>>();
+
+  /** Bumped by every font registration; `runAdvance` watches it to drop memoised widths, since a
+   *  family name can mean a different face afterwards. */
+  fontEpoch = 0;
   // Per font, glyph -> the code points it stands for. A shaped glyph is often absent from the cmap (a
   // ligature) or maps back to a presentation form, so `ToUnicode` cannot come from the cmap alone.
   private shapedOrigins = new Map<string, Map<number, number[]>>();
@@ -703,6 +721,7 @@ endstream`;
     fontStyle: FontStyle = FontStyle.Normal,
     fullName: string = fontName,
   ): FontIndexes {
+    this.fontEpoch++;
     if (this.fonts.hasFont(fontName, fontStyle)) {
       return this.fonts.getFont(fontName, fontStyle)!; // Already exists? Return it!
     }
@@ -738,6 +757,7 @@ endstream`;
   // metrics and emits its PDF font objects. All variants share the family `name`; bold/italic are
   // separate .ttf files registered under the same name with a different style.
   registerCustomFont(name: string, data: Uint8Array, style: FontStyle = FontStyle.Normal): void {
+    this.fontEpoch++;
     let byStyle = this.customFonts.get(name);
     if (!byStyle) {
       byStyle = new Map();
@@ -957,17 +977,20 @@ endstream`;
   ) {
     const resolved = this.resolveCustomStyle(fontFamily, fontStyle);
     if (!resolved) return undefined;
-    const key = `${this.customKey(fontFamily!, resolved)}\u0000${features.join(",")}\u0000${text}`;
-    const cached = this.shapeCache.get(key);
-    if (cached !== undefined) return cached ?? undefined;
     const ttf = this.customFonts.get(fontFamily!)!.get(resolved)!;
+    let byFeature = this.shapeCache.get(ttf);
+    if (!byFeature) this.shapeCache.set(ttf, (byFeature = new Map()));
+    let byText = byFeature.get(featureKey(features));
+    if (!byText) byFeature.set(featureKey(features), (byText = new Map()));
+    const cached = byText.get(text);
+    if (cached !== undefined) return cached ?? undefined;
     const shaped =
       shapeRun(
         [...text].map((c) => c.codePointAt(0)!),
         ttf,
         features,
       ) ?? null;
-    this.shapeCache.set(key, shaped);
+    byText.set(text, shaped);
     if (shaped) {
       // Recorded at shaping time - the only moment the glyph and its code points are known together.
       const fontKey = this.customKey(fontFamily!, resolved);

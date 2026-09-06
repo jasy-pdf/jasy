@@ -40,8 +40,10 @@ const CP1252_FROM_UNICODE: Record<number, number> = {
  * except the C1 range, which the table above fills with printable punctuation instead.
  */
 export function isWindows1252(codePoint: number): boolean {
-  if (codePoint in CP1252_FROM_UNICODE) return true;
-  return codePoint <= 0xff && !(codePoint >= 0x80 && codePoint <= 0x9f);
+  // Latin-1 first: every key in the table above is > 0xff, so this range can never be in it. Order
+  // matters - this runs per character of every measured string, and the object lookup is the slow half.
+  if (codePoint <= 0xff) return codePoint < 0x80 || codePoint > 0x9f;
+  return codePoint in CP1252_FROM_UNICODE;
 }
 
 /** Encodes a JavaScript string to a Windows-1252 byte buffer (the PDF text encoding). */

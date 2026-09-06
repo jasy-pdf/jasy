@@ -40,6 +40,66 @@ export function codePointCount(text: string): number {
   return n;
 }
 
+/**
+ * Glyph widths plus kerning, memoised per metrics object - the line breaker asks for the same run
+ * many times over.
+ *
+ * Keyed by nested maps on primitives, never a composed string key: building one allocates per call,
+ * which costs more than the lookup saves.
+ *
+ * `letterSpacing` is not in the key: it is added outside, so a spaced and an unspaced run share the
+ * width. Font size IS in it - scaling a cached em width drifts in the last bit, which is enough to
+ * move a line break. Kerning is a flag on the metrics rather than a key, so the entry records it and
+ * is thrown away when it flips; the same document can be rendered twice with different options.
+ */
+const ADVANCE_CACHE = new WeakMap<
+  FontMetrics,
+  {
+    epoch: number;
+    kerning: boolean;
+    byFamily: Map<string, Map<FontStyle, Map<unknown, Map<number, Map<string, number>>>>>;
+  }
+>();
+
+function baseAdvance(metrics: FontMetrics, text: string, font: RunFont): number {
+  let entry = ADVANCE_CACHE.get(metrics);
+  const epoch = metrics.fontEpoch ?? 0;
+  const kerning = metrics.kerningEnabled;
+  // A face registered since we measured makes a family name mean something else; a flipped kerning
+  // flag makes every width wrong. Either way the answers are stale.
+  if (!entry || entry.epoch !== epoch || entry.kerning !== kerning) {
+    entry = { epoch, kerning, byFamily: new Map() };
+    ADVANCE_CACHE.set(metrics, entry);
+  }
+  let byStyle = entry.byFamily.get(font.fontFamily);
+  if (!byStyle) entry.byFamily.set(font.fontFamily, (byStyle = new Map()));
+  let byLigatures = byStyle.get(font.fontStyle);
+  if (!byLigatures) byStyle.set(font.fontStyle, (byLigatures = new Map()));
+  let bySize = byLigatures.get(font.ligatures);
+  if (!bySize) byLigatures.set(font.ligatures, (bySize = new Map()));
+  let byText = bySize.get(font.fontSize);
+  if (!byText) bySize.set(font.fontSize, (byText = new Map()));
+
+  const hit = byText.get(text);
+  if (hit !== undefined) return hit;
+
+  let advance = metrics.getStringWidth(
+    text,
+    font.fontFamily,
+    font.fontSize,
+    font.fontStyle,
+    font.ligatures,
+  );
+  if (metrics.kerningEnabled) {
+    let units = 0;
+    for (const k of metrics.getKernPairs(text, font.fontFamily, font.fontStyle, font.ligatures))
+      units += k;
+    advance += (units / 1000) * font.fontSize; // kern units are em/1000
+  }
+  byText.set(text, advance);
+  return advance;
+}
+
 /** The advance of `text` in points: the plain glyph widths, plus kerning (if the document has it on),
  *  plus one `letterSpacing` per code point. */
 export function runAdvance(
@@ -48,13 +108,7 @@ export function runAdvance(
   font: RunFont,
   letterSpacing = 0,
 ): number {
-  let advance = metrics.getStringWidth(
-    text,
-    font.fontFamily,
-    font.fontSize,
-    font.fontStyle,
-    font.ligatures,
-  );
+  let advance = baseAdvance(metrics, text, font);
   if (letterSpacing !== 0) {
     // Per DRAWN glyph, which is what `Tc` applies to; only a ligature makes that differ.
     const glyphs =
@@ -62,11 +116,6 @@ export function runAdvance(
       codePointCount(text);
     advance += glyphs * letterSpacing;
   }
-  if (metrics.kerningEnabled) {
-    let units = 0;
-    for (const k of metrics.getKernPairs(text, font.fontFamily, font.fontStyle, font.ligatures))
-      units += k;
-    advance += (units / 1000) * font.fontSize; // kern units are em/1000
-  }
+
   return advance;
 }

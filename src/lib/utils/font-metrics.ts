@@ -38,6 +38,10 @@ export interface FontMetrics {
    *  drawn one (the backend emits a `TJ` under the same flag). */
   readonly kerningEnabled: boolean;
 
+  /** Bumped whenever a face is registered, so a memoised measurement knows to drop it: the same family
+   *  name can mean a different face afterwards. Optional - leaving it out means never invalidating. */
+  readonly fontEpoch?: number;
+
   /** Per-adjacent-pair kerning of `text`, in em/1000 (negative tightens); length `codePoints - 1`,
    *  zero next to a space. Only meaningful when `kerningEnabled`. */
   getKernPairs(

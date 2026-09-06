@@ -1,11 +1,24 @@
 import { AGL } from "../assets/font-data.ts";
+
+/** The Adobe Glyph List: code point -> glyph name. Constant, so it is parsed once per process and
+ *  shared by every face rather than rebuilt per `AFMParser`. */
+let sharedGlyphMap: Record<string, string> | undefined;
+function glyphList(): Record<string, string> {
+  if (sharedGlyphMap) return sharedGlyphMap;
+  const map: Record<string, string> = {};
+  for (const line of AGL.split("\n")) {
+    const parts = line.trim().split(";");
+    if (parts.length >= 2) map[String.fromCharCode(parseInt(parts[0]!, 16))] = parts[1]!;
+  }
+  return (sharedGlyphMap = map);
+}
 import type { FontVerticals } from "../text/line-metrics.ts";
 import type { FontDecoration } from "../text/text-decoration.ts";
 
 export class AFMParser {
   private advanceWidths: Record<string, number> = {};
   private kerningPairs: Record<string, Record<string, number>> = {};
-  private glyphMap: Record<string, string> = {};
+  private glyphMap: Record<string, string> = glyphList();
 
   // The font's bounding box in glyph space (1000 units / em), from the AFM header. This - not the
   // `Ascender` line - is what a line box is built from; see `verticals()`.
@@ -22,25 +35,6 @@ export class AFMParser {
 
   constructor(afmData: string) {
     this.parseAFMData(afmData);
-    this.loadGlyphList();
-  }
-
-  private loadGlyphList(): void {
-    const lines = AGL.split("\n");
-
-    for (const line of lines) {
-      const parts = line.trim().split(";");
-      if (parts.length >= 2) {
-        const unicodeHex = parts[0];
-        const glyphName = parts[1];
-
-        // Converts the Unicode hex code into the corresponding character
-        const unicodeChar = String.fromCharCode(parseInt(unicodeHex, 16));
-
-        // Adds the character as the key and the glyph name as the value in the list
-        this.glyphMap[unicodeChar] = glyphName;
-      }
-    }
   }
 
   private getGlyphName(char: string): string {
