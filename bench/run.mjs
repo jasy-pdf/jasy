@@ -7,7 +7,7 @@
 // differ is not a comparison - the runner marks it rather than quietly reporting the faster half.
 import { readdirSync } from "node:fs";
 import { writeFileSync } from "node:fs";
-import { measure, pageCount, machine, versions } from "./lib/measure.mjs";
+import { measure, pageCount, machine, versions, inkProfile, compareInk } from "./lib/measure.mjs";
 
 const ENGINES = [
   { key: "jasy", label: "jasy" },
@@ -46,6 +46,22 @@ for (const c of cases) {
         `${String(r.pages).padStart(3)} pages  ${(r.bytes / 1024).toFixed(0).padStart(5)} KB`,
     );
   }
+  // The documents must MATCH, not merely take the same number of pages - see `compareInk`.
+  let inkOffset = 0;
+  if (results.jasy && results.reactPdf) {
+    const diff = compareInk(
+      inkProfile(new URL(`./out/${c.name}-jasy.pdf`, import.meta.url).pathname),
+      inkProfile(new URL(`./out/${c.name}-reactPdf.pdf`, import.meta.url).pathname),
+    );
+    for (const d of diff.problems) console.log(`  !! ${d}`);
+    inkOffset = diff.worst;
+    if (diff.problems.length > 0) {
+      console.log("  -> not comparable: the two engines did not draw the same document\n");
+      rows.push({ name: c.name, ...results });
+      continue;
+    }
+  }
+
   const counts = Object.values(results).map((r) => r.pages);
   const pages = [...new Set(counts)];
   if (counts.some((p) => p <= 0)) {
@@ -56,7 +72,10 @@ for (const c of cases) {
     console.log(`  !! page counts differ (${pages.join(" vs ")}) - these are DIFFERENT documents`);
   } else if (results.jasy && results.reactPdf) {
     const x = results.reactPdf.median / results.jasy.median;
-    console.log(`  -> jasy is ${x.toFixed(2)}x ${x >= 1 ? "faster" : "SLOWER"}`);
+    console.log(
+      `  -> jasy is ${x.toFixed(2)}x ${x >= 1 ? "faster" : "SLOWER"}` +
+        `  (same text, same pages; ink within ${inkOffset.toFixed(1)}pt)`,
+    );
   }
   rows.push({ name: c.name, ...results });
   console.log("");

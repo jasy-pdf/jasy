@@ -71,7 +71,7 @@ export const jasy = () =>
             Row(
               { gap: 0 },
               row(r).map((cell, i) =>
-                Box({ width: W[i], borderBottom: "#dfe4ee", borderWidth: 0.5, padding: 4 }, [
+                Box({ width: W[i], bg: r % 2 ? "#f4f6f9" : "#ffffff", padding: 4 }, [
                   Text(cell, { size: 9 }),
                 ]),
               ),
@@ -94,26 +94,28 @@ export const reactPdf = () =>
         { style: { padding: 40, paddingBottom: 40 + FOOTER_LINE, fontSize: 10, lineHeight: 1.1 } },
         React.createElement(
           View,
-          { fixed: true, style: { flexDirection: "row", alignItems: "center", marginBottom: 8 } },
+          // No marginBottom: our header is a BAND that sits straight above the body, so adding one
+          // here would push react-pdf's first heading 8pt further down than ours.
+          { fixed: true, style: { flexDirection: "row", alignItems: "center" } },
           React.createElement(
             RText,
-            { style: { fontSize: 12, fontFamily: "Helvetica-Bold" } },
+            { style: { fontSize: 12, fontFamily: "Helvetica-Bold", lineHeight: 1.1 } },
             "Quarterly report",
           ),
           React.createElement(View, { style: { flexGrow: 1 } }),
-          React.createElement(RText, { style: { fontSize: 9, color: "gray" } }, "Q3 2026"),
+          React.createElement(RText, { style: { fontSize: 9, color: "gray", lineHeight: 1.1 } }, "Q3 2026"),
         ),
         React.createElement(
           RText,
-          { style: { fontSize: 16, fontFamily: "Helvetica-Bold", marginBottom: 8 } },
+          { style: { fontSize: 16, fontFamily: "Helvetica-Bold", marginBottom: 8, lineHeight: 1.1 } },
           "Summary",
         ),
         ...Array.from({ length: PARAS }, (_, i) =>
-          React.createElement(RText, { key: `p${i}`, style: { marginBottom: 8 } }, COPY.repeat(2)),
+          React.createElement(RText, { key: `p${i}`, style: { fontSize: 10, marginBottom: 8, lineHeight: 1.1 } }, COPY.repeat(2)),
         ),
         React.createElement(
           RText,
-          { style: { fontSize: 16, fontFamily: "Helvetica-Bold", marginBottom: 8 } },
+          { style: { fontSize: 16, fontFamily: "Helvetica-Bold", lineHeight: 1.1 } },
           "Detail",
         ),
         React.createElement(
@@ -125,7 +127,7 @@ export const reactPdf = () =>
               { key: i, style: { width: W[i], backgroundColor: "#eef1f5", padding: 4 } },
               React.createElement(
                 RText,
-                { style: { fontSize: 9, fontFamily: "Helvetica-Bold" } },
+                { style: { fontSize: 9, fontFamily: "Helvetica-Bold", lineHeight: 1.1 } },
                 h,
               ),
             ),
@@ -134,7 +136,7 @@ export const reactPdf = () =>
         ...Array.from({ length: ROWS }, (_, r) =>
           React.createElement(
             View,
-            { key: `r${r}`, style: { flexDirection: "row" } },
+            { key: `r${r}`, wrap: false, style: { flexDirection: "row" } },
             ...row(r).map((cell, i) =>
               React.createElement(
                 View,
@@ -142,12 +144,11 @@ export const reactPdf = () =>
                   key: i,
                   style: {
                     width: W[i],
-                    borderBottomWidth: 0.5,
-                    borderBottomColor: "#dfe4ee",
+                    backgroundColor: r % 2 ? "#f4f6f9" : "#ffffff",
                     padding: 4,
                   },
                 },
-                React.createElement(RText, { style: { fontSize: 9 } }, cell),
+                React.createElement(RText, { style: { fontSize: 9, lineHeight: 1.1 } }, cell),
               ),
             ),
           ),
@@ -158,7 +159,7 @@ export const reactPdf = () =>
           RText,
           {
             fixed: true,
-            style: { position: "absolute", bottom: 40, left: 40, fontSize: 8, color: "gray" },
+            style: { position: "absolute", bottom: 40, left: 40, fontSize: 8, color: "gray", lineHeight: 1.1 },
           },
           "Muster Studio GmbH",
         ),
