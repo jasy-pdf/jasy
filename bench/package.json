@@ -1,0 +1,15 @@
+{
+  "name": "@jasy/bench",
+  "private": true,
+  "description": "Reproducible render benchmarks: jasy against the other declarative PDF engines.",
+  "type": "module",
+  "scripts": {
+    "bench": "node run.mjs"
+  },
+  "dependencies": {
+    "@jasy/pdf": "file:..",
+    "@react-pdf/renderer": "4.5.1",
+    "puppeteer-core": "23.11.1",
+    "react": "18.3.1"
+  }
+}
