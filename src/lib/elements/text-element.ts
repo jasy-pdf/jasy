@@ -246,6 +246,22 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     this.applyStyle(ctx.textStyle ?? DEFAULT_TEXT_STYLE);
   }
 
+  /**
+   * The last `display(metrics)` result, with what it depended on - recasing, coverage and the fallback
+   * split each walk the whole text, and every measure, break and draw asks again.
+   *
+   * COMPARED, not cleared in `resolveStyle`: that runs on every pass and resolves to the same values,
+   * so clearing would drop the answer exactly when it is about to be reused.
+   */
+  private displayed?: {
+    metrics: FontMetrics;
+    family: string;
+    style: FontStyle;
+    transform: TextTransform;
+    fallback: readonly string[];
+    value: string | TextSegment[];
+  };
+
   /** Justified lines may be squeezed to keep a word; every other alignment gets no slack. Read by the
    *  breaker in BOTH passes, or a measured line and a drawn one would disagree about where it ends. */
   /**
@@ -254,13 +270,35 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
    * same width in most fonts).
    */
   private display(metrics?: FontMetrics): string | TextSegment[] {
+    const memo = this.displayed;
+    if (
+      metrics &&
+      memo &&
+      memo.metrics === metrics &&
+      memo.family === this.fontFamily &&
+      memo.style === this.fontStyle &&
+      memo.transform === this.textTransform &&
+      memo.fallback === this.fontFallback
+    )
+      return memo.value;
     const cased = this.recased();
     // A SPAN may bring its own stack, so the element's being empty is not enough to skip the pass.
     const anyStack =
       this.fontFallback.length > 0 ||
       (typeof cased !== "string" && cased.some((seg) => (seg.fontFallback?.length ?? 0) > 0));
     if (!metrics) return cased;
-    if (!anyStack) return this.covered(cased, metrics);
+    const remember = (value: string | TextSegment[]) => {
+      this.displayed = {
+        metrics,
+        family: this.fontFamily,
+        style: this.fontStyle,
+        transform: this.textTransform,
+        fallback: this.fontFallback,
+        value,
+      };
+      return value;
+    };
+    if (!anyStack) return remember(this.covered(cased, metrics));
     // Font fallback turns the content into spans - one per family - which every later pass already
     // knows how to handle. Nothing new downstream.
     const pieces = typeof cased === "string" ? [{ content: cased } as TextSegment] : cased;
@@ -277,7 +315,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       else
         for (const run of runs) out.push({ ...seg, content: run.text, fontFamily: run.fontFamily });
     }
-    return this.covered(out, metrics) as TextSegment[];
+    return remember(this.covered(out, metrics)) as TextSegment[];
   }
 
   /**
