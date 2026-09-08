@@ -15,6 +15,15 @@ function glyphList(): Record<string, string> {
 import type { FontVerticals } from "../text/line-metrics.ts";
 import type { FontDecoration } from "../text/text-decoration.ts";
 
+/** One parser per standard-14 face for the whole process: the AFM data is a constant and a parsed
+ *  face is read-only, so every document can share one. */
+const STANDARD_PARSERS = new Map<string, AFMParser>();
+export function standardParser(fullName: string, data: string): AFMParser {
+  let parser = STANDARD_PARSERS.get(fullName);
+  if (!parser) STANDARD_PARSERS.set(fullName, (parser = new AFMParser(data)));
+  return parser;
+}
+
 export class AFMParser {
   private advanceWidths: Record<string, number> = {};
   private kerningPairs: Record<string, Record<string, number>> = {};
