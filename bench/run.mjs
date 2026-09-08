@@ -7,12 +7,22 @@
 // differ is not a comparison - the runner marks it rather than quietly reporting the faster half.
 import { readdirSync } from "node:fs";
 import { writeFileSync } from "node:fs";
-import { measure, pageCount, machine, versions } from "./lib/measure.mjs";
+import { measure, pageCount, machine, versions, inkProfile, compareInk } from "./lib/measure.mjs";
 
 const ENGINES = [
   { key: "jasy", label: "jasy" },
   { key: "reactPdf", label: "react-pdf" },
+  { key: "jsPdf", label: "jsPDF" },
+  { key: "pdfmake", label: "pdfmake" },
 ];
+
+/** Cases an engine cannot express at all, and why - shown rather than quietly left out. */
+const CANNOT = {
+  jsPdf: {
+    svg: "no SVG support (that is svg2pdf.js, a separate library)",
+    typography: "no kerning, so the same words do not land in the same places",
+  },
+};
 
 const wanted = process.argv.slice(2);
 const files = readdirSync(new URL("./cases/", import.meta.url)).filter((f) => f.endsWith(".mjs"));
@@ -46,44 +56,75 @@ for (const c of cases) {
         `${String(r.pages).padStart(3)} pages  ${(r.bytes / 1024).toFixed(0).padStart(5)} KB`,
     );
   }
+  // Each engine is held against jasy: the documents must MATCH, not merely take the same page count.
+  const file = (engine) => new URL(`./out/${c.name}-${engine}.pdf`, import.meta.url).pathname;
+  const mine = results.jasy ? inkProfile(file("jasy")) : null;
+  for (const e of ENGINES.slice(1)) {
+    const note = CANNOT[e.key]?.[c.name];
+    if (note) {
+      console.log(`  ${e.label.padEnd(11)} cannot render this case - ${note}`);
+      continue;
+    }
+    if (!results[e.key] || !mine) continue;
+    const diff = compareInk(mine, inkProfile(file(e.key)));
+    results[e.key].ink = diff.worst;
+    results[e.key].comparable = diff.problems.length === 0;
+    for (const d of diff.problems) console.log(`  !! ${e.label}: ${d}`);
+  }
+
   const counts = Object.values(results).map((r) => r.pages);
   const pages = [...new Set(counts)];
   if (counts.some((p) => p <= 0)) {
     // `pageCount` returns -1 when poppler is missing. Two unknowns are not a match, and nothing else
-    // holds the two documents to the same shape - so say so and print no ratio.
+    // holds the documents to the same shape - so say so and print no ratio.
     console.log("  !! page counts unavailable (install poppler-utils) - not comparing");
   } else if (pages.length > 1) {
     console.log(`  !! page counts differ (${pages.join(" vs ")}) - these are DIFFERENT documents`);
   } else if (results.jasy && results.reactPdf) {
-    const x = results.reactPdf.median / results.jasy.median;
-    console.log(`  -> jasy is ${x.toFixed(2)}x ${x >= 1 ? "faster" : "SLOWER"}`);
+    for (const e of ENGINES.slice(1)) {
+      const r = results[e.key];
+      if (!r) continue;
+      if (!r.comparable) {
+        console.log(`  -> ${e.label}: not comparable, the documents differ`);
+        continue;
+      }
+      const x = r.median / results.jasy.median;
+      console.log(
+        `  -> vs ${e.label.padEnd(10)} jasy is ${x.toFixed(2)}x ${x >= 1 ? "faster" : "SLOWER"}` +
+          `  (same text, same pages; ink within ${(r.ink ?? 0).toFixed(1)}pt)`,
+      );
+    }
   }
   rows.push({ name: c.name, ...results });
   console.log("");
 }
 
-// The machine-readable result, so the published page and this run can never drift apart.
+// The machine-readable result, so the published page and this run can never drift apart. Written
+// from ENGINES rather than a fixed pair, or adding an engine would silently leave it out of the JSON.
 const out = {
   ranAt: new Date().toISOString(),
   machine: m,
   versions: v,
-  cases: rows.map((r) => ({
-    name: r.name,
-    about: cases.find((c) => c.name === r.name)?.about ?? "",
-    jasy: r.jasy && {
-      median: r.jasy.median,
-      p95: r.jasy.p95,
-      pages: r.jasy.pages,
-      bytes: r.jasy.bytes,
-    },
-    reactPdf: r.reactPdf && {
-      median: r.reactPdf.median,
-      p95: r.reactPdf.p95,
-      pages: r.reactPdf.pages,
-      bytes: r.reactPdf.bytes,
-    },
-    runs: r.jasy?.runs ?? 0,
-  })),
+  cases: rows.map((r) => {
+    const c = cases.find((x) => x.name === r.name);
+    const engines = {};
+    for (const e of ENGINES) {
+      const res = r[e.key];
+      if (res) {
+        engines[e.key] = {
+          median: res.median,
+          p95: res.p95,
+          pages: res.pages,
+          bytes: res.bytes,
+          // Absent for jasy itself; false when the two documents did not match.
+          ...(e.key === "jasy" ? {} : { comparable: res.comparable !== false, ink: res.ink ?? 0 }),
+        };
+      } else if (CANNOT[e.key]?.[r.name]) {
+        engines[e.key] = { cannot: CANNOT[e.key][r.name] };
+      }
+    }
+    return { name: r.name, about: c?.about ?? "", runs: r.jasy?.runs ?? 0, engines };
+  }),
 };
 writeFileSync(new URL("./out/results.json", import.meta.url), JSON.stringify(out, null, 2) + "\n");
 console.log("out/results.json geschrieben");

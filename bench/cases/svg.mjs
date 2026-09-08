@@ -3,6 +3,7 @@
 // What is measured is the drawing, not the convenience.
 import { Document, Page, Row, Svg as JSvg, renderToBytes } from "@jasy/pdf";
 import React from "react";
+import { render as pdfmakeRender } from "../lib/pdfmake.mjs";
 import {
   Document as RDoc,
   Page as RPage,
@@ -89,3 +90,16 @@ export const reactPdf = () =>
       ),
     ),
   );
+
+// pdfmake takes SVG markup directly - it is the only one besides jasy that does.
+export const pdfmake = () =>
+  pdfmakeRender({
+    pageSize: "A4",
+    pageMargins: [30, 30, 30, 30],
+    defaultStyle: { font: "Helvetica" },
+    content: Array.from({ length: N / 10 }, () => ({
+      columns: Array.from({ length: 10 }, () => ({ svg: MARK, width: 44 })),
+      columnGap: 6,
+      margin: [0, 0, 0, 6],
+    })),
+  });

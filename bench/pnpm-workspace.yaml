@@ -1,0 +1,4 @@
+# Answered once, so a fresh `pnpm install` here does not stop to ask. core-js only needs its build
+# script for polyfill telemetry, which a benchmark has no use for.
+allowBuilds:
+  core-js: set this to true or false

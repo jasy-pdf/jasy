@@ -6,6 +6,8 @@
 //   lineHeight  - our default line box is the font's natural height (Helvetica 1.156 em),
 //                 react-pdf's is `ascent - descent` = 1.10 em. Pin both to 1.1.
 import { Document, Page, Column, Paragraph, renderToBytes } from "@jasy/pdf";
+import { jsPDF } from "jspdf";
+import { render as pdfmakeRender, NATURAL_LINE } from "../lib/pdfmake.mjs";
 import React from "react";
 import {
   Document as RDoc,
@@ -64,3 +66,36 @@ export const reactPdf = () =>
       ),
     ),
   );
+
+// jsPDF has no page and no flow: `splitTextToSize` breaks a paragraph, everything after that - the
+// line height, the paragraph gap, the y cursor and WHERE the page ends - is yours to track.
+export const jsPdf = () => {
+  const doc = new jsPDF({ unit: "pt", format: "a4", compress: true });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11);
+  const width = doc.internal.pageSize.getWidth() - 80;
+  const bottom = doc.internal.pageSize.getHeight() - 40;
+  let y = 40 + 11;
+  for (const paragraph of TEXTS) {
+    for (const line of doc.splitTextToSize(paragraph, width)) {
+      if (y > bottom) {
+        doc.addPage();
+        y = 40 + 11;
+      }
+      doc.text(line, 40, y);
+      y += 11 * 1.1;
+    }
+    y += 6;
+  }
+  return new Uint8Array(doc.output("arraybuffer"));
+};
+
+// pdfmake is the closest peer outside React: a document is an object, and it owns the line breaking
+// and the page breaks. Only its `lineHeight` has to be converted - see lib/pdfmake.mjs.
+export const pdfmake = () =>
+  pdfmakeRender({
+    pageSize: "A4",
+    pageMargins: [40, 40, 40, 40],
+    defaultStyle: { font: "Helvetica", fontSize: 11, lineHeight: 1.1 / NATURAL_LINE },
+    content: TEXTS.map((t) => ({ text: t, margin: [0, 0, 0, 6] })),
+  });

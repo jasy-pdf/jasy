@@ -9,7 +9,8 @@
   "dependencies": {
     "@jasy/pdf": "file:..",
     "@react-pdf/renderer": "4.5.1",
-    "puppeteer-core": "23.11.1",
+    "jspdf": "4.2.1",
+    "pdfmake": "0.3.11",
     "react": "18.3.1"
   }
 }

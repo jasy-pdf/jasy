@@ -5,6 +5,8 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { Document, Page, Column, Paragraph, renderToBytes } from "@jasy/pdf";
 import React from "react";
+import { createRequire } from "node:module";
+import { render as pdfmakeRender } from "../lib/pdfmake.mjs";
 import {
   Document as RDoc,
   Page as RPage,
@@ -71,3 +73,24 @@ export const reactPdf = () =>
       ),
     ),
   );
+
+// pdfmake embeds a TrueType face by path and kerns it (it emits `TJ`), so this case is comparable -
+// jsPDF is not, because it never kerns.
+createRequire(import.meta.url)("pdfmake/js/index.js").addFonts({
+  Liberation: {
+    normal: fileURLToPath(TTF),
+    bold: fileURLToPath(TTF),
+    italics: fileURLToPath(TTF),
+    bolditalics: fileURLToPath(TTF),
+  },
+});
+
+export const pdfmake = () =>
+  pdfmakeRender({
+    pageSize: "A4",
+    pageMargins: [40, 40, 40, 40],
+    // Liberation's natural line height is not Helvetica's, so the conversion factor is its own -
+    // measured against the jasy render rather than guessed.
+    defaultStyle: { font: "Liberation", fontSize: 11, lineHeight: 0.9931 },
+    content: TEXTS.map((t) => ({ text: t, margin: [0, 0, 0, 6] })),
+  });
