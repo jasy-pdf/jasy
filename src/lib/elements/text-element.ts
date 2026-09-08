@@ -255,6 +255,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
    */
   private displayed?: {
     metrics: FontMetrics;
+    epoch: number;
     family: string;
     style: FontStyle;
     transform: TextTransform;
@@ -275,6 +276,8 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       metrics &&
       memo &&
       memo.metrics === metrics &&
+      // A face registered since then changes what is drawable and how the fallback stack splits.
+      memo.epoch === (metrics.fontEpoch ?? 0) &&
       memo.family === this.fontFamily &&
       memo.style === this.fontStyle &&
       memo.transform === this.textTransform &&
@@ -290,6 +293,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     const remember = (value: string | TextSegment[]) => {
       this.displayed = {
         metrics,
+        epoch: metrics.fontEpoch ?? 0,
         family: this.fontFamily,
         style: this.fontStyle,
         transform: this.textTransform,
