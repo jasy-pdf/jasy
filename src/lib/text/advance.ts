@@ -61,6 +61,23 @@ const ADVANCE_CACHE = new WeakMap<
   }
 >();
 
+/**
+ * The innermost map a `RunFont` resolves to, remembered on the font object itself. The breaker builds
+ * one font per run and asks for every word with it, so without this each word walks five maps of which
+ * four hold a single entry.
+ */
+const BY_FONT = new WeakMap<
+  RunFont,
+  {
+    entry: object;
+    family: string;
+    size: number;
+    style: FontStyle;
+    ligatures?: boolean;
+    byText: Map<string, number>;
+  }
+>();
+
 function baseAdvance(metrics: FontMetrics, text: string, font: RunFont): number {
   let entry = ADVANCE_CACHE.get(metrics);
   const epoch = metrics.fontEpoch ?? 0;
@@ -71,6 +88,22 @@ function baseAdvance(metrics: FontMetrics, text: string, font: RunFont): number 
     entry = { epoch, kerning, byFamily: new Map() };
     ADVANCE_CACHE.set(metrics, entry);
   }
+  // Same font object as last time, and the metrics entry has not been replaced: the map is already known.
+  // Its FIELDS are compared, not just its identity: a caller that reuses one object and changes the
+  // size on it would otherwise be handed the previous size's map.
+  const known = BY_FONT.get(font);
+  if (
+    known?.entry === entry &&
+    known.family === font.fontFamily &&
+    known.size === font.fontSize &&
+    known.style === font.fontStyle &&
+    known.ligatures === font.ligatures
+  ) {
+    const seen = known.byText.get(text);
+    if (seen !== undefined) return seen;
+    return measureAndStore(metrics, text, font, known.byText);
+  }
+
   let byStyle = entry.byFamily.get(font.fontFamily);
   if (!byStyle) entry.byFamily.set(font.fontFamily, (byStyle = new Map()));
   let byLigatures = byStyle.get(font.fontStyle);
@@ -80,9 +113,27 @@ function baseAdvance(metrics: FontMetrics, text: string, font: RunFont): number 
   let byText = bySize.get(font.fontSize);
   if (!byText) bySize.set(font.fontSize, (byText = new Map()));
 
+  BY_FONT.set(font, {
+    entry,
+    family: font.fontFamily,
+    size: font.fontSize,
+    style: font.fontStyle,
+    ligatures: font.ligatures,
+    byText,
+  });
+
   const hit = byText.get(text);
   if (hit !== undefined) return hit;
+  return measureAndStore(metrics, text, font, byText);
+}
 
+/** The measurement itself, once a miss has found the map it belongs in. */
+function measureAndStore(
+  metrics: FontMetrics,
+  text: string,
+  font: RunFont,
+  byText: Map<string, number>,
+): number {
   let advance = metrics.getStringWidth(
     text,
     font.fontFamily,
