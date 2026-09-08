@@ -23,4 +23,7 @@ pm.addFonts({
 export const NATURAL_LINE = 0.925;
 
 export const render = (definition) =>
-  pm.createPdf(definition).getBuffer().then((b) => new Uint8Array(b));
+  pm
+    .createPdf(definition)
+    .getBuffer()
+    .then((b) => new Uint8Array(b));

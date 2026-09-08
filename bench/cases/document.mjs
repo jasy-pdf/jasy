@@ -301,7 +301,12 @@ export const pdfmake = () =>
         { text: "Q3 2026", fontSize: 9, color: "gray", width: "auto" },
       ],
     }),
-    footer: () => ({ margin: [40, 0, 40, 0], text: "Muster Studio GmbH", fontSize: 8, color: "gray" }),
+    footer: () => ({
+      margin: [40, 0, 40, 0],
+      text: "Muster Studio GmbH",
+      fontSize: 8,
+      color: "gray",
+    }),
     content: [
       { text: "Summary", bold: true, fontSize: 16, margin: [0, 0, 0, 8] },
       ...Array.from({ length: PARAS }, () => ({ text: COPY.repeat(2), margin: [0, 0, 0, 8] })),
@@ -312,7 +317,11 @@ export const pdfmake = () =>
           body: [
             HEAD.map((h) => ({ text: h, bold: true, fontSize: 9, fillColor: "#eef1f5" })),
             ...Array.from({ length: ROWS }, (_, r) =>
-              row(r).map((cell) => ({ text: cell, fontSize: 9, fillColor: r % 2 ? "#f4f6f9" : "#ffffff" })),
+              row(r).map((cell) => ({
+                text: cell,
+                fontSize: 9,
+                fillColor: r % 2 ? "#f4f6f9" : "#ffffff",
+              })),
             ),
           ],
         },
