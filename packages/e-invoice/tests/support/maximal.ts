@@ -17,13 +17,42 @@ export const maximalInvoice: Invoice = {
   issueDate: "2026-08-25",
   type: 380,
   currency: "EUR",
+  // A seller who invoices in EUR but accounts VAT in CHF - the real shape of BT-6/BT-111, and
+  // the reason the CII schema allows TaxTotalAmount exactly twice.
+  taxCurrency: "CHF", // BT-6
+  taxTotalInTaxCurrency: 42.5, // BT-111
   dueDate: "2026-09-08",
   buyerReference: "MARK-BUYERREF",
   purchaseOrderRef: "MARK-ORDERREF",
+  salesOrderRef: "MARK-SALESORDER", // BT-14
+  projectRef: "MARK-PROJECT", // BT-11
+  tenderRef: "MARK-TENDER", // BT-17
+  objectRef: "MARK-OBJECT", // BT-18
+  buyerAccountingRef: "MARK-BUYERACCOUNT", // BT-19
+  noteSubjectCode: "AAI", // BT-21 - a real UNCL 4451 code, not a marker: it is validated
   contractRef: "MARK-CONTRACTREF",
+  // BG-24 - one with a real file, one with only a link, so both branches reach the XSD check.
+  supportingDocuments: [
+    {
+      reference: "MARK-DOCREF",
+      description: "MARK-DOCDESC",
+      file: {
+        content: new TextEncoder().encode("Stunden;8\n"),
+        mimeType: "text/csv",
+        filename: "MARK-DOCFILE.csv",
+      },
+    },
+    { reference: "MARK-DOCREF2", url: "https://example.invalid/MARK-DOCURL.pdf" },
+  ],
+  // BG-3 - two of them, one with a date and one without, so both shapes reach the XSD check.
+  precedingInvoices: [
+    { number: "MARK-PRECEDING", issueDate: "2026-06-30" },
+    { number: "MARK-PRECEDING2" },
+  ],
   notes: ["MARK-DOCNOTE"],
   seller: {
     name: "MARK-SELLERNAME",
+    identifier: "MARK-SELLERID", // BT-29
     tradingName: "MARK-SELLERTRADING",
     vatId: "MARK-SELLERVAT",
     taxNumber: "MARK-SELLERTAXNO",
@@ -43,6 +72,7 @@ export const maximalInvoice: Invoice = {
   },
   buyer: {
     name: "MARK-BUYERNAME",
+    identifier: "MARK-BUYERID", // BT-46
     tradingName: "MARK-BUYERTRADING",
     vatId: "MARK-BUYERVAT",
     legalRegistrationId: "MARK-BUYERREG",
@@ -60,6 +90,7 @@ export const maximalInvoice: Invoice = {
   },
   delivery: {
     date: "2026-08-20",
+    locationId: "MARK-DELIVERYLOC", // BT-71
     recipientName: "MARK-DELIVERYTO",
     address: {
       line1: "MARK-DELIVERYLINE1",
@@ -70,6 +101,8 @@ export const maximalInvoice: Invoice = {
   },
   period: { start: "2026-07-02", end: "2026-07-20" },
   payeeName: "MARK-PAYEE",
+  payeeIdentifier: "MARK-PAYEEID", // BT-60
+  payeeLegalRegistrationId: "MARK-PAYEEREG", // BT-61
   lines: [
     {
       id: "MARK-LINEID",
@@ -85,10 +118,16 @@ export const maximalInvoice: Invoice = {
       vat: { category: "S", ratePercent: 19 },
       period: { start: "2026-07-02", end: "2026-07-20" },
       note: "MARK-LINENOTE",
+      objectRef: "MARK-LINEOBJECT", // BT-128
+      orderLineRef: "MARK-ORDERLINE", // BT-132
+      buyerAccountingRef: "MARK-LINEACCOUNT", // BT-133
+      originCountry: "CH", // BT-159 - a country CODE, so no marker fits
       allowancesCharges: [
         {
           isCharge: false,
-          amount: 5,
+          // Stated as a RATE, so the amount is derived (BT-137/138) - the other shape of the union.
+          baseAmount: 100,
+          percent: 5,
           vat: { category: "S", ratePercent: 19 },
           reason: "MARK-LINEALLOWANCE",
           reasonCode: "95", // BT-140
@@ -106,7 +145,8 @@ export const maximalInvoice: Invoice = {
   allowancesCharges: [
     {
       isCharge: false,
-      amount: 20,
+      baseAmount: 200,
+      percent: 10, // BT-93 / BT-94 - amount derived as 20.00, same figure as before
       vat: { category: "S", ratePercent: 19 },
       reason: "MARK-DOCALLOWANCE",
     },
@@ -127,6 +167,18 @@ export const maximalInvoice: Invoice = {
     accountName: "MARK-ACCOUNTNAME",
     bic: "MARK-BIC",
     terms: "MARK-TERMS",
+    // BG-19 - the three fields CII scatters over three blocks and UBL keeps in two.
+    directDebit: {
+      mandateReference: "MARK-MANDATE",
+      creditorId: "MARK-CREDITORID",
+      debitedIban: "MARK-DEBITEDIBAN",
+    },
+    // Two tiers, and the second names its own base - so both shapes of the BT-20 line are covered.
+    cashDiscounts: [
+      { days: 14, percent: 2 },
+      { days: 30, percent: 1, baseAmount: 500 },
+    ],
   },
   paidAmount: 100,
+  roundingAmount: 0.03, // BT-114
 };

@@ -1,3 +1,4 @@
+import { acAmount } from "./allowance.ts";
 import {
   AllowanceCharge,
   Invoice,
@@ -34,7 +35,8 @@ export interface ComputedInvoice {
   taxTotal: number; // BT-110  sum of VAT group tax amounts
   grandTotal: number; // BT-112  = taxBasisTotal + taxTotal
   paidAmount: number; // BT-113
-  duePayable: number; // BT-115  = grandTotal - paidAmount
+  roundingAmount: number; // BT-114  the deliberate cent, 0 when nobody asked for one
+  duePayable: number; // BT-115  = grandTotal - paidAmount + roundingAmount
   vatBreakdown: VatBreakdownEntry[]; // BG-23
 }
 
@@ -43,7 +45,7 @@ function lineNet(line: InvoiceLine): number {
   const base = line.priceBaseQuantity && line.priceBaseQuantity > 0 ? line.priceBaseQuantity : 1;
   const gross = line.quantity * (line.netUnitPrice / base);
   const adjustment = (line.allowancesCharges ?? []).reduce(
-    (sum, ac) => sum + (ac.isCharge ? ac.amount : -ac.amount),
+    (sum, ac) => sum + (ac.isCharge ? acAmount(ac) : -acAmount(ac)),
     0,
   );
   return round2(gross + adjustment);
@@ -57,8 +59,8 @@ export function computeInvoice(invoice: Invoice): ComputedInvoice {
   const lineTotal = round2(sum(lineNets));
 
   const docAC: AllowanceCharge[] = invoice.allowancesCharges ?? [];
-  const allowanceTotal = round2(sum(docAC.filter((a) => !a.isCharge).map((a) => a.amount)));
-  const chargeTotal = round2(sum(docAC.filter((a) => a.isCharge).map((a) => a.amount)));
+  const allowanceTotal = round2(sum(docAC.filter((a) => !a.isCharge).map(acAmount)));
+  const chargeTotal = round2(sum(docAC.filter((a) => a.isCharge).map(acAmount)));
 
   // BG-23: group by (category, rate). Taxable = matching line nets ± matching document-level
   // allowances/charges. The tax of each group is taxable × rate.
@@ -77,7 +79,7 @@ export function computeInvoice(invoice: Invoice): ComputedInvoice {
   });
   docAC.forEach((ac) => {
     const group = groupFor(ac.vat.category, ac.vat.ratePercent ?? 0);
-    group.taxableAmount += ac.isCharge ? ac.amount : -ac.amount;
+    group.taxableAmount += ac.isCharge ? acAmount(ac) : -acAmount(ac);
   });
 
   const vatBreakdown: VatBreakdownEntry[] = [...groups.values()].map((g) => {
@@ -96,7 +98,10 @@ export function computeInvoice(invoice: Invoice): ComputedInvoice {
   const taxTotal = round2(sum(vatBreakdown.map((g) => g.taxAmount)));
   const grandTotal = round2(taxBasisTotal + taxTotal);
   const paidAmount = round2(invoice.paidAmount ?? 0);
-  const duePayable = round2(grandTotal - paidAmount);
+  // BT-114 is ADDED, per EN 16931: it moves the PAYABLE, not the invoice total. The CII XSD puts
+  // the element before the grand total, which reads as though it moved that instead - it does not.
+  const roundingAmount = round2(invoice.roundingAmount ?? 0);
+  const duePayable = round2(grandTotal - paidAmount + roundingAmount);
 
   return {
     lineNets,
@@ -107,6 +112,7 @@ export function computeInvoice(invoice: Invoice): ComputedInvoice {
     taxTotal,
     grandTotal,
     paidAmount,
+    roundingAmount,
     duePayable,
     vatBreakdown,
   };

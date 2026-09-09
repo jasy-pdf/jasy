@@ -1,4 +1,5 @@
 import * as fs from "fs";
+import { pdfAttachments } from "./attachment.ts";
 import * as path from "path";
 import { fileURLToPath } from "node:url";
 import { type PDFDocumentElement, renderToBytes } from "@jasy/pdf";
@@ -93,6 +94,9 @@ export async function renderZugferd(
         relationship: "Data",
         mimeType: "text/xml",
       },
+      // BG-24 files ride along as PDF/A-3 attachments too - inside the XML a machine finds them, here
+      // a person does. "Supplement", not "Data": only the invoice XML is the invoice.
+      ...pdfAttachments(invoice.supportingDocuments),
     ],
     xmp: facturxXmp({
       title: `Invoice ${invoice.number}`,

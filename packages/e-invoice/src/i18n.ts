@@ -22,6 +22,20 @@ export interface InvoiceLabels {
   plusVat: string;
   grandTotal: string;
   alreadyPaid: string;
+  /** BT-114 - the deliberate cent that makes the payable a round figure. */
+  rounding: string;
+  /** The scalar references that only exist to be quoted back (BT-11, BT-14, BT-17…BT-19, …). */
+  salesOrderNumber: string;
+  projectReference: string;
+  tenderReference: string;
+  objectReference: string;
+  accountingReference: string;
+  partyIdentifier: string;
+  deliveryLocation: string;
+  orderLine: string;
+  originCountry: string;
+  /** BT-111 - the VAT total in the accounting currency, when that is a different one. */
+  vatIn: string;
   amountDue: string;
   payment: string;
   payableBy: string;
@@ -39,6 +53,19 @@ export interface InvoiceLabels {
   deliverTo: string;
   payee: string;
   paymentMeans: string;
+  cashDiscount: string;
+  cashDiscountUntil: string;
+  /** Joins a rate to its base: "10 % <percentOf> 1.000,00 EUR". */
+  percentOf: string;
+  /** BG-3 - which invoice this one corrects or credits. */
+  precedingInvoice: string;
+  /** BG-24 - the extra documents that came with the invoice. */
+  attachments: string;
+  /** BG-19 - SEPA direct debit. */
+  directDebit: string;
+  mandateReference: string;
+  creditorId: string;
+  debitedAccount: string;
   itemNumber: string;
   perQuantity: string;
   page: string;
@@ -71,6 +98,17 @@ const de: InvoiceLabels = {
   plusVat: "zzgl. USt",
   grandTotal: "Gesamtbetrag",
   alreadyPaid: "bereits gezahlt",
+  rounding: "Rundung",
+  salesOrderNumber: "Auftragsnummer",
+  projectReference: "Projekt",
+  tenderReference: "Vergabenummer",
+  objectReference: "Objekt",
+  accountingReference: "Kostenstelle",
+  partyIdentifier: "Kennung",
+  deliveryLocation: "Lieferort-Nr.",
+  orderLine: "Bestellposition",
+  originCountry: "Ursprungsland",
+  vatIn: "USt in",
   amountDue: "Zahlbetrag",
   payment: "Zahlung",
   payableBy: "Zahlbar bis",
@@ -88,6 +126,15 @@ const de: InvoiceLabels = {
   deliverTo: "Lieferanschrift",
   payee: "Zahlungsempfänger",
   paymentMeans: "Zahlungsart",
+  cashDiscount: "Skonto",
+  cashDiscountUntil: "bei Zahlung bis",
+  percentOf: "von",
+  precedingInvoice: "Bezug auf Rechnung",
+  attachments: "Anlagen",
+  directDebit: "SEPA-Lastschrift",
+  mandateReference: "Mandatsreferenz",
+  creditorId: "Gläubiger-ID",
+  debitedAccount: "Belastetes Konto",
   itemNumber: "Art.-Nr.",
   perQuantity: "je",
   page: "Seite",
@@ -120,6 +167,17 @@ const en: InvoiceLabels = {
   plusVat: "plus VAT",
   grandTotal: "Total",
   alreadyPaid: "already paid",
+  rounding: "Rounding",
+  salesOrderNumber: "Sales order",
+  projectReference: "Project",
+  tenderReference: "Tender",
+  objectReference: "Object",
+  accountingReference: "Cost centre",
+  partyIdentifier: "Identifier",
+  deliveryLocation: "Location no.",
+  orderLine: "Order line",
+  originCountry: "Country of origin",
+  vatIn: "VAT in",
   amountDue: "Amount due",
   payment: "Payment",
   payableBy: "Payable by",
@@ -137,6 +195,15 @@ const en: InvoiceLabels = {
   deliverTo: "Delivery address",
   payee: "Payee",
   paymentMeans: "Payment method",
+  cashDiscount: "Early payment discount",
+  cashDiscountUntil: "if paid by",
+  percentOf: "of",
+  precedingInvoice: "Refers to invoice",
+  attachments: "Attachments",
+  directDebit: "SEPA direct debit",
+  mandateReference: "Mandate reference",
+  creditorId: "Creditor ID",
+  debitedAccount: "Debited account",
   itemNumber: "Item no.",
   perQuantity: "per",
   page: "Page",
@@ -169,6 +236,17 @@ const fr: InvoiceLabels = {
   plusVat: "TVA",
   grandTotal: "Total TTC",
   alreadyPaid: "déjà payé",
+  rounding: "Arrondi",
+  salesOrderNumber: "Numéro de commande",
+  projectReference: "Projet",
+  tenderReference: "Appel d'offres",
+  objectReference: "Objet",
+  accountingReference: "Centre de coûts",
+  partyIdentifier: "Identifiant",
+  deliveryLocation: "N° de lieu",
+  orderLine: "Ligne de commande",
+  originCountry: "Pays d'origine",
+  vatIn: "TVA en",
   amountDue: "Net à payer",
   payment: "Paiement",
   payableBy: "À payer avant le",
@@ -186,6 +264,15 @@ const fr: InvoiceLabels = {
   deliverTo: "Adresse de livraison",
   payee: "Bénéficiaire",
   paymentMeans: "Mode de paiement",
+  cashDiscount: "Escompte",
+  cashDiscountUntil: "si payé avant le",
+  percentOf: "de",
+  precedingInvoice: "Se rapporte à la facture",
+  attachments: "Pièces jointes",
+  directDebit: "Prélèvement SEPA",
+  mandateReference: "Référence du mandat",
+  creditorId: "Identifiant créancier",
+  debitedAccount: "Compte débité",
   itemNumber: "Réf. article",
   perQuantity: "par",
   page: "Page",
@@ -217,6 +304,12 @@ export function resolveLabels(
 export interface Formatters {
   /** A currency amount, e.g. de → "1.234,56 €", en → "€1,234.56". */
   money(n: number): string;
+  /**
+   * The same, in a currency that is NOT the document's - only BT-111 needs this. `money` binds
+   * the document currency at construction, and `number` drops the second decimal, which on a
+   * tax figure reads as a typo.
+   */
+  moneyIn(n: number, currency: string): string;
   /** A plain number, e.g. a quantity. */
   number(n: number): string;
   /** A VAT rate given in percent (19 → de "19 %", en "19%"). */
@@ -250,6 +343,8 @@ export function makeFormatters(locale: Locale = "de", currency: string): Formatt
   const currencyNames = new Intl.DisplayNames([tag], { type: "currency" });
   return {
     money: (n) => money.format(n),
+    moneyIn: (n, other) =>
+      new Intl.NumberFormat(tag, { style: "currency", currency: other }).format(n),
     number: (n) => number.format(n),
     percent: (ratePercent) => percent.format(ratePercent / 100),
     date: (iso) => date.format(utc(iso)),

@@ -12,9 +12,11 @@ import {
   Table,
   Text,
 } from "@jasy/pdf";
-import { Delivery, Invoice, PostalAddress, Seller } from "./invoice.ts";
+import { AllowanceCharge, Delivery, Invoice, PostalAddress, Seller } from "./invoice.ts";
 import { ComputedInvoice, VatBreakdownEntry } from "./compute.ts";
 import { Formatters, InvoiceLabels } from "./i18n.ts";
+import { resolveDiscounts } from "./skonto.ts";
+import { acAmount, hasPercentage } from "./allowance.ts";
 
 // The built-in invoice layout: a complete, §14-UStG-aware invoice that renders everything the
 // Invoice carries. That is not a promise in prose - `tests/completeness.test.ts` sets EVERY field to
@@ -74,9 +76,10 @@ export function defaultInvoiceTemplate(
         Text(documentTitle(invoice, L), { size: 21, bold: true, color: INK }),
         ...deliverTo(invoice.delivery, L),
         ...notes(invoice),
+        ...attachments(invoice, L),
         lineItemsTable(invoice, c, L, fmt),
         totals(invoice, c, L, fmt, valueLine),
-        paymentPanel(invoice, L, fmt),
+        paymentPanel(invoice, c, L, fmt),
       ],
     ),
   ]);
@@ -115,6 +118,7 @@ function deliverTo(delivery: Delivery | undefined, L: InvoiceLabels): PDFElement
   const lines = [
     delivery?.recipientName,
     ...(delivery?.address ? addressLines(delivery.address) : []),
+    delivery?.locationId ? `${L.deliveryLocation} ${delivery.locationId}` : undefined, // BT-71
   ].filter((s): s is string => Boolean(s));
 
   // ONE element, not loose lines: the page flow has a 16pt gap and would space the address apart.
@@ -184,11 +188,27 @@ function recipientAndMeta(invoice: Invoice, L: InvoiceLabels, fmt: Formatters): 
     [L.dueDate, invoice.dueDate ? fmt.date(invoice.dueDate) : undefined],
     [L.customerReference, invoice.buyerReference],
     [L.orderNumber, invoice.purchaseOrderRef],
+    [L.salesOrderNumber, invoice.salesOrderRef], // BT-14
+    [L.projectReference, invoice.projectRef], // BT-11
+    [L.tenderReference, invoice.tenderRef], // BT-17
+    [L.objectReference, invoice.objectRef], // BT-18
+    [L.accountingReference, invoice.buyerAccountingRef], // BT-19
     [L.contractReference, invoice.contractRef],
+    // BG-3 - a credit note whose original is not named on the PAPER is unusable to the person
+    // reading it, however well the XML carries it.
+    [
+      L.precedingInvoice,
+      invoice.precedingInvoices?.length
+        ? invoice.precedingInvoices
+            .map((r) => (r.issueDate ? `${r.number} (${fmt.date(r.issueDate)})` : r.number))
+            .join(", ")
+        : undefined,
+    ],
     // BT-48 belongs on the paper (§14a Abs. 1 UStG for reverse charge), but NOT under the address:
     // that block shows through a DIN 5008 window, which may hold nothing but the postal address.
     [L.buyerVatId, buyer.vatId],
     [L.registration, buyer.legalRegistrationId],
+    [L.partyIdentifier, buyer.identifier], // BT-46
     [L.contactPerson, buyer.contact?.name],
     [L.phone, buyer.contact?.phone],
     [L.email, buyer.contact?.email],
@@ -210,6 +230,22 @@ function notes(invoice: Invoice): PDFElement[] {
   return invoice.notes.map((n) => Text(n, { size: 10, color: INK }));
 }
 
+/**
+ * BG-24 on the paper. An attachment nobody is told about is an attachment nobody opens - the file
+ * sits in the PDF, but only a reader who thinks to look at the attachment pane would find it.
+ */
+function attachments(invoice: Invoice, L: InvoiceLabels): PDFElement[] {
+  const docs = invoice.supportingDocuments ?? [];
+  if (!docs.length) return [];
+  const line = docs
+    .map((d) => {
+      const what = d.description ? `${d.description} (${d.reference})` : d.reference;
+      return d.file ? `${what} - ${d.file.filename}` : d.url ? `${what} - ${d.url}` : what;
+    })
+    .join(" · ");
+  return [Text(`${L.attachments}: ${line}`, { size: 9, color: MUTED })];
+}
+
 // --- line items: No | Description | Qty | Unit price | VAT | Amount ---
 function lineItemsTable(
   invoice: Invoice,
@@ -228,7 +264,7 @@ function lineItemsTable(
     // BT-97/BT-104: a discount has to say WHY. §14 Abs. 4 Nr. 7 wants an agreed reduction named.
     const lineAdjustments = (line.allowancesCharges ?? []).map(
       (ac) =>
-        `${ac.reason ?? (ac.isCharge ? L.charge : L.allowance)}  ${ac.isCharge ? "" : "-"}${fmt.money(ac.amount)}`,
+        `${ac.reason ?? (ac.isCharge ? L.charge : L.allowance)}${acPercentSuffix(ac, L, fmt)}  ${ac.isCharge ? "" : "-"}${fmt.money(acAmount(ac))}`,
     );
     const sub = (t: string) => Text(t, { size: 8, color: MUTED });
 
@@ -246,6 +282,12 @@ function lineItemsTable(
       ...(linePeriod ? [sub(linePeriod)] : []),
       ...(itemIds ? [sub(`${L.itemNumber} ${itemIds}`)] : []),
       ...(line.note ? [sub(line.note)] : []), // BT-127
+      ...(line.orderLineRef ? [sub(`${L.orderLine} ${line.orderLineRef}`)] : []), // BT-132
+      ...(line.objectRef ? [sub(`${L.objectReference} ${line.objectRef}`)] : []), // BT-128
+      ...(line.buyerAccountingRef
+        ? [sub(`${L.accountingReference} ${line.buyerAccountingRef}`)]
+        : []), // BT-133
+      ...(line.originCountry ? [sub(`${L.originCountry} ${line.originCountry}`)] : []), // BT-159
       ...lineAdjustments.map(sub),
     ]);
     return [
@@ -297,8 +339,8 @@ function totals(
     for (const ac of invoice.allowancesCharges ?? []) {
       lines.push(
         valueLine(
-          ac.reason ?? (ac.isCharge ? L.charge : L.allowance),
-          `${ac.isCharge ? "" : "-"}${fmt.money(ac.amount)}`,
+          `${ac.reason ?? (ac.isCharge ? L.charge : L.allowance)}${acPercentSuffix(ac, L, fmt)}`,
+          `${ac.isCharge ? "" : "-"}${fmt.money(acAmount(ac))}`,
         ),
       );
     }
@@ -315,7 +357,23 @@ function totals(
   lines.push(Divider({ color: HAIR, margin: { y: 2 } }));
   lines.push(valueLine(L.grandTotal, fmt.money(c.grandTotal), { strong: true, size: 11 }));
   if (c.paidAmount > 0) lines.push(valueLine(L.alreadyPaid, `-${fmt.money(c.paidAmount)}`));
+  // BT-114. A payable that does not equal the total minus what was paid looks like an arithmetic
+  // error unless the difference is named, so the line is printed with its sign.
+  if (c.roundingAmount !== 0) {
+    const sign = c.roundingAmount > 0 ? "+" : "-";
+    lines.push(valueLine(L.rounding, `${sign}${fmt.money(Math.abs(c.roundingAmount))}`));
+  }
   lines.push(valueLine(L.amountDue, fmt.money(c.duePayable), { strong: true, size: 12 }));
+  // BT-111. The whole reason the field exists is that a tax office wants this figure on the
+  // PAPER, so an XML-only implementation would miss the point of it.
+  if (invoice.taxCurrency && invoice.taxTotalInTaxCurrency !== undefined) {
+    lines.push(
+      valueLine(
+        `${L.vatIn} ${invoice.taxCurrency}`,
+        fmt.moneyIn(invoice.taxTotalInTaxCurrency, invoice.taxCurrency),
+      ),
+    );
+  }
   lines.push(
     Text(`${L.amountsIn} ${fmt.currencyName()} (${invoice.currency})`, {
       size: 7.5,
@@ -377,23 +435,85 @@ function vatLabel(v: VatBreakdownEntry, L: InvoiceLabels, fmt: Formatters): stri
   return `${L.vat} ${fmt.percent(v.ratePercent)} (${v.category})`;
 }
 
+/**
+ * " (10 % of 1.200,00 EUR)" when the allowance was stated as a rate, "" otherwise.
+ *
+ * The percentage reaches the XML (BT-94), so it has to reach the paper: a reader who sees only
+ * "-120,00" cannot tell what it was 10 % of, and the two halves of the file would say different
+ * things - the one defect no validator looks for.
+ */
+function acPercentSuffix(ac: AllowanceCharge, L: InvoiceLabels, fmt: Formatters): string {
+  return hasPercentage(ac)
+    ? ` (${fmt.percent(ac.percent)} ${L.percentOf} ${fmt.money(ac.baseAmount)})`
+    : "";
+}
+
 // --- payment terms + bank details + remittance reference ---
-function paymentPanel(invoice: Invoice, L: InvoiceLabels, fmt: Formatters): PDFElement {
+function paymentPanel(
+  invoice: Invoice,
+  c: ComputedInvoice,
+  L: InvoiceLabels,
+  fmt: Formatters,
+): PDFElement {
   const p = invoice.payment;
   const reference = p?.reference ?? invoice.number;
+  // Skonto reaches the XML through BT-20, so it has to reach the paper too - the two halves of a
+  // ZUGFeRD file saying different things is the one defect no validator catches.
+  const discounts = resolveDiscounts(p?.cashDiscounts, invoice.issueDate, c.grandTotal);
   const left: PDFElement[] = [
     Text(L.payment, { size: 10, bold: true, color: INK }),
     ...(invoice.dueDate
       ? [Text(`${L.payableBy} ${fmt.date(invoice.dueDate)}`, { size: 9, color: INK })]
       : []),
     ...(p?.meansText ? [Text(`${L.paymentMeans}  ${p.meansText}`, { size: 9, color: INK })] : []),
+    // BG-19. A collection nobody was told about looks like an unauthorised debit on a statement,
+    // so the mandate and the creditor id belong on the paper, not only in the XML.
+    ...(p?.directDebit
+      ? [
+          Text(L.directDebit, { size: 9, bold: true, color: INK }),
+          Text(`${L.mandateReference}  ${p.directDebit.mandateReference}`, {
+            size: 9,
+            color: INK,
+          }),
+          ...(p.directDebit.creditorId
+            ? [Text(`${L.creditorId}  ${p.directDebit.creditorId}`, { size: 9, color: INK })]
+            : []),
+          ...(p.directDebit.debitedIban
+            ? [
+                Text(`${L.debitedAccount}  ${p.directDebit.debitedIban}`, {
+                  size: 9,
+                  color: INK,
+                }),
+              ]
+            : []),
+        ]
+      : []),
     ...(p?.terms ? [Text(p.terms, { size: 9, color: MUTED })] : []),
+    ...discounts.map((d) =>
+      Text(
+        `${L.cashDiscount} ${fmt.percent(d.percent)} ${L.cashDiscountUntil} ${fmt.date(d.deadline)}` +
+          // An arrow, not "saving X - paying Y": two amounts joined by a dash read as a range.
+          `  ${fmt.money(d.baseAmount)} \u2192 ${fmt.money(d.discountedTotal)}`,
+        { size: 9, color: INK },
+      ),
+    ),
   ];
   const right: PDFElement[] = [
     Text(L.bankDetails, { size: 10, bold: true, color: INK }),
     ...(invoice.payeeName
       ? [Text(`${L.payee}  ${invoice.payeeName}`, { size: 9, color: INK })]
       : []),
+    ...(invoice.payeeIdentifier
+      ? [Text(`${L.partyIdentifier}  ${invoice.payeeIdentifier}`, { size: 9, color: MUTED })]
+      : []), // BT-60
+    ...(invoice.payeeLegalRegistrationId
+      ? [
+          Text(`${L.registration}  ${invoice.payeeLegalRegistrationId}`, {
+            size: 9,
+            color: MUTED,
+          }),
+        ]
+      : []), // BT-61
     ...(p?.accountName ? [Text(p.accountName, { size: 9, color: INK })] : []),
     ...(p?.iban ? [Text(`IBAN  ${p.iban}`, { size: 9, color: INK })] : []),
     ...(p?.bic ? [Text(`BIC  ${p.bic}`, { size: 9, color: INK })] : []),
@@ -434,6 +554,7 @@ function legalFooter(invoice: Invoice, L: InvoiceLabels): PDFElement {
       col([seller.name, ...addressLines(seller.address)]),
       col([
         seller.vatId && `${L.vatId} ${seller.vatId}`,
+        seller.identifier && `${L.partyIdentifier} ${seller.identifier}`, // BT-29
         seller.taxNumber && `${L.taxNumber} ${seller.taxNumber}`,
         seller.legalRegistrationId && `${L.registration} ${seller.legalRegistrationId}`,
         seller.additionalLegalInfo,

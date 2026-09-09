@@ -13,7 +13,7 @@
 // Scope: this first model covers every MANDATORY EN16931 term plus the fields a real invoice needs.
 // Deferred (addable later, none block a valid EN16931 invoice): tax representative (BG-11/12),
 // payment card / direct debit (BG-18/BG-19), item attributes (BG-32), item classification (BT-158),
-// preceding-invoice references (BG-3), per-line object/order references.
+// per-line object/order references. (BG-3 preceding invoices landed 2026-09-09.)
 
 /** ISO 8601 calendar date, `"YYYY-MM-DD"` (e.g. BT-2 issue date). */
 export type IsoDate = string;
@@ -66,6 +66,8 @@ export interface Contact {
 /** The seller / supplier (BG-4 + address BG-5 + contact BG-6). */
 export interface Seller {
   name: string; // BT-27  (MANDATORY) registered legal name
+  /** A directory identifier for the seller, e.g. a GLN (BT-29). Peppol and retail ask for it. */
+  identifier?: string;
   tradingName?: string; // BT-28  business/trading name if different
   /** Seller VAT identifier, e.g. `"DE123456789"` (BT-31). Needed whenever VAT is charged. */
   vatId?: string;
@@ -84,6 +86,8 @@ export interface Seller {
 /** The buyer / customer (BG-7 + address BG-8 + contact BG-9). */
 export interface Buyer {
   name: string; // BT-44  (MANDATORY)
+  /** A directory identifier for the buyer (BT-46) - the counterpart to the seller's BT-29. */
+  identifier?: string;
   tradingName?: string; // BT-45
   /** Buyer VAT identifier (BT-48) - required e.g. for reverse-charge / intra-community supply. */
   vatId?: string;
@@ -110,24 +114,88 @@ export interface ServicePeriod {
   end: IsoDate;
 }
 
+/**
+ * The invoice this one refers back to (BG-3) - what makes a credit note or a correction traceable.
+ *
+ * EN 16931 allows several, because one corrective document may settle more than one original. The
+ * date is optional in the standard but is what lets a recipient find the original when the number
+ * alone is ambiguous across years.
+ */
+export interface PrecedingInvoice {
+  /** Number of the earlier invoice (BT-25)  (MANDATORY within the group). */
+  number: string;
+  /** Its issue date (BT-26). */
+  issueDate?: IsoDate;
+}
+
+/**
+ * An extra document that belongs to the invoice (BG-24) - a timesheet, a proof of service, a
+ * delivery note. Give it a `file`, a `url`, or both.
+ *
+ * A `file` travels twice: base64 inside the XML for a machine, and as an embedded file in the
+ * PDF/A-3 for a person. That is the only way both halves of the document see the same evidence.
+ */
+export interface SupportingDocument {
+  /** A reference for the document, e.g. `"TIMESHEET-2026-09"` (BT-122)  (MANDATORY). */
+  reference: string;
+  /** What it is, in words (BT-123). */
+  description?: string;
+  /** Where the recipient can fetch it instead (BT-124). */
+  url?: string;
+  /** The file itself (BT-125). `mimeType` and `filename` are required by the schema. */
+  file?: {
+    content: Uint8Array;
+    /** e.g. `"application/pdf"`, `"text/csv"`. */
+    mimeType: string;
+    /** The name it is saved under, e.g. `"stundennachweis.pdf"`. */
+    filename: string;
+  };
+}
+
 /** Where the goods/services were delivered (BG-13). Optional; used when it differs from the buyer. */
 export interface Delivery {
   date?: IsoDate; // BT-72  actual delivery date
+  /** Identifier of the delivery location, e.g. a GLN (BT-71) - a site number instead of an address. */
+  locationId?: string;
   recipientName?: string; // BT-70  deliver-to party name
   address?: PostalAddress; // BG-15 deliver-to address
 }
 
-/** A document-level allowance (discount, BG-20) or charge (surcharge, BG-21). */
-export interface AllowanceCharge {
+/** What every allowance/charge carries, whether it is stated as an amount or as a percentage. */
+interface AllowanceChargeBase {
   /** `true` = charge (adds, BG-21), `false` = allowance/discount (subtracts, BG-20). */
   isCharge: boolean;
-  amount: number; // BT-92 (allowance) / BT-99 (charge)  (MANDATORY)
   /** The VAT category + rate this allowance/charge falls under (BT-95/96 or BT-102/103). */
   vat: LineVat;
   reason?: string; // BT-97 / BT-104  human reason
   /** Coded reason (UNCL 5189 allowance / UNCL 7161 charge), BT-98 / BT-105. */
   reasonCode?: string;
 }
+
+/** Stated as a fixed amount. The base and percentage may still be given, and are then shown. */
+export interface AllowanceChargeByAmount extends AllowanceChargeBase {
+  amount: number; // BT-92 / BT-99 / BT-136 / BT-141
+  baseAmount?: number; // BT-93 / BT-100 / BT-137 / BT-142
+  percent?: number; // BT-94 / BT-101 / BT-138 / BT-143
+}
+
+/** Stated as a percentage of a base - the amount is derived, so "10 %" survives into XML and paper. */
+export interface AllowanceChargeByPercent extends AllowanceChargeBase {
+  amount?: number;
+  /** The amount the percentage applies to (BT-93 / BT-100 / BT-137 / BT-142). */
+  baseAmount: number;
+  /** The rate, e.g. `10` for 10 % (BT-94 / BT-101 / BT-138 / BT-143). */
+  percent: number;
+}
+
+/**
+ * A document-level allowance (BG-20) / charge (BG-21), or the line-level pair (BG-27 / BG-28).
+ *
+ * A union rather than three optional fields: EN 16931 needs the AMOUNT either way, so an entry that
+ * gives neither an amount nor a base-and-percentage is not a valid allowance. The union makes that
+ * combination fail to compile instead of failing at a validator.
+ */
+export type AllowanceCharge = AllowanceChargeByAmount | AllowanceChargeByPercent;
 
 /** VAT treatment of a line / allowance / charge: a category and (for taxed categories) a rate. */
 export interface LineVat {
@@ -168,6 +236,49 @@ export interface InvoiceLine {
   /** Per-line allowances/charges (BG-27 / BG-28). Net line amount BT-131 is computed from these. */
   allowancesCharges?: AllowanceCharge[];
   note?: string; // BT-127
+  /** What this line invoices, when it is a thing - a device or meter number (BT-128). */
+  objectRef?: string;
+  /** Which line of the buyer's order this settles (BT-132). Large customers reconcile on it. */
+  orderLineRef?: string;
+  /** The buyer's cost centre for THIS line (BT-133) - BT-19 per position. */
+  buyerAccountingRef?: string;
+  /** Country the item originates from (BT-159). Asked for in export and customs. */
+  originCountry?: CountryCode;
+}
+
+/**
+ * An early-payment discount - Skonto (BT-20).
+ *
+ * Deliberately NOT an `AllowanceCharge`: the standard has no business term for Skonto, because a
+ * discount conditional on early payment must not reduce the invoice total. It is carried in the
+ * payment terms in the structured form XRechnung prescribes; see `skonto.ts`.
+ */
+export interface CashDiscount {
+  /** Days from the issue date within which paying earns the discount, e.g. `14`. */
+  days: number;
+  /** The discount in percent, e.g. `2` for 2 %. */
+  percent: number;
+  /**
+   * The amount the percentage applies to. Defaults to the invoice total including VAT (BT-112),
+   * which is what German practice calculates Skonto on.
+   */
+  baseAmount?: number;
+}
+
+/**
+ * SEPA direct debit (BG-19) - what the payer needs in order to recognise the collection on their
+ * statement and to check it against the mandate they signed.
+ *
+ * Set `payment.meansCode` to `"59"` (SEPA direct debit) or `"49"` alongside it; the pre-flight asks
+ * for a mandate reference whenever one of those is used.
+ */
+export interface DirectDebit {
+  /** The reference of the mandate the payer signed (BT-89)  (MANDATORY). */
+  mandateReference: string;
+  /** The seller's creditor identifier - the German Glaeubiger-ID (BT-90). */
+  creditorId?: string;
+  /** IBAN of the account that will be debited (BT-91). */
+  debitedIban?: string;
 }
 
 /** How the invoice is to be paid (BG-16 + credit transfer BG-17). */
@@ -186,6 +297,13 @@ export interface Payment {
   bic?: string;
   /** Free-text payment terms, e.g. "Zahlbar innerhalb 14 Tagen netto" (BT-20). */
   terms?: string;
+  /**
+   * Early-payment discounts (Skonto), one entry per tier - "2 % within 14 days, 1 % within 30".
+   * Written into BT-20 beneath `terms` in the machine-readable form, and printed on the PDF.
+   */
+  cashDiscounts?: CashDiscount[];
+  /** SEPA direct debit details (BG-19), when the seller collects rather than being paid. */
+  directDebit?: DirectDebit;
 }
 
 /** The complete invoice - the single input to `renderZugferd(invoice, …)`. */
@@ -198,6 +316,20 @@ export interface Invoice {
   type?: InvoiceTypeCode;
   /** Document currency (BT-5)  (MANDATORY). */
   currency: CurrencyCode;
+  /**
+   * The currency VAT is ACCOUNTED in (BT-6), when that differs from the invoice currency. A German
+   * seller invoicing in a foreign currency has to state the tax amount in Euro, so this is `"EUR"`
+   * for them - and `taxTotalInTaxCurrency` (BT-111) must come with it.
+   */
+  taxCurrency?: CurrencyCode;
+  /**
+   * The total VAT expressed in `taxCurrency` (BT-111).
+   *
+   * Deliberately NOT derived: converting it needs an exchange rate, and which rate applies is a tax
+   * question (the rate of the supply date, of the invoice date, the monthly average). Inventing one
+   * would put a number on an invoice that nobody chose.
+   */
+  taxTotalInTaxCurrency?: number;
   /** Payment due date (BT-9). */
   dueDate?: IsoDate;
   /**
@@ -208,8 +340,34 @@ export interface Invoice {
   /** Seller order/contract references: purchase order (BT-13), contract (BT-12). */
   purchaseOrderRef?: string;
   contractRef?: string;
+  /** The SELLER's own order number (BT-14), as opposed to the buyer's BT-13. */
+  salesOrderRef?: string;
+  /** Project the invoice belongs to (BT-11). Agencies and construction are asked for it. */
+  projectRef?: string;
+  /** Tender or lot reference (BT-17). Public procurement can require it. */
+  tenderRef?: string;
+  /** What is being invoiced, when it is a thing: a meter number, a contract object (BT-18). */
+  objectRef?: string;
+  /**
+   * The BUYER's cost centre or booking reference (BT-19). Large customers require it so their
+   * accounting can route the invoice without a human reading it.
+   */
+  buyerAccountingRef?: string;
   /** Free-text document notes (BG-1 / BT-22). */
   notes?: string[];
+  /**
+   * What the notes are ABOUT, as a code (BT-21, UNCL 4451 - e.g. `"AAI"` general information,
+   * `"REG"` regulatory). Applies to every note; the standard allows one subject per note, but a
+   * second note with a different subject is rare enough not to warrant an array of pairs yet.
+   */
+  noteSubjectCode?: string;
+  /**
+   * The invoice(s) this one corrects, credits or supplements (BG-3). Set it on every credit note
+   * (`type: 381`) - without it the recipient cannot match the correction to its original.
+   */
+  precedingInvoices?: PrecedingInvoice[];
+  /** Extra documents that belong to this invoice (BG-24) - timesheets, proofs of service. */
+  supportingDocuments?: SupportingDocument[];
 
   seller: Seller; // BG-4  (MANDATORY)
   buyer: Buyer; // BG-7  (MANDATORY)
@@ -222,6 +380,10 @@ export interface Invoice {
   period?: ServicePeriod;
   /** Payee if different from the seller (BG-10). */
   payeeName?: string; // BT-59
+  /** Identifier of that payee (BT-60). */
+  payeeIdentifier?: string;
+  /** Legal registration id of that payee (BT-61). */
+  payeeLegalRegistrationId?: string;
 
   /** The invoice lines (BG-25)  (MANDATORY, at least one). */
   lines: InvoiceLine[];
@@ -238,4 +400,10 @@ export interface Invoice {
 
   /** Amount already paid (BT-113), subtracted from the total to give the amount due (BT-115). */
   paidAmount?: number;
+  /**
+   * Rounding applied to reach a clean payable amount (BT-114), e.g. `0.03` to collect 100.40 on a
+   * total of 100.37, or `-0.02` to collect 100.35. ADDED to the amount due, so the sign matters:
+   * a positive figure asks for more than the invoice totals, a negative one for less.
+   */
+  roundingAmount?: number;
 }
