@@ -20,6 +20,12 @@ export const maximalInvoice: Invoice = {
   dueDate: "2026-09-08",
   buyerReference: "MARK-BUYERREF",
   purchaseOrderRef: "MARK-ORDERREF",
+  salesOrderRef: "MARK-SALESORDER", // BT-14
+  projectRef: "MARK-PROJECT", // BT-11
+  tenderRef: "MARK-TENDER", // BT-17
+  objectRef: "MARK-OBJECT", // BT-18
+  buyerAccountingRef: "MARK-BUYERACCOUNT", // BT-19
+  noteSubjectCode: "AAI", // BT-21 - a real UNCL 4451 code, not a marker: it is validated
   contractRef: "MARK-CONTRACTREF",
   // BG-24 - one with a real file, one with only a link, so both branches reach the XSD check.
   supportingDocuments: [
@@ -42,6 +48,7 @@ export const maximalInvoice: Invoice = {
   notes: ["MARK-DOCNOTE"],
   seller: {
     name: "MARK-SELLERNAME",
+    identifier: "MARK-SELLERID", // BT-29
     tradingName: "MARK-SELLERTRADING",
     vatId: "MARK-SELLERVAT",
     taxNumber: "MARK-SELLERTAXNO",
@@ -61,6 +68,7 @@ export const maximalInvoice: Invoice = {
   },
   buyer: {
     name: "MARK-BUYERNAME",
+    identifier: "MARK-BUYERID", // BT-46
     tradingName: "MARK-BUYERTRADING",
     vatId: "MARK-BUYERVAT",
     legalRegistrationId: "MARK-BUYERREG",
@@ -78,6 +86,7 @@ export const maximalInvoice: Invoice = {
   },
   delivery: {
     date: "2026-08-20",
+    locationId: "MARK-DELIVERYLOC", // BT-71
     recipientName: "MARK-DELIVERYTO",
     address: {
       line1: "MARK-DELIVERYLINE1",
@@ -88,6 +97,8 @@ export const maximalInvoice: Invoice = {
   },
   period: { start: "2026-07-02", end: "2026-07-20" },
   payeeName: "MARK-PAYEE",
+  payeeIdentifier: "MARK-PAYEEID", // BT-60
+  payeeLegalRegistrationId: "MARK-PAYEEREG", // BT-61
   lines: [
     {
       id: "MARK-LINEID",
@@ -103,6 +114,10 @@ export const maximalInvoice: Invoice = {
       vat: { category: "S", ratePercent: 19 },
       period: { start: "2026-07-02", end: "2026-07-20" },
       note: "MARK-LINENOTE",
+      objectRef: "MARK-LINEOBJECT", // BT-128
+      orderLineRef: "MARK-ORDERLINE", // BT-132
+      buyerAccountingRef: "MARK-LINEACCOUNT", // BT-133
+      originCountry: "CH", // BT-159 - a country CODE, so no marker fits
       allowancesCharges: [
         {
           isCharge: false,

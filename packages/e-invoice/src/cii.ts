@@ -95,6 +95,16 @@ function supportingDocument(doc: SupportingDocument): string {
   ]);
 }
 
+/** A bare reference that only differs from its neighbours by TypeCode (BT-17, BT-18, BT-128). */
+function typedReference(id: string | undefined, typeCode: string): string {
+  return id
+    ? wrap("ram:AdditionalReferencedDocument", [
+        el("ram:IssuerAssignedID", id),
+        el("ram:TypeCode", typeCode),
+      ])
+    : "";
+}
+
 /** BG-3: the invoice this one corrects or credits. Sits AFTER the totals in the XSD sequence. */
 function precedingInvoice(ref: PrecedingInvoice): string {
   return wrap("ram:InvoiceReferencedDocument", [
@@ -118,6 +128,7 @@ function address(a: PostalAddress): string {
 
 function sellerParty(s: Seller): string {
   return wrap("ram:SellerTradeParty", [
+    el("ram:ID", s.identifier), // BT-29 - ID is the FIRST child of TradePartyType
     el("ram:Name", s.name), // BT-27
     el("ram:Description", s.additionalLegalInfo), // BT-33
     wrap("ram:SpecifiedLegalOrganization", [
@@ -142,6 +153,7 @@ function sellerParty(s: Seller): string {
 
 function buyerParty(b: Buyer): string {
   return wrap("ram:BuyerTradeParty", [
+    el("ram:ID", b.identifier), // BT-46
     el("ram:Name", b.name), // BT-44
     wrap("ram:SpecifiedLegalOrganization", [
       el("ram:ID", b.legalRegistrationId), // BT-47
@@ -250,8 +262,14 @@ function line(l: InvoiceLine, net: number, index: number): string {
       el("ram:BuyerAssignedID", l.buyerItemId), // BT-156
       el("ram:Name", l.name), // BT-153
       el("ram:Description", l.description), // BT-154
+      l.originCountry
+        ? wrap("ram:OriginTradeCountry", [el("ram:ID", l.originCountry)]) // BT-159
+        : "",
     ]),
     wrap("ram:SpecifiedLineTradeAgreement", [
+      l.orderLineRef
+        ? wrap("ram:BuyerOrderReferencedDocument", [el("ram:LineID", l.orderLineRef)]) // BT-132
+        : "",
       wrap("ram:NetPriceProductTradePrice", [
         el("ram:ChargeAmount", amount(l.netUnitPrice)), // BT-146
         l.priceBaseQuantity
@@ -276,6 +294,13 @@ function line(l: InvoiceLine, net: number, index: number): string {
       wrap("ram:SpecifiedTradeSettlementLineMonetarySummation", [
         el("ram:LineTotalAmount", amount(net)), // BT-131
       ]),
+      // Both sit AFTER the summation in LineTradeSettlementType, which reads oddly and is binding.
+      typedReference(l.objectRef, "130"), // BT-128
+      l.buyerAccountingRef
+        ? wrap("ram:ReceivableSpecifiedTradeAccountingAccount", [
+            el("ram:ID", l.buyerAccountingRef), // BT-133
+          ])
+        : "",
     ]),
   ]);
 }
@@ -285,7 +310,13 @@ export function toCII(
   computed: ComputedInvoice,
   profile: CiiProfile = "en16931",
 ): string {
-  const notes = (invoice.notes ?? []).map((n) => wrap("ram:IncludedNote", [el("ram:Content", n)])); // BG-1 / BT-22
+  // BG-1. SubjectCode follows Content in NoteType, and says what the note is ABOUT (BT-21).
+  const notes = (invoice.notes ?? []).map((n) =>
+    wrap("ram:IncludedNote", [
+      el("ram:Content", n), // BT-22
+      el("ram:SubjectCode", invoice.noteSubjectCode), // BT-21
+    ]),
+  );
 
   const header = wrap("rsm:ExchangedDocument", [
     el("ram:ID", invoice.number), // BT-1
@@ -300,6 +331,11 @@ export function toCII(
     el("ram:BuyerReference", invoice.buyerReference), // BT-10 (Leitweg-ID for XRechnung)
     sellerParty(invoice.seller), // BG-4
     buyerParty(invoice.buyer), // BG-7
+    invoice.salesOrderRef
+      ? wrap("ram:SellerOrderReferencedDocument", [
+          el("ram:IssuerAssignedID", invoice.salesOrderRef), // BT-14
+        ])
+      : "",
     invoice.purchaseOrderRef
       ? wrap("ram:BuyerOrderReferencedDocument", [
           el("ram:IssuerAssignedID", invoice.purchaseOrderRef), // BT-13
@@ -311,14 +347,25 @@ export function toCII(
         ])
       : "",
     // AdditionalReferencedDocument follows the contract reference in HeaderTradeAgreementType.
+    // Several business terms share the element and are told apart by their TypeCode: 50 tender,
+    // 130 invoiced object, 916 a supporting document.
+    typedReference(invoice.tenderRef, "50"), // BT-17
+    typedReference(invoice.objectRef, "130"), // BT-18
     ...(invoice.supportingDocuments ?? []).map(supportingDocument), // BG-24
+    invoice.projectRef
+      ? wrap("ram:SpecifiedProcuringProject", [
+          el("ram:ID", invoice.projectRef), // BT-11
+          el("ram:Name", invoice.projectRef),
+        ])
+      : "",
   ]);
 
   const d = invoice.delivery;
   // ApplicableHeaderTradeDelivery is mandatory (1..1) even when empty - emit the wrapper always.
   const deliveryChildren = [
-    d?.recipientName || d?.address
+    d?.locationId || d?.recipientName || d?.address
       ? wrap("ram:ShipToTradeParty", [
+          el("ram:ID", d?.locationId), // BT-71 - a site number instead of an address
           el("ram:Name", d?.recipientName), // BT-70
           d?.address ? address(d.address) : "", // BG-15
         ])
@@ -398,7 +445,17 @@ export function toCII(
     el("ram:CreditorReferenceID", invoice.payment?.directDebit?.creditorId), // BT-90
     el("ram:PaymentReference", invoice.payment?.reference ?? invoice.number), // BT-83
     el("ram:InvoiceCurrencyCode", invoice.currency), // BT-5
-    invoice.payeeName ? wrap("ram:PayeeTradeParty", [el("ram:Name", invoice.payeeName)]) : "", // BG-10
+    invoice.payeeName || invoice.payeeIdentifier
+      ? wrap("ram:PayeeTradeParty", [
+          el("ram:ID", invoice.payeeIdentifier), // BT-60
+          el("ram:Name", invoice.payeeName), // BT-59
+          invoice.payeeLegalRegistrationId
+            ? wrap("ram:SpecifiedLegalOrganization", [
+                el("ram:ID", invoice.payeeLegalRegistrationId), // BT-61
+              ])
+            : "",
+        ])
+      : "", // BG-10
     paymentMeans, // BG-16
     ...computed.vatBreakdown.map(tradeTax), // BG-23
     billingPeriod(invoice.period), // BG-14
@@ -408,6 +465,11 @@ export function toCII(
     // AFTER the summation, per the HeaderTradeSettlementType sequence - it reads as an
     // afterthought but the XSD puts it there.
     ...(invoice.precedingInvoices ?? []).map(precedingInvoice), // BG-3
+    invoice.buyerAccountingRef
+      ? wrap("ram:ReceivableSpecifiedTradeAccountingAccount", [
+          el("ram:ID", invoice.buyerAccountingRef), // BT-19
+        ])
+      : "",
   ]);
 
   const transaction = wrap("rsm:SupplyChainTradeTransaction", [

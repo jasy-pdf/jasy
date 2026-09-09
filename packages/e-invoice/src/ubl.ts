@@ -90,6 +90,7 @@ function sellerParty(s: Seller, creditorId?: string): string {
   return wrap("cac:AccountingSupplierParty", [
     wrap("cac:Party", [
       s.electronicAddress ? el("cbc:EndpointID", s.electronicAddress, { schemeID: "EM" }) : "", // BT-34
+      s.identifier ? wrap("cac:PartyIdentification", [el("cbc:ID", s.identifier)]) : "", // BT-29
       // BT-90, the creditor identifier. UBL hangs it on the SELLER party, not on the payment.
       creditorId
         ? wrap("cac:PartyIdentification", [el("cbc:ID", creditorId, { schemeID: "SEPA" })])
@@ -122,6 +123,7 @@ function buyerParty(b: Buyer): string {
   return wrap("cac:AccountingCustomerParty", [
     wrap("cac:Party", [
       b.electronicAddress ? el("cbc:EndpointID", b.electronicAddress, { schemeID: "EM" }) : "", // BT-49
+      b.identifier ? wrap("cac:PartyIdentification", [el("cbc:ID", b.identifier)]) : "", // BT-46
       b.tradingName ? wrap("cac:PartyName", [el("cbc:Name", b.tradingName)]) : "", // BT-45
       address(b.address),
       b.vatId
@@ -234,7 +236,12 @@ function invoiceLine(l: InvoiceLine, net: number, index: number, currency: strin
     l.note ? el("cbc:Note", l.note) : "", // BT-127
     el("cbc:InvoicedQuantity", l.quantity, { unitCode: l.unit }), // BT-129 / BT-130
     money("cbc:LineExtensionAmount", net, currency), // BT-131
+    el("cbc:AccountingCost", l.buyerAccountingRef), // BT-133
     invoicePeriod(l.period), // BG-26
+    l.orderLineRef
+      ? wrap("cac:OrderLineReference", [el("cbc:LineID", l.orderLineRef)]) // BT-132
+      : "",
+    l.objectRef ? wrap("cac:DocumentReference", [el("cbc:ID", l.objectRef)]) : "", // BT-128
     ...(l.allowancesCharges ?? []).map((ac) => lineAllowanceCharge(ac, currency)), // BG-27 / BG-28
     wrap("cac:Item", [
       el("cbc:Description", l.description), // BT-154
@@ -246,6 +253,9 @@ function invoiceLine(l: InvoiceLine, net: number, index: number, currency: strin
         ? wrap("cac:StandardItemIdentification", [
             el("cbc:ID", l.standardItemId, { schemeID: "0160" }),
           ]) // BT-157
+        : "",
+      l.originCountry
+        ? wrap("cac:OriginCountry", [el("cbc:IdentificationCode", l.originCountry)]) // BT-159
         : "",
       taxCategory("cac:ClassifiedTaxCategory", l.vat.category, l.vat.ratePercent ?? 0), // BG-30
     ]),
@@ -273,28 +283,52 @@ export function toUBL(
     el("cbc:IssueDate", invoice.issueDate), // BT-2
     el("cbc:DueDate", invoice.dueDate), // BT-9
     el("cbc:InvoiceTypeCode", invoice.type ?? 380), // BT-3
-    ...(invoice.notes ?? []).map((n) => el("cbc:Note", n)), // BT-22
+    // BT-21 has no element of its own in UBL. The EN 16931 binding prefixes the note with the
+    // subject code in the form #CODE#, which is why this is string surgery and not a field.
+    ...(invoice.notes ?? []).map((n) =>
+      el("cbc:Note", invoice.noteSubjectCode ? `#${invoice.noteSubjectCode}#${n}` : n),
+    ), // BT-22 (+ BT-21)
     el("cbc:DocumentCurrencyCode", cur), // BT-5
+    el("cbc:AccountingCost", invoice.buyerAccountingRef), // BT-19 - BEFORE the buyer reference
     el("cbc:BuyerReference", invoice.buyerReference), // BT-10 (Leitweg-ID)
     invoicePeriod(invoice.period), // BG-14
-    invoice.purchaseOrderRef
-      ? wrap("cac:OrderReference", [el("cbc:ID", invoice.purchaseOrderRef)])
-      : "", // BT-13
+    invoice.purchaseOrderRef || invoice.salesOrderRef
+      ? wrap("cac:OrderReference", [
+          el("cbc:ID", invoice.purchaseOrderRef), // BT-13
+          el("cbc:SalesOrderID", invoice.salesOrderRef), // BT-14
+        ])
+      : "",
     // BillingReference sits between the order and the contract reference in the InvoiceType sequence.
     ...(invoice.precedingInvoices ?? []).map(billingReference), // BG-3
+    invoice.tenderRef
+      ? wrap("cac:OriginatorDocumentReference", [el("cbc:ID", invoice.tenderRef)]) // BT-17
+      : "",
     invoice.contractRef
       ? wrap("cac:ContractDocumentReference", [el("cbc:ID", invoice.contractRef)]) // BT-12
       : "",
     ...(invoice.supportingDocuments ?? []).map(supportingDocument), // BG-24
+    // BT-18 shares the element with BG-24 and is told apart by its document type code.
+    invoice.objectRef
+      ? wrap("cac:AdditionalDocumentReference", [
+          el("cbc:ID", invoice.objectRef),
+          el("cbc:DocumentTypeCode", "130"),
+        ])
+      : "",
+    invoice.projectRef ? wrap("cac:ProjectReference", [el("cbc:ID", invoice.projectRef)]) : "", // BT-11
   ];
 
   const d = invoice.delivery;
   const delivery =
-    d?.date || d?.recipientName || d?.address
+    d?.date || d?.recipientName || d?.address || d?.locationId
       ? wrap("cac:Delivery", [
           el("cbc:ActualDeliveryDate", d?.date), // BT-72
           // A LocationType holds cac:Address - `cac:PostalAddress` belongs to a Party, not here.
-          d?.address ? wrap("cac:DeliveryLocation", [wrapAddress("cac:Address", d.address)]) : "", // BG-15
+          d?.address || d?.locationId
+            ? wrap("cac:DeliveryLocation", [
+                el("cbc:ID", d?.locationId), // BT-71
+                d?.address ? wrapAddress("cac:Address", d.address) : "", // BG-15
+              ])
+            : "",
           d?.recipientName
             ? wrap("cac:DeliveryParty", [wrap("cac:PartyName", [el("cbc:Name", d.recipientName)])])
             : "", // BT-70
@@ -358,9 +392,18 @@ export function toUBL(
     money("cbc:PayableAmount", computed.duePayable, cur), // BT-115
   ]);
 
-  const payee = invoice.payeeName // BT-59 / BG-10
-    ? wrap("cac:PayeeParty", [wrap("cac:PartyName", [el("cbc:Name", invoice.payeeName)])])
-    : "";
+  const payee =
+    invoice.payeeName || invoice.payeeIdentifier // BG-10
+      ? wrap("cac:PayeeParty", [
+          invoice.payeeIdentifier
+            ? wrap("cac:PartyIdentification", [el("cbc:ID", invoice.payeeIdentifier)]) // BT-60
+            : "",
+          invoice.payeeName ? wrap("cac:PartyName", [el("cbc:Name", invoice.payeeName)]) : "", // BT-59
+          invoice.payeeLegalRegistrationId
+            ? wrap("cac:PartyLegalEntity", [el("cbc:CompanyID", invoice.payeeLegalRegistrationId)]) // BT-61
+            : "",
+        ])
+      : "";
   const lines = invoice.lines.map((l, i) => invoiceLine(l, computed.lineNets[i], i, cur));
 
   return (

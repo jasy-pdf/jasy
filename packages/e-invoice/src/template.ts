@@ -118,6 +118,7 @@ function deliverTo(delivery: Delivery | undefined, L: InvoiceLabels): PDFElement
   const lines = [
     delivery?.recipientName,
     ...(delivery?.address ? addressLines(delivery.address) : []),
+    delivery?.locationId ? `${L.deliveryLocation} ${delivery.locationId}` : undefined, // BT-71
   ].filter((s): s is string => Boolean(s));
 
   // ONE element, not loose lines: the page flow has a 16pt gap and would space the address apart.
@@ -187,6 +188,11 @@ function recipientAndMeta(invoice: Invoice, L: InvoiceLabels, fmt: Formatters): 
     [L.dueDate, invoice.dueDate ? fmt.date(invoice.dueDate) : undefined],
     [L.customerReference, invoice.buyerReference],
     [L.orderNumber, invoice.purchaseOrderRef],
+    [L.salesOrderNumber, invoice.salesOrderRef], // BT-14
+    [L.projectReference, invoice.projectRef], // BT-11
+    [L.tenderReference, invoice.tenderRef], // BT-17
+    [L.objectReference, invoice.objectRef], // BT-18
+    [L.accountingReference, invoice.buyerAccountingRef], // BT-19
     [L.contractReference, invoice.contractRef],
     // BG-3 - a credit note whose original is not named on the PAPER is unusable to the person
     // reading it, however well the XML carries it.
@@ -202,6 +208,7 @@ function recipientAndMeta(invoice: Invoice, L: InvoiceLabels, fmt: Formatters): 
     // that block shows through a DIN 5008 window, which may hold nothing but the postal address.
     [L.buyerVatId, buyer.vatId],
     [L.registration, buyer.legalRegistrationId],
+    [L.partyIdentifier, buyer.identifier], // BT-46
     [L.contactPerson, buyer.contact?.name],
     [L.phone, buyer.contact?.phone],
     [L.email, buyer.contact?.email],
@@ -275,6 +282,12 @@ function lineItemsTable(
       ...(linePeriod ? [sub(linePeriod)] : []),
       ...(itemIds ? [sub(`${L.itemNumber} ${itemIds}`)] : []),
       ...(line.note ? [sub(line.note)] : []), // BT-127
+      ...(line.orderLineRef ? [sub(`${L.orderLine} ${line.orderLineRef}`)] : []), // BT-132
+      ...(line.objectRef ? [sub(`${L.objectReference} ${line.objectRef}`)] : []), // BT-128
+      ...(line.buyerAccountingRef
+        ? [sub(`${L.accountingReference} ${line.buyerAccountingRef}`)]
+        : []), // BT-133
+      ...(line.originCountry ? [sub(`${L.originCountry} ${line.originCountry}`)] : []), // BT-159
       ...lineAdjustments.map(sub),
     ]);
     return [
@@ -480,6 +493,17 @@ function paymentPanel(
     ...(invoice.payeeName
       ? [Text(`${L.payee}  ${invoice.payeeName}`, { size: 9, color: INK })]
       : []),
+    ...(invoice.payeeIdentifier
+      ? [Text(`${L.partyIdentifier}  ${invoice.payeeIdentifier}`, { size: 9, color: MUTED })]
+      : []), // BT-60
+    ...(invoice.payeeLegalRegistrationId
+      ? [
+          Text(`${L.registration}  ${invoice.payeeLegalRegistrationId}`, {
+            size: 9,
+            color: MUTED,
+          }),
+        ]
+      : []), // BT-61
     ...(p?.accountName ? [Text(p.accountName, { size: 9, color: INK })] : []),
     ...(p?.iban ? [Text(`IBAN  ${p.iban}`, { size: 9, color: INK })] : []),
     ...(p?.bic ? [Text(`BIC  ${p.bic}`, { size: 9, color: INK })] : []),
@@ -520,6 +544,7 @@ function legalFooter(invoice: Invoice, L: InvoiceLabels): PDFElement {
       col([seller.name, ...addressLines(seller.address)]),
       col([
         seller.vatId && `${L.vatId} ${seller.vatId}`,
+        seller.identifier && `${L.partyIdentifier} ${seller.identifier}`, // BT-29
         seller.taxNumber && `${L.taxNumber} ${seller.taxNumber}`,
         seller.legalRegistrationId && `${L.registration} ${seller.legalRegistrationId}`,
         seller.additionalLegalInfo,

@@ -24,6 +24,16 @@ export interface InvoiceLabels {
   alreadyPaid: string;
   /** BT-114 - the deliberate cent that makes the payable a round figure. */
   rounding: string;
+  /** The scalar references that only exist to be quoted back (BT-11, BT-14, BT-17…BT-19, …). */
+  salesOrderNumber: string;
+  projectReference: string;
+  tenderReference: string;
+  objectReference: string;
+  accountingReference: string;
+  partyIdentifier: string;
+  deliveryLocation: string;
+  orderLine: string;
+  originCountry: string;
   amountDue: string;
   payment: string;
   payableBy: string;
@@ -87,6 +97,15 @@ const de: InvoiceLabels = {
   grandTotal: "Gesamtbetrag",
   alreadyPaid: "bereits gezahlt",
   rounding: "Rundung",
+  salesOrderNumber: "Auftragsnummer",
+  projectReference: "Projekt",
+  tenderReference: "Vergabenummer",
+  objectReference: "Objekt",
+  accountingReference: "Kostenstelle",
+  partyIdentifier: "Kennung",
+  deliveryLocation: "Lieferort-Nr.",
+  orderLine: "Bestellposition",
+  originCountry: "Ursprungsland",
   amountDue: "Zahlbetrag",
   payment: "Zahlung",
   payableBy: "Zahlbar bis",
@@ -146,6 +165,15 @@ const en: InvoiceLabels = {
   grandTotal: "Total",
   alreadyPaid: "already paid",
   rounding: "Rounding",
+  salesOrderNumber: "Sales order",
+  projectReference: "Project",
+  tenderReference: "Tender",
+  objectReference: "Object",
+  accountingReference: "Cost centre",
+  partyIdentifier: "Identifier",
+  deliveryLocation: "Location no.",
+  orderLine: "Order line",
+  originCountry: "Country of origin",
   amountDue: "Amount due",
   payment: "Payment",
   payableBy: "Payable by",
@@ -205,6 +233,15 @@ const fr: InvoiceLabels = {
   grandTotal: "Total TTC",
   alreadyPaid: "déjà payé",
   rounding: "Arrondi",
+  salesOrderNumber: "Numéro de commande",
+  projectReference: "Projet",
+  tenderReference: "Appel d'offres",
+  objectReference: "Objet",
+  accountingReference: "Centre de coûts",
+  partyIdentifier: "Identifiant",
+  deliveryLocation: "N° de lieu",
+  orderLine: "Ligne de commande",
+  originCountry: "Pays d'origine",
   amountDue: "Net à payer",
   payment: "Paiement",
   payableBy: "À payer avant le",

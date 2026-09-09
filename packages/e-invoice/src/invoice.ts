@@ -66,6 +66,8 @@ export interface Contact {
 /** The seller / supplier (BG-4 + address BG-5 + contact BG-6). */
 export interface Seller {
   name: string; // BT-27  (MANDATORY) registered legal name
+  /** A directory identifier for the seller, e.g. a GLN (BT-29). Peppol and retail ask for it. */
+  identifier?: string;
   tradingName?: string; // BT-28  business/trading name if different
   /** Seller VAT identifier, e.g. `"DE123456789"` (BT-31). Needed whenever VAT is charged. */
   vatId?: string;
@@ -84,6 +86,8 @@ export interface Seller {
 /** The buyer / customer (BG-7 + address BG-8 + contact BG-9). */
 export interface Buyer {
   name: string; // BT-44  (MANDATORY)
+  /** A directory identifier for the buyer (BT-46) - the counterpart to the seller's BT-29. */
+  identifier?: string;
   tradingName?: string; // BT-45
   /** Buyer VAT identifier (BT-48) - required e.g. for reverse-charge / intra-community supply. */
   vatId?: string;
@@ -151,6 +155,8 @@ export interface SupportingDocument {
 /** Where the goods/services were delivered (BG-13). Optional; used when it differs from the buyer. */
 export interface Delivery {
   date?: IsoDate; // BT-72  actual delivery date
+  /** Identifier of the delivery location, e.g. a GLN (BT-71) - a site number instead of an address. */
+  locationId?: string;
   recipientName?: string; // BT-70  deliver-to party name
   address?: PostalAddress; // BG-15 deliver-to address
 }
@@ -230,6 +236,14 @@ export interface InvoiceLine {
   /** Per-line allowances/charges (BG-27 / BG-28). Net line amount BT-131 is computed from these. */
   allowancesCharges?: AllowanceCharge[];
   note?: string; // BT-127
+  /** What this line invoices, when it is a thing - a device or meter number (BT-128). */
+  objectRef?: string;
+  /** Which line of the buyer's order this settles (BT-132). Large customers reconcile on it. */
+  orderLineRef?: string;
+  /** The buyer's cost centre for THIS line (BT-133) - BT-19 per position. */
+  buyerAccountingRef?: string;
+  /** Country the item originates from (BT-159). Asked for in export and customs. */
+  originCountry?: CountryCode;
 }
 
 /**
@@ -312,8 +326,27 @@ export interface Invoice {
   /** Seller order/contract references: purchase order (BT-13), contract (BT-12). */
   purchaseOrderRef?: string;
   contractRef?: string;
+  /** The SELLER's own order number (BT-14), as opposed to the buyer's BT-13. */
+  salesOrderRef?: string;
+  /** Project the invoice belongs to (BT-11). Agencies and construction are asked for it. */
+  projectRef?: string;
+  /** Tender or lot reference (BT-17). Public procurement can require it. */
+  tenderRef?: string;
+  /** What is being invoiced, when it is a thing: a meter number, a contract object (BT-18). */
+  objectRef?: string;
+  /**
+   * The BUYER's cost centre or booking reference (BT-19). Large customers require it so their
+   * accounting can route the invoice without a human reading it.
+   */
+  buyerAccountingRef?: string;
   /** Free-text document notes (BG-1 / BT-22). */
   notes?: string[];
+  /**
+   * What the notes are ABOUT, as a code (BT-21, UNCL 4451 - e.g. `"AAI"` general information,
+   * `"REG"` regulatory). Applies to every note; the standard allows one subject per note, but a
+   * second note with a different subject is rare enough not to warrant an array of pairs yet.
+   */
+  noteSubjectCode?: string;
   /**
    * The invoice(s) this one corrects, credits or supplements (BG-3). Set it on every credit note
    * (`type: 381`) - without it the recipient cannot match the correction to its original.
@@ -333,6 +366,10 @@ export interface Invoice {
   period?: ServicePeriod;
   /** Payee if different from the seller (BG-10). */
   payeeName?: string; // BT-59
+  /** Identifier of that payee (BT-60). */
+  payeeIdentifier?: string;
+  /** Legal registration id of that payee (BT-61). */
+  payeeLegalRegistrationId?: string;
 
   /** The invoice lines (BG-25)  (MANDATORY, at least one). */
   lines: InvoiceLine[];
