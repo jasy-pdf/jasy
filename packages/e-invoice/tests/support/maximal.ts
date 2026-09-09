@@ -148,6 +148,12 @@ export const maximalInvoice: Invoice = {
     accountName: "MARK-ACCOUNTNAME",
     bic: "MARK-BIC",
     terms: "MARK-TERMS",
+    // BG-19 - the three fields CII scatters over three blocks and UBL keeps in two.
+    directDebit: {
+      mandateReference: "MARK-MANDATE",
+      creditorId: "MARK-CREDITORID",
+      debitedIban: "MARK-DEBITEDIBAN",
+    },
     // Two tiers, and the second names its own base - so both shapes of the BT-20 line are covered.
     cashDiscounts: [
       { days: 14, percent: 2 },

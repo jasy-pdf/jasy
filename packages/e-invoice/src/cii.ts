@@ -339,6 +339,12 @@ export function toCII(
       ? wrap("ram:SpecifiedTradeSettlementPaymentMeans", [
           el("ram:TypeCode", p.meansCode ?? "58"), // BT-81 (58 = SEPA credit transfer)
           el("ram:Information", p.meansText), // BT-82
+          // PAYER before PAYEE - the type's sequence, and the two are easy to mix up.
+          p.directDebit?.debitedIban
+            ? wrap("ram:PayerPartyDebtorFinancialAccount", [
+                el("ram:IBANID", p.directDebit.debitedIban), // BT-91
+              ])
+            : "",
           p.iban
             ? wrap("ram:PayeePartyCreditorFinancialAccount", [
                 el("ram:IBANID", p.iban), // BT-84
@@ -361,12 +367,13 @@ export function toCII(
     computed.grandTotal,
   );
   const paymentTerms =
-    invoice.dueDate || termsText
+    invoice.dueDate || termsText || p?.directDebit?.mandateReference
       ? wrap("ram:SpecifiedTradePaymentTerms", [
           el("ram:Description", termsText), // BT-20
           invoice.dueDate
             ? wrap("ram:DueDateDateTime", [date102(invoice.dueDate)]) // BT-9
             : "",
+          el("ram:DirectDebitMandateID", p?.directDebit?.mandateReference), // BT-89
         ])
       : "";
 
@@ -387,6 +394,7 @@ export function toCII(
   ]);
 
   const settlement = wrap("ram:ApplicableHeaderTradeSettlement", [
+    el("ram:CreditorReferenceID", invoice.payment?.directDebit?.creditorId), // BT-90
     el("ram:PaymentReference", invoice.payment?.reference ?? invoice.number), // BT-83
     el("ram:InvoiceCurrencyCode", invoice.currency), // BT-5
     invoice.payeeName ? wrap("ram:PayeeTradeParty", [el("ram:Name", invoice.payeeName)]) : "", // BG-10

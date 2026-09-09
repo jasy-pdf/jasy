@@ -85,10 +85,15 @@ function contact(c: { name?: string; phone?: string; email?: string } | undefine
   ]);
 }
 
-function sellerParty(s: Seller): string {
+/** `creditorId` is BT-90: UBL puts it on the party, not on the payment means. */
+function sellerParty(s: Seller, creditorId?: string): string {
   return wrap("cac:AccountingSupplierParty", [
     wrap("cac:Party", [
       s.electronicAddress ? el("cbc:EndpointID", s.electronicAddress, { schemeID: "EM" }) : "", // BT-34
+      // BT-90, the creditor identifier. UBL hangs it on the SELLER party, not on the payment.
+      creditorId
+        ? wrap("cac:PartyIdentification", [el("cbc:ID", creditorId, { schemeID: "SEPA" })])
+        : "",
       s.tradingName ? wrap("cac:PartyName", [el("cbc:Name", s.tradingName)]) : "", // BT-28
       address(s.address),
       s.vatId
@@ -313,6 +318,16 @@ export function toUBL(
                 p.bic ? wrap("cac:FinancialInstitutionBranch", [el("cbc:ID", p.bic)]) : "", // BT-86
               ])
             : "",
+          // BG-19. UBL keeps the mandate together; CII scatters the same three fields over three
+          // different blocks, which is why they are read from one object rather than three.
+          p.directDebit
+            ? wrap("cac:PaymentMandate", [
+                el("cbc:ID", p.directDebit.mandateReference), // BT-89
+                p.directDebit.debitedIban
+                  ? wrap("cac:PayerFinancialAccount", [el("cbc:ID", p.directDebit.debitedIban)]) // BT-91
+                  : "",
+              ])
+            : "",
         ])
       : "";
 
@@ -351,7 +366,7 @@ export function toUBL(
     `<?xml version="1.0" encoding="UTF-8"?>\n` +
     `<Invoice xmlns="${NS.inv}" xmlns:cac="${NS.cac}" xmlns:cbc="${NS.cbc}">` +
     head.filter(Boolean).join("") +
-    sellerParty(invoice.seller) +
+    sellerParty(invoice.seller, invoice.payment?.directDebit?.creditorId) +
     buyerParty(invoice.buyer) +
     payee +
     delivery +

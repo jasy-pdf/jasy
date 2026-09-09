@@ -251,6 +251,22 @@ export interface CashDiscount {
   baseAmount?: number;
 }
 
+/**
+ * SEPA direct debit (BG-19) - what the payer needs in order to recognise the collection on their
+ * statement and to check it against the mandate they signed.
+ *
+ * Set `payment.meansCode` to `"59"` (SEPA direct debit) or `"49"` alongside it; the pre-flight asks
+ * for a mandate reference whenever one of those is used.
+ */
+export interface DirectDebit {
+  /** The reference of the mandate the payer signed (BT-89)  (MANDATORY). */
+  mandateReference: string;
+  /** The seller's creditor identifier - the German Glaeubiger-ID (BT-90). */
+  creditorId?: string;
+  /** IBAN of the account that will be debited (BT-91). */
+  debitedIban?: string;
+}
+
 /** How the invoice is to be paid (BG-16 + credit transfer BG-17). */
 export interface Payment {
   /** Payment means code (UNCL 4461), e.g. `58` SEPA credit transfer, `30` credit transfer (BT-81). */
@@ -272,6 +288,8 @@ export interface Payment {
    * Written into BT-20 beneath `terms` in the machine-readable form, and printed on the PDF.
    */
   cashDiscounts?: CashDiscount[];
+  /** SEPA direct debit details (BG-19), when the seller collects rather than being paid. */
+  directDebit?: DirectDebit;
 }
 
 /** The complete invoice - the single input to `renderZugferd(invoice, …)`. */

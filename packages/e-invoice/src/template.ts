@@ -437,6 +437,28 @@ function paymentPanel(
       ? [Text(`${L.payableBy} ${fmt.date(invoice.dueDate)}`, { size: 9, color: INK })]
       : []),
     ...(p?.meansText ? [Text(`${L.paymentMeans}  ${p.meansText}`, { size: 9, color: INK })] : []),
+    // BG-19. A collection nobody was told about looks like an unauthorised debit on a statement,
+    // so the mandate and the creditor id belong on the paper, not only in the XML.
+    ...(p?.directDebit
+      ? [
+          Text(L.directDebit, { size: 9, bold: true, color: INK }),
+          Text(`${L.mandateReference}  ${p.directDebit.mandateReference}`, {
+            size: 9,
+            color: INK,
+          }),
+          ...(p.directDebit.creditorId
+            ? [Text(`${L.creditorId}  ${p.directDebit.creditorId}`, { size: 9, color: INK })]
+            : []),
+          ...(p.directDebit.debitedIban
+            ? [
+                Text(`${L.debitedAccount}  ${p.directDebit.debitedIban}`, {
+                  size: 9,
+                  color: INK,
+                }),
+              ]
+            : []),
+        ]
+      : []),
     ...(p?.terms ? [Text(p.terms, { size: 9, color: MUTED })] : []),
     ...discounts.map((d) =>
       Text(

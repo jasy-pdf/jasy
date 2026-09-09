@@ -162,10 +162,18 @@ export function xrechnungProblems(invoice: Invoice): string[] {
   require(invoice.dueDate ||
     payment?.terms, "XRechnung needs a due date or payment terms - set invoice.dueDate (BT-9) or invoice.payment.terms (BT-20).");
 
-  // A credit transfer (the default / codes 30, 58, 59) must carry an IBAN.
-  const creditTransfer = !payment?.meansCode || ["30", "58", "59"].includes(payment.meansCode);
+  // A credit transfer (the default, or codes 30 / 58) must carry an IBAN. 59 used to be in this
+  // list and is NOT a credit transfer - UNCL 4461 has 58 = SEPA credit transfer, 59 = SEPA DIRECT
+  // DEBIT - so a direct-debit invoice was being told to supply the payee IBAN it does not need.
+  const creditTransfer = !payment?.meansCode || ["30", "58"].includes(payment.meansCode);
   require(!creditTransfer ||
     payment?.iban, "XRechnung credit transfer needs an IBAN - set invoice.payment.iban (BT-84).");
+
+  // ... and its mirror image: a collection without a mandate reference cannot be checked by the payer.
+  const directDebit = ["49", "59"].includes(payment?.meansCode ?? "");
+  require(!directDebit ||
+    payment?.directDebit
+      ?.mandateReference, "A SEPA direct debit needs a mandate reference - set invoice.payment.directDebit.mandateReference (BT-89).");
 
   // A period that runs backwards is silently accepted by the schema and read as nonsense downstream,
   // so it is worth catching here where the message can name the field.

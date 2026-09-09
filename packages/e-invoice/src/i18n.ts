@@ -47,6 +47,11 @@ export interface InvoiceLabels {
   precedingInvoice: string;
   /** BG-24 - the extra documents that came with the invoice. */
   attachments: string;
+  /** BG-19 - SEPA direct debit. */
+  directDebit: string;
+  mandateReference: string;
+  creditorId: string;
+  debitedAccount: string;
   itemNumber: string;
   perQuantity: string;
   page: string;
@@ -101,6 +106,10 @@ const de: InvoiceLabels = {
   percentOf: "von",
   precedingInvoice: "Bezug auf Rechnung",
   attachments: "Anlagen",
+  directDebit: "SEPA-Lastschrift",
+  mandateReference: "Mandatsreferenz",
+  creditorId: "Gläubiger-ID",
+  debitedAccount: "Belastetes Konto",
   itemNumber: "Art.-Nr.",
   perQuantity: "je",
   page: "Seite",
@@ -155,6 +164,10 @@ const en: InvoiceLabels = {
   percentOf: "of",
   precedingInvoice: "Refers to invoice",
   attachments: "Attachments",
+  directDebit: "SEPA direct debit",
+  mandateReference: "Mandate reference",
+  creditorId: "Creditor ID",
+  debitedAccount: "Debited account",
   itemNumber: "Item no.",
   perQuantity: "per",
   page: "Page",
@@ -209,6 +222,10 @@ const fr: InvoiceLabels = {
   percentOf: "de",
   precedingInvoice: "Se rapporte à la facture",
   attachments: "Pièces jointes",
+  directDebit: "Prélèvement SEPA",
+  mandateReference: "Référence du mandat",
+  creditorId: "Identifiant créancier",
+  debitedAccount: "Compte débité",
   itemNumber: "Réf. article",
   perQuantity: "par",
   page: "Page",
