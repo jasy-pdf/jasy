@@ -15,6 +15,7 @@ import {
 import { Delivery, Invoice, PostalAddress, Seller } from "./invoice.ts";
 import { ComputedInvoice, VatBreakdownEntry } from "./compute.ts";
 import { Formatters, InvoiceLabels } from "./i18n.ts";
+import { resolveDiscounts } from "./skonto.ts";
 
 // The built-in invoice layout: a complete, §14-UStG-aware invoice that renders everything the
 // Invoice carries. That is not a promise in prose - `tests/completeness.test.ts` sets EVERY field to
@@ -76,7 +77,7 @@ export function defaultInvoiceTemplate(
         ...notes(invoice),
         lineItemsTable(invoice, c, L, fmt),
         totals(invoice, c, L, fmt, valueLine),
-        paymentPanel(invoice, L, fmt),
+        paymentPanel(invoice, c, L, fmt),
       ],
     ),
   ]);
@@ -378,9 +379,17 @@ function vatLabel(v: VatBreakdownEntry, L: InvoiceLabels, fmt: Formatters): stri
 }
 
 // --- payment terms + bank details + remittance reference ---
-function paymentPanel(invoice: Invoice, L: InvoiceLabels, fmt: Formatters): PDFElement {
+function paymentPanel(
+  invoice: Invoice,
+  c: ComputedInvoice,
+  L: InvoiceLabels,
+  fmt: Formatters,
+): PDFElement {
   const p = invoice.payment;
   const reference = p?.reference ?? invoice.number;
+  // Skonto reaches the XML through BT-20, so it has to reach the paper too - the two halves of a
+  // ZUGFeRD file saying different things is the one defect no validator catches.
+  const discounts = resolveDiscounts(p?.cashDiscounts, invoice.issueDate, c.grandTotal);
   const left: PDFElement[] = [
     Text(L.payment, { size: 10, bold: true, color: INK }),
     ...(invoice.dueDate
@@ -388,6 +397,14 @@ function paymentPanel(invoice: Invoice, L: InvoiceLabels, fmt: Formatters): PDFE
       : []),
     ...(p?.meansText ? [Text(`${L.paymentMeans}  ${p.meansText}`, { size: 9, color: INK })] : []),
     ...(p?.terms ? [Text(p.terms, { size: 9, color: MUTED })] : []),
+    ...discounts.map((d) =>
+      Text(
+        `${L.cashDiscount} ${fmt.percent(d.percent)} ${L.cashDiscountUntil} ${fmt.date(d.deadline)}` +
+          // An arrow, not "saving X - paying Y": two amounts joined by a dash read as a range.
+          `  ${fmt.money(d.baseAmount)} \u2192 ${fmt.money(d.discountedTotal)}`,
+        { size: 9, color: INK },
+      ),
+    ),
   ];
   const right: PDFElement[] = [
     Text(L.bankDetails, { size: 10, bold: true, color: INK }),

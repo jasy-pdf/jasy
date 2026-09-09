@@ -170,6 +170,25 @@ export interface InvoiceLine {
   note?: string; // BT-127
 }
 
+/**
+ * An early-payment discount - Skonto (BT-20).
+ *
+ * Deliberately NOT an `AllowanceCharge`: the standard has no business term for Skonto, because a
+ * discount conditional on early payment must not reduce the invoice total. It is carried in the
+ * payment terms in the structured form XRechnung prescribes; see `skonto.ts`.
+ */
+export interface CashDiscount {
+  /** Days from the issue date within which paying earns the discount, e.g. `14`. */
+  days: number;
+  /** The discount in percent, e.g. `2` for 2 %. */
+  percent: number;
+  /**
+   * The amount the percentage applies to. Defaults to the invoice total including VAT (BT-112),
+   * which is what German practice calculates Skonto on.
+   */
+  baseAmount?: number;
+}
+
 /** How the invoice is to be paid (BG-16 + credit transfer BG-17). */
 export interface Payment {
   /** Payment means code (UNCL 4461), e.g. `58` SEPA credit transfer, `30` credit transfer (BT-81). */
@@ -186,6 +205,11 @@ export interface Payment {
   bic?: string;
   /** Free-text payment terms, e.g. "Zahlbar innerhalb 14 Tagen netto" (BT-20). */
   terms?: string;
+  /**
+   * Early-payment discounts (Skonto), one entry per tier - "2 % within 14 days, 1 % within 30".
+   * Written into BT-20 beneath `terms` in the machine-readable form, and printed on the PDF.
+   */
+  cashDiscounts?: CashDiscount[];
 }
 
 /** The complete invoice - the single input to `renderZugferd(invoice, …)`. */

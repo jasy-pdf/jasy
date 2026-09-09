@@ -7,7 +7,11 @@ import { computeInvoice } from "./compute.ts";
 // This is a helper, not the authority: the official validator (KoSIT / veraPDF) stays the final gate.
 
 /**
- * Problems that would make ANY profile fail, so they are checked whatever the user asked for.
+ * Problems the user must see whatever profile they asked for.
+ *
+ * Two kinds, deliberately in one list: things a validator would REJECT, and one thing a validator
+ * would ACCEPT although the document is false. A rejected invoice costs an afternoon; a false one
+ * that passes every gate costs a customer relationship, so both belong in the same pre-flight.
  *
  * The wording of each rule below was read out of the vendored EN 16931 schematron, not recalled:
  * the alternatives it allows are load-bearing. Requiring a VAT id where the standard also accepts a
@@ -67,8 +71,34 @@ export function en16931Problems(invoice: Invoice): string[] {
     }
   }
 
+  // NOT a standard rule - the trap that exists because Skonto had no field until 2026-09-09. Entered
+  // as an allowance it deducts immediately, although it is only due on early payment: schema-valid,
+  // factually wrong, invisible to every validator. Matched on the reason text, which is where a user
+  // says what they meant.
+  for (const [i, ac] of (invoice.allowancesCharges ?? []).entries()) {
+    if (!ac.isCharge && SKONTO_WORDS.test(ac.reason ?? "")) {
+      problems.push(
+        `invoice.allowancesCharges[${i}] looks like Skonto ("${ac.reason}"). An early-payment discount is not an allowance - it would be deducted immediately although it is only due on early payment. Use invoice.payment.cashDiscounts instead (BT-20).`,
+      );
+    }
+  }
+
+  // The discount itself has to be a possible one, or the structured BT-20 line is nonsense.
+  for (const [i, d] of (invoice.payment?.cashDiscounts ?? []).entries()) {
+    const where = `invoice.payment.cashDiscounts[${i}]`;
+    if (!(d.percent > 0 && d.percent < 100)) {
+      problems.push(`${where}.percent must be greater than 0 and less than 100, got ${d.percent}.`);
+    }
+    if (!Number.isInteger(d.days) || d.days < 0) {
+      problems.push(`${where}.days must be a whole number of days, got ${d.days}.`);
+    }
+  }
+
   return problems;
 }
+
+/** Words that mean "early-payment discount" in the languages this template speaks. */
+const SKONTO_WORDS = /\bskonto\b|\bescompte\b|early[- ]payment discount|cash discount/i;
 
 /** The VAT categories EN 16931 requires an exemption reason for. `S` and `Z` are taxed, so not those. */
 const NEEDS_EXEMPTION_REASON = ["E", "AE", "K", "G", "O"] as const;

@@ -127,6 +127,11 @@ export const maximalInvoice: Invoice = {
     accountName: "MARK-ACCOUNTNAME",
     bic: "MARK-BIC",
     terms: "MARK-TERMS",
+    // Two tiers, and the second names its own base - so both shapes of the BT-20 line are covered.
+    cashDiscounts: [
+      { days: 14, percent: 2 },
+      { days: 30, percent: 1, baseAmount: 500 },
+    ],
   },
   paidAmount: 100,
 };

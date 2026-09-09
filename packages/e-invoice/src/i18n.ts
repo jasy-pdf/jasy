@@ -39,6 +39,8 @@ export interface InvoiceLabels {
   deliverTo: string;
   payee: string;
   paymentMeans: string;
+  cashDiscount: string;
+  cashDiscountUntil: string;
   itemNumber: string;
   perQuantity: string;
   page: string;
@@ -88,6 +90,8 @@ const de: InvoiceLabels = {
   deliverTo: "Lieferanschrift",
   payee: "Zahlungsempfänger",
   paymentMeans: "Zahlungsart",
+  cashDiscount: "Skonto",
+  cashDiscountUntil: "bei Zahlung bis",
   itemNumber: "Art.-Nr.",
   perQuantity: "je",
   page: "Seite",
@@ -137,6 +141,8 @@ const en: InvoiceLabels = {
   deliverTo: "Delivery address",
   payee: "Payee",
   paymentMeans: "Payment method",
+  cashDiscount: "Early payment discount",
+  cashDiscountUntil: "if paid by",
   itemNumber: "Item no.",
   perQuantity: "per",
   page: "Page",
@@ -186,6 +192,8 @@ const fr: InvoiceLabels = {
   deliverTo: "Adresse de livraison",
   payee: "Bénéficiaire",
   paymentMeans: "Mode de paiement",
+  cashDiscount: "Escompte",
+  cashDiscountUntil: "si payé avant le",
   itemNumber: "Réf. article",
   perQuantity: "par",
   page: "Page",

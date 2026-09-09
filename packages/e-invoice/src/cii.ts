@@ -8,6 +8,7 @@ import {
   ServicePeriod,
 } from "./invoice.ts";
 import { ComputedInvoice, VatBreakdownEntry } from "./compute.ts";
+import { paymentTermsText } from "./skonto.ts";
 
 // Emits the UN/CEFACT Cross Industry Invoice (CII) XML for the EN16931 profile. The structure is
 // order-sensitive (it follows the CII XSD sequence); every element is mapped to its BT/BG code.
@@ -310,10 +311,17 @@ export function toCII(
         ])
       : "";
 
+  // BT-20 carries the human terms AND, beneath them, one machine-readable line per Skonto tier.
+  const termsText = paymentTermsText(
+    p?.terms,
+    p?.cashDiscounts,
+    invoice.issueDate,
+    computed.grandTotal,
+  );
   const paymentTerms =
-    invoice.dueDate || p?.terms
+    invoice.dueDate || termsText
       ? wrap("ram:SpecifiedTradePaymentTerms", [
-          el("ram:Description", p?.terms), // BT-20
+          el("ram:Description", termsText), // BT-20
           invoice.dueDate
             ? wrap("ram:DueDateDateTime", [date102(invoice.dueDate)]) // BT-9
             : "",

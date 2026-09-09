@@ -9,6 +9,7 @@ import {
 } from "./invoice.ts";
 import { ComputedInvoice, VatBreakdownEntry } from "./compute.ts";
 import { BUSINESS_PROCESS, CiiProfile, GUIDELINE } from "./cii.ts";
+import { paymentTermsText } from "./skonto.ts";
 
 // Emits the OASIS UBL Invoice XML for the EN16931 profile - the SECOND permitted syntax (PEPPOL is
 // UBL, and XRechnung accepts it too). Same semantic model (BT/BG) + pre-computed totals as the CII
@@ -276,7 +277,14 @@ export function toUBL(
         ])
       : "";
 
-  const paymentTerms = p?.terms ? wrap("cac:PaymentTerms", [el("cbc:Note", p.terms)]) : ""; // BT-20
+  // BT-20 - the same text the CII gets, from the same function, or the two syntaxes would disagree.
+  const termsText = paymentTermsText(
+    p?.terms,
+    p?.cashDiscounts,
+    invoice.issueDate,
+    computed.grandTotal,
+  );
+  const paymentTerms = termsText ? wrap("cac:PaymentTerms", [el("cbc:Note", termsText)]) : "";
 
   const taxTotal = wrap("cac:TaxTotal", [
     money("cbc:TaxAmount", computed.taxTotal, cur), // BT-110
