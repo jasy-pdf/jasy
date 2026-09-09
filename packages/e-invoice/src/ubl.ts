@@ -354,6 +354,7 @@ export function toUBL(
       : "", // BT-107
     docAC.some((a) => a.isCharge) ? money("cbc:ChargeTotalAmount", computed.chargeTotal, cur) : "", // BT-108
     computed.paidAmount ? money("cbc:PrepaidAmount", computed.paidAmount, cur) : "", // BT-113
+    computed.roundingAmount ? money("cbc:PayableRoundingAmount", computed.roundingAmount, cur) : "", // BT-114
     money("cbc:PayableAmount", computed.duePayable, cur), // BT-115
   ]);
 

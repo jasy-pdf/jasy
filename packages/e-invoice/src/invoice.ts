@@ -349,4 +349,10 @@ export interface Invoice {
 
   /** Amount already paid (BT-113), subtracted from the total to give the amount due (BT-115). */
   paidAmount?: number;
+  /**
+   * Rounding applied to reach a clean payable amount (BT-114), e.g. `0.03` to collect 100.40 on a
+   * total of 100.37, or `-0.02` to collect 100.35. ADDED to the amount due, so the sign matters:
+   * a positive figure asks for more than the invoice totals, a negative one for less.
+   */
+  roundingAmount?: number;
 }

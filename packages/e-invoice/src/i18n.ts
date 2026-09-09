@@ -22,6 +22,8 @@ export interface InvoiceLabels {
   plusVat: string;
   grandTotal: string;
   alreadyPaid: string;
+  /** BT-114 - the deliberate cent that makes the payable a round figure. */
+  rounding: string;
   amountDue: string;
   payment: string;
   payableBy: string;
@@ -84,6 +86,7 @@ const de: InvoiceLabels = {
   plusVat: "zzgl. USt",
   grandTotal: "Gesamtbetrag",
   alreadyPaid: "bereits gezahlt",
+  rounding: "Rundung",
   amountDue: "Zahlbetrag",
   payment: "Zahlung",
   payableBy: "Zahlbar bis",
@@ -142,6 +145,7 @@ const en: InvoiceLabels = {
   plusVat: "plus VAT",
   grandTotal: "Total",
   alreadyPaid: "already paid",
+  rounding: "Rounding",
   amountDue: "Amount due",
   payment: "Payment",
   payableBy: "Payable by",
@@ -200,6 +204,7 @@ const fr: InvoiceLabels = {
   plusVat: "TVA",
   grandTotal: "Total TTC",
   alreadyPaid: "déjà payé",
+  rounding: "Arrondi",
   amountDue: "Net à payer",
   payment: "Paiement",
   payableBy: "À payer avant le",

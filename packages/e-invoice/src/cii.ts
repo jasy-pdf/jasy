@@ -388,6 +388,7 @@ export function toCII(
       : "",
     el("ram:TaxBasisTotalAmount", amount(computed.taxBasisTotal)), // BT-109
     el("ram:TaxTotalAmount", amount(computed.taxTotal), { currencyID: invoice.currency }), // BT-110
+    computed.roundingAmount ? el("ram:RoundingAmount", amount(computed.roundingAmount)) : "", // BT-114
     el("ram:GrandTotalAmount", amount(computed.grandTotal)), // BT-112
     computed.paidAmount ? el("ram:TotalPrepaidAmount", amount(computed.paidAmount)) : "", // BT-113
     el("ram:DuePayableAmount", amount(computed.duePayable)), // BT-115

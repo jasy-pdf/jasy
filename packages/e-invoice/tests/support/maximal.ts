@@ -161,4 +161,5 @@ export const maximalInvoice: Invoice = {
     ],
   },
   paidAmount: 100,
+  roundingAmount: 0.03, // BT-114
 };

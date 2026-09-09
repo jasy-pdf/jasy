@@ -344,6 +344,12 @@ function totals(
   lines.push(Divider({ color: HAIR, margin: { y: 2 } }));
   lines.push(valueLine(L.grandTotal, fmt.money(c.grandTotal), { strong: true, size: 11 }));
   if (c.paidAmount > 0) lines.push(valueLine(L.alreadyPaid, `-${fmt.money(c.paidAmount)}`));
+  // BT-114. A payable that does not equal the total minus what was paid looks like an arithmetic
+  // error unless the difference is named, so the line is printed with its sign.
+  if (c.roundingAmount !== 0) {
+    const sign = c.roundingAmount > 0 ? "+" : "-";
+    lines.push(valueLine(L.rounding, `${sign}${fmt.money(Math.abs(c.roundingAmount))}`));
+  }
   lines.push(valueLine(L.amountDue, fmt.money(c.duePayable), { strong: true, size: 12 }));
   lines.push(
     Text(`${L.amountsIn} ${fmt.currencyName()} (${invoice.currency})`, {
