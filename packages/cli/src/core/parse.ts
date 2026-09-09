@@ -77,10 +77,15 @@ function partyId(scope: string | undefined): string | undefined {
   return val(head, "ram:ID");
 }
 
+/** Regex-safe: every value interpolated into a pattern here comes out of the parsed file. */
+const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 /** BT-111. The element appears twice; only `currencyID` separates it from BT-110, so match on that. */
 function amountInCurrency(scope: string | undefined, currency: string): string | undefined {
   if (scope === undefined) return undefined;
-  const re = new RegExp(`<ram:TaxTotalAmount\\s[^>]*currencyID="${currency}"[^>]*>([^<]*)<`);
+  const re = new RegExp(
+    `<ram:TaxTotalAmount\\s[^>]*currencyID="${escapeRe(currency)}"[^>]*>([^<]*)<`,
+  );
   return re.exec(scope)?.[1];
 }
 
@@ -550,7 +555,10 @@ export function parseUBL(xml: string): Invoice {
     .map(unesc)
     .filter((n) => n.length > 0);
   const noteSubjectCode = /^#([A-Za-z0-9]+)#/.exec(rawNotes[0] ?? "")?.[1];
-  const notes = rawNotes.map((n) => n.replace(/^#[A-Za-z0-9]+#/, ""));
+  // Only the prefix that IS the subject code: a note legitimately starting with some other #TAG#
+  // keeps it, and so does one whose prefix differs from the first note's.
+  const prefix = noteSubjectCode ? `#${noteSubjectCode}#` : undefined;
+  const notes = rawNotes.map((n) => (prefix && n.startsWith(prefix) ? n.slice(prefix.length) : n));
 
   const del = inner(xml, "cac:Delivery");
   const dLoc = inner(del, "cac:DeliveryLocation");
@@ -597,8 +605,10 @@ export function parseUBL(xml: string): Invoice {
   const monetary = inner(xml, "cac:LegalMonetaryTotal");
   const paid = val(monetary, "cbc:PrepaidAmount");
   const rounding = val(monetary, "cbc:PayableRoundingAmount"); // BT-114
-  // BT-111 is a SECOND cac:TaxTotal carrying only an amount - the first one has the breakdown.
-  const taxTotals = innerAll(xml, "cac:TaxTotal");
+  // BT-111 is a SECOND cac:TaxTotal carrying only an amount - the first one has the breakdown. Scoped
+  // to before the lines: a LINE-level TaxTotal has no subtotal either and would be mistaken for it.
+  const beforeLines = xml.indexOf("<cac:InvoiceLine");
+  const taxTotals = innerAll(beforeLines >= 0 ? xml.slice(0, beforeLines) : xml, "cac:TaxTotal");
   const secondTaxTotal = taxTotals.find((t) => !t.includes("<cac:TaxSubtotal"));
   const taxTotalInTaxCurrency =
     secondTaxTotal !== undefined ? num(val(secondTaxTotal, "cbc:TaxAmount")) : undefined;

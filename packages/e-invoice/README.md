@@ -133,9 +133,9 @@ dependency-light. Now it has jasy.
 
 ## Honest scope
 
-Every EN-16931 business term was audited field by field on 2026-09-09; the register is in the
-repository as `packages/e-invoice/COVERAGE.md`. Every mandatory term is emitted, and so is everything
-a real business hits.
+Every EN-16931 business term was audited field by field on 2026-09-09. Every mandatory term is
+emitted, and so is everything a real business hits. Each field in the model carries its `BT-` / `BG-`
+code in its own doc comment, so the mapping is readable straight from `src/invoice.ts`.
 
 Six optional terms are deliberately left for 1.1: **BT-147/BT-148** (list price with a discount - a
 line allowance already expresses the same money), **BT-7/BT-8** (VAT point date, for prepayments) and
