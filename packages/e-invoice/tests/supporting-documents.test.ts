@@ -144,6 +144,52 @@ describe("the file also goes into the PDF, not only the XML", () => {
   });
 });
 
+describe("a name collision is refused, because no validator catches it", () => {
+  const file = (filename: string) => ({
+    reference: filename,
+    file: { content: CSV, mimeType: "text/csv", filename },
+  });
+
+  it("refuses the name a reader uses to find the invoice XML", () => {
+    // Both files end up in one name tree. A consumer picks whichever it finds first, and veraPDF
+    // calls the result compliant - measured.
+    expect(() => pdfAttachments([file("factur-x.xml")])).toThrow(/factur-x\.xml/);
+  });
+
+  it("refuses the other reserved names too, whatever the case", () => {
+    for (const n of ["zugferd-invoice.xml", "XRechnung.xml", "order-x.xml"]) {
+      expect(() => pdfAttachments([file(n)]), n).toThrow(/invoice XML/);
+    }
+  });
+
+  it("refuses two attachments sharing a name", () => {
+    expect(() => pdfAttachments([file("t.csv"), file("t.csv")])).toThrow(/used twice/);
+  });
+
+  it("does NOT quietly rename - the name is written in the XML too", () => {
+    // Uniquifying the PDF key would leave the XML saying "t.csv" and the PDF saying "t (2).csv",
+    // which is the two-halves-disagree defect this package exists to prevent.
+    try {
+      pdfAttachments([file("t.csv"), file("t.csv")]);
+    } catch (e) {
+      expect((e as Error).message).toContain("cannot share a name");
+    }
+  });
+
+  it("allows names that merely look similar", () => {
+    expect(() => pdfAttachments([file("factur-x-copy.xml"), file("t.csv")])).not.toThrow();
+  });
+
+  it("names both in the pre-flight, before the render throws", () => {
+    const problems = en16931Problems({
+      ...base,
+      supportingDocuments: [file("factur-x.xml"), file("t.csv"), file("T.CSV")],
+    });
+    expect(problems.join(" ")).toContain("invoice XML");
+    expect(problems.join(" ")).toContain("used twice");
+  });
+});
+
 describe("the paper says an attachment exists", () => {
   const printed = (invoice: Invoice) =>
     printedText(
