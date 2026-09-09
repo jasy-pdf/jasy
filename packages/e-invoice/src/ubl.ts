@@ -10,6 +10,7 @@ import {
 import { ComputedInvoice, VatBreakdownEntry } from "./compute.ts";
 import { BUSINESS_PROCESS, CiiProfile, GUIDELINE } from "./cii.ts";
 import { paymentTermsText } from "./skonto.ts";
+import { acAmount, hasPercentage } from "./allowance.ts";
 
 // Emits the OASIS UBL Invoice XML for the EN16931 profile - the SECOND permitted syntax (PEPPOL is
 // UBL, and XRechnung accepts it too). Same semantic model (BT/BG) + pre-computed totals as the CII
@@ -154,7 +155,10 @@ function docAllowanceCharge(ac: AllowanceCharge, currency: string): string {
     el("cbc:ChargeIndicator", String(ac.isCharge)),
     el("cbc:AllowanceChargeReasonCode", ac.reasonCode), // BT-98 / BT-105
     el("cbc:AllowanceChargeReason", ac.reason), // BT-97 / BT-104
-    money("cbc:Amount", ac.amount, currency), // BT-92 / BT-99
+    // UBL splits the pair around the amount: the factor before it, the base after.
+    hasPercentage(ac) ? el("cbc:MultiplierFactorNumeric", ac.percent) : "", // BT-94 / BT-101
+    money("cbc:Amount", acAmount(ac), currency), // BT-92 / BT-99
+    hasPercentage(ac) ? money("cbc:BaseAmount", ac.baseAmount, currency) : "", // BT-93 / BT-100
     taxCategory("cac:TaxCategory", ac.vat.category, ac.vat.ratePercent ?? 0),
   ]);
 }
@@ -165,7 +169,9 @@ function lineAllowanceCharge(ac: AllowanceCharge, currency: string): string {
     el("cbc:ChargeIndicator", String(ac.isCharge)),
     el("cbc:AllowanceChargeReasonCode", ac.reasonCode), // BT-140 / BT-145
     el("cbc:AllowanceChargeReason", ac.reason), // BT-139 / BT-144
-    money("cbc:Amount", ac.amount, currency), // BT-136 / BT-141
+    hasPercentage(ac) ? el("cbc:MultiplierFactorNumeric", ac.percent) : "", // BT-138 / BT-143
+    money("cbc:Amount", acAmount(ac), currency), // BT-136 / BT-141
+    hasPercentage(ac) ? money("cbc:BaseAmount", ac.baseAmount, currency) : "", // BT-137 / BT-142
   ]);
 }
 

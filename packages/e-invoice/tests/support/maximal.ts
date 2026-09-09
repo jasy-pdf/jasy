@@ -88,7 +88,9 @@ export const maximalInvoice: Invoice = {
       allowancesCharges: [
         {
           isCharge: false,
-          amount: 5,
+          // Stated as a RATE, so the amount is derived (BT-137/138) - the other shape of the union.
+          baseAmount: 100,
+          percent: 5,
           vat: { category: "S", ratePercent: 19 },
           reason: "MARK-LINEALLOWANCE",
           reasonCode: "95", // BT-140
@@ -106,7 +108,8 @@ export const maximalInvoice: Invoice = {
   allowancesCharges: [
     {
       isCharge: false,
-      amount: 20,
+      baseAmount: 200,
+      percent: 10, // BT-93 / BT-94 - amount derived as 20.00, same figure as before
       vat: { category: "S", ratePercent: 19 },
       reason: "MARK-DOCALLOWANCE",
     },

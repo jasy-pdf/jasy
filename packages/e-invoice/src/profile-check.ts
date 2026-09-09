@@ -1,5 +1,6 @@
 import { Invoice } from "./invoice.ts";
 import { computeInvoice } from "./compute.ts";
+import { acDerivedAmount } from "./allowance.ts";
 
 // A friendly pre-flight for the XRechnung (German B2G) profile: it lists, in plain language, the
 // fields XRechnung makes mandatory on top of EN16931 - so the user gets actionable guidance BEFORE
@@ -80,6 +81,30 @@ export function en16931Problems(invoice: Invoice): string[] {
       problems.push(
         `invoice.allowancesCharges[${i}] looks like Skonto ("${ac.reason}"). An early-payment discount is not an allowance - it would be deducted immediately although it is only due on early payment. Use invoice.payment.cashDiscounts instead (BT-20).`,
       );
+    }
+  }
+
+  // An allowance may state BOTH a fixed amount and a base-with-percentage. When the two disagree the
+  // amount wins (it is what the totals use), so silence here would print one number and bill another.
+  const everyAC = [
+    ...(invoice.allowancesCharges ?? []).map(
+      (ac, i) => [`invoice.allowancesCharges[${i}]`, ac] as const,
+    ),
+    ...invoice.lines.flatMap((line, li) =>
+      (line.allowancesCharges ?? []).map(
+        (ac, i) => [`invoice.lines[${li}].allowancesCharges[${i}]`, ac] as const,
+      ),
+    ),
+  ];
+  for (const [where, ac] of everyAC) {
+    const derived = acDerivedAmount(ac);
+    if (derived !== null && ac.amount !== undefined && Math.abs(derived - ac.amount) > 0.005) {
+      problems.push(
+        `${where}: amount is ${ac.amount}, but ${ac.percent}% of ${ac.baseAmount} is ${derived}. The amount is what gets billed - drop it to have it derived, or correct one of the two.`,
+      );
+    }
+    if (ac.percent !== undefined && (ac.percent <= 0 || ac.percent > 100)) {
+      problems.push(`${where}.percent must be greater than 0 and at most 100, got ${ac.percent}.`);
     }
   }
 

@@ -9,6 +9,7 @@ import {
 } from "./invoice.ts";
 import { ComputedInvoice, VatBreakdownEntry } from "./compute.ts";
 import { paymentTermsText } from "./skonto.ts";
+import { acAmount, hasPercentage } from "./allowance.ts";
 
 // Emits the UN/CEFACT Cross Industry Invoice (CII) XML for the EN16931 profile. The structure is
 // order-sensitive (it follows the CII XSD sequence); every element is mapped to its BT/BG code.
@@ -142,7 +143,10 @@ function contact(c: { name?: string; phone?: string; email?: string } | undefine
 function docAllowanceCharge(ac: AllowanceCharge): string {
   return wrap("ram:SpecifiedTradeAllowanceCharge", [
     wrap("ram:ChargeIndicator", [el("udt:Indicator", String(ac.isCharge))]),
-    el("ram:ActualAmount", amount(ac.amount)), // BT-92 / BT-99
+    // PERCENT and BASIS before the amount - TradeAllowanceChargeType's sequence in the XSD.
+    hasPercentage(ac) ? el("ram:CalculationPercent", ac.percent) : "", // BT-94 / BT-101
+    hasPercentage(ac) ? el("ram:BasisAmount", amount(ac.baseAmount)) : "", // BT-93 / BT-100
+    el("ram:ActualAmount", amount(acAmount(ac))), // BT-92 / BT-99
     // CODE before REASON - the XSD sequence, which reads backwards from how one says it.
     el("ram:ReasonCode", ac.reasonCode), // BT-98 / BT-105
     el("ram:Reason", ac.reason), // BT-97 / BT-104
@@ -162,7 +166,9 @@ function docAllowanceCharge(ac: AllowanceCharge): string {
 function lineAllowanceCharge(ac: AllowanceCharge): string {
   return wrap("ram:SpecifiedTradeAllowanceCharge", [
     wrap("ram:ChargeIndicator", [el("udt:Indicator", String(ac.isCharge))]),
-    el("ram:ActualAmount", amount(ac.amount)), // BT-136 / BT-141
+    hasPercentage(ac) ? el("ram:CalculationPercent", ac.percent) : "", // BT-138 / BT-143
+    hasPercentage(ac) ? el("ram:BasisAmount", amount(ac.baseAmount)) : "", // BT-137 / BT-142
+    el("ram:ActualAmount", amount(acAmount(ac))), // BT-136 / BT-141
     el("ram:ReasonCode", ac.reasonCode), // BT-140 / BT-145
     el("ram:Reason", ac.reason), // BT-139 / BT-144
   ]);

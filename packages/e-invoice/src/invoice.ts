@@ -117,17 +117,41 @@ export interface Delivery {
   address?: PostalAddress; // BG-15 deliver-to address
 }
 
-/** A document-level allowance (discount, BG-20) or charge (surcharge, BG-21). */
-export interface AllowanceCharge {
+/** What every allowance/charge carries, whether it is stated as an amount or as a percentage. */
+interface AllowanceChargeBase {
   /** `true` = charge (adds, BG-21), `false` = allowance/discount (subtracts, BG-20). */
   isCharge: boolean;
-  amount: number; // BT-92 (allowance) / BT-99 (charge)  (MANDATORY)
   /** The VAT category + rate this allowance/charge falls under (BT-95/96 or BT-102/103). */
   vat: LineVat;
   reason?: string; // BT-97 / BT-104  human reason
   /** Coded reason (UNCL 5189 allowance / UNCL 7161 charge), BT-98 / BT-105. */
   reasonCode?: string;
 }
+
+/** Stated as a fixed amount. The base and percentage may still be given, and are then shown. */
+export interface AllowanceChargeByAmount extends AllowanceChargeBase {
+  amount: number; // BT-92 / BT-99 / BT-136 / BT-141
+  baseAmount?: number; // BT-93 / BT-100 / BT-137 / BT-142
+  percent?: number; // BT-94 / BT-101 / BT-138 / BT-143
+}
+
+/** Stated as a percentage of a base - the amount is derived, so "10 %" survives into XML and paper. */
+export interface AllowanceChargeByPercent extends AllowanceChargeBase {
+  amount?: number;
+  /** The amount the percentage applies to (BT-93 / BT-100 / BT-137 / BT-142). */
+  baseAmount: number;
+  /** The rate, e.g. `10` for 10 % (BT-94 / BT-101 / BT-138 / BT-143). */
+  percent: number;
+}
+
+/**
+ * A document-level allowance (BG-20) / charge (BG-21), or the line-level pair (BG-27 / BG-28).
+ *
+ * A union rather than three optional fields: EN 16931 needs the AMOUNT either way, so an entry that
+ * gives neither an amount nor a base-and-percentage is not a valid allowance. The union makes that
+ * combination fail to compile instead of failing at a validator.
+ */
+export type AllowanceCharge = AllowanceChargeByAmount | AllowanceChargeByPercent;
 
 /** VAT treatment of a line / allowance / charge: a category and (for taxed categories) a rate. */
 export interface LineVat {

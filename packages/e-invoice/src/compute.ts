@@ -1,3 +1,4 @@
+import { acAmount } from "./allowance.ts";
 import {
   AllowanceCharge,
   Invoice,
@@ -43,7 +44,7 @@ function lineNet(line: InvoiceLine): number {
   const base = line.priceBaseQuantity && line.priceBaseQuantity > 0 ? line.priceBaseQuantity : 1;
   const gross = line.quantity * (line.netUnitPrice / base);
   const adjustment = (line.allowancesCharges ?? []).reduce(
-    (sum, ac) => sum + (ac.isCharge ? ac.amount : -ac.amount),
+    (sum, ac) => sum + (ac.isCharge ? acAmount(ac) : -acAmount(ac)),
     0,
   );
   return round2(gross + adjustment);
@@ -57,8 +58,8 @@ export function computeInvoice(invoice: Invoice): ComputedInvoice {
   const lineTotal = round2(sum(lineNets));
 
   const docAC: AllowanceCharge[] = invoice.allowancesCharges ?? [];
-  const allowanceTotal = round2(sum(docAC.filter((a) => !a.isCharge).map((a) => a.amount)));
-  const chargeTotal = round2(sum(docAC.filter((a) => a.isCharge).map((a) => a.amount)));
+  const allowanceTotal = round2(sum(docAC.filter((a) => !a.isCharge).map(acAmount)));
+  const chargeTotal = round2(sum(docAC.filter((a) => a.isCharge).map(acAmount)));
 
   // BG-23: group by (category, rate). Taxable = matching line nets ± matching document-level
   // allowances/charges. The tax of each group is taxable × rate.
@@ -77,7 +78,7 @@ export function computeInvoice(invoice: Invoice): ComputedInvoice {
   });
   docAC.forEach((ac) => {
     const group = groupFor(ac.vat.category, ac.vat.ratePercent ?? 0);
-    group.taxableAmount += ac.isCharge ? ac.amount : -ac.amount;
+    group.taxableAmount += ac.isCharge ? acAmount(ac) : -acAmount(ac);
   });
 
   const vatBreakdown: VatBreakdownEntry[] = [...groups.values()].map((g) => {

@@ -12,10 +12,11 @@ import {
   Table,
   Text,
 } from "@jasy/pdf";
-import { Delivery, Invoice, PostalAddress, Seller } from "./invoice.ts";
+import { AllowanceCharge, Delivery, Invoice, PostalAddress, Seller } from "./invoice.ts";
 import { ComputedInvoice, VatBreakdownEntry } from "./compute.ts";
 import { Formatters, InvoiceLabels } from "./i18n.ts";
 import { resolveDiscounts } from "./skonto.ts";
+import { acAmount, hasPercentage } from "./allowance.ts";
 
 // The built-in invoice layout: a complete, §14-UStG-aware invoice that renders everything the
 // Invoice carries. That is not a promise in prose - `tests/completeness.test.ts` sets EVERY field to
@@ -229,7 +230,7 @@ function lineItemsTable(
     // BT-97/BT-104: a discount has to say WHY. §14 Abs. 4 Nr. 7 wants an agreed reduction named.
     const lineAdjustments = (line.allowancesCharges ?? []).map(
       (ac) =>
-        `${ac.reason ?? (ac.isCharge ? L.charge : L.allowance)}  ${ac.isCharge ? "" : "-"}${fmt.money(ac.amount)}`,
+        `${ac.reason ?? (ac.isCharge ? L.charge : L.allowance)}${acPercentSuffix(ac, L, fmt)}  ${ac.isCharge ? "" : "-"}${fmt.money(acAmount(ac))}`,
     );
     const sub = (t: string) => Text(t, { size: 8, color: MUTED });
 
@@ -298,8 +299,8 @@ function totals(
     for (const ac of invoice.allowancesCharges ?? []) {
       lines.push(
         valueLine(
-          ac.reason ?? (ac.isCharge ? L.charge : L.allowance),
-          `${ac.isCharge ? "" : "-"}${fmt.money(ac.amount)}`,
+          `${ac.reason ?? (ac.isCharge ? L.charge : L.allowance)}${acPercentSuffix(ac, L, fmt)}`,
+          `${ac.isCharge ? "" : "-"}${fmt.money(acAmount(ac))}`,
         ),
       );
     }
@@ -376,6 +377,19 @@ function hasVatBreakdown(c: ComputedInvoice): boolean {
 function vatLabel(v: VatBreakdownEntry, L: InvoiceLabels, fmt: Formatters): string {
   if (v.category === "S") return `${L.plusVat} ${fmt.percent(v.ratePercent)}`;
   return `${L.vat} ${fmt.percent(v.ratePercent)} (${v.category})`;
+}
+
+/**
+ * " (10 % of 1.200,00 EUR)" when the allowance was stated as a rate, "" otherwise.
+ *
+ * The percentage reaches the XML (BT-94), so it has to reach the paper: a reader who sees only
+ * "-120,00" cannot tell what it was 10 % of, and the two halves of the file would say different
+ * things - the one defect no validator looks for.
+ */
+function acPercentSuffix(ac: AllowanceCharge, L: InvoiceLabels, fmt: Formatters): string {
+  return hasPercentage(ac)
+    ? ` (${fmt.percent(ac.percent)} ${L.percentOf} ${fmt.money(ac.baseAmount)})`
+    : "";
 }
 
 // --- payment terms + bank details + remittance reference ---
