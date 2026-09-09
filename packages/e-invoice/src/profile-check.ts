@@ -1,6 +1,7 @@
 import { Invoice } from "./invoice.ts";
 import { computeInvoice } from "./compute.ts";
 import { acDerivedAmount } from "./allowance.ts";
+import { supportingDocumentProblems } from "./attachment.ts";
 
 // A friendly pre-flight for the XRechnung (German B2G) profile: it lists, in plain language, the
 // fields XRechnung makes mandatory on top of EN16931 - so the user gets actionable guidance BEFORE
@@ -71,6 +72,10 @@ export function en16931Problems(invoice: Invoice): string[] {
       );
     }
   }
+
+  problems.push(
+    ...supportingDocumentProblems(invoice.supportingDocuments, "invoice.supportingDocuments"),
+  );
 
   // NOT a standard rule - the trap that exists because Skonto had no field until 2026-09-09. Entered
   // as an allowance it deducts immediately, although it is only due on early payment: schema-valid,

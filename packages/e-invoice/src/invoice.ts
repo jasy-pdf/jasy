@@ -124,6 +124,30 @@ export interface PrecedingInvoice {
   issueDate?: IsoDate;
 }
 
+/**
+ * An extra document that belongs to the invoice (BG-24) - a timesheet, a proof of service, a
+ * delivery note. Give it a `file`, a `url`, or both.
+ *
+ * A `file` travels twice: base64 inside the XML for a machine, and as an embedded file in the
+ * PDF/A-3 for a person. That is the only way both halves of the document see the same evidence.
+ */
+export interface SupportingDocument {
+  /** A reference for the document, e.g. `"TIMESHEET-2026-09"` (BT-122)  (MANDATORY). */
+  reference: string;
+  /** What it is, in words (BT-123). */
+  description?: string;
+  /** Where the recipient can fetch it instead (BT-124). */
+  url?: string;
+  /** The file itself (BT-125). `mimeType` and `filename` are required by the schema. */
+  file?: {
+    content: Uint8Array;
+    /** e.g. `"application/pdf"`, `"text/csv"`. */
+    mimeType: string;
+    /** The name it is saved under, e.g. `"stundennachweis.pdf"`. */
+    filename: string;
+  };
+}
+
 /** Where the goods/services were delivered (BG-13). Optional; used when it differs from the buyer. */
 export interface Delivery {
   date?: IsoDate; // BT-72  actual delivery date
@@ -277,6 +301,8 @@ export interface Invoice {
    * (`type: 381`) - without it the recipient cannot match the correction to its original.
    */
   precedingInvoices?: PrecedingInvoice[];
+  /** Extra documents that belong to this invoice (BG-24) - timesheets, proofs of service. */
+  supportingDocuments?: SupportingDocument[];
 
   seller: Seller; // BG-4  (MANDATORY)
   buyer: Buyer; // BG-7  (MANDATORY)

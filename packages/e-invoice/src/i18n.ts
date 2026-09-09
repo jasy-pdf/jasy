@@ -45,6 +45,8 @@ export interface InvoiceLabels {
   percentOf: string;
   /** BG-3 - which invoice this one corrects or credits. */
   precedingInvoice: string;
+  /** BG-24 - the extra documents that came with the invoice. */
+  attachments: string;
   itemNumber: string;
   perQuantity: string;
   page: string;
@@ -98,6 +100,7 @@ const de: InvoiceLabels = {
   cashDiscountUntil: "bei Zahlung bis",
   percentOf: "von",
   precedingInvoice: "Bezug auf Rechnung",
+  attachments: "Anlagen",
   itemNumber: "Art.-Nr.",
   perQuantity: "je",
   page: "Seite",
@@ -151,6 +154,7 @@ const en: InvoiceLabels = {
   cashDiscountUntil: "if paid by",
   percentOf: "of",
   precedingInvoice: "Refers to invoice",
+  attachments: "Attachments",
   itemNumber: "Item no.",
   perQuantity: "per",
   page: "Page",
@@ -204,6 +208,7 @@ const fr: InvoiceLabels = {
   cashDiscountUntil: "si payé avant le",
   percentOf: "de",
   precedingInvoice: "Se rapporte à la facture",
+  attachments: "Pièces jointes",
   itemNumber: "Réf. article",
   perQuantity: "par",
   page: "Page",

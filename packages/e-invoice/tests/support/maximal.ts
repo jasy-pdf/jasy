@@ -21,6 +21,19 @@ export const maximalInvoice: Invoice = {
   buyerReference: "MARK-BUYERREF",
   purchaseOrderRef: "MARK-ORDERREF",
   contractRef: "MARK-CONTRACTREF",
+  // BG-24 - one with a real file, one with only a link, so both branches reach the XSD check.
+  supportingDocuments: [
+    {
+      reference: "MARK-DOCREF",
+      description: "MARK-DOCDESC",
+      file: {
+        content: new TextEncoder().encode("Stunden;8\n"),
+        mimeType: "text/csv",
+        filename: "MARK-DOCFILE.csv",
+      },
+    },
+    { reference: "MARK-DOCREF2", url: "https://example.invalid/MARK-DOCURL.pdf" },
+  ],
   // BG-3 - two of them, one with a date and one without, so both shapes reach the XSD check.
   precedingInvoices: [
     { number: "MARK-PRECEDING", issueDate: "2026-06-30" },

@@ -76,6 +76,7 @@ export function defaultInvoiceTemplate(
         Text(documentTitle(invoice, L), { size: 21, bold: true, color: INK }),
         ...deliverTo(invoice.delivery, L),
         ...notes(invoice),
+        ...attachments(invoice, L),
         lineItemsTable(invoice, c, L, fmt),
         totals(invoice, c, L, fmt, valueLine),
         paymentPanel(invoice, c, L, fmt),
@@ -220,6 +221,22 @@ function recipientAndMeta(invoice: Invoice, L: InvoiceLabels, fmt: Formatters): 
 function notes(invoice: Invoice): PDFElement[] {
   if (!invoice.notes?.length) return [];
   return invoice.notes.map((n) => Text(n, { size: 10, color: INK }));
+}
+
+/**
+ * BG-24 on the paper. An attachment nobody is told about is an attachment nobody opens - the file
+ * sits in the PDF, but only a reader who thinks to look at the attachment pane would find it.
+ */
+function attachments(invoice: Invoice, L: InvoiceLabels): PDFElement[] {
+  const docs = invoice.supportingDocuments ?? [];
+  if (!docs.length) return [];
+  const line = docs
+    .map((d) => {
+      const what = d.description ? `${d.description} (${d.reference})` : d.reference;
+      return d.file ? `${what} - ${d.file.filename}` : d.url ? `${what} - ${d.url}` : what;
+    })
+    .join(" · ");
+  return [Text(`${L.attachments}: ${line}`, { size: 9, color: MUTED })];
 }
 
 // --- line items: No | Description | Qty | Unit price | VAT | Amount ---

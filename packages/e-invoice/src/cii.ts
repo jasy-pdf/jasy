@@ -1,6 +1,7 @@
 import {
   AllowanceCharge,
   PrecedingInvoice,
+  SupportingDocument,
   Buyer,
   Invoice,
   InvoiceLine,
@@ -11,6 +12,7 @@ import {
 import { ComputedInvoice, VatBreakdownEntry } from "./compute.ts";
 import { paymentTermsText } from "./skonto.ts";
 import { acAmount, hasPercentage } from "./allowance.ts";
+import { toBase64 } from "./attachment.ts";
 
 // Emits the UN/CEFACT Cross Industry Invoice (CII) XML for the EN16931 profile. The structure is
 // order-sensitive (it follows the CII XSD sequence); every element is mapped to its BT/BG code.
@@ -74,6 +76,24 @@ const date102 = (iso: string) =>
 /** The same date in the QUALIFIED namespace, which FormattedIssueDateTime (BT-26) requires. */
 const qdtDate102 = (iso: string) =>
   `<qdt:DateTimeString format="102">${iso.replace(/-/g, "")}</qdt:DateTimeString>`;
+
+/**
+ * BG-24: an extra document. TypeCode 916 ("related document") is what Factur-X uses for the group;
+ * `mimeCode` and `filename` are REQUIRED attributes on the binary, so a file without them is refused
+ * by `profile-check` rather than written out and rejected by the schema.
+ */
+function supportingDocument(doc: SupportingDocument): string {
+  const binary = doc.file
+    ? `<ram:AttachmentBinaryObject mimeCode="${escAttr(doc.file.mimeType)}" filename="${escAttr(doc.file.filename)}">${toBase64(doc.file.content)}</ram:AttachmentBinaryObject>`
+    : "";
+  return wrap("ram:AdditionalReferencedDocument", [
+    el("ram:IssuerAssignedID", doc.reference), // BT-122
+    el("ram:URIID", doc.url), // BT-124
+    el("ram:TypeCode", "916"),
+    el("ram:Name", doc.description), // BT-123
+    binary, // BT-125
+  ]);
+}
 
 /** BG-3: the invoice this one corrects or credits. Sits AFTER the totals in the XSD sequence. */
 function precedingInvoice(ref: PrecedingInvoice): string {
@@ -290,6 +310,8 @@ export function toCII(
           el("ram:IssuerAssignedID", invoice.contractRef), // BT-12
         ])
       : "",
+    // AdditionalReferencedDocument follows the contract reference in HeaderTradeAgreementType.
+    ...(invoice.supportingDocuments ?? []).map(supportingDocument), // BG-24
   ]);
 
   const d = invoice.delivery;

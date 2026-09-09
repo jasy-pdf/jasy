@@ -11,7 +11,8 @@ import { ComputedInvoice, VatBreakdownEntry } from "./compute.ts";
 import { BUSINESS_PROCESS, CiiProfile, GUIDELINE } from "./cii.ts";
 import { paymentTermsText } from "./skonto.ts";
 import { acAmount, hasPercentage } from "./allowance.ts";
-import { PrecedingInvoice } from "./invoice.ts";
+import { PrecedingInvoice, SupportingDocument } from "./invoice.ts";
+import { toBase64 } from "./attachment.ts";
 
 // Emits the OASIS UBL Invoice XML for the EN16931 profile - the SECOND permitted syntax (PEPPOL is
 // UBL, and XRechnung accepts it too). Same semantic model (BT/BG) + pre-computed totals as the CII
@@ -184,6 +185,24 @@ function taxSubtotal(g: VatBreakdownEntry, currency: string): string {
   ]);
 }
 
+/**
+ * BG-24: an extra document. UBL nests the payload one level deeper than CII - the binary and the
+ * external link both live inside `cac:Attachment`, and the link is itself wrapped again.
+ */
+function supportingDocument(doc: SupportingDocument): string {
+  const binary = doc.file
+    ? `<cbc:EmbeddedDocumentBinaryObject mimeCode="${escAttr(doc.file.mimeType)}" filename="${escAttr(doc.file.filename)}">${toBase64(doc.file.content)}</cbc:EmbeddedDocumentBinaryObject>`
+    : "";
+  return wrap("cac:AdditionalDocumentReference", [
+    el("cbc:ID", doc.reference), // BT-122
+    el("cbc:DocumentDescription", doc.description), // BT-123
+    wrap("cac:Attachment", [
+      binary, // BT-125
+      doc.url ? wrap("cac:ExternalReference", [el("cbc:URI", doc.url)]) : "", // BT-124
+    ]),
+  ]);
+}
+
 /** BG-3: the invoice being corrected or credited. */
 function billingReference(ref: PrecedingInvoice): string {
   return wrap("cac:BillingReference", [
@@ -261,6 +280,7 @@ export function toUBL(
     invoice.contractRef
       ? wrap("cac:ContractDocumentReference", [el("cbc:ID", invoice.contractRef)]) // BT-12
       : "",
+    ...(invoice.supportingDocuments ?? []).map(supportingDocument), // BG-24
   ];
 
   const d = invoice.delivery;
