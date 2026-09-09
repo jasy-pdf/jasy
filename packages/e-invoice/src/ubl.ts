@@ -289,6 +289,7 @@ export function toUBL(
       el("cbc:Note", invoice.noteSubjectCode ? `#${invoice.noteSubjectCode}#${n}` : n),
     ), // BT-22 (+ BT-21)
     el("cbc:DocumentCurrencyCode", cur), // BT-5
+    el("cbc:TaxCurrencyCode", invoice.taxCurrency), // BT-6
     el("cbc:AccountingCost", invoice.buyerAccountingRef), // BT-19 - BEFORE the buyer reference
     el("cbc:BuyerReference", invoice.buyerReference), // BT-10 (Leitweg-ID)
     invoicePeriod(invoice.period), // BG-14
@@ -374,10 +375,18 @@ export function toUBL(
   );
   const paymentTerms = termsText ? wrap("cac:PaymentTerms", [el("cbc:Note", termsText)]) : "";
 
-  const taxTotal = wrap("cac:TaxTotal", [
-    money("cbc:TaxAmount", computed.taxTotal, cur), // BT-110
-    ...computed.vatBreakdown.map((g) => taxSubtotal(g, cur)), // BG-23
-  ]);
+  const taxTotal =
+    wrap("cac:TaxTotal", [
+      money("cbc:TaxAmount", computed.taxTotal, cur), // BT-110
+      ...computed.vatBreakdown.map((g) => taxSubtotal(g, cur)), // BG-23
+    ]) +
+    // BT-111 is a SECOND TaxTotal with nothing but the amount - the breakdown is not repeated,
+    // because it is the same tax expressed in another currency, not a second tax.
+    (invoice.taxCurrency && invoice.taxTotalInTaxCurrency !== undefined
+      ? wrap("cac:TaxTotal", [
+          money("cbc:TaxAmount", invoice.taxTotalInTaxCurrency, invoice.taxCurrency),
+        ])
+      : "");
 
   const monetaryTotal = wrap("cac:LegalMonetaryTotal", [
     money("cbc:LineExtensionAmount", computed.lineTotal, cur), // BT-106

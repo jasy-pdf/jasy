@@ -17,6 +17,10 @@ export const maximalInvoice: Invoice = {
   issueDate: "2026-08-25",
   type: 380,
   currency: "EUR",
+  // A seller who invoices in EUR but accounts VAT in CHF - the real shape of BT-6/BT-111, and
+  // the reason the CII schema allows TaxTotalAmount exactly twice.
+  taxCurrency: "CHF", // BT-6
+  taxTotalInTaxCurrency: 42.5, // BT-111
   dueDate: "2026-09-08",
   buyerReference: "MARK-BUYERREF",
   purchaseOrderRef: "MARK-ORDERREF",

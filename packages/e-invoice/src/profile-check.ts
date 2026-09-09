@@ -77,6 +77,19 @@ export function en16931Problems(invoice: Invoice): string[] {
     ...supportingDocumentProblems(invoice.supportingDocuments, "invoice.supportingDocuments"),
   );
 
+  // BR-53: naming a VAT accounting currency without the amount in it states a currency and no
+  // figure, which is worse than saying nothing.
+  if (invoice.taxCurrency && invoice.taxTotalInTaxCurrency === undefined) {
+    problems.push(
+      `invoice.taxCurrency is ${invoice.taxCurrency} (BT-6) but invoice.taxTotalInTaxCurrency (BT-111) is missing - the VAT total has to be stated in that currency.`,
+    );
+  }
+  if (invoice.taxTotalInTaxCurrency !== undefined && !invoice.taxCurrency) {
+    problems.push(
+      "invoice.taxTotalInTaxCurrency (BT-111) is set but invoice.taxCurrency (BT-6) is not - an amount without its currency cannot be read.",
+    );
+  }
+
   // NOT a standard rule - the trap that exists because Skonto had no field until 2026-09-09. Entered
   // as an allowance it deducts immediately, although it is only due on early payment: schema-valid,
   // factually wrong, invisible to every validator. Matched on the reason text, which is where a user
@@ -143,6 +156,12 @@ export function xrechnungProblems(invoice: Invoice): string[] {
   problems.push(...en16931Problems(invoice));
 
   require(invoice.buyerReference, "XRechnung needs the Leitweg-ID - set invoice.buyerReference (BT-10).");
+
+  // A German seller invoicing in a foreign currency still owes the tax authority a Euro figure.
+  // Nothing in the schema forces it, so without this the invoice goes out silently deficient -
+  // the same shape of trap as Skonto entered as an allowance.
+  require(invoice.currency === "EUR" ||
+    invoice.taxCurrency, `The invoice is in ${invoice.currency}, so the VAT total is also owed in EUR - set invoice.taxCurrency (BT-6) and invoice.taxTotalInTaxCurrency (BT-111).`);
 
   require(seller.electronicAddress, "XRechnung needs the seller's electronic address - set invoice.seller.electronicAddress (BT-34).");
   require(buyer.electronicAddress, "XRechnung needs the buyer's electronic address - set invoice.buyer.electronicAddress (BT-49).");

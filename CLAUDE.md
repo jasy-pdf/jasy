@@ -700,6 +700,53 @@ wordWidth > maxWidth` and forgot the SPACE that would join the word. It went uns
   A code point no family in the stack has stays with the first one and shows its `.notdef`, as a browser
   does — dropping it would make the text read differently than it was written.
 
+- ✅ **EN 16931 - audited field by field, and the gaps closed** (2026-09-09, `@jasy/e-invoice`). The
+  question "do we cover everything?" had been answered "yes" five times without anyone opening
+  `src/invoice.ts`, whose own header comment had listed its deferred groups since the first commit.
+  The register is now **`packages/e-invoice/COVERAGE.md`** (gitignored, ours): every business term,
+  read out of the source, with the counts DERIVED from the rows rather than hand-counted - the first
+  hand-count was wrong because a row like `BT-35…BT-40` is six terms, not one. **That file is the only
+  way the completeness question gets answered from here.** Built the same day, each verified against
+  veraPDF (PDF/A-3b), the vendored CII and UBL XSDs via `xmllint`, and Flo's KoSIT run:
+  - **Skonto** (BT-20 structured, `payment.cashDiscounts`) - FIRST because it was the only gap that
+    could produce a WRONG invoice. Skonto is not an allowance: a discount conditional on early payment
+    must not reduce the total. Entered as a document allowance - the obvious workaround - it deducts
+    immediately, which is schema-valid and factually false, and no validator sees it. `profile-check`
+    now names that mistake by matching the allowance's reason text.
+  - **Percentage allowances/charges** (BT-93/94, BT-100/101, BT-137/138, BT-142/143). `AllowanceCharge`
+    became a UNION - either an `amount` or a `baseAmount`+`percent` - so "neither" fails to compile.
+    `src/allowance.ts` is the ONE place the amount is resolved; four separate `base*percent/100`
+    expressions is how the totals and the printed figure start disagreeing.
+  - **BG-3 preceding invoice** (`precedingInvoices`), **BG-24 attachments** (`supportingDocuments` -
+    base64 in the XML AND an embedded file in the PDF/A-3, `Supplement` not `Data`), **BG-19 SEPA
+    direct debit** (`payment.directDebit`), **BT-114 rounding** (moves the PAYABLE, not the total),
+    fifteen scalar references (BT-11/14/17/18/19/21/29/46/60/61/71/128/132/133/159), and
+    **BT-6/BT-111** the VAT accounting currency.
+  - **BT-6/BT-111 was built ahead of the other edge cases on purpose**: a non-EUR invoice went out
+    with no Euro tax figure and NO warning - the Skonto trap again. `xrechnungProblems` now says so.
+    The amount is never derived: which exchange rate applies is a tax question.
+  - **The schemas are the authority, not memory.** `schema/cii` and `schema/ubl` are vendored, and
+    `cii-order.test.ts` / `ubl-order.test.ts` DERIVE the expected sequence from them. They caught two
+    real ordering bugs in this work (`AccountingCost` before `BuyerReference`,
+    `OriginatorDocumentReference` before `ContractDocumentReference`) - both would have produced a
+    schema-invalid file that the business-rule validator waves through. Things the XSD settled that
+    would otherwise have been guesses: BT-26 is `qdt:` not `udt:` (a namespace we had never emitted);
+    `TaxTotalAmount` has `maxOccurs="2"`, which is exactly how BT-110 and BT-111 are told apart; the
+    two syntaxes disagree constantly (BT-13/BT-14 are two CII elements but one UBL `OrderReference`;
+    BT-21 has a CII element and NO UBL element, where the binding prefixes the note with `#CODE#`).
+  - **`fixture-is-maximal` and `completeness` earned their keep repeatedly**: the first refused every
+    new field until the maximal fixture set it, the second refused eleven fields that reached the XML
+    but not the paper. Known weakness, unfixed: `fixture-is-maximal` matches a field NAME anywhere in
+    the file, so `baseAmount`/`percent` passed vacuously once `cashDiscounts` introduced those names.
+  - **Left for 1.1, recorded in the board description** (github.com/orgs/jasy-pdf/projects/2):
+    BT-147/148 (list price + discount; a BG-27 line allowance already expresses the same money),
+    BT-7/BT-8 (VAT point date; prepayments), BT-15/BT-16 (receiving/despatch advice; logistics).
+    Deliberately deferred and documented in `src/invoice.ts`: BG-11/12 tax representative, BG-18
+    payment card, BG-32 item attributes, BT-158 classification.
+  - **Still open, and it matters:** the term list in `COVERAGE.md` was compiled from knowledge of
+    EN 16931, not from a machine-readable copy. Read it once against the official list before it
+    becomes a public promise.
+
 - ✅ **Invoicing period, BG-14 + BG-26** (2026-08-02, `@jasy/e-invoice`) — `invoice.period` and
   `line.period` (`{ start, end }`) emit `ram:BillingSpecifiedPeriod` in CII and `cac:InvoicePeriod` in
   UBL, at document AND line level. Why it matters: §14 Abs. 4 Nr. 6 UStG wants a delivery DATE or a

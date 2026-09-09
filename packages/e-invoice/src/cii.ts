@@ -435,6 +435,13 @@ export function toCII(
       : "",
     el("ram:TaxBasisTotalAmount", amount(computed.taxBasisTotal)), // BT-109
     el("ram:TaxTotalAmount", amount(computed.taxTotal), { currencyID: invoice.currency }), // BT-110
+    // The schema allows this element exactly TWICE, which is how BT-110 and BT-111 are told
+    // apart: same tag, different currencyID.
+    invoice.taxCurrency && invoice.taxTotalInTaxCurrency !== undefined
+      ? el("ram:TaxTotalAmount", amount(invoice.taxTotalInTaxCurrency), {
+          currencyID: invoice.taxCurrency,
+        }) // BT-111
+      : "",
     computed.roundingAmount ? el("ram:RoundingAmount", amount(computed.roundingAmount)) : "", // BT-114
     el("ram:GrandTotalAmount", amount(computed.grandTotal)), // BT-112
     computed.paidAmount ? el("ram:TotalPrepaidAmount", amount(computed.paidAmount)) : "", // BT-113
@@ -444,6 +451,7 @@ export function toCII(
   const settlement = wrap("ram:ApplicableHeaderTradeSettlement", [
     el("ram:CreditorReferenceID", invoice.payment?.directDebit?.creditorId), // BT-90
     el("ram:PaymentReference", invoice.payment?.reference ?? invoice.number), // BT-83
+    el("ram:TaxCurrencyCode", invoice.taxCurrency), // BT-6
     el("ram:InvoiceCurrencyCode", invoice.currency), // BT-5
     invoice.payeeName || invoice.payeeIdentifier
       ? wrap("ram:PayeeTradeParty", [

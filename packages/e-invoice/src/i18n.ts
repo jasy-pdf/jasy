@@ -34,6 +34,8 @@ export interface InvoiceLabels {
   deliveryLocation: string;
   orderLine: string;
   originCountry: string;
+  /** BT-111 - the VAT total in the accounting currency, when that is a different one. */
+  vatIn: string;
   amountDue: string;
   payment: string;
   payableBy: string;
@@ -106,6 +108,7 @@ const de: InvoiceLabels = {
   deliveryLocation: "Lieferort-Nr.",
   orderLine: "Bestellposition",
   originCountry: "Ursprungsland",
+  vatIn: "USt in",
   amountDue: "Zahlbetrag",
   payment: "Zahlung",
   payableBy: "Zahlbar bis",
@@ -174,6 +177,7 @@ const en: InvoiceLabels = {
   deliveryLocation: "Location no.",
   orderLine: "Order line",
   originCountry: "Country of origin",
+  vatIn: "VAT in",
   amountDue: "Amount due",
   payment: "Payment",
   payableBy: "Payable by",
@@ -242,6 +246,7 @@ const fr: InvoiceLabels = {
   deliveryLocation: "N° de lieu",
   orderLine: "Ligne de commande",
   originCountry: "Pays d'origine",
+  vatIn: "TVA en",
   amountDue: "Net à payer",
   payment: "Paiement",
   payableBy: "À payer avant le",
@@ -299,6 +304,12 @@ export function resolveLabels(
 export interface Formatters {
   /** A currency amount, e.g. de → "1.234,56 €", en → "€1,234.56". */
   money(n: number): string;
+  /**
+   * The same, in a currency that is NOT the document's - only BT-111 needs this. `money` binds
+   * the document currency at construction, and `number` drops the second decimal, which on a
+   * tax figure reads as a typo.
+   */
+  moneyIn(n: number, currency: string): string;
   /** A plain number, e.g. a quantity. */
   number(n: number): string;
   /** A VAT rate given in percent (19 → de "19 %", en "19%"). */
@@ -332,6 +343,8 @@ export function makeFormatters(locale: Locale = "de", currency: string): Formatt
   const currencyNames = new Intl.DisplayNames([tag], { type: "currency" });
   return {
     money: (n) => money.format(n),
+    moneyIn: (n, other) =>
+      new Intl.NumberFormat(tag, { style: "currency", currency: other }).format(n),
     number: (n) => number.format(n),
     percent: (ratePercent) => percent.format(ratePercent / 100),
     date: (iso) => date.format(utc(iso)),

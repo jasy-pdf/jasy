@@ -316,6 +316,20 @@ export interface Invoice {
   type?: InvoiceTypeCode;
   /** Document currency (BT-5)  (MANDATORY). */
   currency: CurrencyCode;
+  /**
+   * The currency VAT is ACCOUNTED in (BT-6), when that differs from the invoice currency. A German
+   * seller invoicing in a foreign currency has to state the tax amount in Euro, so this is `"EUR"`
+   * for them - and `taxTotalInTaxCurrency` (BT-111) must come with it.
+   */
+  taxCurrency?: CurrencyCode;
+  /**
+   * The total VAT expressed in `taxCurrency` (BT-111).
+   *
+   * Deliberately NOT derived: converting it needs an exchange rate, and which rate applies is a tax
+   * question (the rate of the supply date, of the invoice date, the monthly average). Inventing one
+   * would put a number on an invoice that nobody chose.
+   */
+  taxTotalInTaxCurrency?: number;
   /** Payment due date (BT-9). */
   dueDate?: IsoDate;
   /**

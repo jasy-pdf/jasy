@@ -364,6 +364,16 @@ function totals(
     lines.push(valueLine(L.rounding, `${sign}${fmt.money(Math.abs(c.roundingAmount))}`));
   }
   lines.push(valueLine(L.amountDue, fmt.money(c.duePayable), { strong: true, size: 12 }));
+  // BT-111. The whole reason the field exists is that a tax office wants this figure on the
+  // PAPER, so an XML-only implementation would miss the point of it.
+  if (invoice.taxCurrency && invoice.taxTotalInTaxCurrency !== undefined) {
+    lines.push(
+      valueLine(
+        `${L.vatIn} ${invoice.taxCurrency}`,
+        fmt.moneyIn(invoice.taxTotalInTaxCurrency, invoice.taxCurrency),
+      ),
+    );
+  }
   lines.push(
     Text(`${L.amountsIn} ${fmt.currencyName()} (${invoice.currency})`, {
       size: 7.5,
