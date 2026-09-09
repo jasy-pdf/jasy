@@ -743,6 +743,15 @@ wordWidth > maxWidth` and forgot the SPACE that would join the word. It went uns
     BT-7/BT-8 (VAT point date; prepayments), BT-15/BT-16 (receiving/despatch advice; logistics).
     Deliberately deferred and documented in `src/invoice.ts`: BG-11/12 tax representative, BG-18
     payment card, BG-32 item attributes, BT-158 classification.
+  - **The CLI reader caught up the same day** - `packages/cli/src/core/parse.ts` is a hand-written
+    list of `val(x, "ram:…")` lookups, so a field the writer learns is not read unless someone adds a
+    line. The fix that matters is the TEST: the round-trip now runs against `maximalInvoice`, the
+    fixture shaped by the model, not the old one shaped by the parser (which could never notice a
+    missing field). It immediately surfaced three gaps that predate the audit: **BG-14/BG-26 service
+    period was never parsed at all** (a §14 UStG field), the UBL delivery address was looked up as
+    `cac:PostalAddress` where the writer emits `cac:Address`, and allowance percentages were dropped.
+    Traps worth knowing: a party's own `ram:ID` needs manual scoping or it reads BT-30 as BT-29;
+    BT-110 vs BT-111 differ only by `currencyID`; BT-29 vs BT-90 only by `schemeID="SEPA"`.
   - **Still open, and it matters:** the term list in `COVERAGE.md` was compiled from knowledge of
     EN 16931, not from a machine-readable copy. Read it once against the official list before it
     becomes a public promise.
