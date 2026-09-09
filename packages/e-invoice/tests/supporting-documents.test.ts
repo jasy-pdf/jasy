@@ -168,12 +168,9 @@ describe("a name collision is refused, because no validator catches it", () => {
 
   it("does NOT quietly rename - the name is written in the XML too", () => {
     // Uniquifying the PDF key would leave the XML saying "t.csv" and the PDF saying "t (2).csv",
-    // which is the two-halves-disagree defect this package exists to prevent.
-    try {
-      pdfAttachments([file("t.csv"), file("t.csv")]);
-    } catch (e) {
-      expect((e as Error).message).toContain("cannot share a name");
-    }
+    // which is the two-halves-disagree defect this package exists to prevent. Asserted with toThrow,
+    // not a try/catch: a catch block that never runs is a test that passes for the wrong reason.
+    expect(() => pdfAttachments([file("t.csv"), file("t.csv")])).toThrow(/cannot share a name/);
   });
 
   it("allows names that merely look similar", () => {
