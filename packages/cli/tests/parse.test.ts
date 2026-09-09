@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { toCII, toUBL, computeInvoice } from "@jasy/e-invoice";
 import { parseCII, parseUBL, parseInvoice } from "../src/core/parse";
+import { maximalInvoice } from "../../e-invoice/tests/support/maximal.ts";
 
 // a rich invoice exercising every field the CII parser handles
 const invoice = {
@@ -75,6 +76,24 @@ const invoice = {
 };
 
 const cii = (inv: typeof invoice) => toCII(inv, computeInvoice(inv));
+
+/**
+ * The round-trip against `maximalInvoice` - the fixture shaped by the MODEL, not by this parser.
+ * The `invoice` above covers "every field the parser handles" and so can never catch a missing one.
+ */
+describe("round-trip against the maximal invoice", () => {
+  it("CII: re-emitting loses nothing", () => {
+    const xml = toCII(maximalInvoice, computeInvoice(maximalInvoice));
+    const parsed = parseCII(xml);
+    expect(toCII(parsed, computeInvoice(parsed))).toBe(xml);
+  });
+
+  it("UBL: re-emitting loses nothing", () => {
+    const xml = toUBL(maximalInvoice, computeInvoice(maximalInvoice));
+    const parsed = parseUBL(xml);
+    expect(toUBL(parsed, computeInvoice(parsed))).toBe(xml);
+  });
+});
 
 describe("parseCII - XML → Invoice", () => {
   it("round-trips: re-emitting the parsed invoice reproduces the same CII", () => {
