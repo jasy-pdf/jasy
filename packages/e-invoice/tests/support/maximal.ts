@@ -21,6 +21,11 @@ export const maximalInvoice: Invoice = {
   buyerReference: "MARK-BUYERREF",
   purchaseOrderRef: "MARK-ORDERREF",
   contractRef: "MARK-CONTRACTREF",
+  // BG-3 - two of them, one with a date and one without, so both shapes reach the XSD check.
+  precedingInvoices: [
+    { number: "MARK-PRECEDING", issueDate: "2026-06-30" },
+    { number: "MARK-PRECEDING2" },
+  ],
   notes: ["MARK-DOCNOTE"],
   seller: {
     name: "MARK-SELLERNAME",

@@ -11,6 +11,7 @@ import { ComputedInvoice, VatBreakdownEntry } from "./compute.ts";
 import { BUSINESS_PROCESS, CiiProfile, GUIDELINE } from "./cii.ts";
 import { paymentTermsText } from "./skonto.ts";
 import { acAmount, hasPercentage } from "./allowance.ts";
+import { PrecedingInvoice } from "./invoice.ts";
 
 // Emits the OASIS UBL Invoice XML for the EN16931 profile - the SECOND permitted syntax (PEPPOL is
 // UBL, and XRechnung accepts it too). Same semantic model (BT/BG) + pre-computed totals as the CII
@@ -183,6 +184,16 @@ function taxSubtotal(g: VatBreakdownEntry, currency: string): string {
   ]);
 }
 
+/** BG-3: the invoice being corrected or credited. */
+function billingReference(ref: PrecedingInvoice): string {
+  return wrap("cac:BillingReference", [
+    wrap("cac:InvoiceDocumentReference", [
+      el("cbc:ID", ref.number), // BT-25
+      el("cbc:IssueDate", ref.issueDate), // BT-26
+    ]),
+  ]);
+}
+
 /** The service period (BG-14 on the document, BG-26 on a line) - UBL's `cac:InvoicePeriod`. */
 function invoicePeriod(p?: ServicePeriod): string {
   return p
@@ -245,6 +256,8 @@ export function toUBL(
     invoice.purchaseOrderRef
       ? wrap("cac:OrderReference", [el("cbc:ID", invoice.purchaseOrderRef)])
       : "", // BT-13
+    // BillingReference sits between the order and the contract reference in the InvoiceType sequence.
+    ...(invoice.precedingInvoices ?? []).map(billingReference), // BG-3
     invoice.contractRef
       ? wrap("cac:ContractDocumentReference", [el("cbc:ID", invoice.contractRef)]) // BT-12
       : "",

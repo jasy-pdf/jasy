@@ -43,6 +43,8 @@ export interface InvoiceLabels {
   cashDiscountUntil: string;
   /** Joins a rate to its base: "10 % <percentOf> 1.000,00 EUR". */
   percentOf: string;
+  /** BG-3 - which invoice this one corrects or credits. */
+  precedingInvoice: string;
   itemNumber: string;
   perQuantity: string;
   page: string;
@@ -95,6 +97,7 @@ const de: InvoiceLabels = {
   cashDiscount: "Skonto",
   cashDiscountUntil: "bei Zahlung bis",
   percentOf: "von",
+  precedingInvoice: "Bezug auf Rechnung",
   itemNumber: "Art.-Nr.",
   perQuantity: "je",
   page: "Seite",
@@ -147,6 +150,7 @@ const en: InvoiceLabels = {
   cashDiscount: "Early payment discount",
   cashDiscountUntil: "if paid by",
   percentOf: "of",
+  precedingInvoice: "Refers to invoice",
   itemNumber: "Item no.",
   perQuantity: "per",
   page: "Page",
@@ -199,6 +203,7 @@ const fr: InvoiceLabels = {
   cashDiscount: "Escompte",
   cashDiscountUntil: "si payé avant le",
   percentOf: "de",
+  precedingInvoice: "Se rapporte à la facture",
   itemNumber: "Réf. article",
   perQuantity: "par",
   page: "Page",

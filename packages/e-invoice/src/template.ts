@@ -187,6 +187,16 @@ function recipientAndMeta(invoice: Invoice, L: InvoiceLabels, fmt: Formatters): 
     [L.customerReference, invoice.buyerReference],
     [L.orderNumber, invoice.purchaseOrderRef],
     [L.contractReference, invoice.contractRef],
+    // BG-3 - a credit note whose original is not named on the PAPER is unusable to the person
+    // reading it, however well the XML carries it.
+    [
+      L.precedingInvoice,
+      invoice.precedingInvoices?.length
+        ? invoice.precedingInvoices
+            .map((r) => (r.issueDate ? `${r.number} (${fmt.date(r.issueDate)})` : r.number))
+            .join(", ")
+        : undefined,
+    ],
     // BT-48 belongs on the paper (§14a Abs. 1 UStG for reverse charge), but NOT under the address:
     // that block shows through a DIN 5008 window, which may hold nothing but the postal address.
     [L.buyerVatId, buyer.vatId],

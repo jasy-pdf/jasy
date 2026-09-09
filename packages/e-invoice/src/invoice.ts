@@ -13,7 +13,7 @@
 // Scope: this first model covers every MANDATORY EN16931 term plus the fields a real invoice needs.
 // Deferred (addable later, none block a valid EN16931 invoice): tax representative (BG-11/12),
 // payment card / direct debit (BG-18/BG-19), item attributes (BG-32), item classification (BT-158),
-// preceding-invoice references (BG-3), per-line object/order references.
+// per-line object/order references. (BG-3 preceding invoices landed 2026-09-09.)
 
 /** ISO 8601 calendar date, `"YYYY-MM-DD"` (e.g. BT-2 issue date). */
 export type IsoDate = string;
@@ -108,6 +108,20 @@ export interface ServicePeriod {
   start: IsoDate;
   /** Last day, inclusive (BT-74 / BT-135). */
   end: IsoDate;
+}
+
+/**
+ * The invoice this one refers back to (BG-3) - what makes a credit note or a correction traceable.
+ *
+ * EN 16931 allows several, because one corrective document may settle more than one original. The
+ * date is optional in the standard but is what lets a recipient find the original when the number
+ * alone is ambiguous across years.
+ */
+export interface PrecedingInvoice {
+  /** Number of the earlier invoice (BT-25)  (MANDATORY within the group). */
+  number: string;
+  /** Its issue date (BT-26). */
+  issueDate?: IsoDate;
 }
 
 /** Where the goods/services were delivered (BG-13). Optional; used when it differs from the buyer. */
@@ -258,6 +272,11 @@ export interface Invoice {
   contractRef?: string;
   /** Free-text document notes (BG-1 / BT-22). */
   notes?: string[];
+  /**
+   * The invoice(s) this one corrects, credits or supplements (BG-3). Set it on every credit note
+   * (`type: 381`) - without it the recipient cannot match the correction to its original.
+   */
+  precedingInvoices?: PrecedingInvoice[];
 
   seller: Seller; // BG-4  (MANDATORY)
   buyer: Buyer; // BG-7  (MANDATORY)

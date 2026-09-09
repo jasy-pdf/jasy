@@ -1,5 +1,6 @@
 import {
   AllowanceCharge,
+  PrecedingInvoice,
   Buyer,
   Invoice,
   InvoiceLine,
@@ -19,6 +20,8 @@ const NS = {
   rsm: "urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100",
   ram: "urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100",
   udt: "urn:un:unece:uncefact:data:standard:UnqualifiedDataType:100",
+  // BT-26 is the only qualified type we emit: FormattedIssueDateTime is qdt, not udt.
+  qdt: "urn:un:unece:uncefact:data:standard:QualifiedDataType:100",
 };
 
 /** The profiles this generator emits CII for. */
@@ -68,6 +71,17 @@ function wrap(tag: string, children: string[]): string {
 
 const date102 = (iso: string) =>
   `<udt:DateTimeString format="102">${iso.replace(/-/g, "")}</udt:DateTimeString>`;
+/** The same date in the QUALIFIED namespace, which FormattedIssueDateTime (BT-26) requires. */
+const qdtDate102 = (iso: string) =>
+  `<qdt:DateTimeString format="102">${iso.replace(/-/g, "")}</qdt:DateTimeString>`;
+
+/** BG-3: the invoice this one corrects or credits. Sits AFTER the totals in the XSD sequence. */
+function precedingInvoice(ref: PrecedingInvoice): string {
+  return wrap("ram:InvoiceReferencedDocument", [
+    el("ram:IssuerAssignedID", ref.number), // BT-25
+    ref.issueDate ? wrap("ram:FormattedIssueDateTime", [qdtDate102(ref.issueDate)]) : "", // BT-26
+  ]);
+}
 const amount = (n: number) => n.toFixed(2);
 
 function address(a: PostalAddress): string {
@@ -360,6 +374,9 @@ export function toCII(
     ...(invoice.allowancesCharges ?? []).map(docAllowanceCharge), // BG-20 / BG-21
     paymentTerms,
     totals, // BG-22
+    // AFTER the summation, per the HeaderTradeSettlementType sequence - it reads as an
+    // afterthought but the XSD puts it there.
+    ...(invoice.precedingInvoices ?? []).map(precedingInvoice), // BG-3
   ]);
 
   const transaction = wrap("rsm:SupplyChainTradeTransaction", [
@@ -381,7 +398,7 @@ export function toCII(
 
   return (
     `<?xml version="1.0" encoding="UTF-8"?>\n` +
-    `<rsm:CrossIndustryInvoice xmlns:rsm="${NS.rsm}" xmlns:ram="${NS.ram}" xmlns:udt="${NS.udt}">` +
+    `<rsm:CrossIndustryInvoice xmlns:rsm="${NS.rsm}" xmlns:ram="${NS.ram}" xmlns:qdt="${NS.qdt}" xmlns:udt="${NS.udt}">` +
     context +
     header +
     transaction +
