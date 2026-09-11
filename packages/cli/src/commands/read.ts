@@ -2,6 +2,7 @@ import { writeFileSync } from "node:fs";
 import { resolve, basename } from "node:path";
 import { readInvoiceFile, type ReadResult } from "../core/read.js";
 import { describeInvoice } from "../core/detect.js";
+import { detailLines, lineDetailLines } from "../core/export.js";
 
 // `jasy read <file> [--xml] [-o out]` - read a ZUGFeRD / XRechnung PDF (or raw XML) and show the actual
 // invoice (number, parties, lines, totals) for humans, or dump / save the embedded XML.
@@ -61,12 +62,23 @@ export function readCommand(args: string[]): void {
     inv.lines.forEach((l, i) => {
       const left = `  ${l.quantity} ${l.unit}  ${l.name}`;
       console.log(left.padEnd(48) + money(r.totals!.lineNets[i]).padStart(12));
+      for (const sub of lineDetailLines(l)) console.log(`      ${dim(sub)}`);
     });
     const t = r.totals;
     console.log("  " + dim("─".repeat(58)));
     console.log(
       `  ${dim("net")} ${money(t.taxBasisTotal)}   ${dim("VAT")} ${money(t.taxTotal)}   ${bold(`total ${money(t.grandTotal)} ${inv.currency}`)}`,
     );
+    // The payable is a second figure only when something moved it - a payment already made, a rounding.
+    if (t.duePayable !== t.grandTotal) {
+      console.log(`  ${dim("due")}   ${bold(`${money(t.duePayable)} ${inv.currency}`)}`);
+    }
+    // The same lines the TXT export prints - one source, so the two views cannot drift apart.
+    const details = detailLines(inv, t);
+    if (details.length) {
+      console.log("");
+      for (const line of details) console.log(line ? `  ${dim(line)}` : "");
+    }
     console.log(`\n  ${dim("→ --xml print the XML · -o <file> save it · jasy validate <file>")}`);
   } else {
     console.log(`  source     ${r.isPdf ? "PDF - embedded XML extracted" : "raw XML"}`);
