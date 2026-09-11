@@ -6,7 +6,7 @@ import { readInvoice, type ReadResult } from "../core/read.js";
 import { describeInvoice } from "../core/detect.js";
 import { checkPdfA3, type PdfaReport } from "../core/pdfa.js";
 import { validateInvoiceXml, profileFor, type ValidationReport } from "../core/validate.js";
-import { exportInvoice, type ExportFormat } from "../core/export.js";
+import { exportInvoice, detailLines, lineDetailLines, type ExportFormat } from "../core/export.js";
 import { detectTools } from "../core/verapdf.js";
 import { openFileDialog } from "./file-open.js";
 
@@ -128,6 +128,8 @@ export function launchTui(): void {
           status: money(t.lineNets[i]),
           statusFg: MUTED,
         });
+        for (const sub of lineDetailLines(l))
+          rows.push({ text: fit(`    ${sub}`, w - 6), fg: MUTED });
       }
       rows.push({
         text: `net ${money(t.taxBasisTotal)}   VAT ${money(t.taxTotal)}`,
@@ -135,6 +137,20 @@ export function launchTui(): void {
         status: `${money(t.grandTotal)} ${inv.currency}`,
         statusFg: INK,
       });
+      if (t.duePayable !== t.grandTotal) {
+        rows.push({
+          text: "due",
+          fg: MUTED,
+          status: `${money(t.duePayable)} ${inv.currency}`,
+          statusFg: INK,
+        });
+      }
+      // The same block `jasy read` and the TXT export print - one source for all three views.
+      const details = detailLines(inv, t);
+      if (details.length) {
+        rows.push({ text: "", fg: MUTED });
+        for (const line of details) rows.push({ text: fit(line, w - 6), fg: MUTED });
+      }
       rows.push({ text: "", fg: MUTED });
     }
 
