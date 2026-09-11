@@ -1,4 +1,5 @@
 import { deflateRawSync } from "node:zlib";
+import { resolveDiscounts, acAmount, hasPercentage } from "@jasy/e-invoice";
 import type { Invoice, ComputedInvoice } from "@jasy/e-invoice";
 
 // Export a parsed invoice for humans / downstream systems: JSON (full model + totals), TXT (a readable
@@ -27,6 +28,92 @@ function summary(inv: Invoice, t: ComputedInvoice) {
   };
 }
 
+/**
+ * Everything on the invoice beyond the receipt - references, payment, discounts, attachments - as
+ * plain text lines. ONE function for both readers (`jasy read` and the TXT export) so the two can
+ * never disagree about what an invoice carries; each only decides how to colour it.
+ *
+ * The order is the order someone opening a SUPPLIER invoice looks for things: how do I pay, is
+ * there a discount for paying early, what does this correct, what came with it.
+ */
+export function detailLines(inv: Invoice, t: ComputedInvoice): string[] {
+  const L: string[] = [];
+  // A space after the pad, not inside it: "Direct debit" is exactly twelve wide and would glue on.
+  const row = (label: string, value: string | undefined) => {
+    if (value) L.push(`${label.padEnd(12)} ${value}`);
+  };
+
+  // references - the buyer's booking keys first, then the seller's
+  row("Order", inv.purchaseOrderRef);
+  row("Sales order", inv.salesOrderRef);
+  row("Contract", inv.contractRef);
+  row("Project", inv.projectRef);
+  row("Tender", inv.tenderRef);
+  row("Object", inv.objectRef);
+  row("Cost centre", inv.buyerAccountingRef);
+  if (inv.precedingInvoices?.length) {
+    row(
+      "Corrects",
+      inv.precedingInvoices
+        .map((p) => (p.issueDate ? `${p.number} (${p.issueDate})` : p.number))
+        .join(", "),
+    );
+  }
+
+  // payment
+  const p = inv.payment;
+  if (p) {
+    if (L.length) L.push("");
+    row("Terms", p.terms);
+    if (p.iban)
+      row(
+        "IBAN",
+        `${p.iban}${p.bic ? `  BIC ${p.bic}` : ""}${p.accountName ? `  ${p.accountName}` : ""}`,
+      );
+    if (p.directDebit) {
+      row("Direct debit", `mandate ${p.directDebit.mandateReference}`);
+      row("", p.directDebit.creditorId ? `creditor ${p.directDebit.creditorId}` : undefined);
+      row("", p.directDebit.debitedIban ? `debited ${p.directDebit.debitedIban}` : undefined);
+    }
+    for (const d of resolveDiscounts(p.cashDiscounts, inv.issueDate, t.grandTotal)) {
+      row(
+        "Skonto",
+        `${d.percent}% if paid by ${d.deadline}: ${money(d.discountedTotal)} ${inv.currency} (saves ${money(d.discountAmount)})`,
+      );
+    }
+  }
+
+  // what moved the money between the lines and the total
+  const acs = inv.allowancesCharges ?? [];
+  if (acs.length || t.roundingAmount !== 0 || inv.taxCurrency) {
+    L.push("");
+    for (const ac of acs) {
+      const rate = hasPercentage(ac) ? ` (${ac.percent}% of ${money(ac.baseAmount)})` : "";
+      row(
+        ac.isCharge ? "Charge" : "Discount",
+        `${ac.reason ?? ""}${rate}  ${ac.isCharge ? "+" : "-"}${money(acAmount(ac))}`,
+      );
+    }
+    if (t.roundingAmount !== 0) {
+      row("Rounding", `${t.roundingAmount > 0 ? "+" : "-"}${money(Math.abs(t.roundingAmount))}`);
+    }
+    if (inv.taxCurrency && inv.taxTotalInTaxCurrency !== undefined) {
+      row(`VAT in ${inv.taxCurrency}`, money(inv.taxTotalInTaxCurrency));
+    }
+  }
+
+  // attachments
+  if (inv.supportingDocuments?.length) {
+    L.push("");
+    for (const d of inv.supportingDocuments) {
+      const what = d.description ? `${d.description} (${d.reference})` : d.reference;
+      const where = d.file ? d.file.filename : d.url ? d.url : "";
+      row("Attached", where ? `${what} - ${where}` : what);
+    }
+  }
+  return L;
+}
+
 /** Full invoice model + a computed totals block, pretty-printed. */
 export function exportJson(inv: Invoice, t: ComputedInvoice): string {
   return JSON.stringify({ ...inv, totals: summary(inv, t) }, null, 2);
@@ -50,13 +137,38 @@ export function exportText(inv: Invoice, t: ComputedInvoice): string {
     L.push(
       `${String(l.quantity).padEnd(8)}${l.unit.padEnd(6)}${l.name.slice(0, 33).padEnd(34)}${money(t.lineNets[i]).padStart(12)}`,
     );
+    for (const sub of lineDetailLines(l)) L.push(`${"".padEnd(14)}${sub}`);
   });
   L.push("─".repeat(60));
   const s = summary(inv, t);
   L.push(`${"Net".padStart(48)}${money(s.net).padStart(12)}`);
   L.push(`${"VAT".padStart(48)}${money(s.vat).padStart(12)}`);
   L.push(`${`Total ${s.currency}`.padStart(48)}${money(s.gross).padStart(12)}`);
+  // Only when they differ: an amount already paid or a rounding makes the payable a second figure.
+  if (s.due !== s.gross) {
+    if (inv.paidAmount) L.push(`${"Paid".padStart(48)}${`-${money(inv.paidAmount)}`.padStart(12)}`);
+    L.push(`${`Due ${s.currency}`.padStart(48)}${money(s.due).padStart(12)}`);
+  }
+  const details = detailLines(inv, t);
+  if (details.length) L.push("", ...details);
   return L.join("\n") + "\n";
+}
+
+/** What a line carries beyond quantity, name and net - shown indented beneath it. */
+export function lineDetailLines(l: Invoice["lines"][number]): string[] {
+  const L: string[] = [];
+  for (const ac of l.allowancesCharges ?? []) {
+    const rate = hasPercentage(ac) ? ` (${ac.percent}% of ${money(ac.baseAmount)})` : "";
+    L.push(
+      `${ac.isCharge ? "charge" : "discount"} ${ac.reason ?? ""}${rate} ${ac.isCharge ? "+" : "-"}${money(acAmount(ac))}`,
+    );
+  }
+  if (l.period) L.push(`period ${l.period.start} to ${l.period.end}`);
+  if (l.orderLineRef) L.push(`order line ${l.orderLineRef}`);
+  if (l.objectRef) L.push(`object ${l.objectRef}`);
+  if (l.buyerAccountingRef) L.push(`cost centre ${l.buyerAccountingRef}`);
+  if (l.originCountry) L.push(`origin ${l.originCountry}`);
+  return L;
 }
 
 // ── minimal ZIP container (for the .xlsx); each part deflated via zlib ──────────────────────────────

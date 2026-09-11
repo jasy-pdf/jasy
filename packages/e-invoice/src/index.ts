@@ -9,6 +9,11 @@ export { toCII } from "./cii.ts";
 export { toUBL } from "./ubl.ts";
 export type { CiiProfile } from "./cii.ts";
 export { en16931Problems, xrechnungProblems } from "./profile-check.ts";
+// The single sources of two derived figures - exported so a reader (the CLI) shows the same numbers
+// the paper does, instead of recomputing them a second way.
+export { resolveDiscounts } from "./skonto.ts";
+export type { ResolvedDiscount } from "./skonto.ts";
+export { acAmount, hasPercentage } from "./allowance.ts";
 export { bundledFonts } from "./fonts.ts";
 export { facturxXmp } from "./xmp.ts";
 export type { XmpOptions } from "./xmp.ts";
