@@ -48,6 +48,7 @@ describe("every field the maximal invoice carries reaches the text", () => {
     ["the rounding with its sign", /Rounding\s+\+0\.03/],
     ["the VAT total in the accounting currency", /VAT in CHF\s+42\.50/],
     ["the amount due when it differs from the total", /Due EUR/],
+    ["a document note, tagged with its subject code", /Note\s+\[AAI\] MARK-DOCNOTE/],
     ["the sales order", /Sales order\s+MARK-SALESORDER/],
     ["the project", /Project\s+MARK-PROJECT/],
     ["the tender", /Tender\s+MARK-TENDER/],
@@ -68,6 +69,12 @@ describe("what is shown only when it is there", () => {
   it("prints no details block at all for the smallest invoice", () => {
     expect(detailLines(base, computeInvoice(base))).toEqual([]);
     expect(lineDetailLines(base.lines[0]!)).toEqual([]);
+  });
+
+  it("prints a note without a code when there is none", () => {
+    const noted = { ...base, notes: ["Danke.", "Bitte Rechnungsnummer angeben."] };
+    const lines = detailLines(noted, computeInvoice(noted)).filter((l) => l.startsWith("Note"));
+    expect(lines).toEqual(["Note         Danke.", "Note         Bitte Rechnungsnummer angeben."]);
   });
 
   it("prints no Due line when nothing moved the payable", () => {

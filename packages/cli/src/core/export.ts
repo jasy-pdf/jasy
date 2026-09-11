@@ -51,6 +51,10 @@ export function detailLines(inv: Invoice, t: ComputedInvoice): string[] {
   row("Tender", inv.tenderRef);
   row("Object", inv.objectRef);
   row("Cost centre", inv.buyerAccountingRef);
+  // BG-1, what the seller wrote to the reader; the subject code (BT-21) says what it is about.
+  for (const note of inv.notes ?? []) {
+    row("Note", inv.noteSubjectCode ? `[${inv.noteSubjectCode}] ${note}` : note);
+  }
   if (inv.precedingInvoices?.length) {
     row(
       "Corrects",
