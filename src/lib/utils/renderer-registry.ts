@@ -3,16 +3,26 @@ import type { IRNode } from "../ir/display-list.ts";
 import type { PDFObjectManager } from "./pdf-object-manager.ts";
 
 /**
- * Renders one element to IR. `origin` is the ABSOLUTE top-left that the element's own offset is
+ * Where an element is drawn. `origin` is the ABSOLUTE top-left that the element's own offset is
  * relative to; a renderer adds it to its position and hands its children the origin THEY are relative
- * to. Typed so that a call which forgets to pass it on does not compile - a forgotten origin draws at
- * the page corner without a word.
+ * to. `frame` is the absolute top-left of the nearest positioning frame (the page's content box, or a
+ * `relative` Box): a `Positioned` is laid out relative to it and draws from there, at its own place in
+ * the tree - tree order is paint order.
+ */
+export interface RenderScope {
+  origin: Offset;
+  frame: Offset;
+}
+
+/**
+ * Renders one element to IR. Typed so that a call which forgets to pass the scope on does not
+ * compile - a forgotten origin draws at the page corner without a word.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type ElementRenderer = (
   element: any,
   objectManager: PDFObjectManager,
-  origin: Offset,
+  scope: RenderScope,
 ) => Promise<IRNode[]>;
 
 /**

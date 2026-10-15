@@ -1,20 +1,19 @@
-import type { Offset } from "../layout/box-constraints.ts";
 import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 import { RepeatingHeaderElement } from "../elements/layout/repeating-header-element.ts";
-import { RendererRegistry } from "../utils/renderer-registry.ts";
+import { RendererRegistry, type RenderScope } from "../utils/renderer-registry.ts";
 import { IRNode } from "../ir/display-list.ts";
 
 export class RepeatingHeaderRenderer {
   static async render(
     element: RepeatingHeaderElement,
     objectManager: PDFObjectManager,
-    origin: Offset,
+    scope: RenderScope,
   ): Promise<IRNode[]> {
     const { header, body } = element.getProps();
     const nodes: IRNode[] = [];
     for (const child of [header, body]) {
       const renderer = RendererRegistry.getRenderer(child);
-      nodes.push(...(await renderer(child, objectManager, origin)));
+      nodes.push(...(await renderer(child, objectManager, scope)));
     }
     return nodes;
   }

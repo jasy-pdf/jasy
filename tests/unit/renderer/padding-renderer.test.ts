@@ -1,11 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
-import { PaddingRenderer } from "../../../src/lib/renderer/padding-renderer";
-import { PaddingElement } from "../../../src/lib/elements/layout/padding-element";
-import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager";
+import { PaddingRenderer } from "../../../src/lib/renderer/padding-renderer.ts";
+import { PaddingElement } from "../../../src/lib/elements/layout/padding-element.ts";
+import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager.ts";
 import {
   RendererRegistry,
   MissingRendererError,
 } from "../../../src/lib/utils/renderer-registry.ts";
+import { PAGE_SCOPE } from "../support/scope.ts";
 
 // Mock RendererRegistry.getRenderer method. Renderers now return an IRNode[];
 // "rendered child content" stands in for a node passed straight through.
@@ -36,10 +37,7 @@ describe("PaddingRenderer", () => {
     // Mock PDFObjectManager
     const mockObjectManager = {} as PDFObjectManager;
 
-    const result = await PaddingRenderer.render(mockPaddingElement, mockObjectManager, {
-      x: 0,
-      y: 0,
-    });
+    const result = await PaddingRenderer.render(mockPaddingElement, mockObjectManager, PAGE_SCOPE);
 
     expect(mockPaddingElement.getProps).toHaveBeenCalled();
     expect(result).toContain("rendered child content");
@@ -72,7 +70,7 @@ describe("PaddingRenderer", () => {
     const mockObjectManager = {} as PDFObjectManager;
 
     await expect(
-      PaddingRenderer.render(mockPaddingElement, mockObjectManager, { x: 0, y: 0 }),
+      PaddingRenderer.render(mockPaddingElement, mockObjectManager, PAGE_SCOPE),
     ).rejects.toThrow(MissingRendererError);
   });
 });

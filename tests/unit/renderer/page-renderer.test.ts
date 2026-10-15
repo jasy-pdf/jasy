@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { PageRenderer } from "../../../src/lib/renderer/page-renderer";
-import { PageElement } from "../../../src/lib/elements/page-element";
-import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager";
-import { RendererRegistry } from "../../../src/lib/utils/renderer-registry";
-import { PageSize } from "../../../src/lib/constants/page-sizes";
+import { PageRenderer } from "../../../src/lib/renderer/page-renderer.ts";
+import { PageElement } from "../../../src/lib/elements/page-element.ts";
+import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager.ts";
+import { RendererRegistry } from "../../../src/lib/utils/renderer-registry.ts";
+import { PageSize } from "../../../src/lib/constants/page-sizes.ts";
 
 // Mock RendererRegistry.getRenderer method. Renderers now return an IRNode[]; these
 // tests only check page structure (object count, references), so an empty list is fine.
@@ -24,12 +24,11 @@ describe("PageRenderer", () => {
     // Mock PageElement
     const mockPageElement = {
       getProps: vi.fn().mockReturnValue({
-        config: { pageSize: PageSize.A4 },
+        config: { pageSize: PageSize.A4, margin: { top: 0, right: 0, bottom: 0, left: 0 } },
         children: [
           { getProps: vi.fn() }, // Child element
         ],
       }),
-      positionedContent: () => [],
     } as unknown as PageElement;
 
     // Mock PDFObjectManager
@@ -70,10 +69,9 @@ describe("PageRenderer", () => {
     // Mock PageElement
     const mockPageElement = {
       getProps: vi.fn().mockReturnValue({
-        config: { pageSize: PageSize.A4 },
+        config: { pageSize: PageSize.A4, margin: { top: 0, right: 0, bottom: 0, left: 0 } },
         children: [],
       }),
-      positionedContent: () => [],
     } as unknown as PageElement;
 
     // Mock PDFObjectManager with image references
@@ -104,13 +102,12 @@ describe("PageRenderer", () => {
     // Mock PageElement
     const mockPageElement = {
       getProps: vi.fn().mockReturnValue({
-        config: { pageSize: PageSize.A4 },
+        config: { pageSize: PageSize.A4, margin: { top: 0, right: 0, bottom: 0, left: 0 } },
         children: [
           { getProps: vi.fn() },
           { getProps: vi.fn() }, // Multiple children
         ],
       }),
-      positionedContent: () => [],
     } as unknown as PageElement;
 
     // Mock PDFObjectManager with multiple fonts

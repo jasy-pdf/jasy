@@ -1,18 +1,20 @@
-import { PositionedRenderer } from "./positioned-renderer.ts";
-import type { Offset } from "../layout/box-constraints.ts";
 import { pageFormats, PageSize } from "../constants/page-sizes.ts";
 import { PageElement, resolvePageContentBox } from "../elements/page-element.ts";
 import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
-import { RendererRegistry } from "../utils/renderer-registry.ts";
+import { RendererRegistry, type RenderScope } from "../utils/renderer-registry.ts";
 import { Orientation } from "./pdf-config.ts";
 import { IRNode } from "../ir/display-list.ts";
 import { PdfBackend } from "./pdf-backend.ts";
 
 export class PageRenderer {
   static async render(page: PageElement, objectManager: PDFObjectManager): Promise<number> {
-    // A page is the outermost frame: its children's offsets are page coordinates.
-    const origin: Offset = { x: 0, y: 0 };
     const { children, config, header, footer } = page.getProps();
+    // A page is the outermost box: its children's offsets are page coordinates. Its content box is the
+    // frame a `Positioned` with no `relative` ancestor was placed against.
+    const scope: RenderScope = {
+      origin: { x: 0, y: 0 },
+      frame: resolvePageContentBox(config!).origin, // config is resolved by layout
+    };
 
     // Header (top band) and footer (bottom band) sit around the body and repeat on every
     // physical page; they are placed by `PageElement.calculateLayout` / the page driver.
@@ -32,13 +34,7 @@ export class PageRenderer {
     const nodes: IRNode[] = [];
     for (const element of renderables) {
       const renderer = RendererRegistry.getRenderer(element);
-      nodes.push(...(await renderer(element, objectManager, origin)));
-    }
-    // The page's out-of-flow content last, on top, placed relative to its content box (the frame).
-    const placed = page.positionedContent();
-    if (placed.length > 0) {
-      const frameOrigin = resolvePageContentBox(page.resolveConfig(config)).origin;
-      nodes.push(...(await PositionedRenderer.renderPlaced(placed, objectManager, frameOrigin)));
+      nodes.push(...(await renderer(element, objectManager, scope)));
     }
     // Accessible tagging: one struct context per page (allocates its StructParents index), threaded into
     // serialize so each drawable node is wrapped in marked content. Undefined = tagging off (byte-identical).

@@ -7,6 +7,7 @@ import { BoxConstraints } from "../../../src/lib/layout/box-constraints.ts";
 import type { LayoutContext } from "../../../src/lib/elements/pdf-element.ts";
 import { testMetrics } from "../support/metrics.ts";
 import type { TextRun } from "../../../src/lib/ir/display-list.ts";
+import { PAGE_SCOPE } from "../support/scope.ts";
 
 // The four CSS text properties react-pdf had and we did not. Every glyph is 10 wide at size 10 and a
 // space is 10 too, so an x reads as a glyph count and the arithmetic is checkable by hand.
@@ -33,7 +34,7 @@ const context = (manager: PDFObjectManager): LayoutContext => ({
 const drawn = async (el: TextElement, width = 200) => {
   const manager = om();
   el.calculateLayout(BoxConstraints.tight(width, 400), { x: 0, y: 0 }, context(manager));
-  return (await TextRenderer.render(el, manager, { x: 0, y: 0 })).filter(
+  return (await TextRenderer.render(el, manager, PAGE_SCOPE)).filter(
     (n): n is TextRun => n.type === "text",
   );
 };
@@ -153,7 +154,7 @@ describe("a spaced paragraph sizes its own box", () => {
     const el = text("aa bb cc", { wordSpacing: 12 });
     const manager = om();
     el.calculateLayout(BoxConstraints.loose(Infinity, 400), { x: 0, y: 0 }, context(manager));
-    const runs = (await TextRenderer.render(el, manager, { x: 0, y: 0 })).filter(
+    const runs = (await TextRenderer.render(el, manager, PAGE_SCOPE)).filter(
       (n): n is TextRun => n.type === "text",
     );
     expect(new Set(runs.map((r) => r.y)).size).toBe(1);
@@ -261,7 +262,7 @@ describe("font fallback", () => {
     });
     const manager = stackMetrics();
     el.calculateLayout(BoxConstraints.tight(400, 400), { x: 0, y: 0 }, context(manager));
-    const runs = (await TextRenderer.render(el, manager, { x: 0, y: 0 })).filter(
+    const runs = (await TextRenderer.render(el, manager, PAGE_SCOPE)).filter(
       (n): n is TextRun => n.type === "text",
     );
     expect(runs.map((r) => [r.text, r.fontFamily])).toEqual([
@@ -279,7 +280,7 @@ describe("font fallback", () => {
     const el = new TextElement({ content: "ab漢字", fontSize: 10, fontFamily: "Latin" });
     const manager = stackMetrics();
     el.calculateLayout(BoxConstraints.tight(400, 400), { x: 0, y: 0 }, context(manager));
-    const runs = (await TextRenderer.render(el, manager, { x: 0, y: 0 })).filter(
+    const runs = (await TextRenderer.render(el, manager, PAGE_SCOPE)).filter(
       (n): n is TextRun => n.type === "text",
     );
     expect(runs.map((r) => r.text)).toEqual(["ab"]);
@@ -310,7 +311,7 @@ describe("a span brings its own font stack", () => {
       getEmojiImageSource: () => undefined,
     } as unknown as PDFObjectManager;
     el.calculateLayout(BoxConstraints.tight(400, 400), { x: 0, y: 0 }, context(manager));
-    const runs = (await TextRenderer.render(el, manager, { x: 0, y: 0 })).filter(
+    const runs = (await TextRenderer.render(el, manager, PAGE_SCOPE)).filter(
       (n): n is TextRun => n.type === "text",
     );
     expect(runs.map((r) => [r.text, r.fontFamily])).toEqual([

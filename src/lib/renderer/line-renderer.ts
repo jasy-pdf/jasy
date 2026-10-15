@@ -1,4 +1,4 @@
-import type { Offset } from "../layout/box-constraints.ts";
+import type { RenderScope } from "../utils/renderer-registry.ts";
 import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 import { LineElement } from "../elements/index.ts";
 import { IRNode, Line } from "../ir/display-list.ts";
@@ -7,7 +7,7 @@ export class LineRenderer {
   static async render(
     lineElement: LineElement,
     _objectManager: PDFObjectManager,
-    origin: Offset,
+    scope: RenderScope,
   ): Promise<IRNode[]> {
     const {
       x: ownX,
@@ -17,11 +17,11 @@ export class LineRenderer {
       color,
       strokeWidth,
     } = lineElement.getProps();
-    // Its own position is relative to `origin`; the IR wants page coordinates.
-    const x = origin.x + (ownX ?? 0);
-    const y = origin.y + (ownY ?? 0);
-    const xEnd = origin.x + (ownXEnd ?? 0);
-    const yEnd = origin.y + (ownYEnd ?? 0);
+    // Its own position is relative to `scope.origin`; the IR wants page coordinates.
+    const x = scope.origin.x + (ownX ?? 0);
+    const y = scope.origin.y + (ownY ?? 0);
+    const xEnd = scope.origin.x + (ownXEnd ?? 0);
+    const yEnd = scope.origin.y + (ownYEnd ?? 0);
 
     const node: Line = {
       type: "line",

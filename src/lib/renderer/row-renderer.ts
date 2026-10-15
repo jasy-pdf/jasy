@@ -1,14 +1,13 @@
-import type { Offset } from "../layout/box-constraints.ts";
 import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 import { RowElement } from "../elements/row-element.ts";
-import { RendererRegistry } from "../utils/renderer-registry.ts";
+import { RendererRegistry, type RenderScope } from "../utils/renderer-registry.ts";
 import { IRNode } from "../ir/display-list.ts";
 
 export class RowRenderer {
   static async render(
     rowElement: RowElement,
     objectManager: PDFObjectManager,
-    origin: Offset,
+    scope: RenderScope,
   ): Promise<IRNode[]> {
     const { children } = rowElement.getProps();
     const nodes: IRNode[] = [];
@@ -16,7 +15,7 @@ export class RowRenderer {
     if (children)
       for (const child of children) {
         const renderer = RendererRegistry.getRenderer(child);
-        nodes.push(...(await renderer(child, objectManager, origin)));
+        nodes.push(...(await renderer(child, objectManager, scope)));
       }
 
     return nodes;

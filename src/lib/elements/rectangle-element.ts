@@ -10,7 +10,7 @@ import {
   resolveSize,
 } from "../layout/box-constraints.ts";
 import { stackMinIntrinsic, withDeclaredExtent } from "../layout/min-intrinsic.ts";
-import { PositionedElement, positionedIn } from "./layout/positioned-element.ts";
+import { positionedIn } from "./layout/positioned-element.ts";
 import {
   Fragmentable,
   FragmentResult,
@@ -82,8 +82,6 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
   private overflow: "hidden" | "visible";
   private breakBefore: boolean;
   private breakAfter: boolean;
-  // Its out-of-flow descendants, placed relative to this box by the last layout.
-  private positioned: PositionedElement[] = [];
 
   private sizeMemory!: { x: number; y: number } & SizingParams;
 
@@ -356,11 +354,10 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
     }
 
     // The box is sized now: place its out-of-flow `Positioned` descendants, relative to its own
-    // top-left. The renderer draws them after the flow content, so they lie on top (CSS order).
-    if (offset) {
-      this.positioned = frame ? positionedIn(this.children) : [];
+    // top-left. Each is drawn at its own place in the tree (tree order).
+    if (frame) {
       const box = { width: width ?? 0, height: height ?? 0 };
-      for (const p of this.positioned) p.placeIn(box, childCtx);
+      for (const p of positionedIn(this.children)) p.placeIn(box, childCtx);
     }
 
     // Border-box model: width/height ARE the outer box (the rect we draw); the content
@@ -394,7 +391,7 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
       radius: this.radius,
       sideBorders: this.sideBorders,
       overflow: this.overflow,
-      positioned: this.positioned,
+      relative: this.relative,
     };
   }
 }

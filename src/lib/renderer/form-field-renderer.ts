@@ -1,4 +1,4 @@
-import type { Offset } from "../layout/box-constraints.ts";
+import type { RenderScope } from "../utils/renderer-registry.ts";
 import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 import { TextFieldElement } from "../elements/forms/text-field-element.ts";
 import { CheckboxElement } from "../elements/forms/checkbox-element.ts";
@@ -27,12 +27,12 @@ export class FormFieldRenderer {
   static async render(
     element: FormFieldElement,
     _objectManager: PDFObjectManager,
-    origin: Offset,
+    scope: RenderScope,
   ): Promise<IRNode[]> {
     const { x: ownX, y: ownY, width, height, spec, style } = element.getProps();
-    // Its own position is relative to `origin`; the IR wants page coordinates.
-    const x = origin.x + (ownX ?? 0);
-    const y = origin.y + (ownY ?? 0);
+    // Its own position is relative to `scope.origin`; the IR wants page coordinates.
+    const x = scope.origin.x + (ownX ?? 0);
+    const y = scope.origin.y + (ownY ?? 0);
     return [{ type: "formfield", x, y, width, height, field: spec, style }];
   }
 }

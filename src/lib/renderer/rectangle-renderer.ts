@@ -1,9 +1,7 @@
-import { PositionedRenderer } from "./positioned-renderer.ts";
-import type { Offset } from "../layout/box-constraints.ts";
 import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 
 import { RectangleElement, SideBorders } from "../elements/rectangle-element.ts";
-import { RendererRegistry } from "../utils/renderer-registry.ts";
+import { RendererRegistry, type RenderScope } from "../utils/renderer-registry.ts";
 import { IRNode, Rect, Line } from "../ir/display-list.ts";
 import { isGradientInput, resolveGradient } from "../api/gradient.ts";
 import { Color } from "../common/color.ts";
@@ -12,7 +10,7 @@ export class RectangleRenderer {
   static async render(
     rectangleElement: RectangleElement,
     objectManager: PDFObjectManager,
-    origin: Offset,
+    scope: RenderScope,
   ): Promise<IRNode[]> {
     const {
       x: ownX,
@@ -26,11 +24,11 @@ export class RectangleRenderer {
       radius,
       sideBorders,
       overflow,
-      positioned,
+      relative,
     } = rectangleElement.getProps();
-    // Its own position is relative to `origin`; the IR wants page coordinates.
-    const x = origin.x + (ownX ?? 0);
-    const y = origin.y + (ownY ?? 0);
+    // Its own position is relative to `scope.origin`; the IR wants page coordinates.
+    const x = scope.origin.x + (ownX ?? 0);
+    const y = scope.origin.y + (ownY ?? 0);
 
     const h = height!;
     const nodes: IRNode[] = [];
@@ -73,13 +71,13 @@ export class RectangleRenderer {
     if (clip) {
       nodes.push({ type: "clip-push", x, y, width, height: h, ...(radius ? { radius } : {}) });
     }
+    // A `relative` box is the frame its `Positioned` descendants were placed against.
+    const childScope: RenderScope = relative ? { ...scope, frame: { x, y } } : scope;
     if (children)
       for (const child of children) {
         const renderer = RendererRegistry.getRenderer(child);
-        nodes.push(...(await renderer(child, objectManager, origin)));
+        nodes.push(...(await renderer(child, objectManager, childScope)));
       }
-    // A `relative` box draws its out-of-flow descendants last, inside the clip like the flow content.
-    nodes.push(...(await PositionedRenderer.renderPlaced(positioned, objectManager, { x, y })));
     if (clip) nodes.push({ type: "clip-pop" });
 
     return nodes;

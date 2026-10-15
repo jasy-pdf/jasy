@@ -1,6 +1,5 @@
-import type { Offset } from "../layout/box-constraints.ts";
 import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
-import { RendererRegistry } from "../utils/renderer-registry.ts";
+import { RendererRegistry, type RenderScope } from "../utils/renderer-registry.ts";
 import { DefaultTextStyleElement } from "../elements/layout/default-text-style-element.ts";
 import { IRNode } from "../ir/display-list.ts";
 
@@ -10,10 +9,10 @@ export class DefaultTextStyleRenderer {
   static async render(
     element: DefaultTextStyleElement,
     objectManager: PDFObjectManager,
-    origin: Offset,
+    scope: RenderScope,
   ): Promise<IRNode[]> {
     const { child } = element.getProps();
     const renderer = RendererRegistry.getRenderer(child);
-    return renderer(child, objectManager, origin);
+    return renderer(child, objectManager, scope);
   }
 }

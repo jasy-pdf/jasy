@@ -1,17 +1,18 @@
-import { describe, it, expect } from "vitest";
-import { PositionedElement } from "../../../src/lib/elements/layout/positioned-element";
-import { RectangleElement } from "../../../src/lib/elements/rectangle-element";
-import { ContainerElement } from "../../../src/lib/elements/container-element";
-import { PageElement } from "../../../src/lib/elements/page-element";
-import { RectangleRenderer } from "../../../src/lib/renderer/rectangle-renderer";
-import { LayoutContext } from "../../../src/lib/elements/pdf-element";
-import { BoxConstraints } from "../../../src/lib/layout/box-constraints";
-import { Orientation } from "../../../src/lib/renderer/pdf-config";
-import { PageSize } from "../../../src/lib/constants/page-sizes";
-import type { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager";
+import { describe, it, expect, vi } from "vitest";
+import { PositionedElement } from "../../../src/lib/elements/layout/positioned-element.ts";
+import { RectangleElement } from "../../../src/lib/elements/rectangle-element.ts";
+import { ContainerElement } from "../../../src/lib/elements/container-element.ts";
+import { PageElement } from "../../../src/lib/elements/page-element.ts";
+import { RectangleRenderer } from "../../../src/lib/renderer/rectangle-renderer.ts";
+import { LayoutContext } from "../../../src/lib/elements/pdf-element.ts";
+import { BoxConstraints } from "../../../src/lib/layout/box-constraints.ts";
+import { Orientation } from "../../../src/lib/renderer/pdf-config.ts";
+import { PageSize } from "../../../src/lib/constants/page-sizes.ts";
+import type { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager.ts";
 import { testMetrics } from "../support/metrics.ts";
 import { RendererRegistry } from "../../../src/lib/utils/renderer-registry.ts";
 import { PositionedRenderer } from "../../../src/lib/renderer/positioned-renderer.ts";
+import { PAGE_SCOPE } from "../support/scope.ts";
 
 // Rendering a frame on its own: its renderers are registered here, as `PDFRenderer.render` would.
 RendererRegistry.register(RectangleElement, RectangleRenderer.render);
@@ -34,7 +35,7 @@ const ctxWithFrame = {
 // where it ends up on the page when `frame` is rendered at the page origin.
 const drawnAt = async (frameEl: RectangleElement, child: RectangleElement) => {
   const { width, height } = child.getSize();
-  const nodes = await RectangleRenderer.render(frameEl, {} as PDFObjectManager, { x: 0, y: 0 });
+  const nodes = await RectangleRenderer.render(frameEl, {} as PDFObjectManager, PAGE_SCOPE);
   const box = nodes.find((n) => n.type === "rect" && n.width === width && n.height === height);
   return box && box.type === "rect" ? { x: box.x, y: box.y } : undefined;
 };
@@ -224,11 +225,12 @@ describe("PositionedElement - the page is the default frame", () => {
         },
         [band]: positioned,
       });
+      const placeIn = vi.spyOn(positioned, "placeIn");
       page.calculateLayout(new BoxConstraints(), { x: 0, y: 0 }, {
         metrics,
         pageConfig: {},
       } as LayoutContext);
-      expect(page.positionedContent(), `${band} placed more than once`).toEqual([positioned]);
+      expect(placeIn, `${band} placed more than once`).toHaveBeenCalledTimes(1);
     }
   });
 
@@ -280,6 +282,43 @@ describe("PositionedElement - the page is the default frame", () => {
   });
 });
 
+// Tree order is paint order (Flutter's `Stack`): a `Positioned` is drawn where it sits in the tree, so
+// the author picks its layer by placing it. Until `z-index` exists this is the only way to put a
+// watermark UNDER the content, and it must stay that way.
+describe("PositionedElement - paints in tree order", () => {
+  const paintOrder = async (children: (RectangleElement | PositionedElement)[]) => {
+    const f = new RectangleElement({
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 60,
+      borderWidth: 0,
+      relative: true,
+      children,
+    });
+    f.calculateLayout(BoxConstraints.loose(100, 60), { x: 0, y: 0 }, ctx);
+    const nodes = await RectangleRenderer.render(f, {} as PDFObjectManager, PAGE_SCOPE);
+    // Each test box has its own width; the frame itself is the 100-wide one.
+    return nodes.flatMap((n) => (n.type === "rect" && n.width !== 100 ? [n.width] : []));
+  };
+
+  it("draws a Positioned placed BEFORE the flow content under it (a watermark)", async () => {
+    const order = await paintOrder([
+      new PositionedElement({ child: fixed(11, 10), top: 0, left: 0 }),
+      fixed(22, 10),
+    ]);
+    expect(order).toEqual([11, 22]);
+  });
+
+  it("draws a Positioned placed AFTER the flow content on top of it (a badge)", async () => {
+    const order = await paintOrder([
+      fixed(22, 10),
+      new PositionedElement({ child: fixed(11, 10), top: 0, left: 0 }),
+    ]);
+    expect(order).toEqual([22, 11]);
+  });
+});
+
 describe("RectangleElement - overflow clips the children", () => {
   const laidOut = (overflow?: "hidden" | "visible") => {
     const rect = new RectangleElement({
@@ -296,16 +335,17 @@ describe("RectangleElement - overflow clips the children", () => {
   };
 
   it('wraps children in clip-push/clip-pop when overflow is "hidden"', async () => {
-    const nodes = await RectangleRenderer.render(laidOut("hidden"), {} as PDFObjectManager, {
-      x: 0,
-      y: 0,
-    });
+    const nodes = await RectangleRenderer.render(
+      laidOut("hidden"),
+      {} as PDFObjectManager,
+      PAGE_SCOPE,
+    );
     expect(nodes.some((n) => n.type === "clip-push")).toBe(true);
     expect(nodes.some((n) => n.type === "clip-pop")).toBe(true);
   });
 
   it("emits no clip by default (visible) - byte-identical to before", async () => {
-    const nodes = await RectangleRenderer.render(laidOut(), {} as PDFObjectManager, { x: 0, y: 0 });
+    const nodes = await RectangleRenderer.render(laidOut(), {} as PDFObjectManager, PAGE_SCOPE);
     expect(nodes.some((n) => n.type === "clip-push" || n.type === "clip-pop")).toBe(false);
   });
 });

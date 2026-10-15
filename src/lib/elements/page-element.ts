@@ -4,7 +4,7 @@ import type { ColorMode, DefaultFont, Margin } from "../renderer/index.ts";
 import { BoxConstraints, Offset, Size } from "../layout/box-constraints.ts";
 import { LayoutContext, PDFElement, PositioningFrame, WithChildren } from "./pdf-element.ts";
 import { TextElement } from "./text-element.ts";
-import { PositionedElement, positionedIn } from "./layout/positioned-element.ts";
+import { positionedIn } from "./layout/positioned-element.ts";
 
 export interface PDFPageConfig {
   pageSize?: PageSize;
@@ -130,8 +130,6 @@ export class PageElement extends PDFElement {
   private children: PDFElement[];
   private header?: PDFElement;
   private footer?: PDFElement;
-  // Its out-of-flow descendants, placed relative to the content box by the last layout.
-  private positioned: PositionedElement[] = [];
 
   constructor({ children, config, header, footer }: PDFPageParams) {
     super();
@@ -176,9 +174,9 @@ export class PageElement extends PDFElement {
     );
 
     // Last, once the bands and the body are laid out: the page's out-of-flow descendants, placed
-    // relative to its content box. The renderer draws them after the flow content (CSS order).
-    this.positioned = positionedIn([this.header, ...this.children, this.footer]);
-    for (const p of this.positioned) p.placeIn(frame.size, frameCtx);
+    // relative to its content box. Each is drawn at its own place in the tree (tree order).
+    for (const p of positionedIn([this.header, ...this.children, this.footer]))
+      p.placeIn(frame.size, frameCtx);
 
     return { width: frame.size.width, height: frame.size.height };
   }
@@ -198,11 +196,6 @@ export class PageElement extends PDFElement {
     return [this.header, ...this.children, this.footer].filter(
       (el): el is PDFElement => el !== undefined,
     );
-  }
-
-  /** The out-of-flow content to draw after the flow content, offsets relative to the content box. */
-  positionedContent(): readonly PositionedElement[] {
-    return this.positioned;
   }
 
   override getProps(): PDFPageParams {

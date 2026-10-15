@@ -1,4 +1,4 @@
-import type { Offset } from "../layout/box-constraints.ts";
+import type { RenderScope } from "../utils/renderer-registry.ts";
 import { BoxFit, ImageElement } from "../elements/image-element.ts";
 import { bytesFromLatin1 } from "../utils/bytes.ts";
 import {
@@ -15,13 +15,13 @@ export class ImageRenderer {
   static async render(
     imageElement: ImageElement,
     objectManager: PDFObjectManager,
-    origin: Offset,
+    scope: RenderScope,
   ): Promise<IRNode[]> {
     // Load the image and convert it in a binary string
     let { x: ownX, y: ownY, width, height, image, fit, radius, alt } = imageElement.getProps();
-    // Its own position is relative to `origin`; the IR wants page coordinates.
-    let x = origin.x + (ownX ?? 0);
-    let y = origin.y + (ownY ?? 0);
+    // Its own position is relative to `scope.origin`; the IR wants page coordinates.
+    let x = scope.origin.x + (ownX ?? 0);
+    let y = scope.origin.y + (ownY ?? 0);
     await image.init(); // Load and initialize the image
     const imageType = await image.getImageType(); // For the moment we can handle `png` and `jpg/jpeg` files
     const fileData = await image.getFileData();

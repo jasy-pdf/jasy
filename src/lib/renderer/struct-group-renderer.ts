@@ -1,8 +1,7 @@
-import type { Offset } from "../layout/box-constraints.ts";
 import { StructGroup } from "../elements/layout/struct-group.ts";
 import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 import { IRNode } from "../ir/display-list.ts";
-import { RendererRegistry } from "../utils/renderer-registry.ts";
+import { RendererRegistry, type RenderScope } from "../utils/renderer-registry.ts";
 
 /**
  * Renders a StructGroup: opens its structure element, renders the child under it, closes it. With accessible
@@ -12,12 +11,12 @@ export class StructGroupRenderer {
   static async render(
     group: StructGroup,
     objectManager: PDFObjectManager,
-    origin: Offset,
+    scope: RenderScope,
   ): Promise<IRNode[]> {
     const { role, child } = group.getProps();
     const renderChild = async (): Promise<IRNode[]> => {
       const renderer = RendererRegistry.getRenderer(child);
-      return renderer(child, objectManager, origin);
+      return renderer(child, objectManager, scope);
     };
     if (!objectManager.struct.enabled) return renderChild();
 

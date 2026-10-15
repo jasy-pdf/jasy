@@ -1,11 +1,12 @@
-import { TextRenderer } from "../../../src/lib/renderer/text-renderer";
-import { PdfBackend } from "../../../src/lib/renderer/pdf-backend";
-import { FontStyle, PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager";
+import { TextRenderer } from "../../../src/lib/renderer/text-renderer.ts";
+import { PdfBackend } from "../../../src/lib/renderer/pdf-backend.ts";
+import { FontStyle, PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager.ts";
 import { describe, it, vi, expect } from "vitest";
-import { TextElement } from "../../../src/lib/elements";
-import { HorizontalAlignment } from "../../../src/lib/elements/pdf-element";
-import { Color } from "../../../src/lib/common/color";
+import { TextElement } from "../../../src/lib/elements/index.ts";
+import { HorizontalAlignment } from "../../../src/lib/elements/pdf-element.ts";
+import { Color } from "../../../src/lib/common/color.ts";
 import { testMetrics } from "../support/metrics.ts";
+import { PAGE_SCOPE } from "../support/scope.ts";
 
 describe("TextRenderer - calculateTextHeight", () => {
   it("should calculate the correct text height for a simple string", () => {
@@ -114,7 +115,7 @@ describe("TextRenderer - calculateTextHeight", () => {
     } as unknown as PDFObjectManager;
 
     const result = PdfBackend.serialize(
-      await TextRenderer.render(mockTextElement, mockObjectManager, { x: 0, y: 0 }),
+      await TextRenderer.render(mockTextElement, mockObjectManager, PAGE_SCOPE),
       mockObjectManager,
     );
 
@@ -158,7 +159,7 @@ describe("TextRenderer - calculateTextHeight", () => {
     } as unknown as PDFObjectManager;
 
     const result = PdfBackend.serialize(
-      await TextRenderer.render(mockTextElement, mockObjectManager, { x: 0, y: 0 }),
+      await TextRenderer.render(mockTextElement, mockObjectManager, PAGE_SCOPE),
       mockObjectManager,
     );
 
@@ -199,7 +200,7 @@ describe("TextRenderer - calculateTextHeight", () => {
     } as unknown as PDFObjectManager;
 
     const result = PdfBackend.serialize(
-      await TextRenderer.render(mockTextElement, mockObjectManager, { x: 0, y: 0 }),
+      await TextRenderer.render(mockTextElement, mockObjectManager, PAGE_SCOPE),
       mockObjectManager,
     );
 
@@ -243,7 +244,7 @@ describe("TextRenderer - calculateTextHeight", () => {
     } as unknown as PDFObjectManager;
 
     const result = PdfBackend.serialize(
-      await TextRenderer.render(mockTextElement, mockObjectManager, { x: 0, y: 0 }),
+      await TextRenderer.render(mockTextElement, mockObjectManager, PAGE_SCOPE),
       mockObjectManager,
     );
 
@@ -284,7 +285,7 @@ describe("TextRenderer - calculateTextHeight", () => {
     } as unknown as PDFObjectManager;
 
     const result = PdfBackend.serialize(
-      await TextRenderer.render(mockTextElement, mockObjectManager, { x: 0, y: 0 }),
+      await TextRenderer.render(mockTextElement, mockObjectManager, PAGE_SCOPE),
       mockObjectManager,
     );
 
@@ -344,7 +345,7 @@ describe("TextRenderer - calculateTextHeight", () => {
     } as unknown as PDFObjectManager;
 
     const result = PdfBackend.serialize(
-      await TextRenderer.render(mockTextElement, mockObjectManager, { x: 0, y: 0 }),
+      await TextRenderer.render(mockTextElement, mockObjectManager, PAGE_SCOPE),
       mockObjectManager,
     );
 
@@ -402,7 +403,7 @@ describe("TextRenderer - calculateTextHeight", () => {
     } as unknown as PDFObjectManager;
 
     const result = PdfBackend.serialize(
-      await TextRenderer.render(mockTextElement, mockObjectManager, { x: 0, y: 0 }),
+      await TextRenderer.render(mockTextElement, mockObjectManager, PAGE_SCOPE),
       mockObjectManager,
     );
 

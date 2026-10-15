@@ -141,9 +141,13 @@ New rule:
   tree, so one early in a header lies UNDER the body (a watermark) and one as a last child lies on
   top (a badge). The author picks the layer by the position in the tree. This is the behaviour
   before the rebuild and it stays until `z-index` exists; `z-index` comes later on top of it.
-- At render, positioned content is drawn at `frameOrigin + offset`. The renderer therefore needs the
-  frame's absolute origin at the `Positioned`'s place in the tree, passed down with `origin` (no
-  render-time state in the elements).
+- At render, positioned content is drawn at `frameOrigin + offset`. Renderers take a
+  `RenderScope { origin, frame }`: a frame owner sets `frame` for its subtree, and a `Positioned`
+  draws its child with `origin = frame` at its own place in the tree (no render-time state in the
+  elements).
+- `z-index` later: the frame owner already finds its `Positioned` descendants structurally
+  (`positionedIn`). A layer other than the default is then painted by the frame owner, below or
+  above its flow content; the default stays tree order.
 - Measured why not CSS order without `z-index`: gallery `18-watermark` put "CONFIDENTIAL" over the
   body text instead of under it.
 

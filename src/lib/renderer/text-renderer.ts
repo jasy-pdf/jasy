@@ -1,4 +1,4 @@
-import type { Offset } from "../layout/box-constraints.ts";
+import type { RenderScope } from "../utils/renderer-registry.ts";
 import { Color } from "../common/color.ts";
 import { HorizontalAlignment } from "../elements/pdf-element.ts";
 import { VERTICAL_TEXT_SHIFT, TextElement, TextSegment } from "../elements/text-element.ts";
@@ -98,7 +98,7 @@ export class TextRenderer {
   static async render(
     textElement: TextElement,
     objectManager: PDFObjectManager,
-    origin: Offset,
+    scope: RenderScope,
   ): Promise<IRNode[]> {
     const {
       x,
@@ -139,8 +139,8 @@ export class TextRenderer {
       textAlignment,
       color,
       // Every run, decoration and link rect derives from this one absolute origin.
-      origin.x + (x ?? 0),
-      origin.y + (y ?? 0),
+      scope.origin.x + (x ?? 0),
+      scope.origin.y + (y ?? 0),
       maxLines,
       overflow,
       lineHeight,

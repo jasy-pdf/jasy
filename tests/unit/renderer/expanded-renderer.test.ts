@@ -1,15 +1,15 @@
 import { describe, it, expect, vi } from "vitest";
-import { ExpandedRenderer } from "../../../src/lib/renderer/expanded-renderer";
+import { ExpandedRenderer } from "../../../src/lib/renderer/expanded-renderer.ts";
 import {
   RendererRegistry,
   MissingRendererError,
 } from "../../../src/lib/utils/renderer-registry.ts";
-import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager";
-import { ExpandedElement } from "../../../src/lib/elements";
-import { PDFElement } from "../../../src/lib/elements/pdf-element";
+import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager.ts";
+import { ExpandedElement } from "../../../src/lib/elements/index.ts";
+import { PDFElement } from "../../../src/lib/elements/pdf-element.ts";
 
-// The origin a renderer is handed must reach its children unchanged (a container has no box of its own).
-const ORIGIN = { x: 12, y: 34 };
+// The scope a renderer is handed must reach its children unchanged (it has no box of its own).
+const SCOPE = { origin: { x: 12, y: 34 }, frame: { x: 5, y: 6 } };
 
 describe("ExpandedRenderer", () => {
   it("should render the child element using its registered renderer", async () => {
@@ -43,10 +43,10 @@ describe("ExpandedRenderer", () => {
     vi.spyOn(RendererRegistry, "getRenderer").mockReturnValue(mockChildRenderer);
 
     // Call the ExpandedRenderer's render method
-    const result = await ExpandedRenderer.render(mockExpandedElement, mockObjectManager, ORIGIN);
+    const result = await ExpandedRenderer.render(mockExpandedElement, mockObjectManager, SCOPE);
 
     // Check if the mock renderer for the child was called
-    expect(mockChildRenderer).toHaveBeenCalledWith(mockChild, mockObjectManager, ORIGIN);
+    expect(mockChildRenderer).toHaveBeenCalledWith(mockChild, mockObjectManager, SCOPE);
 
     // Expanded passes the child's display list straight through.
     expect(result).toEqual(["child-node"]);
@@ -80,7 +80,7 @@ describe("ExpandedRenderer", () => {
     });
 
     await expect(
-      ExpandedRenderer.render(mockExpandedElement, mockObjectManager, ORIGIN),
+      ExpandedRenderer.render(mockExpandedElement, mockObjectManager, SCOPE),
     ).rejects.toThrow(MissingRendererError);
   });
 });

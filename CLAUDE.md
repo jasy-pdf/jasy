@@ -72,7 +72,7 @@ The render pass is split at a hard seam — **the display list (IR)** — so the
 sees a component:
 
 - **Producers** (`src/lib/renderer/*`, one class per element, dispatched via `RendererRegistry` keyed
-  on the element's constructor): each `render(element, objectManager)` returns an **`IRNode[]`**, not
+  on the element's constructor): each `render(element, objectManager, scope)` returns an **`IRNode[]`**, not
   a string. Leaves (`TextRenderer`→`TextRun[]`, `LineRenderer`, `ImageRenderer`, `RectangleRenderer`)
   emit primitives; structural renderers (`Container`/`Expanded`/`Padding`, and `Rectangle` for its
   children) **concatenate** their children's lists. Producers still know about components and still do
