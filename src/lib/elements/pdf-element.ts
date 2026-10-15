@@ -63,6 +63,10 @@ export interface LayoutContext {
    *  `keepTogether` group reads it to decide the degrade rule: veto splitting only when the group would
    *  fit on a fresh page; a group taller than a whole page drops the veto and splits. */
   pageBodyHeight?: number;
+  /** Something already sits above this element in the current page region. Then "does not fit"
+   *  means "move to the next page", never an overflow - only content at the top of a fresh page is
+   *  forced on and reported. Set by `packChildren`; absent = top of the page. */
+  belowContent?: boolean;
 }
 
 let _nextStructId = 0;
