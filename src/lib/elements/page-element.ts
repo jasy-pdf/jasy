@@ -105,17 +105,8 @@ export function layoutPageBands(
 
   let footerHeight = 0;
   if (footer) {
-    // Measure first to learn its height, then place it flush against the bottom edge. The MEASURING
-    // pass gets a throwaway `place` list: an out-of-flow child registers a placement every time it is
-    // laid out, and this subtree is laid out twice. Only the second, real pass may register.
-    const measureCtx: LayoutContext = ctx.frame
-      ? { ...ctx, frame: { ...ctx.frame, place: [] } }
-      : ctx;
-    footerHeight = footer.calculateLayout(
-      BoxConstraints.loose(width, Infinity),
-      origin,
-      measureCtx,
-    ).height;
+    // Measure first to learn its height, then place it flush against the bottom edge.
+    footerHeight = footer.measure(BoxConstraints.loose(width, Infinity), ctx).height;
     footer.calculateLayout(
       BoxConstraints.loose(width, Infinity),
       { x: origin.x, y: origin.y + height - footerHeight },
@@ -191,6 +182,12 @@ export class PageElement extends PDFElement {
     for (const place of frame.place) place(frame, frameCtx);
 
     return { width: frame.size.width, height: frame.size.height };
+  }
+
+  /** A page is as large as its content box, whatever it holds. */
+  override measure(_constraints: BoxConstraints, ctx: LayoutContext): Size {
+    const { width, height } = resolvePageContentBox(this.resolveConfig(ctx.pageConfig));
+    return { width, height };
   }
 
   /** The document defaults with this page's own settings on top. Pure: no pass has to run first. */

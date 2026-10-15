@@ -153,11 +153,7 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
     // break marker), rather than handing back the original that still holds it.
     if (remainder.length === 0 && !forceBreak) {
       // The content fits, but a fixed height may not - such a box cannot shrink, so it moves on whole.
-      const own = this.calculateLayout(
-        BoxConstraints.loose(width, Infinity),
-        { x: 0, y: 0 },
-        ctx,
-      ).height;
+      const own = this.measure(BoxConstraints.loose(width, Infinity), ctx).height;
       return own <= maxHeight
         ? { fitted: this, remainder: null }
         : { fitted: null, remainder: this };
@@ -167,10 +163,7 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
 
     const contentHeight = (kids: PDFElement[]): number =>
       kids.reduce(
-        (sum, child) =>
-          sum +
-          child.calculateLayout(BoxConstraints.loose(innerWidth, Infinity), { x: 0, y: 0 }, ctx)
-            .height,
+        (sum, child) => sum + child.measure(BoxConstraints.loose(innerWidth, Infinity), ctx).height,
         0,
       );
 
@@ -247,6 +240,18 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
   }
 
   calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
+    return this.sizeWith(constraints, ctx, offset);
+  }
+
+  override measure(constraints: BoxConstraints, ctx: LayoutContext): Size {
+    return this.sizeWith(constraints, ctx, null);
+  }
+
+  /**
+   * The one sizing path. With an `offset` it lays the children out and keeps its geometry; with
+   * `null` it only measures - no field written, no child placed, no frame drained.
+   */
+  private sizeWith(constraints: BoxConstraints, ctx: LayoutContext, offset: Offset | null): Size {
     // An explicit extent is a fixed point size or a fraction of the offered box (relative sizing);
     // the fraction only resolves in a bounded region. `undefined` = fill / shrink-wrap below.
     const specs = extentSpecs(this.sizeMemory);
@@ -265,12 +270,12 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
     // fixed box would balloon to the parent's size.)
     // Whether there is a region to fill is decided by the constraints we were GIVEN: a `maxWidth` caps
     // a box, it does not turn a shrink-wrapping one into a filling one (CSS `max-width` does not either).
-    this.width =
+    let width =
       explicitWidth !== undefined
         ? bounds.constrainWidth(explicitWidth)
         : constraints.hasBoundedWidth
           ? bounds.maxWidth
-          : this.width;
+          : undefined;
     // Width shrink-wrap: no explicit width AND an unbounded region (e.g. a `Box` badge inside a
     // `Positioned`). Resolved after the children are measured, just below.
     const shrinkWrapWidth = explicitWidth === undefined && !constraints.hasBoundedWidth;
@@ -278,21 +283,23 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
     // SHRINK-WRAP the content in an unbounded one (a note box in a stack). Shrink-wrap is
     // resolved after the children are measured, just below.
     const shrinkWrapHeight = explicitHeight === undefined && !constraints.hasBoundedHeight;
-    this.height =
+    let height =
       explicitHeight !== undefined
         ? bounds.constrainHeight(explicitHeight)
         : constraints.hasBoundedHeight
           ? bounds.maxHeight
-          : this.height;
-    this.x = this.sizeMemory.x + offset.x;
-    this.y = this.sizeMemory.y + offset.y;
+          : undefined;
+    const x = this.sizeMemory.x + (offset?.x ?? 0);
+    const y = this.sizeMemory.y + (offset?.y ?? 0);
 
     // A `relative` box is a positioning frame: thread a fresh frame to the subtree so any
     // `Positioned` descendant registers against it (out of flow), then drain it below once the
     // box is sized. A plain box leaves `ctx` untouched -> byte-identical.
-    const frame: PositioningFrame | undefined = this.relative
-      ? { origin: { x: 0, y: 0 }, size: { width: 0, height: 0 }, place: [] }
-      : undefined;
+    // Measuring places nothing, so it needs no frame of its own.
+    const frame: PositioningFrame | undefined =
+      this.relative && offset
+        ? { origin: { x: 0, y: 0 }, size: { width: 0, height: 0 }, place: [] }
+        : undefined;
     const childCtx: LayoutContext = frame ? { ...ctx, frame } : ctx;
 
     // Lay out children stacked inside the border (inset by the border width). Width is finalized here;
@@ -301,15 +308,15 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
     // still free inside the box, so its flex child has real leftover space instead of an infinite one.
     const innerWidth = shrinkWrapWidth
       ? Infinity
-      : Math.max(0, (this.width ?? 0) - 2 * this.borderWidth);
+      : Math.max(0, (width ?? 0) - 2 * this.borderWidth);
     const innerHeight = shrinkWrapHeight
       ? Infinity
-      : Math.max(0, (this.height ?? 0) - 2 * this.borderWidth);
+      : Math.max(0, (height ?? 0) - 2 * this.borderWidth);
     let contentWidth = 0;
     let contentHeight = 0;
-    let yCursor = this.y + this.borderWidth;
+    let yCursor = y + this.borderWidth;
     for (const child of this.children) {
-      const consumed = yCursor - (this.y + this.borderWidth);
+      const consumed = yCursor - (y + this.borderWidth);
       // Same rule the flex helper applies: a child gets a finite main extent when it cannot lay itself
       // out without one - a stack holding an `Expanded`/`Spacer`, or a child sized as a percentage of us.
       const needsBound =
@@ -317,11 +324,10 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
       const childHeight = needsBound
         ? Math.max(0, innerHeight - consumed) // Infinity - consumed stays Infinity, as it should
         : Infinity;
-      const childSize = child.calculateLayout(
-        BoxConstraints.loose(innerWidth, childHeight),
-        { x: this.x + this.borderWidth, y: yCursor },
-        childCtx,
-      );
+      const childConstraints = BoxConstraints.loose(innerWidth, childHeight);
+      const childSize = offset
+        ? child.calculateLayout(childConstraints, { x: x + this.borderWidth, y: yCursor }, childCtx)
+        : child.measure(childConstraints, childCtx);
       yCursor += childSize.height;
       contentHeight += childSize.height;
       contentWidth = Math.max(contentWidth, childSize.width);
@@ -329,21 +335,28 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
 
     // No explicit width and no bounded region: shrink-wrap to the widest child.
     // Clamped, so a min/max still applies to a box that sized itself to its content.
-    if (shrinkWrapWidth) this.width = bounds.constrainWidth(contentWidth + 2 * this.borderWidth);
+    if (shrinkWrapWidth) width = bounds.constrainWidth(contentWidth + 2 * this.borderWidth);
     // A ratio on a shrink-wrapping box can only be applied HERE: before the children were measured
     // there was no width to derive the height from.
     const ratio = this.sizeMemory.aspectRatio;
     const ratioSizesHeight =
       ratio !== undefined && ratio > 0 && shrinkWrapWidth && shrinkWrapHeight;
     // No explicit height and no bounded region: the border hugs its content.
-    if (ratioSizesHeight) this.height = bounds.constrainHeight((this.width ?? 0) / ratio);
+    if (ratioSizesHeight) height = bounds.constrainHeight((width ?? 0) / ratio);
     else if (shrinkWrapHeight)
-      this.height = bounds.constrainHeight(contentHeight + 2 * this.borderWidth);
+      height = bounds.constrainHeight(contentHeight + 2 * this.borderWidth);
+
+    if (offset) {
+      this.x = x;
+      this.y = y;
+      this.width = width;
+      this.height = height;
+    }
 
     // The box is sized now: place any out-of-flow `Positioned` descendants against its box.
     if (frame) {
-      frame.origin = { x: this.x, y: this.y };
-      frame.size = { width: this.width ?? 0, height: this.height ?? 0 };
+      frame.origin = { x, y };
+      frame.size = { width: width ?? 0, height: height ?? 0 };
       for (const place of frame.place) place(frame, ctx);
     }
 
@@ -352,8 +365,8 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
     // border added on (that asymmetric "+border" was the source of the magic-3 fudge in
     // fragment). Top-left coordinates; the Y-flip happens at the IR -> backend seam.
     return {
-      width: this.width ?? 0,
-      height: this.height ?? 0,
+      width: width ?? 0,
+      height: height ?? 0,
     };
   }
 

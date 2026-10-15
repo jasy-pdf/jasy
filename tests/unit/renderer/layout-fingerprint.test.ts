@@ -16,6 +16,7 @@ import {
   renderToBytes,
 } from "../../../src/lib/index.ts";
 import type { JasyDocument } from "../../../src/lib/api/structure.ts";
+import { deeplyNested } from "../support/deep-nesting.ts";
 import { textMeasureCache } from "../../../src/lib/text/measure-cache.ts";
 
 // The output of a fixed set of documents, pinned to the byte. Output is byte-stable (no dates, a
@@ -65,6 +66,8 @@ const documents: Record<string, () => JasyDocument> = {
         Text("after the full width"),
       ]),
     ]),
+  // Eight levels of Column / Box / Row: the shape whose layout cost grew 2^depth.
+  "deep nesting": () => Document([Page({ size: "A3", margin: 20 }, deeplyNested(8))]),
   // A wrapping Row: chips flow onto as many lines as they need.
   "a wrapping row": () =>
     Document([
@@ -193,6 +196,7 @@ const fingerprint = async (make: () => JasyDocument, fonts?: Record<string, Buff
     .slice(0, 16);
 
 const EXPECTED: Record<string, string> = {
+  "deep nesting": "621c1af048708b8e",
   "a wrapping row": "eb6b1d9a3d89ddce",
   "a text shrunk by its row": "bc99bf7e05ea2d27",
   "the same words in three widths": "f5816a1e5006ddbf",

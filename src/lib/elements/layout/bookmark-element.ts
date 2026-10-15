@@ -27,6 +27,10 @@ export class BookmarkElement extends PDFElement {
     return size;
   }
 
+  override measure(constraints: BoxConstraints, ctx: LayoutContext): Size {
+    return this.child.measure(constraints, ctx);
+  }
+
   override getProps() {
     return {
       title: this.title,

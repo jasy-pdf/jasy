@@ -29,6 +29,9 @@ class MockBox extends PDFElement {
     this.offeredMaxHeight = c.maxHeight;
     return this.size;
   }
+  measure(): Size {
+    return this.size;
+  }
 }
 
 const ctx = {} as LayoutContext;

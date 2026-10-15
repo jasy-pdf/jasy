@@ -1,6 +1,15 @@
 import { PDFElement, LayoutContext, FlexiblePDFElement } from "../elements/pdf-element.ts";
 import { BoxConstraints, Offset, Size } from "../layout/box-constraints.ts";
 
+/** `layout` places every child (one `calculateLayout` each); `measure` only sizes, with no side effects. */
+export type FlexMode = "layout" | "measure";
+
+const sameConstraints = (a: BoxConstraints, b: BoxConstraints) =>
+  a.minWidth === b.minWidth &&
+  a.maxWidth === b.maxWidth &&
+  a.minHeight === b.minHeight &&
+  a.maxHeight === b.maxHeight;
+
 /** Distribution of the children ALONG the stacking (main) axis when there is leftover
  *  space and no flex child to absorb it. */
 // Re-exported so every existing import keeps working; the definitions live in layout/alignment.ts.
@@ -116,6 +125,7 @@ export class FlexLayoutHelper {
     crossOrigin: number,
     options: FlexOptions,
     ctx: LayoutContext,
+    mode: FlexMode = "layout",
   ): { mainUsed: number; crossUsed: number } {
     if (!options.wrap || children.length === 0 || !Number.isFinite(mainAvail)) {
       // An unbounded main axis has no edge to wrap at, so wrapping there is meaningless, not an error.
@@ -128,6 +138,7 @@ export class FlexLayoutHelper {
         crossOrigin,
         options,
         ctx,
+        mode,
       );
     }
     return FlexLayoutHelper.layoutWrapped(
@@ -139,6 +150,7 @@ export class FlexLayoutHelper {
       crossOrigin,
       options,
       ctx,
+      mode,
     );
   }
 
@@ -158,6 +170,7 @@ export class FlexLayoutHelper {
     crossOrigin: number,
     options: FlexOptions,
     ctx: LayoutContext,
+    mode: FlexMode,
   ): { mainUsed: number; crossUsed: number } {
     const gap = options.gap ?? 0;
     const ordered = inLayoutOrder(children, options.reverse ?? false);
@@ -182,11 +195,7 @@ export class FlexLayoutHelper {
       // child overflow, and so does our own non-wrapping path.
       const needsBound = child.needsBoundedMain(axis.mainHorizontal);
       const main = axis.mainOf(
-        child.calculateLayout(
-          axis.measureConstraints(crossAvail, needsBound ? mainAvail : Infinity),
-          axis.offsetAt(mainStart, crossOrigin),
-          ctx,
-        ),
+        child.measure(axis.measureConstraints(crossAvail, needsBound ? mainAvail : Infinity), ctx),
       );
       measured.set(child, main);
       return main;
@@ -223,6 +232,7 @@ export class FlexLayoutHelper {
         crossOrigin,
         lineOptions,
         ctx,
+        "measure",
       ),
     );
 
@@ -256,6 +266,7 @@ export class FlexLayoutHelper {
         cursor,
         lineOptions,
         ctx,
+        mode,
       );
       cursor += heights[i];
       if (i < lines.length - 1) cursor += between;
@@ -273,6 +284,7 @@ export class FlexLayoutHelper {
     crossOrigin: number,
     options: FlexOptions,
     ctx: LayoutContext,
+    mode: FlexMode,
   ): { mainUsed: number; crossUsed: number } {
     const gap = options.gap ?? 0;
     const main = options.main ?? "start";
@@ -310,19 +322,19 @@ export class FlexLayoutHelper {
     let totalBasis = 0;
     let crossUsed = 0;
     const fixedSize = new Map<PDFElement, Size>();
+    // The constraints each measured size answers, so the last pass can reuse it instead of asking again.
+    const measuredUnder = new Map<PDFElement, BoxConstraints>();
     for (const child of children) {
       if (child instanceof FlexiblePDFElement) {
         totalFlex += child.getFlex();
         totalBasis += child.getBasis(percentBase);
       } else {
-        const size = child.calculateLayout(
-          axis.measureConstraints(crossAvail, mainCapFor(child)),
-          axis.offsetAt(mainStart, crossOrigin),
-          ctx,
-        );
+        const constraints = axis.measureConstraints(crossAvail, mainCapFor(child));
+        const size = child.measure(constraints, ctx);
         fixedMain += axis.mainOf(size);
         crossUsed = Math.max(crossUsed, axis.crossOf(size));
         fixedSize.set(child, size);
+        measuredUnder.set(child, constraints);
       }
     }
 
@@ -392,14 +404,12 @@ export class FlexLayoutHelper {
         shrunkCap.set(child, capped);
         // Re-measure NOW, not in pass 2: a narrower child may wrap to more lines, and the line's
         // cross extent is settled just below.
-        const size = child.calculateLayout(
-          axis.measureConstraints(crossAvail, capped),
-          axis.offsetAt(mainStart, crossOrigin),
-          ctx,
-        );
+        const constraints = axis.measureConstraints(crossAvail, capped);
+        const size = child.measure(constraints, ctx);
         fixedMain += axis.mainOf(size) - natural;
         crossUsed = Math.max(crossUsed, axis.crossOf(size));
         fixedSize.set(child, size);
+        measuredUnder.set(child, constraints);
       }
     }
 
@@ -430,12 +440,11 @@ export class FlexLayoutHelper {
         if (child instanceof FlexiblePDFElement) {
           const mainExtent =
             child.getBasis(percentBase) + (child.getFlex() / totalFlex) * remaining;
-          const size = child.calculateLayout(
-            axis.flexConstraints(mainExtent, crossAvail),
-            axis.offsetAt(mainStart, crossOrigin),
-            ctx,
-          );
+          const constraints = axis.flexConstraints(mainExtent, crossAvail);
+          const size = child.measure(constraints, ctx);
           crossUsed = Math.max(crossUsed, axis.crossOf(size));
+          fixedSize.set(child, size);
+          measuredUnder.set(child, constraints);
         }
       }
     }
@@ -449,7 +458,16 @@ export class FlexLayoutHelper {
     // A child may override the container with its own `alignSelf` (CSS), so the decision is per child.
     const alignFor = (child: PDFElement): CrossAlign => child.alignSelf ?? cross;
 
-    // Pass 2: place each child at the running main position, offset across by its alignment.
+    // Pass 2: place each child at the running main position, offset across by its alignment. This is
+    // the ONE layout a child gets. Measuring, it only sizes - and reuses a size already measured under
+    // the same constraints, or the measuring itself would double at every level.
+    const place = (child: PDFElement, constraints: BoxConstraints, offset: Offset): Size => {
+      if (mode === "layout") return child.calculateLayout(constraints, offset, ctx);
+      const known = measuredUnder.get(child);
+      return known && sameConstraints(known, constraints)
+        ? fixedSize.get(child)!
+        : child.measure(constraints, ctx);
+    };
     let mainPos = mainStart + leadingSpace;
     let placedCross = 0;
     children.forEach((child, index) => {
@@ -467,18 +485,18 @@ export class FlexLayoutHelper {
         // CONSTRAINT too: reading the per-child alignment would hand an `alignSelf: "start"` flex child
         // an unbounded cross axis on a shrink-wrapping line, where the container's own rule gives it
         // the line's extent. A no-op that changes the constraints is not a no-op.
-        const size = child.calculateLayout(
+        const size = place(
+          child,
           axis.flexConstraints(mainExtent, cross === "stretch" ? crossExtent : crossAvail),
           axis.offsetAt(mainPos, crossOrigin),
-          ctx,
         );
         placedCross = Math.max(placedCross, axis.crossOf(size));
       } else {
         const childCross = axis.crossOf(fixedSize.get(child)!);
-        const size = child.calculateLayout(
+        const size = place(
+          child,
           axis.measureConstraints(stretch ? crossExtent : crossAvail, mainCapFor(child)),
           axis.offsetAt(mainPos, crossOrigin + crossOffset(align, crossExtent, childCross)),
-          ctx,
         );
         mainExtent = axis.mainOf(size);
         placedCross = Math.max(placedCross, axis.crossOf(size));

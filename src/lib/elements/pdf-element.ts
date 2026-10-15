@@ -98,6 +98,14 @@ export abstract class PDFElement {
   abstract calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size;
 
   /**
+   * The size `calculateLayout` would return under these constraints - with NO side effects: no
+   * position, no stored size, nothing registered with a frame. A parent asks this to decide, and lays
+   * a child out once afterwards; asking with a full layout doubled the work at every nesting level.
+   * Both must come from ONE sizing computation, or a measured size and a laid-out one can differ.
+   */
+  abstract measure(constraints: BoxConstraints, ctx: LayoutContext): Size;
+
+  /**
    * The relative-size fraction (0..1) this element asked for on the given axis, if any (`horizontal` =
    * width). A flex parent reads it to resolve a percentage child against its OWN main size - e.g. a
    * `Box({ width: "50%" })` inside a Row, where the child otherwise gets an unbounded main axis and the

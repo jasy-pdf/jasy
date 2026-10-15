@@ -67,11 +67,23 @@ export class SignatureFieldElement extends SizedPDFElement {
   }
 
   calculateLayout(constraints: BoxConstraints, offset: Offset, _ctx: LayoutContext): Size {
+    const size = this.sizeFor(constraints);
     this.x = offset.x;
     this.y = offset.y;
-    this.width = this.requested.width ?? (constraints.hasBoundedWidth ? constraints.maxWidth : 240);
-    this.height = this.requested.height ?? 48;
-    return { width: this.width, height: this.height };
+    this.width = size.width;
+    this.height = size.height;
+    return size;
+  }
+
+  override measure(constraints: BoxConstraints): Size {
+    return this.sizeFor(constraints);
+  }
+
+  private sizeFor(constraints: BoxConstraints): Size {
+    const width =
+      this.requested.width ?? (constraints.hasBoundedWidth ? constraints.maxWidth : 240);
+    const height = this.requested.height ?? 48;
+    return { width, height };
   }
 
   getProps() {

@@ -168,11 +168,7 @@ export class PDFDocumentRenderer {
       if (fitted === null) {
         // Measure the region's true height for the message (rare path, so the extra pass is free);
         // pass B lays it out again, so this mutation does not leak.
-        const needed = region.calculateLayout(
-          BoxConstraints.loose(width, Infinity),
-          { x: 0, y: 0 },
-          pageCtx,
-        ).height;
+        const needed = region.measure(BoxConstraints.loose(width, Infinity), pageCtx).height;
         reportOverflow(region, needed, height, pageCtx.onOverflow ?? "ignore");
         pages.push({ kind: "fragment", config, content: region, header, footer });
         break;

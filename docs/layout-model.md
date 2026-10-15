@@ -90,6 +90,9 @@ leaves the width out of the key.
 - `measure` and `layout` share one sizing function per element, parameterised by "how to size a
   child": measure a child, or lay it out. That is Flutter's `_computeSizes`, and it keeps the two
   answers from ever disagreeing.
+- **One exception, deliberate:** `Text.measure` resolves the inherited style and fills its memos
+  (`displayed`, `measured`). Both are a pure function of the context, so the same inputs leave the
+  same state, which a later layout reads back unchanged. Nothing positional is written.
 - Today's measurements become `measure`:
   - flex basis, shrink and stretch measurement
   - `minIntrinsicMain`

@@ -532,24 +532,33 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
   }
 
   calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
-    this.resolveStyle(ctx);
-    this.x = offset.x;
-    this.y = offset.y;
     // Bounded width (e.g. inside a Column) wraps to that width; an unbounded width
     // (e.g. inside a Row) means the text takes its natural single-line width and does
-    // not wrap. Columns always bound the width, so this leaves their layout untouched.
+    // not wrap. Sized by `measure`, so a measured text and a laid-out one cannot differ.
+    const size = this.measure(constraints, ctx);
+    this.x = offset.x;
+    this.y = offset.y;
     this.resolved = this.display(ctx.metrics);
-    this.width = constraints.hasBoundedWidth
-      ? constraints.maxWidth
-      : this.naturalWidth(ctx.metrics);
-
-    const wrapWidth = this.width ?? 0;
-    this.height = this.measuredHeight(ctx.metrics, wrapWidth);
-
+    this.width = size.width;
+    this.height = size.height;
     // Top-left coordinates (y = top of the text box). The baseline offset and the
     // Y-flip are applied downstream (the line-builder positions baselines, the seam
     // flips to PDF), so the element stays coordinate-system-blind.
-    return { width: wrapWidth, height: this.height };
+    return size;
+  }
+
+  /**
+   * The size `calculateLayout` would take, without placing anything. Resolving the inherited style
+   * and filling the memos below are its only writes, and both are a pure function of the context:
+   * the same inputs leave the same state, which a later layout reads back unchanged.
+   */
+  override measure(constraints: BoxConstraints, ctx: LayoutContext): Size {
+    this.resolveStyle(ctx);
+    const content = this.display(ctx.metrics);
+    const width = constraints.hasBoundedWidth
+      ? constraints.maxWidth
+      : this.naturalWidth(ctx.metrics);
+    return { width, height: this.measuredHeight(ctx.metrics, width, content) };
   }
 
   /**
@@ -580,14 +589,18 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     height: number;
   };
 
-  private measuredHeight(metrics: FontMetrics, width: number): number {
+  private measuredHeight(
+    metrics: FontMetrics,
+    width: number,
+    content: string | TextSegment[],
+  ): number {
     const m = this.measured;
     if (
       textMeasureCache.enabled &&
       m &&
       m.metrics === metrics &&
       m.epoch === (metrics.fontEpoch ?? 0) &&
-      m.content === this.resolved &&
+      m.content === content &&
       m.width === width &&
       m.fontSize === this.fontSize &&
       m.fontFamily === this.fontFamily &&
@@ -605,7 +618,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     )
       return m.height;
     const height = TextRenderer.calculateTextHeight(
-      this.resolved!,
+      content,
       this.fontSize,
       this.fontFamily,
       this.fontStyle,
@@ -620,7 +633,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     this.measured = {
       metrics,
       epoch: metrics.fontEpoch ?? 0,
-      content: this.resolved!,
+      content,
       width,
       fontSize: this.fontSize,
       fontFamily: this.fontFamily,

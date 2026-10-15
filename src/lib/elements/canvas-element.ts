@@ -58,9 +58,20 @@ export class CanvasElement extends SizedPDFElement {
   }
 
   calculateLayout(constraints: BoxConstraints, offset: Offset, _ctx: LayoutContext): Size {
+    const size = this.sizeFor(constraints);
     this.x = offset.x;
     this.y = offset.y;
+    this.width = size.width;
+    this.height = size.height;
+    return size;
+  }
 
+  override measure(constraints: BoxConstraints): Size {
+    return this.sizeFor(constraints);
+  }
+
+  /** Its size under these constraints - the one computation both `measure` and layout use. */
+  private sizeFor(constraints: BoxConstraints): Size {
     const specs = extentSpecs({
       ...this.sizing,
       width: this.requested.width,
@@ -71,8 +82,9 @@ export class CanvasElement extends SizedPDFElement {
     const resolved = resolveSize(specs.width, specs.height, this.sizing.aspectRatio, constraints);
     const bounds = resolved.constraints;
 
-    this.width = resolved.width ?? (bounds.hasBoundedWidth ? bounds.maxWidth : 0);
-    this.height = resolved.height ?? (bounds.hasBoundedHeight ? bounds.maxHeight : 0);
-    return { width: this.width, height: this.height };
+    return {
+      width: resolved.width ?? (bounds.hasBoundedWidth ? bounds.maxWidth : 0),
+      height: resolved.height ?? (bounds.hasBoundedHeight ? bounds.maxHeight : 0),
+    };
   }
 }

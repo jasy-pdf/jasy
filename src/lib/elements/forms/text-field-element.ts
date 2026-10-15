@@ -79,14 +79,26 @@ export class TextFieldElement extends SizedPDFElement {
   }
 
   calculateLayout(constraints: BoxConstraints, offset: Offset, _ctx: LayoutContext): Size {
+    const size = this.sizeFor(constraints);
     this.x = offset.x;
     this.y = offset.y;
+    this.width = size.width;
+    this.height = size.height;
+    return size;
+  }
+
+  override measure(constraints: BoxConstraints): Size {
+    return this.sizeFor(constraints);
+  }
+
+  private sizeFor(constraints: BoxConstraints): Size {
     // Width: explicit, else fill the offered box (a form field with no width spans the column).
-    this.width = this.requested.width ?? (constraints.hasBoundedWidth ? constraints.maxWidth : 200);
+    const width =
+      this.requested.width ?? (constraints.hasBoundedWidth ? constraints.maxWidth : 200);
     // Height: explicit, else a comfortable single line (font size + padding). Multiline without an
     // explicit height still gets the single-line default - the caller should size a multiline box.
-    this.height = this.requested.height ?? this.requested.fontSize + 9;
-    return { width: this.width, height: this.height };
+    const height = this.requested.height ?? this.requested.fontSize + 9;
+    return { width, height };
   }
 
   getProps() {

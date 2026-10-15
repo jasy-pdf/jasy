@@ -93,9 +93,20 @@ export class SvgElement extends SizedPDFElement {
   }
 
   calculateLayout(constraints: BoxConstraints, offset: Offset, _ctx: LayoutContext): Size {
+    const size = this.sizeFor(constraints);
     this.x = offset.x;
     this.y = offset.y;
+    this.width = size.width;
+    this.height = size.height;
+    return size;
+  }
 
+  override measure(constraints: BoxConstraints): Size {
+    return this.sizeFor(constraints);
+  }
+
+  /** Its size under these constraints - the one computation both `measure` and layout use. */
+  private sizeFor(constraints: BoxConstraints): Size {
     const specs = extentSpecs({
       ...this.sizing,
       width: this.requested.width,
@@ -122,8 +133,9 @@ export class SvgElement extends SizedPDFElement {
 
     // Nothing pinned: draw at the intrinsic size, as an unsized `<img>` does - never fill the region,
     // which would blow a 24pt icon up to the whole page.
-    this.width = w ?? bounds.constrainWidth(this.intrinsic.width);
-    this.height = h ?? bounds.constrainHeight(this.intrinsic.height);
-    return { width: this.width, height: this.height };
+    return {
+      width: w ?? bounds.constrainWidth(this.intrinsic.width),
+      height: h ?? bounds.constrainHeight(this.intrinsic.height),
+    };
   }
 }

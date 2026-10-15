@@ -23,33 +23,34 @@ export class RepeatingHeaderElement extends PDFElement implements Fragmentable {
   }
 
   calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
+    const size = this.sizeWith(constraints, ctx, offset);
     this.x = offset.x;
     this.y = offset.y;
+    this.width = size.width;
+    this.height = size.height;
+    return size;
+  }
+
+  override measure(constraints: BoxConstraints, ctx: LayoutContext): Size {
+    return this.sizeWith(constraints, ctx, null);
+  }
+
+  /** The one sizing path: with an `offset` header and body are laid out there, with `null` measured. */
+  private sizeWith(constraints: BoxConstraints, ctx: LayoutContext, offset: Offset | null): Size {
     const width = constraints.hasBoundedWidth ? constraints.maxWidth : 0;
-
-    const h = this.header.calculateLayout(
-      BoxConstraints.loose(width, Infinity),
-      { x: this.x, y: this.y },
-      ctx,
-    );
-    const b = this.body.calculateLayout(
-      BoxConstraints.loose(width, Infinity),
-      { x: this.x, y: this.y + h.height + this.gap },
-      ctx,
-    );
-
-    this.width = width;
-    this.height = h.height + this.gap + b.height;
-    return { width: this.width, height: this.height };
+    const inner = BoxConstraints.loose(width, Infinity);
+    const h = offset
+      ? this.header.calculateLayout(inner, { x: offset.x, y: offset.y }, ctx)
+      : this.header.measure(inner, ctx);
+    const b = offset
+      ? this.body.calculateLayout(inner, { x: offset.x, y: offset.y + h.height + this.gap }, ctx)
+      : this.body.measure(inner, ctx);
+    return { width, height: h.height + this.gap + b.height };
   }
 
   fragment(maxHeight: number, width: number, ctx: LayoutContext): FragmentResult {
     // Reserve the header's height on every page; the body flows in what's left.
-    const headerHeight = this.header.calculateLayout(
-      BoxConstraints.loose(width, Infinity),
-      { x: 0, y: 0 },
-      ctx,
-    ).height;
+    const headerHeight = this.header.measure(BoxConstraints.loose(width, Infinity), ctx).height;
 
     if (!isFragmentable(this.body)) return { fitted: this, remainder: null };
 

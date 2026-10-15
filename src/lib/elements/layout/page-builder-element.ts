@@ -46,6 +46,11 @@ export class PageBuilderElement extends PDFElement {
     return this.composed.calculateLayout(constraints, offset, ctx);
   }
 
+  /** Builds a throwaway subtree to size it; only a real layout keeps what it built. */
+  override measure(constraints: BoxConstraints, ctx: LayoutContext): Size {
+    return this.build(this.infoFrom(ctx)).measure(constraints, ctx);
+  }
+
   // Named `composed` (not `child`) like DeferredElement: the pre-layout image walk keys on `child`, and
   // this subtree does not exist yet when it runs. So an Image inside a PageBuilder skips aspect-ratio
   // pre-resolution - give it both width and height, exactly as inside a Deferred/Table subtree.

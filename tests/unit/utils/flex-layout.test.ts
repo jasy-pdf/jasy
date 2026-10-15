@@ -12,8 +12,8 @@ import {
 } from "../../../src/lib/elements/pdf-element";
 import { BoxConstraints, Offset, Size } from "../../../src/lib/layout/box-constraints";
 
-// The helper PLACES children (calls calculateLayout with their offset), so the mocks
-// record where they were placed and report a fixed size.
+// The helper MEASURES children (no side effects) and then PLACES each once (calculateLayout with
+// its offset), so the mocks record where they were placed and report a fixed size either way.
 class MockBox extends PDFElement {
   placedAt?: Offset;
   constructor(private size: Size) {
@@ -24,6 +24,9 @@ class MockBox extends PDFElement {
   }
   calculateLayout(_c: BoxConstraints, offset: Offset): Size {
     this.placedAt = offset;
+    return this.size;
+  }
+  measure(): Size {
     return this.size;
   }
 }
@@ -38,6 +41,9 @@ class MockFlex extends FlexiblePDFElement {
   }
   calculateLayout(c: BoxConstraints, offset: Offset): Size {
     this.placedAt = offset;
+    return this.measure(c);
+  }
+  measure(c: BoxConstraints): Size {
     return {
       width: c.maxWidth === Infinity ? 0 : c.maxWidth,
       height: c.maxHeight === Infinity ? 0 : c.maxHeight,

@@ -23,6 +23,11 @@ export class DeferredElement extends PDFElement implements Fragmentable {
     return this.build(ctx).calculateLayout(constraints, offset, ctx);
   }
 
+  /** Builds a throwaway subtree to size it; only a real layout keeps what it built. */
+  override measure(constraints: BoxConstraints, ctx: LayoutContext): Size {
+    return this.resolve(ctx).measure(constraints, ctx);
+  }
+
   fragment(maxHeight: number, width: number, ctx: LayoutContext): FragmentResult {
     const c = this.build(ctx);
     return isFragmentable(c)

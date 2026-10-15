@@ -211,7 +211,18 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
   calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
     this.x = offset.x;
     this.y = offset.y;
+    const size = this.sizeWith(constraints, ctx, offset);
+    this.width = size.width;
+    this.height = size.height;
+    return size;
+  }
 
+  override measure(constraints: BoxConstraints, ctx: LayoutContext): Size {
+    return this.sizeWith(constraints, ctx, null);
+  }
+
+  /** The one sizing path: `origin` places the children (layout); `null` only sizes them (measure). */
+  private sizeWith(constraints: BoxConstraints, ctx: LayoutContext, origin: Offset | null): Size {
     // Relative sizing: a pinned extent (fixed points or a fraction of the offered box, clamped into
     // the constraints) wins; else fill a bounded axis; else stay `undefined` and shrink-wrap below.
     // A Column nested in a Row gets unbounded width - passing 0 there would collapse children to 0.
@@ -251,8 +262,8 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
         VERTICAL_AXIS,
         mainAvail,
         crossAvail,
-        this.y,
-        this.x,
+        origin?.y ?? 0,
+        origin?.x ?? 0,
         {
           gap: this.gap,
           main: this.main,
@@ -262,15 +273,14 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
           alignContent: this.alignContent,
         },
         ctx,
+        origin ? "layout" : "measure",
       );
     }
 
     // Pinned/bounded axis takes that extent; an unbounded one shrink-wraps to the children (height =
     // the stack, width = the widest child). Top-left coordinates; the container draws nothing, and
     // the Y-flip happens once at the IR -> backend seam.
-    this.width = boundedWidth ?? result.crossUsed;
-    this.height = boundedHeight ?? result.mainUsed;
-    return { width: this.width, height: this.height };
+    return { width: boundedWidth ?? result.crossUsed, height: boundedHeight ?? result.mainUsed };
   }
 
   override getProps(): ContainerElementParams {

@@ -121,11 +121,7 @@ export function packChildren(
     // (CSS ignores break-before at the top of a page); that guard also prevents an empty page + a loop.
     if (child.breaksBefore() && fitted.length > 0) return spill(i, true);
 
-    const childHeight = child.calculateLayout(
-      BoxConstraints.loose(width, Infinity),
-      { x: 0, y: 0 },
-      ctx,
-    ).height;
+    const childHeight = child.measure(BoxConstraints.loose(width, Infinity), ctx).height;
 
     // A gap precedes every child except the first one placed in this region.
     const lead = fitted.length > 0 ? gap : 0;

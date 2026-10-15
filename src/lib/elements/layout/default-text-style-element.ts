@@ -54,6 +54,10 @@ export class DefaultTextStyleElement extends SizedPDFElement implements Fragment
     return size;
   }
 
+  override measure(constraints: BoxConstraints, ctx: LayoutContext): Size {
+    return this.child.measure(constraints, this.childCtx(ctx));
+  }
+
   override getProps() {
     return { x: this.x, y: this.y, width: this.width, height: this.height, child: this.child };
   }

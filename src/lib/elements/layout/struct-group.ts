@@ -29,6 +29,10 @@ export class StructGroup extends PDFElement implements Fragmentable {
     return this.child.calculateLayout(constraints, offset, ctx);
   }
 
+  override measure(constraints: BoxConstraints, ctx: LayoutContext): Size {
+    return this.child.measure(constraints, ctx);
+  }
+
   /** Only splittable when the wrapped child is - so a StructGroup(Row) is moved whole to the next page,
    *  not clipped at the boundary (isFragmentable honours this veto). */
   canFragment(): boolean {

@@ -67,11 +67,22 @@ export class RadioElement extends SizedPDFElement {
   }
 
   calculateLayout(_constraints: BoxConstraints, offset: Offset, _ctx: LayoutContext): Size {
+    const size = this.sizeFor(_constraints);
     this.x = offset.x;
     this.y = offset.y;
-    this.width = this.size;
-    this.height = this.size;
-    return { width: this.size, height: this.size };
+    this.width = size.width;
+    this.height = size.height;
+    return size;
+  }
+
+  override measure(_constraints: BoxConstraints): Size {
+    return this.sizeFor(_constraints);
+  }
+
+  private sizeFor(_constraints: BoxConstraints): Size {
+    const width = this.size;
+    const height = this.size;
+    return { width, height };
   }
 
   getProps() {

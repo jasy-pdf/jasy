@@ -39,6 +39,10 @@ export class KeepTogetherElement extends PDFElement implements Fragmentable {
     return this.child.calculateLayout(constraints, offset, ctx);
   }
 
+  override measure(constraints: BoxConstraints, ctx: LayoutContext): Size {
+    return this.child.measure(constraints, ctx);
+  }
+
   // Transparent: forward the sizing hints the flex parent reads, so a %-sized or Spacer-holding child
   // keeps working when it is wrapped (the wrapper must not swallow these).
   override relativeSizeFactor(horizontal: boolean): number | undefined {
@@ -77,11 +81,7 @@ export class KeepTogetherElement extends PDFElement implements Fragmentable {
       return this.splitChild(maxHeight, width, ctx);
     }
 
-    const natural = this.child.calculateLayout(
-      BoxConstraints.loose(width, Infinity),
-      { x: 0, y: 0 },
-      ctx,
-    ).height;
+    const natural = this.child.measure(BoxConstraints.loose(width, Infinity), ctx).height;
 
     // 1. Fits in the offered space: keep whole.
     if (natural <= maxHeight) return { fitted: this, remainder: null };
