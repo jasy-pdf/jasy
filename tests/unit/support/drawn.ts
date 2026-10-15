@@ -28,3 +28,19 @@ export function runOf(runs: TextRun[], text: string): TextRun {
   if (!hit) throw new Error(`no text "${text}" drawn`);
   return hit;
 }
+
+/** Like `drawnTextRuns`, one list per page in page order. */
+export async function drawnPages(render: () => Promise<unknown>): Promise<TextRun[][]> {
+  const pages: TextRun[][] = [];
+  const flipY = PdfBackend.flipY.bind(PdfBackend);
+  const spy = vi.spyOn(PdfBackend, "flipY").mockImplementation((nodes, height) => {
+    pages.push(nodes.filter((n): n is TextRun => n.type === "text"));
+    return flipY(nodes, height);
+  });
+  try {
+    await render();
+  } finally {
+    spy.mockRestore();
+  }
+  return pages;
+}

@@ -1,6 +1,7 @@
 import { BoxConstraints, Offset, Size } from "../../layout/box-constraints.ts";
 import { Fragmentable, FragmentResult, isFragmentable } from "../../layout/fragmentation.ts";
 import { LayoutContext, PDFElement } from "../pdf-element.ts";
+import { BuiltFromContext } from "../../layout/layout-cache.ts";
 
 /**
  * Builds its subtree at layout time via `resolve(ctx)`, so the tree can depend on font
@@ -8,14 +9,21 @@ import { LayoutContext, PDFElement } from "../pdf-element.ts";
  * stays table-agnostic - the closure comes from the API layer.
  */
 export class DeferredElement extends PDFElement implements Fragmentable {
+  // The subtree that was laid out last, and so gets drawn. Measuring never replaces it.
   private composed?: PDFElement;
+  private built = new BuiltFromContext<PDFElement>();
 
   constructor(private resolve: (ctx: LayoutContext) => PDFElement) {
     super();
   }
 
+  /** The subtree for this context: built once, and again only when the context changes. */
+  private subtree(ctx: LayoutContext): PDFElement {
+    return this.built.get(ctx, () => this.resolve(ctx));
+  }
+
   private build(ctx: LayoutContext): PDFElement {
-    this.composed = this.resolve(ctx);
+    this.composed = this.subtree(ctx);
     return this.composed;
   }
 
@@ -28,9 +36,9 @@ export class DeferredElement extends PDFElement implements Fragmentable {
     return this.composed?.dependsOnPage() ?? true;
   }
 
-  /** Builds a throwaway subtree to size it; only a real layout keeps what it built. */
+  /** Sizes the subtree for this context - the same one a layout under it will draw. */
   protected override computeSize(constraints: BoxConstraints, ctx: LayoutContext): Size {
-    return this.resolve(ctx).measure(constraints, ctx);
+    return this.subtree(ctx).measure(constraints, ctx);
   }
 
   fragment(maxHeight: number, width: number, ctx: LayoutContext): FragmentResult {

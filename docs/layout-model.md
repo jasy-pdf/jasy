@@ -160,7 +160,8 @@ New rule:
 ### 3.5 Subtrees built during layout
 
 - **`Deferred`** (tables with measured columns) keeps its built subtree and rebuilds only when its
-  inputs change. A table is then built once per render instead of once per layout call.
+  inputs change (`BuiltFromContext`: the context half of the size key; the page counts only if the
+  built subtree depends on it). A table is built once per render instead of once per layout call.
 - **`PageBuilder`** builds with the real page info on each page, so its size may differ per page (a
   conditional header may shrink on later pages). `dependsOnPage()` is true for it, for `Page`, and for
   every element holding one (asked through `layoutChildren`, remembered - the tree is immutable). A

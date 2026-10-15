@@ -22,6 +22,9 @@ import type { LayoutContext } from "../elements/pdf-element.ts";
  * - `fontEpoch` moves when a font face is added, and kerning can be switched on the same metrics; both
  *   change widths.
  *
+ * The same key, without the constraints, decides when a subtree built at layout time can be reused
+ * (`BuiltFromContext`, below).
+ *
  * Below this level sit value memos that are not size caches: glyph advances per font
  * (`text/advance.ts`) and a Text's displayed content (`TextElement.display`).
  */
@@ -30,11 +33,8 @@ export const layoutCache = {
   enabled: true,
 };
 
-interface Key {
-  minWidth: number;
-  maxWidth: number;
-  minHeight: number;
-  maxHeight: number;
+/** The context inputs: what a size - or a subtree built at layout time - can read besides the element. */
+interface ContextKey {
   metrics: LayoutContext["metrics"];
   fontEpoch: number;
   kerning: boolean | undefined;
@@ -43,11 +43,7 @@ interface Key {
   pageInfo: LayoutContext["pageInfo"];
 }
 
-const keyOf = (c: BoxConstraints, ctx: LayoutContext, onPage: boolean): Key => ({
-  minWidth: c.minWidth,
-  maxWidth: c.maxWidth,
-  minHeight: c.minHeight,
-  maxHeight: c.maxHeight,
+const contextKeyOf = (ctx: LayoutContext, onPage: boolean): ContextKey => ({
   metrics: ctx.metrics,
   fontEpoch: ctx.metrics?.fontEpoch ?? 0,
   kerning: ctx.metrics?.kerningEnabled,
@@ -56,17 +52,37 @@ const keyOf = (c: BoxConstraints, ctx: LayoutContext, onPage: boolean): Key => (
   pageInfo: onPage ? ctx.pageInfo : undefined,
 });
 
-const sameKey = (a: Key, b: Key): boolean =>
-  a.minWidth === b.minWidth &&
-  a.maxWidth === b.maxWidth &&
-  a.minHeight === b.minHeight &&
-  a.maxHeight === b.maxHeight &&
+const sameContext = (a: ContextKey, b: ContextKey): boolean =>
   a.metrics === b.metrics &&
   a.fontEpoch === b.fontEpoch &&
   a.kerning === b.kerning &&
   a.textStyle === b.textStyle &&
   a.pageConfig === b.pageConfig &&
   a.pageInfo === b.pageInfo;
+
+/** A size's key: the context inputs plus the constraints. */
+interface Key {
+  minWidth: number;
+  maxWidth: number;
+  minHeight: number;
+  maxHeight: number;
+  context: ContextKey;
+}
+
+const keyOf = (c: BoxConstraints, ctx: LayoutContext, onPage: boolean): Key => ({
+  minWidth: c.minWidth,
+  maxWidth: c.maxWidth,
+  minHeight: c.minHeight,
+  maxHeight: c.maxHeight,
+  context: contextKeyOf(ctx, onPage),
+});
+
+const sameKey = (a: Key, b: Key): boolean =>
+  a.minWidth === b.minWidth &&
+  a.maxWidth === b.maxWidth &&
+  a.minHeight === b.minHeight &&
+  a.maxHeight === b.maxHeight &&
+  sameContext(a.context, b.context);
 
 /**
  * How many different questions one element remembers. Flex asks a child at more than one width (its
@@ -92,5 +108,28 @@ export class SizeCache {
     if (this.entries.length < ENTRIES) this.entries.push(entry);
     else this.entries[this.next] = entry;
     this.next = (this.next + 1) % ENTRIES;
+  }
+}
+
+/**
+ * A subtree an element builds from the context at layout time (`Deferred`: a table whose `auto`
+ * columns are measured from its cells). It is built again only when the context key changes - the
+ * size rules, without constraints, because building never reads them. Whether the page belongs to
+ * the key is decided by what was built: a subtree without a `PageBuilder` is the same on every page.
+ */
+export class BuiltFromContext<T extends { dependsOnPage(): boolean }> {
+  private last?: { key: ContextKey; value: T };
+
+  get(ctx: LayoutContext, build: () => T): T {
+    const last = this.last;
+    if (
+      layoutCache.enabled &&
+      last &&
+      sameContext(last.key, contextKeyOf(ctx, last.value.dependsOnPage()))
+    )
+      return last.value;
+    const value = build();
+    this.last = { key: contextKeyOf(ctx, value.dependsOnPage()), value };
+    return value;
   }
 }
