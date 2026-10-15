@@ -1,4 +1,6 @@
-import type { PDFElement } from "@jasy/pdf";
+import { renderToBytes } from "@jasy/pdf";
+import type { PDFDocumentElement } from "@jasy/pdf";
+import { bundledFonts } from "../../src/fonts.ts";
 
 /**
  * Every string the template puts into the layout, in tree order.
@@ -7,8 +9,12 @@ import type { PDFElement } from "@jasy/pdf";
  * font, so the content stream holds glyph ids, not readable characters. What is really drawn where
  * is the job of `template-overflow.test.ts`; this answers the other half - does the value reach the
  * page at all.
+ *
+ * The tree is read AFTER a layout pass, with the fonts the invoice ships: a content-sized table
+ * column ("auto", "minmax()") builds its cells only then, and the text is what the layout resolved.
  */
-export function printedText(root: PDFElement): string[] {
+export async function printedText(root: PDFDocumentElement): Promise<string[]> {
+  await renderToBytes(root, { fonts: bundledFonts(), standardFonts: false });
   const out: string[] = [];
   const seen = new Set<unknown>();
 

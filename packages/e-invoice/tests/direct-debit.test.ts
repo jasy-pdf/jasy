@@ -109,27 +109,29 @@ describe("UBL keeps the mandate together and hangs the creditor id on the party"
 });
 
 describe("the paper tells the payer what is about to be collected", () => {
-  const printed = (invoice: Invoice) =>
-    printedText(
-      defaultInvoiceTemplate(
-        invoice,
-        computeInvoice(invoice),
-        resolveLabels("de"),
-        makeFormatters("de", "EUR"),
-      ),
+  const printed = async (invoice: Invoice) =>
+    (
+      await printedText(
+        defaultInvoiceTemplate(
+          invoice,
+          computeInvoice(invoice),
+          resolveLabels("de"),
+          makeFormatters("de", "EUR"),
+        ),
+      )
     ).join("\n");
 
-  it("names the mandate, the creditor id and the debited account", () => {
-    const text = printed(base);
+  it("names the mandate, the creditor id and the debited account", async () => {
+    const text = await printed(base);
     expect(text).toContain("SEPA-Lastschrift");
     expect(text).toContain("MND-2026-0042");
     expect(text).toContain("DE98ZZZ09999999999");
     expect(text).toContain("DE02120300000000202051");
   });
 
-  it("says nothing when the invoice is paid by transfer", () => {
+  it("says nothing when the invoice is paid by transfer", async () => {
     const transfer: Invoice = { ...base, payment: { meansCode: "58", iban: "DE02" } };
-    expect(printed(transfer)).not.toContain("SEPA-Lastschrift");
+    expect(await printed(transfer)).not.toContain("SEPA-Lastschrift");
   });
 });
 

@@ -99,37 +99,39 @@ describe("both syntaxes, each in its own slot", () => {
 });
 
 describe("the paper explains the difference", () => {
-  const printed = (invoice: Invoice) =>
-    printedText(
-      defaultInvoiceTemplate(
-        invoice,
-        computeInvoice(invoice),
-        resolveLabels("de"),
-        makeFormatters("de", "EUR"),
-      ),
+  const printed = async (invoice: Invoice) =>
+    (
+      await printedText(
+        defaultInvoiceTemplate(
+          invoice,
+          computeInvoice(invoice),
+          resolveLabels("de"),
+          makeFormatters("de", "EUR"),
+        ),
+      )
     ).join("\n");
 
-  it("shows the rounding with its sign, so the payable is not a mystery", () => {
-    const text = printed({ ...base, roundingAmount: 0.02 });
+  it("shows the rounding with its sign, so the payable is not a mystery", async () => {
+    const text = await printed({ ...base, roundingAmount: 0.02 });
     expect(text).toContain("Rundung");
     expect(text).toMatch(/\+0,02/);
   });
 
-  it("shows a downward rounding as a subtraction", () => {
-    expect(printed({ ...base, roundingAmount: -0.03 })).toMatch(/-0,03/);
+  it("shows a downward rounding as a subtraction", async () => {
+    expect(await printed({ ...base, roundingAmount: -0.03 })).toMatch(/-0,03/);
   });
 
-  it("prints no rounding line when there is none", () => {
-    expect(printed(base)).not.toContain("Rundung");
+  it("prints no rounding line when there is none", async () => {
+    expect(await printed(base)).not.toContain("Rundung");
   });
 
   // BT-113 may be negative (EN 16931 only demands BR-CO-16), and whatever reaches the XML reaches
   // the paper - or the payable on the page has no explanation.
-  it("shows an amount already paid as a subtraction", () => {
-    expect(printed({ ...base, paidAmount: 50 })).toMatch(/bereits gezahlt\n-50,00/);
+  it("shows an amount already paid as a subtraction", async () => {
+    expect(await printed({ ...base, paidAmount: 50 })).toMatch(/bereits gezahlt\n-50,00/);
   });
 
-  it("shows a negative amount already paid as an addition", () => {
-    expect(printed({ ...base, paidAmount: -50 })).toMatch(/bereits gezahlt\n\+50,00/);
+  it("shows a negative amount already paid as an addition", async () => {
+    expect(await printed({ ...base, paidAmount: -50 })).toMatch(/bereits gezahlt\n\+50,00/);
   });
 });

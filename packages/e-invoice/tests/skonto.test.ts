@@ -157,15 +157,17 @@ describe("both syntaxes carry it, and say the same thing", () => {
 });
 
 describe("the paper says what the XML says", () => {
-  it("prints the percentage, the deadline and what it saves", () => {
+  it("prints the percentage, the deadline and what it saves", async () => {
     const invoice = withSkonto({ days: 14, percent: 2 });
-    const text = printedText(
-      defaultInvoiceTemplate(
-        invoice,
-        computeInvoice(invoice),
-        resolveLabels("de"),
-        makeFormatters("de", "EUR"),
-      ),
+    const text = (
+      await printedText(
+        defaultInvoiceTemplate(
+          invoice,
+          computeInvoice(invoice),
+          resolveLabels("de"),
+          makeFormatters("de", "EUR"),
+        ),
+      )
     ).join("\n");
     expect(text).toContain("Skonto");
     expect(text).toMatch(/23\.09\.2026/);

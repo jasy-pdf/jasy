@@ -8,6 +8,8 @@ import { RepeatingHeaderElement } from "../../../src/lib/elements/layout/repeati
 import { DeferredElement } from "../../../src/lib/elements/layout/deferred-element";
 import { PDFElement } from "../../../src/lib/elements/pdf-element";
 import { StructGroup } from "../../../src/lib/elements/layout/struct-group";
+import { TextElement } from "../../../src/lib/elements/text-element.ts";
+import { Document, Page, renderToBytes } from "../../../src/lib/api/structure.ts";
 
 // Tables now wrap the table / rows / cells in layout-transparent StructGroups (accessibility). These
 // helpers see through them, so the tests still assert the underlying Column / Row / Box structure.
@@ -114,4 +116,64 @@ describe("Table factory", () => {
     expect(is.bottom).toBeDefined();
     expect(is.right).toBeDefined();
   });
+});
+
+// CSS grid's `minmax(min, auto)`: as wide as the widest cell, but never narrower than `min` (points,
+// like every jasy number). Measured after layout: where the second column starts.
+describe('a "minmax(<points>, auto)" column', () => {
+  const textNode = (root: unknown, content: string): TextElement => {
+    const seen = new Set<unknown>();
+    const walk = (node: unknown): TextElement | undefined => {
+      if (!node || typeof node !== "object" || seen.has(node)) return undefined;
+      seen.add(node);
+      if (node instanceof TextElement && node.getProps().content === content) return node;
+      for (const value of Object.values(node as Record<string, unknown>)) {
+        for (const kid of Array.isArray(value) ? value : [value]) {
+          const hit = walk(kid);
+          if (hit) return hit;
+        }
+      }
+      return undefined;
+    };
+    const hit = walk(root);
+    if (!hit) throw new Error(`no text "${content}"`);
+    return hit;
+  };
+  /** Width of the first column: where "next" starts minus where the first cell starts. */
+  const firstColumnWidth = async (column: string, first: string): Promise<number> => {
+    const doc = Document([Page([Table({ columns: [column, "1fr"] }, [[first, "next"]])])]);
+    await renderToBytes(doc);
+    return textNode(doc, "next").getProps().x - textNode(doc, first).getProps().x;
+  };
+
+  it("holds its minimum when the content is narrower", async () => {
+    expect(await firstColumnWidth("minmax(60, auto)", "a")).toBe(60);
+  });
+
+  it("grows like `auto` when the content is wider", async () => {
+    const wide = "a cell much wider than sixty points";
+    expect(await firstColumnWidth("minmax(60, auto)", wide)).toBe(
+      await firstColumnWidth("auto", wide),
+    );
+    expect(await firstColumnWidth("auto", wide)).toBeGreaterThan(60);
+  });
+
+  it("measures past a header that is shorter than the columns", async () => {
+    // A missing header cell is skipped, as a missing body cell is.
+    const doc = Document([
+      Page([Table({ columns: ["1fr", "minmax(40, auto)"], header: ["Item"] }, [["a", "b"]])]),
+    ]);
+    await expect(renderToBytes(doc)).resolves.toBeInstanceOf(Uint8Array);
+  });
+
+  it("is resolved at layout time, like `auto`", () => {
+    expect(Table({ columns: ["minmax(40, auto)"] }, [["a"]])).toBeInstanceOf(DeferredElement);
+  });
+
+  it.each(["minmax(40, 1fr)", "minmax(40, 120)", "minmax(auto, 40)", "minmax(40px, auto)"])(
+    "names the edge of what is supported: %s",
+    (column) => {
+      expect(() => Table({ columns: [column] }, [["a"]])).toThrow(/minmax\(40, auto\)/);
+    },
+  );
 });

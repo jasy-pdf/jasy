@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { beforeAll, describe, it, expect } from "vitest";
 import { defaultInvoiceTemplate, documentTitle } from "../src/template";
 import { computeInvoice } from "../src/compute";
 import { resolveLabels, makeFormatters } from "../src/i18n";
@@ -32,14 +32,19 @@ const NOT_PRINTED: Record<string, string> = {
 };
 
 describe("every field that reaches the XML reaches the paper", () => {
-  const text = printedText(
-    defaultInvoiceTemplate(
-      maximal,
-      computeInvoice(maximal),
-      resolveLabels("de"),
-      makeFormatters("de", "EUR"),
-    ),
-  ).join("\n");
+  let text = "";
+  beforeAll(async () => {
+    text = (
+      await printedText(
+        defaultInvoiceTemplate(
+          maximal,
+          computeInvoice(maximal),
+          resolveLabels("de"),
+          makeFormatters("de", "EUR"),
+        ),
+      )
+    ).join("\n");
+  });
 
   const markers = JSON.stringify(maximal).match(/MARK-[A-Z0-9]+/g) ?? [];
   const expected = [...new Set(markers)].filter((m) => !(m in NOT_PRINTED));
@@ -212,28 +217,30 @@ describe("the identifiers a zero-VAT category demands", () => {
 describe("a credit note must not call itself an invoice", () => {
   // BT-3 reaches the XML either way; the PAPER used to say "Rechnung" regardless. A document that
   // names itself wrong is not a cosmetic problem - §14 Abs. 4 Nr. 10 UStG is about what it is called.
-  const titleOf = (invoice: Invoice, locale: "de" | "en" = "de") =>
-    printedText(
-      defaultInvoiceTemplate(
-        invoice,
-        computeInvoice(invoice),
-        resolveLabels(locale),
-        makeFormatters(locale, invoice.currency),
-      ),
-      // the bare number also appears in the information block - the TITLE is the one that prefixes it
+  const titleOf = async (invoice: Invoice, locale: "de" | "en" = "de") =>
+    (
+      await printedText(
+        defaultInvoiceTemplate(
+          invoice,
+          computeInvoice(invoice),
+          resolveLabels(locale),
+          makeFormatters(locale, invoice.currency),
+        ),
+        // the bare number also appears in the information block - the TITLE is the one that prefixes it
+      )
     ).find((t) => t !== invoice.number && t.endsWith(invoice.number));
 
-  it("says Gutschrift for type 381", () => {
-    expect(titleOf({ ...maximal, type: 381 })).toMatch(/^Gutschrift /);
+  it("says Gutschrift for type 381", async () => {
+    expect(await titleOf({ ...maximal, type: 381 })).toMatch(/^Gutschrift /);
   });
 
-  it("still says Rechnung for type 380 and for no type at all", () => {
-    expect(titleOf({ ...maximal, type: 380 })).toMatch(/^Rechnung /);
-    expect(titleOf({ ...maximal, type: undefined })).toMatch(/^Rechnung /);
+  it("still says Rechnung for type 380 and for no type at all", async () => {
+    expect(await titleOf({ ...maximal, type: 380 })).toMatch(/^Rechnung /);
+    expect(await titleOf({ ...maximal, type: undefined })).toMatch(/^Rechnung /);
   });
 
-  it("follows the locale", () => {
-    expect(titleOf({ ...maximal, type: 381 }, "en")).toMatch(/^Credit note /);
+  it("follows the locale", async () => {
+    expect(await titleOf({ ...maximal, type: 381 }, "en")).toMatch(/^Credit note /);
   });
 });
 

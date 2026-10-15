@@ -128,14 +128,16 @@ describe("we never invent the exchange rate", () => {
 });
 
 describe("the paper carries it, because that is who the figure is for", () => {
-  it("prints the VAT total in the accounting currency", () => {
-    const text = printedText(
-      defaultInvoiceTemplate(
-        withEuroVat,
-        computeInvoice(withEuroVat),
-        resolveLabels("de"),
-        makeFormatters("de", "USD"),
-      ),
+  it("prints the VAT total in the accounting currency", async () => {
+    const text = (
+      await printedText(
+        defaultInvoiceTemplate(
+          withEuroVat,
+          computeInvoice(withEuroVat),
+          resolveLabels("de"),
+          makeFormatters("de", "USD"),
+        ),
+      )
     ).join("\n");
     expect(text).toContain("USt in EUR");
     // Formatted as MONEY in the other currency: "172,4" would read as a typo on a tax figure.
