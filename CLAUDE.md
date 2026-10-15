@@ -195,30 +195,29 @@ shared state.
 
 ## Element & renderer inventory
 
-| Element                 | File                                         | Renderer               | Notes                                                                                     |
-| ----------------------- | -------------------------------------------- | ---------------------- | ----------------------------------------------------------------------------------------- |
-| `PDFDocumentElement`    | `elements/pdf-document-element.ts`           | `PDFDocumentRenderer`  | root, holds pages                                                                         |
-| `PageElement`           | `elements/page-element.ts`                   | `PageRenderer`         | per-page `config` (size/orientation/margin)                                               |
-| `ContainerElement`      | `elements/container-element.ts`              | `ContainerRenderer`    | sized box, flex column of children                                                        |
-| `TextElement`           | `elements/text-element.ts`                   | `TextRenderer`         | string or `TextSegment[]` (mixed font/size/color), alignment, word-wrap                   |
-| `PaddingElement`        | `elements/layout/padding-element.ts`         | `PaddingRenderer`      | margin `[top,right,bottom,left]`, sizes to child                                          |
-| `ExpandedElement`       | `elements/layout/expanded-element.ts`        | `ExpandedRenderer`     | flex child, fills remaining height                                                        |
-| `SizedContainerElement` | `elements/layout/sized-container-element.ts` | —                      |                                                                                           |
-| `ImageElement`          | `elements/image-element.ts`                  | `ImageRenderer`        | via `jimp`; `BoxFit`, grayscale; `CustomLocalImage`                                       |
-| `LineElement`           | `elements/line-element.ts`                   | `LineRenderer`         | stroke                                                                                    |
-| `RectangleElement`      | `elements/rectangle-element.ts`              | `RectangleRenderer`    | fill + stroke                                                                             |
-| `Color`                 | `common/color.ts`                            | —                      | RGB → PDF color string                                                                    |
-| `LinkElement`           | `elements/layout/link-element.ts`            | `LinkRenderer`         | `href` (URL) or `dest` (an `Anchor`) → a /Link annotation                                 |
-| `AnchorElement`         | `elements/layout/anchor-element.ts`          | `AnchorRenderer`       | named jump target → catalog /Names /Dests                                                 |
-| `BookmarkElement`       | `elements/layout/bookmark-element.ts`        | `BookmarkRenderer`     | outline entry, nested by `level` → /Outlines                                              |
-| `RotatedElement`        | `elements/layout/rotated-element.ts`         | `RotatedRenderer`      | paint-only spin at any angle (stamps)                                                     |
-| `RotatedBoxElement`     | `elements/layout/rotated-box-element.ts`     | `RotatedRenderer`      | layout-aware quarter-turns (vertical labels)                                              |
-| `PageBuilderElement`    | `elements/layout/page-builder-element.ts`    | `PageBuilderRenderer`  | builds from `PageInfo` (pageNumber/pageCount/pageSize)                                    |
-| `PageBreakElement`      | `elements/layout/page-break-element.ts`      | `PageBreakRenderer`    | forced page break; zero-size, packer cuts at it (`forceBreak` bubbles up)                 |
-| `KeepTogetherElement`   | `elements/layout/keep-together-element.ts`   | `KeepTogetherRenderer` | transparent wrapper; vetoes a page-split (break-inside: avoid), degrades if > 1 page      |
-| form fields (6 classes) | `elements/forms/*.ts`                        | `FormFieldRenderer`    | AcroForm widgets; reserve a rect, emit a widget annotation. Shared spec: `forms/field.ts` |
-| `SvgElement`            | `elements/svg-element.ts`                    | `SvgRenderer`          | an SVG drawing; parsed at construction, `svg/` turns it into `Path` IR                    |
-| `CanvasElement`         | `elements/canvas-element.ts`                 | `CanvasRenderer`       | a box drawn by a callback; `canvas/painter.ts` records into `Path` IR                     |
+| Element                 | File                                       | Renderer               | Notes                                                                                     |
+| ----------------------- | ------------------------------------------ | ---------------------- | ----------------------------------------------------------------------------------------- |
+| `PDFDocumentElement`    | `elements/pdf-document-element.ts`         | `PDFDocumentRenderer`  | root, holds pages                                                                         |
+| `PageElement`           | `elements/page-element.ts`                 | `PageRenderer`         | per-page `config` (size/orientation/margin)                                               |
+| `ContainerElement`      | `elements/container-element.ts`            | `ContainerRenderer`    | sized box, flex column of children                                                        |
+| `TextElement`           | `elements/text-element.ts`                 | `TextRenderer`         | string or `TextSegment[]` (mixed font/size/color), alignment, word-wrap                   |
+| `PaddingElement`        | `elements/layout/padding-element.ts`       | `PaddingRenderer`      | margin `[top,right,bottom,left]`, sizes to child                                          |
+| `ExpandedElement`       | `elements/layout/expanded-element.ts`      | `ExpandedRenderer`     | flex child, fills remaining height                                                        |
+| `ImageElement`          | `elements/image-element.ts`                | `ImageRenderer`        | via `jimp`; `BoxFit`, grayscale; `CustomLocalImage`                                       |
+| `LineElement`           | `elements/line-element.ts`                 | `LineRenderer`         | stroke                                                                                    |
+| `RectangleElement`      | `elements/rectangle-element.ts`            | `RectangleRenderer`    | fill + stroke                                                                             |
+| `Color`                 | `common/color.ts`                          | —                      | RGB → PDF color string                                                                    |
+| `LinkElement`           | `elements/layout/link-element.ts`          | `LinkRenderer`         | `href` (URL) or `dest` (an `Anchor`) → a /Link annotation                                 |
+| `AnchorElement`         | `elements/layout/anchor-element.ts`        | `AnchorRenderer`       | named jump target → catalog /Names /Dests                                                 |
+| `BookmarkElement`       | `elements/layout/bookmark-element.ts`      | `BookmarkRenderer`     | outline entry, nested by `level` → /Outlines                                              |
+| `RotatedElement`        | `elements/layout/rotated-element.ts`       | `RotatedRenderer`      | paint-only spin at any angle (stamps)                                                     |
+| `RotatedBoxElement`     | `elements/layout/rotated-box-element.ts`   | `RotatedRenderer`      | layout-aware quarter-turns (vertical labels)                                              |
+| `PageBuilderElement`    | `elements/layout/page-builder-element.ts`  | `PageBuilderRenderer`  | builds from `PageInfo` (pageNumber/pageCount/pageSize)                                    |
+| `PageBreakElement`      | `elements/layout/page-break-element.ts`    | `PageBreakRenderer`    | forced page break; zero-size, packer cuts at it (`forceBreak` bubbles up)                 |
+| `KeepTogetherElement`   | `elements/layout/keep-together-element.ts` | `KeepTogetherRenderer` | transparent wrapper; vetoes a page-split (break-inside: avoid), degrades if > 1 page      |
+| form fields (6 classes) | `elements/forms/*.ts`                      | `FormFieldRenderer`    | AcroForm widgets; reserve a rect, emit a widget annotation. Shared spec: `forms/field.ts` |
+| `SvgElement`            | `elements/svg-element.ts`                  | `SvgRenderer`          | an SVG drawing; parsed at construction, `svg/` turns it into `Path` IR                    |
+| `CanvasElement`         | `elements/canvas-element.ts`               | `CanvasRenderer`       | a box drawn by a callback; `canvas/painter.ts` records into `Path` IR                     |
 
 Every renderer's `render()` returns `Promise<IRNode[]>`. Adding an element =
 new element + renderer that returns IR + (if it draws something new) a primitive in `ir/display-list.ts`

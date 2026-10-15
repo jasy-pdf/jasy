@@ -30,30 +30,35 @@ export class ExpandedElement extends FlexiblePDFElement implements Fragmentable 
   }
 
   calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
-    if (constraints.hasBoundedWidth) this.width = constraints.maxWidth;
     // Absolute placement from the parent; assignment (not +=) so re-layout is idempotent.
     this.x = offset.x;
     this.y = offset.y;
 
     Validator.validateFlexElement(this);
 
+    // It fills its MAIN axis only. Across it, it is an ordinary child: with no width bound it takes
+    // its content's width, from THIS call - never one left over from an earlier layout.
+    const width = constraints.hasBoundedWidth ? constraints.maxWidth : Infinity;
+
     if (constraints.hasBoundedHeight) {
       // A bounded region: fill it - the normal flex behavior.
       this.height = constraints.maxHeight;
-      this.child.calculateLayout(
-        BoxConstraints.loose(this.width, this.height),
+      const childSize = this.child.calculateLayout(
+        BoxConstraints.loose(width, this.height),
         { x: this.x, y: this.y },
         ctx,
       );
+      this.width = constraints.hasBoundedWidth ? width : childSize.width;
     } else {
       // Unbounded (measuring while paginating): there's no leftover space to fill, so
       // collapse to the child's natural height. This lets an overflowing column flow
       // instead of the flex silently hiding the overflow.
       const childSize = this.child.calculateLayout(
-        BoxConstraints.loose(this.width, Infinity),
+        BoxConstraints.loose(width, Infinity),
         { x: this.x, y: this.y },
         ctx,
       );
+      this.width = constraints.hasBoundedWidth ? width : childSize.width;
       this.height = childSize.height;
     }
 

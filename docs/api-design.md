@@ -103,7 +103,7 @@ _between_ children of a Column/Row).
 | `Spacer(flex?)`                        | flexible gap         | `flex`                                                          | `ExpandedElement` (empty child)        |
 | `Expanded(opts, child)`                | child fills leftover | `flex`                                                          | `ExpandedElement`                      |
 | `Center(child)` / `Align(opts, child)` | alignment wrapper    | `align`                                                         | Column/Row align                       |
-| `SizedBox(opts, child?)`               | fixed size / strut   | `width`, `height`                                               | `SizedContainerElement`                |
+| `SizedBox(opts, child?)`               | fixed size / strut   | `width`, `height`                                               | not built: `Box({ width, height })`    |
 
 † **The sizing set**, shared by `Box` · `Column` · `Row` · `Image` and resolved in ONE place
 (`resolveSize`, `layout/box-constraints.ts`):

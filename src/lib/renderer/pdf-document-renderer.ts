@@ -106,7 +106,9 @@ export class PDFDocumentRenderer {
    * documents keep producing byte-identical output.
    */
   private static paginateLogicalPage(page: PageElement, ctx: LayoutContext): PhysicalPage[] {
-    const { children, config, header, footer } = page.getProps();
+    const { children, header, footer } = page.getProps();
+    // Resolved here, not read back from an earlier layout pass that happened to merge it.
+    const config = page.resolveConfig(ctx.pageConfig);
 
     if (children.length !== 1 || !isFragmentable(children[0])) {
       return [{ kind: "whole", page }];
@@ -119,13 +121,13 @@ export class PDFDocumentRenderer {
     // real frame (in `PageElement`) and drains it.
     const pageCtx: LayoutContext = {
       metrics: ctx.metrics,
-      pageConfig: config!,
+      pageConfig: config,
       textStyle: ctx.textStyle,
       onOverflow: ctx.onOverflow,
-      frame: pageFrame(config!),
+      frame: pageFrame(config),
     };
     const { bodyWidth: width, bodyHeight: height } = layoutPageBands(
-      config!,
+      config,
       header,
       footer,
       pageCtx,

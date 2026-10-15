@@ -132,7 +132,9 @@ export function layoutPageBands(
   };
 }
 export class PageElement extends PDFElement {
-  // This page's own (partial) config; merged with the document defaults during layout.
+  // What the page itself says (partial). Never overwritten: every layout resolves it afresh.
+  private readonly ownConfig: PDFPageConfig;
+  // The resolved config of the last layout, for the renderer (MediaBox) and the bands.
   private config: PDFPageConfig;
   private children: PDFElement[];
   private header?: PDFElement;
@@ -141,16 +143,16 @@ export class PageElement extends PDFElement {
   constructor({ children, config, header, footer }: PDFPageParams) {
     super();
     this.children = children;
-    this.config = config ?? {};
+    this.ownConfig = config ?? {};
+    this.config = this.ownConfig;
     this.header = header;
     this.footer = footer;
   }
 
   calculateLayout(_constraints: BoxConstraints, _offset: Offset, ctx: LayoutContext): Size {
-    // Merge the document defaults (carried in the context) with this page's overrides,
-    // then hand descendants a context bound to THIS page's geometry. This is what
-    // fixes the old last-page-wins global page-config bug.
-    this.config = { ...ctx.pageConfig, ...this.config };
+    // Hand descendants a context bound to THIS page's geometry. This is what fixes the old
+    // last-page-wins global page-config bug.
+    this.config = this.resolveConfig(ctx.pageConfig);
     const pageCtx: LayoutContext = {
       metrics: ctx.metrics,
       pageConfig: this.config,
@@ -189,6 +191,11 @@ export class PageElement extends PDFElement {
     for (const place of frame.place) place(frame, frameCtx);
 
     return { width: frame.size.width, height: frame.size.height };
+  }
+
+  /** The document defaults with this page's own settings on top. Pure: no pass has to run first. */
+  resolveConfig(defaults: PDFPageConfig | undefined): PDFPageConfig {
+    return { ...defaults, ...this.ownConfig };
   }
 
   override getProps(): PDFPageParams {

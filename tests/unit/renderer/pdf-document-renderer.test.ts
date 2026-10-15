@@ -12,9 +12,10 @@ const ctx = {} as LayoutContext; // not used on the unchanged (non-fragmenting) 
 
 // A page that takes the unchanged path: not the single-fragmentable-child shape. The render pass lays
 // every physical page out again (that is what gives a PageBuilder its final page number), so the fake
-// needs calculateLayout too.
+// needs calculateLayout too - and resolveConfig, which pagination asks for the page's geometry.
 const plainPage = () => ({
   getProps: () => ({ children: [], config: {} }),
+  resolveConfig: (defaults: object | undefined) => ({ ...defaults }),
   calculateLayout: vi.fn(),
 });
 
