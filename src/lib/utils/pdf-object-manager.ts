@@ -240,8 +240,8 @@ export class PDFObjectManager implements FontMetrics {
    *  key would carry the whole run's text, so every lookup would copy it into a fresh string. */
   private shapeCache = new Map<TTFParser, Map<string, Map<string, ShapedGlyph[] | null>>>();
 
-  /** Bumped by every font registration; `runAdvance` watches it to drop memoised widths, since a
-   *  family name can mean a different face afterwards. */
+  /** Bumped when a face is really ADDED (a repeat registration returns early, untouched); every
+   *  memoised measurement watches it, since a family name can mean a different face afterwards. */
   fontEpoch = 0;
   // Per font, glyph -> the code points it stands for. A shaped glyph is often absent from the cmap (a
   // ligature) or maps back to a presentation form, so `ToUnicode` cannot come from the cmap alone.
@@ -721,10 +721,10 @@ endstream`;
     fontStyle: FontStyle = FontStyle.Normal,
     fullName: string = fontName,
   ): FontIndexes {
-    this.fontEpoch++;
     if (this.fonts.hasFont(fontName, fontStyle)) {
       return this.fonts.getFont(fontName, fontStyle)!; // Already exists? Return it!
     }
+    this.fontEpoch++;
     this.verticalsCache.delete(fontName);
     this.decorationCache.delete(fontName);
 
@@ -757,13 +757,13 @@ endstream`;
   // metrics and emits its PDF font objects. All variants share the family `name`; bold/italic are
   // separate .ttf files registered under the same name with a different style.
   registerCustomFont(name: string, data: Uint8Array, style: FontStyle = FontStyle.Normal): void {
-    this.fontEpoch++;
     let byStyle = this.customFonts.get(name);
     if (!byStyle) {
       byStyle = new Map();
       this.customFonts.set(name, byStyle);
     }
     if (byStyle.has(style)) return;
+    this.fontEpoch++;
     // A WOFF is the same sfnt behind a small wrapper, so it is unpacked HERE - the one place every
     // font path meets (a file, raw bytes, a URL, a browser upload) - and TTFParser never learns a
     // second container format.

@@ -200,3 +200,30 @@ describe("PDFObjectManager - XRef Table and Trailer with multiple objects", () =
     expect(trailer).toContain("50"); // Start of XRef table
   });
 });
+
+// `fontEpoch` tells every memoised measurement that a family name may now mean another face. Only a
+// face that is really NEW can do that; a repeat registration hands back what is there, and must not
+// throw away every measurement made so far (it runs per page and per drawn text run).
+describe("fontEpoch moves only when a face is really added", () => {
+  const ttf = new Uint8Array(fs.readFileSync("tests/fixtures/fonts/dejavu-subset.ttf"));
+
+  it("a standard font registered again leaves it alone", () => {
+    const manager = new PDFObjectManager();
+    manager.registerFont("Helvetica");
+    const epoch = manager.fontEpoch;
+    manager.registerFont("Helvetica");
+    expect(manager.fontEpoch).toBe(epoch);
+    manager.registerFont("Courier"); // a new face does move it
+    expect(manager.fontEpoch).toBeGreaterThan(epoch);
+  });
+
+  it("an embedded font registered again leaves it alone", () => {
+    const manager = new PDFObjectManager();
+    manager.registerCustomFont("Test", ttf);
+    const epoch = manager.fontEpoch;
+    manager.registerCustomFont("Test", ttf);
+    expect(manager.fontEpoch).toBe(epoch);
+    manager.registerCustomFont("Test", ttf, FontStyle.Bold); // a new style is a new face
+    expect(manager.fontEpoch).toBeGreaterThan(epoch);
+  });
+});
