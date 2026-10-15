@@ -34,7 +34,7 @@ const withColorFont = (): PDFObjectManager => {
 
 describe("TextRenderer - COLR color glyph expansion", () => {
   it("expands a lone emoji into one filled Path per palette layer (red then blue)", async () => {
-    const nodes = await TextRenderer.render(textElement("😀"), withColorFont());
+    const nodes = await TextRenderer.render(textElement("😀"), withColorFont(), { x: 0, y: 0 });
 
     const paths = nodes.filter((n): n is Path => n.type === "path");
     expect(nodes).toHaveLength(2); // only the two layers, no text run
@@ -46,7 +46,7 @@ describe("TextRenderer - COLR color glyph expansion", () => {
   });
 
   it("keeps surrounding text as runs and places the emoji layers between them", async () => {
-    const nodes = await TextRenderer.render(textElement("A😀B"), withColorFont());
+    const nodes = await TextRenderer.render(textElement("A😀B"), withColorFont(), { x: 0, y: 0 });
 
     expect(nodes.map((n) => n.type)).toEqual(["text", "path", "path", "text"]);
     const before = nodes[0] as TextRun;
@@ -60,7 +60,7 @@ describe("TextRenderer - COLR color glyph expansion", () => {
   it("expands a COLR v1 glyph into a solid layer + a gradient layer", async () => {
     const om = new PDFObjectManager();
     om.registerCustomFont("Emoji", buildColorV1Ttf(0x1f600));
-    const nodes = await TextRenderer.render(textElement("😀"), om);
+    const nodes = await TextRenderer.render(textElement("😀"), om, { x: 0, y: 0 });
 
     const paths = nodes.filter((n): n is Path => n.type === "path");
     expect(paths).toHaveLength(2);
@@ -99,6 +99,7 @@ describe("TextRenderer - COLR color glyph expansion", () => {
         }),
       } as unknown as TextElement,
       om,
+      { x: 0, y: 0 },
     );
     expect(nodes).toHaveLength(1);
     expect(nodes[0].type).toBe("text");
@@ -148,7 +149,7 @@ describe("TextRenderer - COLR color glyph expansion", () => {
       }),
     } as unknown as TextElement;
 
-    const nodes = await TextRenderer.render(el, om);
+    const nodes = await TextRenderer.render(el, om, { x: 0, y: 0 });
     expect(nodes.map((n) => n.type)).toEqual(["text", "path", "path", "text"]);
     const before = nodes[0] as TextRun;
     const after = nodes[3] as TextRun;
@@ -179,7 +180,7 @@ describe("TextRenderer - COLR color glyph expansion", () => {
       }),
     } as unknown as TextElement;
 
-    const nodes = await TextRenderer.render(el, om);
+    const nodes = await TextRenderer.render(el, om, { x: 0, y: 0 });
     expect(nodes).toHaveLength(1);
     expect(nodes[0].type).toBe("text");
   });

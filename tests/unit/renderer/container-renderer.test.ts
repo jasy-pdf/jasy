@@ -5,6 +5,9 @@ import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager";
 import { ContainerElement } from "../../../src/lib/elements/container-element";
 import { PDFElement } from "../../../src/lib/elements/pdf-element";
 
+// The origin a renderer is handed must reach its children unchanged (a container has no box of its own).
+const ORIGIN = { x: 12, y: 34 };
+
 describe("ContainerRenderer", () => {
   it("should render children elements using their respective renderers", async () => {
     // Mock child elements (they should be instances of PDFElement or its subclasses)
@@ -47,11 +50,11 @@ describe("ContainerRenderer", () => {
       .mockImplementationOnce(() => mockRenderer2);
 
     // Call the ContainerRenderer's render method
-    const result = await ContainerRenderer.render(mockContainerElement, mockObjectManager);
+    const result = await ContainerRenderer.render(mockContainerElement, mockObjectManager, ORIGIN);
 
     // Check if the correct renderers were called for each child
-    expect(mockRenderer1).toHaveBeenCalledWith(mockChild1, mockObjectManager);
-    expect(mockRenderer2).toHaveBeenCalledWith(mockChild2, mockObjectManager);
+    expect(mockRenderer1).toHaveBeenCalledWith(mockChild1, mockObjectManager, ORIGIN);
+    expect(mockRenderer2).toHaveBeenCalledWith(mockChild2, mockObjectManager, ORIGIN);
 
     // The container concatenates its children's display lists in order.
     expect(result).toEqual(["node-1", "node-2"]);
@@ -75,7 +78,7 @@ describe("ContainerRenderer", () => {
     const mockObjectManager = {} as PDFObjectManager;
 
     // Call the ContainerRenderer's render method
-    const result = await ContainerRenderer.render(mockContainerElement, mockObjectManager);
+    const result = await ContainerRenderer.render(mockContainerElement, mockObjectManager, ORIGIN);
 
     // No children -> empty display list.
     expect(result).toEqual([]);
@@ -99,7 +102,7 @@ describe("ContainerRenderer", () => {
     const mockObjectManager = {} as PDFObjectManager;
 
     // Call the ContainerRenderer's render method
-    const result = await ContainerRenderer.render(mockContainerElement, mockObjectManager);
+    const result = await ContainerRenderer.render(mockContainerElement, mockObjectManager, ORIGIN);
 
     // No children -> empty display list.
     expect(result).toEqual([]);

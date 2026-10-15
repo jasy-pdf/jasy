@@ -39,7 +39,7 @@ const drawn = async (
     metrics: om(),
     textStyle,
   } as never);
-  const nodes = await TextRenderer.render(el, om());
+  const nodes = await TextRenderer.render(el, om(), { x: 0, y: 0 });
   return nodes.filter((n): n is TextRun => n.type === "text");
 };
 
@@ -154,7 +154,7 @@ describe("shaping sees the LOGICAL text, and its glyphs are drawn in visual orde
     el.calculateLayout(BoxConstraints.tight(400, 400), { x: 0, y: 0 }, {
       metrics: shapingOm(seen),
     } as never);
-    await TextRenderer.render(el, shapingOm(seen));
+    await TextRenderer.render(el, shapingOm(seen), { x: 0, y: 0 });
     expect(seen).toContain(HE_LOGICAL);
     expect(seen).not.toContain([...HE_LOGICAL].reverse().join(""));
   });
@@ -165,7 +165,7 @@ describe("shaping sees the LOGICAL text, and its glyphs are drawn in visual orde
     el.calculateLayout(BoxConstraints.tight(400, 400), { x: 0, y: 0 }, {
       metrics: manager,
     } as never);
-    const runs = (await TextRenderer.render(el, manager)).filter(
+    const runs = (await TextRenderer.render(el, manager, { x: 0, y: 0 })).filter(
       (n): n is TextRun => n.type === "text",
     );
     // Shaped logically as 1000,1001,1002,1003 - drawn in the reverse of that.
@@ -202,7 +202,7 @@ describe("a shaped run and the colour-emoji split", () => {
     el.calculateLayout(BoxConstraints.tight(400, 400), { x: 0, y: 0 }, {
       metrics: manager,
     } as never);
-    const runs = (await TextRenderer.render(el, manager)).filter(
+    const runs = (await TextRenderer.render(el, manager, { x: 0, y: 0 })).filter(
       (n): n is TextRun => n.type === "text",
     );
     expect(runs).toHaveLength(1);

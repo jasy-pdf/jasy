@@ -1,3 +1,4 @@
+import type { Offset } from "../layout/box-constraints.ts";
 import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 import { RendererRegistry } from "../utils/renderer-registry.ts";
 import { DefaultTextStyleElement } from "../elements/layout/default-text-style-element.ts";
@@ -9,9 +10,10 @@ export class DefaultTextStyleRenderer {
   static async render(
     element: DefaultTextStyleElement,
     objectManager: PDFObjectManager,
+    origin: Offset,
   ): Promise<IRNode[]> {
     const { child } = element.getProps();
     const renderer = RendererRegistry.getRenderer(child);
-    return renderer(child, objectManager);
+    return renderer(child, objectManager, origin);
   }
 }

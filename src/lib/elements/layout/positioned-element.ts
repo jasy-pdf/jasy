@@ -55,8 +55,7 @@ export class PositionedElement extends PDFElement {
           "or inside a Box({ relative: true }).",
       );
     }
-    // Defer to the frame: it calls back once it has sized itself. Out of flow either way.
-    ctx.frame.place.push((frame, frameCtx) => this.placeInFrame(frame, frameCtx));
+    // Out of flow: it takes no room here. The frame's owner places it once it knows its own size.
     return { width: 0, height: 0 };
   }
 
@@ -65,8 +64,16 @@ export class PositionedElement extends PDFElement {
     return { width: 0, height: 0 };
   }
 
-  /** Lays the child out at the resolved position inside (or overflowing) the frame box. */
-  private placeInFrame(frame: { origin: Offset; size: Size }, ctx: LayoutContext): void {
+  override layoutChildren(): readonly PDFElement[] {
+    return [this.child];
+  }
+
+  /**
+   * Lays the child out at the resolved position inside (or overflowing) a frame of `frameSize`. The
+   * offset is relative to the frame's top-left; its owner draws the child from there.
+   */
+  placeIn(frameSize: Size, ctx: LayoutContext): void {
+    const frame = { origin: { x: 0, y: 0 }, size: frameSize };
     const { top, right, bottom, left, h, v, x: nudgeX, y: nudgeY } = this.insets;
 
     // An axis is PINNED (stretched) only when BOTH of its EDGES are given; otherwise the child
@@ -117,4 +124,19 @@ export class PositionedElement extends PDFElement {
   override getProps(): WithChild {
     return { child: this.child };
   }
+}
+
+/**
+ * The `Positioned` elements a frame owns, in tree order: every one below `roots`, including those
+ * inside another `Positioned`, but none below a nested frame - that one places its own.
+ */
+export function positionedIn(roots: readonly (PDFElement | undefined)[]): PositionedElement[] {
+  const found: PositionedElement[] = [];
+  const walk = (el: PDFElement): void => {
+    if (el instanceof PositionedElement) found.push(el);
+    if (el.isPositioningFrame()) return;
+    for (const child of el.layoutChildren()) walk(child);
+  };
+  for (const root of roots) if (root) walk(root);
+  return found;
 }

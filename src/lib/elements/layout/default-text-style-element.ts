@@ -58,6 +58,10 @@ export class DefaultTextStyleElement extends SizedPDFElement implements Fragment
     return this.child.measure(constraints, this.childCtx(ctx));
   }
 
+  override layoutChildren(): readonly PDFElement[] {
+    return [this.child];
+  }
+
   override getProps() {
     return { x: this.x, y: this.y, width: this.width, height: this.height, child: this.child };
   }

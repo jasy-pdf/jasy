@@ -137,13 +137,15 @@ New rule:
 - A frame owner, after its own layout, walks its subtree once for the `Positioned` descendants that
   belong to it (stopping at nested frame owners), lays each one out, and stores its offset **relative
   to the frame owner**. The list depends only on the immutable tree, so it is computed once.
-- **Paint order follows CSS:** a frame owner draws its flow content first, then its positioned
-  descendants in tree order, so positioned content lies on top - what `position: absolute` does, and
-  what the renderer comment already promises. A `Positioned` draws nothing where it sits in the flow.
-- At render, positioned content is drawn at `frameOrigin + offset`.
-- Today a `Positioned` is drawn at its place in the tree, so it lies on top only when it is the last
-  child. Where that differs, the output changes; a test written first shows the change, and it is
-  listed.
+- **Paint order is tree order** (as Flutter's `Stack`): a `Positioned` is drawn where it sits in the
+  tree, so one early in a header lies UNDER the body (a watermark) and one as a last child lies on
+  top (a badge). The author picks the layer by the position in the tree. This is the behaviour
+  before the rebuild and it stays until `z-index` exists; `z-index` comes later on top of it.
+- At render, positioned content is drawn at `frameOrigin + offset`. The renderer therefore needs the
+  frame's absolute origin at the `Positioned`'s place in the tree, passed down with `origin` (no
+  render-time state in the elements).
+- Measured why not CSS order without `z-index`: gallery `18-watermark` put "CONFIDENTIAL" over the
+  body text instead of under it.
 
 ### 3.5 Subtrees built during layout
 
@@ -232,7 +234,8 @@ constant per leaf, independent of depth.
 
 ## 8. Decisions (Flo, 2026-10-15)
 
-1. **Positioned paint order** is decided by what fits the new model best: CSS order (section 3.4).
+1. **Positioned paint order = tree order** (section 3.4). Revised 2026-10-16 after the watermark
+   render: CSS order without `z-index` puts every watermark on top. `z-index` is a later goal.
 2. **Floating point:** the rebuild is new and faster; it does not reproduce the old addition order.
    Last-digit differences are re-pinned with a listed diff (section 4).
 3. **Stages 6 and 7** are part of the rebuild. It is carried through, not split.

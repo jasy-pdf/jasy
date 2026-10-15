@@ -53,6 +53,10 @@ export class StructGroup extends PDFElement implements Fragmentable {
     };
   }
 
+  override layoutChildren(): readonly PDFElement[] {
+    return [this.child];
+  }
+
   override getProps() {
     return { role: this.role, child: this.child };
   }

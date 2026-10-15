@@ -39,6 +39,10 @@ export class RotatedElement extends PDFElement {
     return this.child.measure(constraints, ctx);
   }
 
+  override layoutChildren(): readonly PDFElement[] {
+    return [this.child];
+  }
+
   override getProps() {
     return {
       angle: this.angle,

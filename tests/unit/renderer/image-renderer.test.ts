@@ -44,7 +44,7 @@ describe("ImageRenderer", () => {
     // The renderer now returns an IRNode[]; the backend serializes it and registers
     // the image XObject (which is what the registerImage assertions below check).
     const result = PdfBackend.serialize(
-      await ImageRenderer.render(mockImageElement, mockObjectManager),
+      await ImageRenderer.render(mockImageElement, mockObjectManager, { x: 0, y: 0 }),
       mockObjectManager,
     );
 
@@ -100,7 +100,7 @@ describe("ImageRenderer", () => {
     // The renderer now returns an IRNode[]; the backend serializes it and registers
     // the image XObject (which is what the registerImage assertions below check).
     const result = PdfBackend.serialize(
-      await ImageRenderer.render(mockImageElement, mockObjectManager),
+      await ImageRenderer.render(mockImageElement, mockObjectManager, { x: 0, y: 0 }),
       mockObjectManager,
     );
 
@@ -142,9 +142,9 @@ describe("ImageRenderer", () => {
     // Mock PDFObjectManager
     const mockObjectManager = {} as PDFObjectManager;
 
-    await expect(ImageRenderer.render(mockImageElement, mockObjectManager)).rejects.toThrow(
-      "File data cannot be `null`",
-    );
+    await expect(
+      ImageRenderer.render(mockImageElement, mockObjectManager, { x: 0, y: 0 }),
+    ).rejects.toThrow("File data cannot be `null`");
   });
 
   it("should render an image with the correct placement and size for 'fill' fit", async () => {
@@ -185,7 +185,7 @@ describe("ImageRenderer", () => {
     // The renderer now returns an IRNode[]; the backend serializes it and registers
     // the image XObject (which is what the registerImage assertions below check).
     const result = PdfBackend.serialize(
-      await ImageRenderer.render(mockImageElement, mockObjectManager),
+      await ImageRenderer.render(mockImageElement, mockObjectManager, { x: 0, y: 0 }),
       mockObjectManager,
     );
 
@@ -241,7 +241,7 @@ describe("ImageRenderer", () => {
     // The renderer now returns an IRNode[]; the backend serializes it and registers
     // the image XObject (which is what the registerImage assertions below check).
     const result = PdfBackend.serialize(
-      await ImageRenderer.render(mockImageElement, mockObjectManager),
+      await ImageRenderer.render(mockImageElement, mockObjectManager, { x: 0, y: 0 }),
       mockObjectManager,
     );
 
@@ -285,7 +285,7 @@ describe("ImageRenderer", () => {
       offsetX: 0,
       offsetY: 0,
     });
-    const [node] = await ImageRenderer.render(mockImageElement, mockObjectManager);
+    const [node] = await ImageRenderer.render(mockImageElement, mockObjectManager, { x: 0, y: 0 });
     expect((node as { tag?: unknown }).tag).toEqual({ role: "Figure", key: 7 });
   });
 });

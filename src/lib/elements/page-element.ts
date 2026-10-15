@@ -4,6 +4,7 @@ import type { ColorMode, DefaultFont, Margin } from "../renderer/index.ts";
 import { BoxConstraints, Offset, Size } from "../layout/box-constraints.ts";
 import { LayoutContext, PDFElement, PositioningFrame, WithChildren } from "./pdf-element.ts";
 import { TextElement } from "./text-element.ts";
+import { PositionedElement, positionedIn } from "./layout/positioned-element.ts";
 
 export interface PDFPageConfig {
   pageSize?: PageSize;
@@ -77,13 +78,12 @@ export interface PageBands {
  * resolve a `Positioned` against this same box, so `top`/`bottom` mean the same thing in each.
  *
  * `layoutPageBands` lays the bands out, so its caller must hand it a context carrying this frame -
- * otherwise a `Positioned` in a band has nothing to resolve against (ISSUE-4). A caller that only
- * wants the band HEIGHTS may throw the frame away without draining it: an out-of-flow child
- * contributes no height.
+ * otherwise a `Positioned` in a band has nothing to resolve against (ISSUE-4). An out-of-flow child
+ * contributes no height, so a caller that only wants the band HEIGHTS needs nothing more.
  */
 export function pageFrame(config: PDFPageConfig): PositioningFrame {
   const { origin, width, height } = resolvePageContentBox(config);
-  return { origin, size: { width, height }, place: [] };
+  return { origin, size: { width, height } };
 }
 
 export function layoutPageBands(
@@ -130,6 +130,8 @@ export class PageElement extends PDFElement {
   private children: PDFElement[];
   private header?: PDFElement;
   private footer?: PDFElement;
+  // Its out-of-flow descendants, placed relative to the content box by the last layout.
+  private positioned: PositionedElement[] = [];
 
   constructor({ children, config, header, footer }: PDFPageParams) {
     super();
@@ -173,13 +175,10 @@ export class PageElement extends PDFElement {
       child.calculateLayout(childConstraints, bands.bodyOrigin, frameCtx),
     );
 
-    // Drained last, once every band and the body have registered: an out-of-flow child is placed
-    // against the final frame box and paints on top of the flow content.
-    //
-    // The callback gets `frameCtx`, not `pageCtx`: a `Positioned` NESTED inside an out-of-flow child
-    // must still see a frame. It appends to `frame.place` while we walk it, and a `for..of` over an
-    // array visits what was appended, so nested placements drain in the same loop.
-    for (const place of frame.place) place(frame, frameCtx);
+    // Last, once the bands and the body are laid out: the page's out-of-flow descendants, placed
+    // relative to its content box. The renderer draws them after the flow content (CSS order).
+    this.positioned = positionedIn([this.header, ...this.children, this.footer]);
+    for (const p of this.positioned) p.placeIn(frame.size, frameCtx);
 
     return { width: frame.size.width, height: frame.size.height };
   }
@@ -193,6 +192,17 @@ export class PageElement extends PDFElement {
   /** The document defaults with this page's own settings on top. Pure: no pass has to run first. */
   resolveConfig(defaults: PDFPageConfig | undefined): PDFPageConfig {
     return { ...defaults, ...this.ownConfig };
+  }
+
+  override layoutChildren(): readonly PDFElement[] {
+    return [this.header, ...this.children, this.footer].filter(
+      (el): el is PDFElement => el !== undefined,
+    );
+  }
+
+  /** The out-of-flow content to draw after the flow content, offsets relative to the content box. */
+  positionedContent(): readonly PositionedElement[] {
+    return this.positioned;
   }
 
   override getProps(): PDFPageParams {

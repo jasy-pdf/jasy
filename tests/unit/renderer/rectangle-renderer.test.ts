@@ -26,12 +26,13 @@ describe("RectangleRenderer", () => {
         color: new Color(0, 0, 0),
         backgroundColor: undefined,
         borderWidth: 1,
+        positioned: [],
         children: [],
       }),
     } as unknown as RectangleElement;
 
     const result = PdfBackend.serialize(
-      await RectangleRenderer.render(mockRectangleElement, mockObjectManager),
+      await RectangleRenderer.render(mockRectangleElement, mockObjectManager, { x: 0, y: 0 }),
       mockObjectManager,
     );
 
@@ -48,12 +49,13 @@ describe("RectangleRenderer", () => {
         color: new Color(255, 0, 0), // Red border color
         backgroundColor: undefined,
         borderWidth: 2,
+        positioned: [],
         children: [],
       }),
     } as unknown as RectangleElement;
 
     const result = PdfBackend.serialize(
-      await RectangleRenderer.render(mockRectangleElement, mockObjectManager),
+      await RectangleRenderer.render(mockRectangleElement, mockObjectManager, { x: 0, y: 0 }),
       mockObjectManager,
     );
 
@@ -70,12 +72,13 @@ describe("RectangleRenderer", () => {
         color: new Color(0, 0, 255), // Blue border color
         backgroundColor: new Color(0, 255, 0), // Green background
         borderWidth: 1,
+        positioned: [],
         children: [],
       }),
     } as unknown as RectangleElement;
 
     const result = PdfBackend.serialize(
-      await RectangleRenderer.render(mockRectangleElement, mockObjectManager),
+      await RectangleRenderer.render(mockRectangleElement, mockObjectManager, { x: 0, y: 0 }),
       mockObjectManager,
     );
 
@@ -107,11 +110,15 @@ describe("RectangleRenderer", () => {
         color: new Color(0, 0, 255), // Blue border color
         backgroundColor: new Color(0, 255, 0), // Green background
         borderWidth: 1,
+        positioned: [],
         children: [mockChildElement],
       }),
     } as unknown as RectangleElement;
 
-    const result = await RectangleRenderer.render(mockRectangleElement, mockObjectManager);
+    const result = await RectangleRenderer.render(mockRectangleElement, mockObjectManager, {
+      x: 0,
+      y: 0,
+    });
 
     // The box node comes first, then the child's nodes are appended.
     expect(result[0]).toMatchObject({

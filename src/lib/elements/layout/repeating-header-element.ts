@@ -65,6 +65,10 @@ export class RepeatingHeaderElement extends PDFElement implements Fragmentable {
     };
   }
 
+  override layoutChildren(): readonly PDFElement[] {
+    return [this.header, this.body];
+  }
+
   override getProps() {
     return {
       x: this.x,

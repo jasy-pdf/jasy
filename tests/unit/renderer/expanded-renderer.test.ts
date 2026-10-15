@@ -8,6 +8,9 @@ import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager";
 import { ExpandedElement } from "../../../src/lib/elements";
 import { PDFElement } from "../../../src/lib/elements/pdf-element";
 
+// The origin a renderer is handed must reach its children unchanged (a container has no box of its own).
+const ORIGIN = { x: 12, y: 34 };
+
 describe("ExpandedRenderer", () => {
   it("should render the child element using its registered renderer", async () => {
     // Mock child element (it should be an instance of PDFElement or its subclass)
@@ -40,10 +43,10 @@ describe("ExpandedRenderer", () => {
     vi.spyOn(RendererRegistry, "getRenderer").mockReturnValue(mockChildRenderer);
 
     // Call the ExpandedRenderer's render method
-    const result = await ExpandedRenderer.render(mockExpandedElement, mockObjectManager);
+    const result = await ExpandedRenderer.render(mockExpandedElement, mockObjectManager, ORIGIN);
 
     // Check if the mock renderer for the child was called
-    expect(mockChildRenderer).toHaveBeenCalledWith(mockChild, mockObjectManager);
+    expect(mockChildRenderer).toHaveBeenCalledWith(mockChild, mockObjectManager, ORIGIN);
 
     // Expanded passes the child's display list straight through.
     expect(result).toEqual(["child-node"]);
@@ -76,8 +79,8 @@ describe("ExpandedRenderer", () => {
       throw new MissingRendererError("FakeChild");
     });
 
-    await expect(ExpandedRenderer.render(mockExpandedElement, mockObjectManager)).rejects.toThrow(
-      MissingRendererError,
-    );
+    await expect(
+      ExpandedRenderer.render(mockExpandedElement, mockObjectManager, ORIGIN),
+    ).rejects.toThrow(MissingRendererError);
   });
 });

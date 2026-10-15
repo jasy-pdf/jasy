@@ -72,6 +72,10 @@ export class RotatedBoxElement extends PDFElement {
   }
 
   /** Same shape as `RotatedElement` (angle + box), so both share `RotatedRenderer`. */
+  override layoutChildren(): readonly PDFElement[] {
+    return [this.child];
+  }
+
   override getProps() {
     return {
       angle: this.turns * 90,

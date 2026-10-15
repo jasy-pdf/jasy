@@ -10,6 +10,7 @@ import {
   resolveSize,
 } from "../layout/box-constraints.ts";
 import { stackMinIntrinsic, withDeclaredExtent } from "../layout/min-intrinsic.ts";
+import { PositionedElement, positionedIn } from "./layout/positioned-element.ts";
 import {
   Fragmentable,
   FragmentResult,
@@ -81,6 +82,8 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
   private overflow: "hidden" | "visible";
   private breakBefore: boolean;
   private breakAfter: boolean;
+  // Its out-of-flow descendants, placed relative to this box by the last layout.
+  private positioned: PositionedElement[] = [];
 
   private sizeMemory!: { x: number; y: number } & SizingParams;
 
@@ -292,13 +295,12 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
     const x = this.sizeMemory.x + (offset?.x ?? 0);
     const y = this.sizeMemory.y + (offset?.y ?? 0);
 
-    // A `relative` box is a positioning frame: thread a fresh frame to the subtree so any
-    // `Positioned` descendant registers against it (out of flow), then drain it below once the
-    // box is sized. A plain box leaves `ctx` untouched -> byte-identical.
-    // Measuring places nothing, so it needs no frame of its own.
+    // A `relative` box is a positioning frame: its subtree is told it has one, and once the box is
+    // sized it lays out the `Positioned` descendants against itself (below). Measuring places
+    // nothing, so it needs no frame. A plain box leaves `ctx` untouched.
     const frame: PositioningFrame | undefined =
       this.relative && offset
-        ? { origin: { x: 0, y: 0 }, size: { width: 0, height: 0 }, place: [] }
+        ? { origin: { x: 0, y: 0 }, size: { width: 0, height: 0 } }
         : undefined;
     const childCtx: LayoutContext = frame ? { ...ctx, frame } : ctx;
 
@@ -353,11 +355,12 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
       this.height = height;
     }
 
-    // The box is sized now: place any out-of-flow `Positioned` descendants against its box.
-    if (frame) {
-      frame.origin = { x, y };
-      frame.size = { width: width ?? 0, height: height ?? 0 };
-      for (const place of frame.place) place(frame, ctx);
+    // The box is sized now: place its out-of-flow `Positioned` descendants, relative to its own
+    // top-left. The renderer draws them after the flow content, so they lie on top (CSS order).
+    if (offset) {
+      this.positioned = frame ? positionedIn(this.children) : [];
+      const box = { width: width ?? 0, height: height ?? 0 };
+      for (const p of this.positioned) p.placeIn(box, childCtx);
     }
 
     // Border-box model: width/height ARE the outer box (the rect we draw); the content
@@ -368,6 +371,14 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
       width: width ?? 0,
       height: height ?? 0,
     };
+  }
+
+  override isPositioningFrame(): boolean {
+    return this.relative;
+  }
+
+  override layoutChildren(): readonly PDFElement[] {
+    return this.children ?? [];
   }
 
   override getProps() {
@@ -383,6 +394,7 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
       radius: this.radius,
       sideBorders: this.sideBorders,
       overflow: this.overflow,
+      positioned: this.positioned,
     };
   }
 }

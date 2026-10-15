@@ -1,3 +1,4 @@
+import type { Offset } from "../layout/box-constraints.ts";
 import { KeepTogetherElement } from "../elements/layout/keep-together-element.ts";
 import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 import { IRNode } from "../ir/display-list.ts";
@@ -11,9 +12,10 @@ export class KeepTogetherRenderer {
   static async render(
     group: KeepTogetherElement,
     objectManager: PDFObjectManager,
+    origin: Offset,
   ): Promise<IRNode[]> {
     const { child } = group.getProps();
     const renderer = RendererRegistry.getRenderer(child);
-    return renderer(child, objectManager);
+    return renderer(child, objectManager, origin);
   }
 }

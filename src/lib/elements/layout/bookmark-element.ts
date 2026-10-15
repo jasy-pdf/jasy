@@ -31,6 +31,10 @@ export class BookmarkElement extends PDFElement {
     return this.child.measure(constraints, ctx);
   }
 
+  override layoutChildren(): readonly PDFElement[] {
+    return [this.child];
+  }
+
   override getProps() {
     return {
       title: this.title,

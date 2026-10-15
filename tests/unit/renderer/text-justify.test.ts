@@ -35,7 +35,7 @@ const drawn = async (content: string, width: number, align?: HorizontalAlignment
   el.calculateLayout(BoxConstraints.tight(width, 400), { x: 0, y: 0 }, {
     metrics: manager,
   } as never);
-  const runs = (await TextRenderer.render(el, manager)).filter(
+  const runs = (await TextRenderer.render(el, manager, { x: 0, y: 0 })).filter(
     (n): n is TextRun => n.type === "text",
   );
   return runs.map((r) => ({ x: r.x, y: r.y, text: r.text }));

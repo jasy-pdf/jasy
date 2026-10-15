@@ -1,3 +1,20 @@
+import type { Offset } from "../layout/box-constraints.ts";
+import type { IRNode } from "../ir/display-list.ts";
+import type { PDFObjectManager } from "./pdf-object-manager.ts";
+
+/**
+ * Renders one element to IR. `origin` is the ABSOLUTE top-left that the element's own offset is
+ * relative to; a renderer adds it to its position and hands its children the origin THEY are relative
+ * to. Typed so that a call which forgets to pass it on does not compile - a forgotten origin draws at
+ * the page corner without a word.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type ElementRenderer = (
+  element: any,
+  objectManager: PDFObjectManager,
+  origin: Offset,
+) => Promise<IRNode[]>;
+
 /**
  * Thrown when an element reaches the render pass with no registered renderer.
  *
@@ -18,16 +35,16 @@ export class MissingRendererError extends Error {
 }
 
 export class RendererRegistry {
-  private static renderers = new Map<Function, Function>();
+  private static renderers = new Map<Function, ElementRenderer>();
 
-  static register(elementClass: Function, renderer: Function) {
+  static register(elementClass: Function, renderer: ElementRenderer) {
     if (!RendererRegistry.renderers.has(elementClass)) {
       RendererRegistry.renderers.set(elementClass, renderer);
     }
   }
   // Keyed on the element's constructor, so it only needs an object - not `any`.
   // Throws rather than returning undefined: a missing renderer is always a bug, and skipping it drew nothing.
-  static getRenderer(element: object): Function {
+  static getRenderer(element: object): ElementRenderer {
     const renderer = RendererRegistry.renderers.get(element.constructor);
     if (!renderer) throw new MissingRendererError(element.constructor.name);
     return renderer;

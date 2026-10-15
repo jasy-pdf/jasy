@@ -1,3 +1,5 @@
+import { PositionedRenderer } from "./positioned-renderer.ts";
+import type { Offset } from "../layout/box-constraints.ts";
 import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 
 import { RectangleElement, SideBorders } from "../elements/rectangle-element.ts";
@@ -10,10 +12,11 @@ export class RectangleRenderer {
   static async render(
     rectangleElement: RectangleElement,
     objectManager: PDFObjectManager,
+    origin: Offset,
   ): Promise<IRNode[]> {
     const {
-      x,
-      y,
+      x: ownX,
+      y: ownY,
       width,
       height,
       children,
@@ -23,7 +26,11 @@ export class RectangleRenderer {
       radius,
       sideBorders,
       overflow,
+      positioned,
     } = rectangleElement.getProps();
+    // Its own position is relative to `origin`; the IR wants page coordinates.
+    const x = origin.x + (ownX ?? 0);
+    const y = origin.y + (ownY ?? 0);
 
     const h = height!;
     const nodes: IRNode[] = [];
@@ -69,8 +76,10 @@ export class RectangleRenderer {
     if (children)
       for (const child of children) {
         const renderer = RendererRegistry.getRenderer(child);
-        nodes.push(...(await renderer(child, objectManager)));
+        nodes.push(...(await renderer(child, objectManager, origin)));
       }
+    // A `relative` box draws its out-of-flow descendants last, inside the clip like the flow content.
+    nodes.push(...(await PositionedRenderer.renderPlaced(positioned, objectManager, { x, y })));
     if (clip) nodes.push({ type: "clip-pop" });
 
     return nodes;

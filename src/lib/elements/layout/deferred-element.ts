@@ -35,6 +35,10 @@ export class DeferredElement extends PDFElement implements Fragmentable {
       : { fitted: this, remainder: null };
   }
 
+  override layoutChildren(): readonly PDFElement[] {
+    return this.composed ? [this.composed] : [];
+  }
+
   override getProps() {
     return { composed: this.composed };
   }

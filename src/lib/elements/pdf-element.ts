@@ -12,15 +12,14 @@ import type { CrossAlign } from "../layout/alignment.ts";
  * height. The PDF byte writer is deliberately absent - layout must not touch it.
  */
 /**
- * A positioning frame - the CSS "containing block" that `Positioned` children resolve their
- * offsets against. A `relative` Box (later the page) creates one and threads it to its subtree;
- * `Positioned` descendants register a placement closure in `place`, which the frame drains once it
- * has finished sizing itself (so `right`/`bottom` can resolve against the final box).
+ * A positioning frame - the CSS "containing block" that `Positioned` children resolve their offsets
+ * against: the page's content box, or a `relative` Box. Threaded to the subtree so a `Positioned`
+ * can tell it has one. The frame's owner finds its `Positioned` descendants by walking the tree
+ * after sizing itself, and lays them out against its own box - layout itself registers nothing.
  */
 export interface PositioningFrame {
   origin: Offset;
   size: Size;
-  place: Array<(frame: { origin: Offset; size: Size }, ctx: LayoutContext) => void>;
 }
 
 /**
@@ -104,6 +103,16 @@ export abstract class PDFElement {
    * Both must come from ONE sizing computation, or a measured size and a laid-out one can differ.
    */
   abstract measure(constraints: BoxConstraints, ctx: LayoutContext): Size;
+
+  /** The elements this one lays out, for walks that must see the whole tree. Leaves have none. */
+  layoutChildren(): readonly PDFElement[] {
+    return [];
+  }
+
+  /** Lays out its own `Positioned` descendants (a page, a `relative` Box); a walk for them stops here. */
+  isPositioningFrame(): boolean {
+    return false;
+  }
 
   /**
    * The relative-size fraction (0..1) this element asked for on the given axis, if any (`horizontal` =

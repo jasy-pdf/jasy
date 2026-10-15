@@ -211,6 +211,10 @@ export class RowElement extends SizedPDFElement {
     return { width: boundedWidth ?? result.mainUsed, height: boundedHeight ?? result.crossUsed };
   }
 
+  override layoutChildren(): readonly PDFElement[] {
+    return this.children;
+  }
+
   override getProps() {
     return {
       x: this.x,

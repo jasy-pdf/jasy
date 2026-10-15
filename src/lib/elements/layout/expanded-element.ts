@@ -93,6 +93,10 @@ export class ExpandedElement extends FlexiblePDFElement implements Fragmentable 
     });
   }
 
+  override layoutChildren(): readonly PDFElement[] {
+    return [this.child];
+  }
+
   override getProps() {
     return {
       x: this.x,

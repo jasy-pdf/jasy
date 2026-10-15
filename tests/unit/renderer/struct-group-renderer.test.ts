@@ -18,7 +18,7 @@ describe("StructGroupRenderer", () => {
     const struct = { enabled: false, openElement: vi.fn(), push: vi.fn(), pop: vi.fn() };
     const om = { struct } as unknown as PDFObjectManager;
 
-    const out = await StructGroupRenderer.render(group(), om);
+    const out = await StructGroupRenderer.render(group(), om, { x: 0, y: 0 });
     expect(out).toBe(childIR); // just the child's IR
     expect(struct.openElement).not.toHaveBeenCalled();
     expect(struct.push).not.toHaveBeenCalled();
@@ -37,7 +37,7 @@ describe("StructGroupRenderer", () => {
     };
     const om = { struct } as unknown as PDFObjectManager;
 
-    await expect(StructGroupRenderer.render(group(), om)).rejects.toThrow("boom");
+    await expect(StructGroupRenderer.render(group(), om, { x: 0, y: 0 })).rejects.toThrow("boom");
     expect(struct.openElement).toHaveBeenCalledWith(expect.any(Number), "Table");
     expect(struct.push).toHaveBeenCalledWith(7);
     expect(struct.pop).toHaveBeenCalledTimes(1); // the finally block ran despite the throw

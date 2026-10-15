@@ -103,6 +103,10 @@ export class KeepTogetherElement extends PDFElement implements Fragmentable {
     return this.child.fragment(maxHeight, width, ctx);
   }
 
+  override layoutChildren(): readonly PDFElement[] {
+    return [this.child];
+  }
+
   override getProps() {
     return { child: this.child };
   }

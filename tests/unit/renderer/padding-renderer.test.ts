@@ -36,7 +36,10 @@ describe("PaddingRenderer", () => {
     // Mock PDFObjectManager
     const mockObjectManager = {} as PDFObjectManager;
 
-    const result = await PaddingRenderer.render(mockPaddingElement, mockObjectManager);
+    const result = await PaddingRenderer.render(mockPaddingElement, mockObjectManager, {
+      x: 0,
+      y: 0,
+    });
 
     expect(mockPaddingElement.getProps).toHaveBeenCalled();
     expect(result).toContain("rendered child content");
@@ -68,8 +71,8 @@ describe("PaddingRenderer", () => {
 
     const mockObjectManager = {} as PDFObjectManager;
 
-    await expect(PaddingRenderer.render(mockPaddingElement, mockObjectManager)).rejects.toThrow(
-      MissingRendererError,
-    );
+    await expect(
+      PaddingRenderer.render(mockPaddingElement, mockObjectManager, { x: 0, y: 0 }),
+    ).rejects.toThrow(MissingRendererError);
   });
 });

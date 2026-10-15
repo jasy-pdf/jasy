@@ -1,14 +1,21 @@
+import type { Offset } from "../layout/box-constraints.ts";
 import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 import { AnchorElement } from "../elements/layout/anchor-element.ts";
 import { RendererRegistry } from "../utils/renderer-registry.ts";
 import { IRNode } from "../ir/display-list.ts";
 
 export class AnchorRenderer {
-  static async render(element: AnchorElement, objectManager: PDFObjectManager): Promise<IRNode[]> {
-    const { name, child, y } = element.getProps();
+  static async render(
+    element: AnchorElement,
+    objectManager: PDFObjectManager,
+    origin: Offset,
+  ): Promise<IRNode[]> {
+    const { name, child, y: ownY } = element.getProps();
+    // Its own position is relative to `origin`; the IR wants page coordinates.
+    const y = origin.y + (ownY ?? 0);
 
     const renderer = RendererRegistry.getRenderer(child);
-    const childNodes = await renderer(child, objectManager);
+    const childNodes = await renderer(child, objectManager, origin);
 
     // The child draws normally; an Anchor IR node carries the name + scroll target for the page renderer
     // to register as a named destination (it produces no content-stream ops itself).

@@ -1,3 +1,4 @@
+import type { Offset } from "../layout/box-constraints.ts";
 import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 import { ContainerElement } from "../elements/container-element.ts";
 import { RendererRegistry } from "../utils/renderer-registry.ts";
@@ -7,6 +8,7 @@ export class ContainerRenderer {
   static async render(
     containerElement: ContainerElement,
     objectManager: PDFObjectManager,
+    origin: Offset,
   ): Promise<IRNode[]> {
     const { children } = containerElement.getProps();
     const nodes: IRNode[] = [];
@@ -14,7 +16,7 @@ export class ContainerRenderer {
     if (children)
       for (const child of children) {
         const renderer = RendererRegistry.getRenderer(child);
-        nodes.push(...(await renderer(child, objectManager)));
+        nodes.push(...(await renderer(child, objectManager, origin)));
       }
 
     return nodes;

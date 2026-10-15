@@ -29,6 +29,7 @@ describe("PageRenderer", () => {
           { getProps: vi.fn() }, // Child element
         ],
       }),
+      positionedContent: () => [],
     } as unknown as PageElement;
 
     // Mock PDFObjectManager
@@ -72,6 +73,7 @@ describe("PageRenderer", () => {
         config: { pageSize: PageSize.A4 },
         children: [],
       }),
+      positionedContent: () => [],
     } as unknown as PageElement;
 
     // Mock PDFObjectManager with image references
@@ -108,6 +110,7 @@ describe("PageRenderer", () => {
           { getProps: vi.fn() }, // Multiple children
         ],
       }),
+      positionedContent: () => [],
     } as unknown as PageElement;
 
     // Mock PDFObjectManager with multiple fonts

@@ -283,6 +283,10 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
     return { width: boundedWidth ?? result.crossUsed, height: boundedHeight ?? result.mainUsed };
   }
 
+  override layoutChildren(): readonly PDFElement[] {
+    return this.children ?? [];
+  }
+
   override getProps(): ContainerElementParams {
     return {
       x: this.x,

@@ -1,3 +1,4 @@
+import type { Offset } from "../layout/box-constraints.ts";
 import { StructGroup } from "../elements/layout/struct-group.ts";
 import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 import { IRNode } from "../ir/display-list.ts";
@@ -8,11 +9,15 @@ import { RendererRegistry } from "../utils/renderer-registry.ts";
  * tagging off it is fully transparent - just the child's IR.
  */
 export class StructGroupRenderer {
-  static async render(group: StructGroup, objectManager: PDFObjectManager): Promise<IRNode[]> {
+  static async render(
+    group: StructGroup,
+    objectManager: PDFObjectManager,
+    origin: Offset,
+  ): Promise<IRNode[]> {
     const { role, child } = group.getProps();
     const renderChild = async (): Promise<IRNode[]> => {
       const renderer = RendererRegistry.getRenderer(child);
-      return renderer(child, objectManager);
+      return renderer(child, objectManager, origin);
     };
     if (!objectManager.struct.enabled) return renderChild();
 
