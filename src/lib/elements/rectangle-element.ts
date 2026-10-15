@@ -152,6 +152,8 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
     // exception - fall through so the box is rebuilt from the packed children (without the consumed
     // break marker), rather than handing back the original that still holds it.
     if (remainder.length === 0 && !forceBreak) return { fitted: this, remainder: null };
+    // Nothing fit below the content above: move on whole, not as an empty bordered box.
+    if (fitted.length === 0 && !forceBreak) return { fitted: null, remainder: this };
 
     const contentHeight = (kids: PDFElement[]): number =>
       kids.reduce(

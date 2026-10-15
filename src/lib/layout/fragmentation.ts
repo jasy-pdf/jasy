@@ -145,8 +145,10 @@ export function packChildren(
     const remaining = maxHeight - usedHeight - lead;
     let placedPart = false;
     let childBroke = false;
+    const below = ctx.belowContent || fitted.length > 0;
     if (isFragmentable(child)) {
-      const split = child.fragment(Math.max(0, remaining), width, ctx);
+      const childCtx = below && !ctx.belowContent ? { ...ctx, belowContent: true } : ctx;
+      const split = child.fragment(Math.max(0, remaining), width, childCtx);
       childBroke = split.forceBreak ?? false;
       if (split.fitted) {
         fitted.push(split.fitted);
@@ -163,9 +165,10 @@ export function packChildren(
       }
     }
     if (!placedPart) {
-      if (fitted.length === 0 && !childBroke) {
-        // Taller than the whole region and unsplittable: force it on (it overflows and is clipped)
-        // so the next region still advances - and surface it per the overflow policy.
+      if (!below && !childBroke) {
+        // Taller than a whole fresh page and unsplittable: force it on (it overflows and is clipped)
+        // so the next region still advances - and surface it per the overflow policy. Below other
+        // content it simply waits for the next page.
         reportOverflow(child, childHeight, maxHeight, ctx.onOverflow ?? "ignore");
         fitted.push(child);
       } else {

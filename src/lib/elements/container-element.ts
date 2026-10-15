@@ -136,6 +136,8 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
     // here even when nothing follows it (a trailing `PageBreak`): return the packed children, which
     // no longer hold the consumed break marker, so it does not leak into the render pass.
     if (remainder.length === 0 && !forceBreak) return { fitted: this, remainder: null };
+    // Nothing fit below the content above: move on whole, not as an empty shell left behind.
+    if (fitted.length === 0 && !forceBreak) return { fitted: null, remainder: this };
 
     return {
       fitted: this.cloneWithChildren(fitted),
