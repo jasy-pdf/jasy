@@ -1,6 +1,5 @@
-import { PDFElement, LayoutContext, WithChild, SizedPDFElement } from "../pdf-element.ts";
-import { BoxConstraints, Offset, Size } from "../../layout/box-constraints.ts";
-import { Fragmentable, FragmentResult, isFragmentable } from "../../layout/fragmentation.ts";
+import { PDFElement, LayoutContext, WithChild } from "../pdf-element.ts";
+import { ProxyElement } from "./proxy-element.ts";
 import { DEFAULT_TEXT_STYLE, ResolvedTextStyle, mergeTextStyle } from "../../text/text-style.ts";
 
 interface DefaultTextStyleParams extends WithChild {
@@ -9,21 +8,19 @@ interface DefaultTextStyleParams extends WithChild {
 
 /**
  * Provides default text properties (font/size/color/lineHeight/align/weight) to its whole subtree -
- * Flutter's `DefaultTextStyle`. Transparent to layout: the child takes the same constraints, offset
- * and size; only the inherited TextStyle changes. A `Text` below still wins per property, and these
+ * Flutter's `DefaultTextStyle`. Transparent to layout (a `ProxyElement`): only the inherited
+ * TextStyle changes. A `Text` below still wins per property, and these
  * overrides layer onto whatever the element already inherited from above.
  */
-export class DefaultTextStyleElement extends SizedPDFElement implements Fragmentable {
-  private child: PDFElement;
+export class DefaultTextStyleElement extends ProxyElement {
   private style: Partial<ResolvedTextStyle>;
 
   constructor({ child, style }: DefaultTextStyleParams) {
-    super({ x: 0, y: 0 });
-    this.child = child;
+    super(child);
     this.style = style;
   }
 
-  private childCtx(ctx: LayoutContext): LayoutContext {
+  protected override childContext(ctx: LayoutContext): LayoutContext {
     return { ...ctx, textStyle: this.mergedOnto(ctx.textStyle ?? DEFAULT_TEXT_STYLE) };
   }
 
@@ -37,36 +34,9 @@ export class DefaultTextStyleElement extends SizedPDFElement implements Fragment
     return this.merged.style;
   }
 
-  // Transparent to fragmentation too: split the child against the merged context, re-wrapping each
-  // half so the remainder on the next page keeps the same defaults.
-  fragment(maxHeight: number, width: number, ctx: LayoutContext): FragmentResult {
-    if (!isFragmentable(this.child)) return { fitted: null, remainder: this };
-    const split = this.child.fragment(maxHeight, width, this.childCtx(ctx));
-    return {
-      fitted: split.fitted ? this.cloneWithChild(split.fitted) : null,
-      remainder: split.remainder ? this.cloneWithChild(split.remainder) : null,
-    };
-  }
-
-  private cloneWithChild(child: PDFElement): DefaultTextStyleElement {
+  // Each piece of a split keeps the defaults, so the remainder on the next page looks the same.
+  protected override rewrap(child: PDFElement): PDFElement {
     return new DefaultTextStyleElement({ child, style: this.style });
-  }
-
-  calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
-    this.x = offset.x;
-    this.y = offset.y;
-    const size = this.child.calculateLayout(constraints, offset, this.childCtx(ctx));
-    this.width = size.width;
-    this.height = size.height;
-    return size;
-  }
-
-  protected override computeSize(constraints: BoxConstraints, ctx: LayoutContext): Size {
-    return this.child.measure(constraints, this.childCtx(ctx));
-  }
-
-  override layoutChildren(): readonly PDFElement[] {
-    return [this.child];
   }
 
   override getProps() {

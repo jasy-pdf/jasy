@@ -188,6 +188,17 @@ and `RepeatingHeader` drop `forceBreak` from `fragment()`. Most forward neither 
 behaviour** (a `PageBreak` inside a `Link` starts to work), so it is its own visible stage, not hidden
 inside the refactor.
 
+Built (6b): `ProxyElement` (`elements/layout/proxy-element.ts`, Flutter's `RenderProxyBox`) is the base
+of `Link`, `Anchor`, `Bookmark`, `StructGroup`, `DefaultTextStyle` and `KeepTogether`. It forwards
+sizing (`relativeSizeFactor`, `needsBoundedMain`, `minIntrinsicMain`) and pagination (`isPageBreak`,
+`hasForcedBreak`, `breaksBefore/After`, `fragment` with `forceBreak`). A wrapper adds only
+`childContext` and `rewrap(piece, continued)`: a jump target or outline entry marks the FIRST piece of
+a split only, a link stays clickable on every piece. `Expanded` and `RepeatingHeader` pass `forceBreak`
+and `hasForcedBreak` on; `Rotated` passes sizing and break-before/after but is never split. `PageBuilder`
+and `Deferred` build their child during layout and the signals carry no context, so they stay as they
+are. Flex item properties through a wrapper (`Expanded`, `alignSelf`, `order` of a wrapped child) are
+step 6c.
+
 ## 4. Floating point and byte stability
 
 - An absolute coordinate is computed as `parentOrigin + offset` in the render pass. Today it is built

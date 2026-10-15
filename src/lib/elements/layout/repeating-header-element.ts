@@ -61,14 +61,23 @@ export class RepeatingHeaderElement extends PDFElement implements Fragmentable {
     if (!isFragmentable(this.body)) return { fitted: this, remainder: null };
 
     const split = this.body.fragment(Math.max(0, maxHeight - headerHeight - this.gap), width, ctx);
-    // Body fits whole → the whole thing fits on this page.
-    if (split.remainder === null) return { fitted: this, remainder: null };
+    // Body fits whole, no break inside → the whole thing fits on this page.
+    if (split.remainder === null && !split.forceBreak) return { fitted: this, remainder: null };
 
-    // Re-wrap each body piece with the SAME header → it reappears on the next page too.
+    // Re-wrap each body piece with the SAME header → it reappears on the next page too. A forced
+    // break inside the body is passed on, so the page ends there.
     return {
       fitted: split.fitted ? new RepeatingHeaderElement(this.header, split.fitted, this.gap) : null,
-      remainder: new RepeatingHeaderElement(this.header, split.remainder, this.gap),
+      remainder: split.remainder
+        ? new RepeatingHeaderElement(this.header, split.remainder, this.gap)
+        : null,
+      forceBreak: split.forceBreak,
     };
+  }
+
+  /** A break inside the body is a break in the flow the table sits in. */
+  override hasForcedBreak(): boolean {
+    return this.body.hasForcedBreak();
   }
 
   override layoutChildren(): readonly PDFElement[] {

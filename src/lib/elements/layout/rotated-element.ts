@@ -43,6 +43,28 @@ export class RotatedElement extends PDFElement {
     return [this.child];
   }
 
+  // It takes the child's space, so the child's sizing hints and its break-before/after are its own.
+  // It is never split - half a rotation on each page means nothing - so a break INSIDE stays inside.
+  override relativeSizeFactor(horizontal: boolean): number | undefined {
+    return this.child.relativeSizeFactor(horizontal);
+  }
+
+  override needsBoundedMain(horizontal: boolean): boolean {
+    return this.child.needsBoundedMain(horizontal);
+  }
+
+  override minIntrinsicMain(horizontal: boolean, ctx: LayoutContext): number {
+    return this.child.minIntrinsicMain(horizontal, ctx);
+  }
+
+  override breaksBefore(): boolean {
+    return this.child.breaksBefore();
+  }
+
+  override breaksAfter(): boolean {
+    return this.child.breaksAfter();
+  }
+
   override getProps() {
     return {
       angle: this.angle,

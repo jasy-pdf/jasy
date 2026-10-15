@@ -297,7 +297,9 @@ rendering. This is the standing visual check; prefer it over one-off `scripts/ru
 - Elements expose state via `getProps()`; renderers consume `getProps()`, never reach into privates.
 - Renderers return `IRNode[]`, never PDF strings. PDF operators live **only** in `PdfBackend`.
 - New element = new file in `elements/` implementing `calculateLayout` and `computeSize` from ONE sizing
-  path (never override `measure` - the base class owns it), export from `elements/index.ts`, write a renderer in
+  path (never override `measure` - the base class owns it). A wrapper that only MARKS its one child (a
+  link, a role, inherited defaults) extends `ProxyElement` and adds `childContext`/`rewrap` - it then
+  sizes and breaks across pages exactly like its child, export from `elements/index.ts`, write a renderer in
   `renderer/` that returns `IRNode[]`, **register it in `PDFRenderer.render()`**, export from
   `renderer/index.ts`, add a test under `tests/unit/<group>/` (mirror the source path; import the
   subject via a relative path to `src/lib/<group>/<module>.ts` — count the `../` from the test's OWN

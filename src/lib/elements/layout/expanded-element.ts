@@ -79,7 +79,21 @@ export class ExpandedElement extends FlexiblePDFElement implements Fragmentable 
     return {
       fitted: split.fitted ? this.cloneWithChild(split.fitted) : null,
       remainder: split.remainder ? this.cloneWithChild(split.remainder) : null,
+      forceBreak: split.forceBreak,
     };
+  }
+
+  // A break inside the flex child is a break in the flow it sits in.
+  override hasForcedBreak(): boolean {
+    return this.child.hasForcedBreak();
+  }
+
+  override breaksBefore(): boolean {
+    return this.child.breaksBefore();
+  }
+
+  override breaksAfter(): boolean {
+    return this.child.breaksAfter();
   }
 
   private cloneWithChild(child: PDFElement): ExpandedElement {

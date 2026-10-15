@@ -1,6 +1,6 @@
 import { vi } from "vitest";
 import { PdfBackend } from "../../../src/lib/renderer/pdf-backend.ts";
-import type { TextRun } from "../../../src/lib/ir/display-list.ts";
+import type { IRNode, TextRun } from "../../../src/lib/ir/display-list.ts";
 
 /**
  * Every text run DRAWN while `render` runs, in page coordinates (top-left, before the Y flip). An
@@ -29,12 +29,12 @@ export function runOf(runs: TextRun[], text: string): TextRun {
   return hit;
 }
 
-/** Like `drawnTextRuns`, one list per page in page order. */
-export async function drawnPages(render: () => Promise<unknown>): Promise<TextRun[][]> {
-  const pages: TextRun[][] = [];
+/** Every node DRAWN while `render` runs, one list per page in page order (top-left coordinates). */
+export async function drawnNodes(render: () => Promise<unknown>): Promise<IRNode[][]> {
+  const pages: IRNode[][] = [];
   const flipY = PdfBackend.flipY.bind(PdfBackend);
   const spy = vi.spyOn(PdfBackend, "flipY").mockImplementation((nodes, height) => {
-    pages.push(nodes.filter((n): n is TextRun => n.type === "text"));
+    pages.push([...nodes]);
     return flipY(nodes, height);
   });
   try {
@@ -43,4 +43,11 @@ export async function drawnPages(render: () => Promise<unknown>): Promise<TextRu
     spy.mockRestore();
   }
   return pages;
+}
+
+/** Like `drawnTextRuns`, one list per page in page order. */
+export async function drawnPages(render: () => Promise<unknown>): Promise<TextRun[][]> {
+  return (await drawnNodes(render)).map((nodes) =>
+    nodes.filter((n): n is TextRun => n.type === "text"),
+  );
 }

@@ -1,60 +1,24 @@
-import { PDFElement, LayoutContext } from "../pdf-element.ts";
-import { BoxConstraints, Offset, Size } from "../../layout/box-constraints.ts";
-import { Fragmentable, FragmentResult, isFragmentable } from "../../layout/fragmentation.ts";
+import { PDFElement } from "../pdf-element.ts";
+import { ProxyElement } from "./proxy-element.ts";
 
 /**
- * A layout-TRANSPARENT wrapper that assigns an accessibility structure role (Table / TR / TH / TD / …) to
- * its single child. It delegates ALL layout and fragmentation to the child, so the visual result is byte-
- * identical; only its renderer opens a structure element and nests the child's tags underneath.
+ * A layout-transparent wrapper (a `ProxyElement`) that assigns an accessibility structure role
+ * (Table / TR / TH / TD / …) to its single child; only its renderer opens a structure element and nests
+ * the child's tags underneath.
  *
- * Split across pages, the fitted and remainder halves share this group's `structId`, so it stays ONE
- * logical structure element (a table broken over pages is a single <Table>, exactly as Acrobat produces).
+ * Split across pages, the pieces share this group's `structId`, so it stays ONE logical structure
+ * element (a table broken over pages is a single <Table>, exactly as Acrobat produces).
  */
-export class StructGroup extends PDFElement implements Fragmentable {
+export class StructGroup extends ProxyElement {
   private role: string;
-  private child: PDFElement;
 
   constructor({ role, child }: { role: string; child: PDFElement }) {
-    super();
+    super(child);
     this.role = role;
-    this.child = child;
   }
 
-  /** Layout-transparent: the floor is whatever the wrapped child needs. */
-  override minIntrinsicMain(horizontal: boolean, ctx: LayoutContext): number {
-    return this.child.minIntrinsicMain(horizontal, ctx);
-  }
-
-  calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
-    return this.child.calculateLayout(constraints, offset, ctx);
-  }
-
-  protected override computeSize(constraints: BoxConstraints, ctx: LayoutContext): Size {
-    return this.child.measure(constraints, ctx);
-  }
-
-  /** Only splittable when the wrapped child is - so a StructGroup(Row) is moved whole to the next page,
-   *  not clipped at the boundary (isFragmentable honours this veto). */
-  canFragment(): boolean {
-    return isFragmentable(this.child);
-  }
-
-  fragment(maxHeight: number, width: number, ctx: LayoutContext): FragmentResult {
-    if (!isFragmentable(this.child)) return { fitted: null, remainder: this };
-    const { fitted, remainder } = this.child.fragment(maxHeight, width, ctx);
-    // Re-wrap each half with the SAME role + identity, so both pages point at one structure element.
-    return {
-      fitted: fitted
-        ? new StructGroup({ role: this.role, child: fitted }).adoptStructId(this)
-        : null,
-      remainder: remainder
-        ? new StructGroup({ role: this.role, child: remainder }).adoptStructId(this)
-        : null,
-    };
-  }
-
-  override layoutChildren(): readonly PDFElement[] {
-    return [this.child];
+  protected override rewrap(child: PDFElement): PDFElement {
+    return new StructGroup({ role: this.role, child }).adoptStructId(this);
   }
 
   override getProps() {
