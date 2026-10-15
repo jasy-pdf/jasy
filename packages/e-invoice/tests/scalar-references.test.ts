@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { beforeAll, describe, it, expect } from "vitest";
 import { Invoice } from "../src/invoice.ts";
 import { toCII } from "../src/cii.ts";
 import { toUBL } from "../src/ubl.ts";
@@ -166,9 +166,14 @@ describe("UBL, where the same values land somewhere else entirely", () => {
 });
 
 describe("every one of them reaches the paper", () => {
-  const text = printedText(
-    defaultInvoiceTemplate(full, computed, resolveLabels("de"), makeFormatters("de", "EUR")),
-  ).join("\n");
+  let text = "";
+  beforeAll(async () => {
+    text = (
+      await printedText(
+        defaultInvoiceTemplate(full, computed, resolveLabels("de"), makeFormatters("de", "EUR")),
+      )
+    ).join("\n");
+  });
 
   it.each([
     ["BT-14 sales order", "SO-200"],

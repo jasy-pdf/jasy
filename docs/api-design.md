@@ -191,7 +191,7 @@ rather than given, so `fit` defaults to `fill`.
 
 ### After the core API
 
-| `Grid` / `Table` | rows × cols, auto + fixed widths | `columns: ("auto" \| number \| "1fr")[]`, `gap` | built on `Row`/`Column` |
+| `Grid` / `Table` | rows × cols, auto + fixed widths | `columns: ("auto" \| "minmax(40, auto)" \| number \| "1fr")[]`, `gap` | built on `Row`/`Column` |
 
 ---
 

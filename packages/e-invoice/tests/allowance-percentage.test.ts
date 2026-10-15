@@ -112,25 +112,27 @@ describe("both syntaxes carry the rate", () => {
 });
 
 describe("the paper shows the rate, not just the euros", () => {
-  const printed = (invoice: Invoice) =>
-    printedText(
-      defaultInvoiceTemplate(
-        invoice,
-        computeInvoice(invoice),
-        resolveLabels("de"),
-        makeFormatters("de", "EUR"),
-      ),
+  const printed = async (invoice: Invoice) =>
+    (
+      await printedText(
+        defaultInvoiceTemplate(
+          invoice,
+          computeInvoice(invoice),
+          resolveLabels("de"),
+          makeFormatters("de", "EUR"),
+        ),
+      )
     ).join("\n");
 
-  it("prints the percentage and what it applies to", () => {
-    const text = printed(withDocAC(RATE));
+  it("prints the percentage and what it applies to", async () => {
+    const text = await printed(withDocAC(RATE));
     expect(text).toContain("Mengenrabatt");
     expect(text).toMatch(/10\s*%/);
     expect(text).toMatch(/1\.000,00/);
   });
 
-  it("does the same for a line-level rate", () => {
-    const text = printed({
+  it("does the same for a line-level rate", async () => {
+    const text = await printed({
       ...base,
       lines: [
         { ...base.lines[0]!, allowancesCharges: [{ ...RATE, baseAmount: 1000, percent: 5 }] },

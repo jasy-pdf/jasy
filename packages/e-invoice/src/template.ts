@@ -308,7 +308,8 @@ function lineItemsTable(
 
   return Table(
     {
-      columns: [40, "1fr", 70, 80, 50, 84],
+      // A line id is one unbreakable word: the column grows to fit it instead of drawing it over the item.
+      columns: ["minmax(40, auto)", "1fr", 70, 80, 50, 84],
       header: [
         head(L.position),
         head(L.description),

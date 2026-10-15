@@ -6,6 +6,7 @@ import { xrechnungProblems } from "../src/profile-check";
 import { Invoice } from "../src/invoice";
 import { defaultInvoiceTemplate } from "../src/template";
 import { resolveLabels, makeFormatters } from "../src/i18n";
+import { printedText } from "./support/printed.ts";
 
 // BG-14 (document) and BG-26 (line): the "Leistungszeitraum". German VAT law (§14 Abs. 4 Nr. 6 UStG)
 // wants a delivery DATE or a PERIOD, and for a recurring service the period is the truthful one - a
@@ -127,52 +128,39 @@ describe("the period in the PRINTED invoice", () => {
   // The point of BG-14 is that both halves of a ZUGFeRD file say the same thing. A period that lives
   // only in the XML is the same defect as one that lives only in the text, just mirrored - which is
   // exactly how the four rejected invoices that prompted this failed.
-  const printed = (i: Invoice, locale: "de" | "en" = "de"): string[] => {
-    const doc = defaultInvoiceTemplate(
-      i,
-      computeInvoice(i),
-      resolveLabels(locale),
-      makeFormatters(locale, i.currency),
+  const printed = (i: Invoice, locale: "de" | "en" = "de") =>
+    printedText(
+      defaultInvoiceTemplate(
+        i,
+        computeInvoice(i),
+        resolveLabels(locale),
+        makeFormatters(locale, i.currency),
+      ),
     );
-    const out: string[] = [];
-    const seen = new Set<unknown>();
-    const walk = (node: unknown): void => {
-      if (!node || typeof node !== "object" || seen.has(node)) return;
-      seen.add(node);
-      const props = (node as { getProps?: () => { content?: unknown } }).getProps?.();
-      if (typeof props?.content === "string") out.push(props.content);
-      for (const value of Object.values(node)) {
-        if (Array.isArray(value)) value.forEach(walk);
-        else walk(value);
-      }
-    };
-    walk(doc);
-    return out;
-  };
 
-  it("shows the period, labelled, on the document", () => {
-    const text = printed({ ...base, period });
+  it("shows the period, labelled, on the document", async () => {
+    const text = await printed({ ...base, period });
     expect(text).toContain("Leistungszeitraum");
     expect(text).toContain("Mai 2026"); // a whole calendar month collapses to its name
   });
 
-  it("shows both ends when the period is not a whole month", () => {
-    const text = printed({ ...base, period: { start: "2026-05-03", end: "2026-06-14" } });
+  it("shows both ends when the period is not a whole month", async () => {
+    const text = await printed({ ...base, period: { start: "2026-05-03", end: "2026-06-14" } });
     expect(text).toContain("03.05.2026 - 14.06.2026");
   });
 
-  it("says nothing at all when there is no period", () => {
-    expect(printed(base)).not.toContain("Leistungszeitraum");
+  it("says nothing at all when there is no period", async () => {
+    expect(await printed(base)).not.toContain("Leistungszeitraum");
   });
 
-  it("shows a delivery date and a period side by side, since the XML carries both", () => {
-    const text = printed({ ...base, period, delivery: { date: "2026-05-31" } });
+  it("shows a delivery date and a period side by side, since the XML carries both", async () => {
+    const text = await printed({ ...base, period, delivery: { date: "2026-05-31" } });
     expect(text).toContain("Leistungszeitraum");
     expect(text).toContain("Lieferdatum");
   });
 
-  it("follows the locale", () => {
-    const text = printed({ ...base, period }, "en");
+  it("follows the locale", async () => {
+    const text = await printed({ ...base, period }, "en");
     expect(text).toContain("Service period");
     expect(text).toContain("May 2026");
   });
@@ -182,28 +170,15 @@ describe("the line period on the paper (BG-26)", () => {
   // The document period was printed since 2026-08-25; a period on a single LINE reached the XML and
   // stayed invisible. That is the half-a-document defect one level down - the case it matters for is
   // an invoice whose lines cover DIFFERENT months, where the header period cannot speak for them.
-  const printed = (i: Invoice): string[] => {
-    const doc = defaultInvoiceTemplate(
-      i,
-      computeInvoice(i),
-      resolveLabels("de"),
-      makeFormatters("de", i.currency),
+  const printed = (i: Invoice) =>
+    printedText(
+      defaultInvoiceTemplate(
+        i,
+        computeInvoice(i),
+        resolveLabels("de"),
+        makeFormatters("de", i.currency),
+      ),
     );
-    const out: string[] = [];
-    const seen = new Set<unknown>();
-    const walk = (node: unknown): void => {
-      if (!node || typeof node !== "object" || seen.has(node)) return;
-      seen.add(node);
-      const props = (node as { getProps?: () => { content?: unknown } }).getProps?.();
-      if (typeof props?.content === "string") out.push(props.content);
-      for (const value of Object.values(node)) {
-        if (Array.isArray(value)) value.forEach(walk);
-        else walk(value);
-      }
-    };
-    walk(doc);
-    return out;
-  };
 
   const twoMonths: Invoice = {
     ...base,
@@ -213,21 +188,21 @@ describe("the line period on the paper (BG-26)", () => {
     ],
   };
 
-  it("prints each line's own period", () => {
-    const text = printed(twoMonths).join("\n");
+  it("prints each line's own period", async () => {
+    const text = (await printed(twoMonths)).join("\n");
     expect(text).toContain("Leistungszeitraum Mai 2026");
     expect(text).toContain("Leistungszeitraum Juni 2026");
   });
 
-  it("stays silent when the line repeats the document period", () => {
+  it("stays silent when the line repeats the document period", async () => {
     // Same span on the header and on every row is noise; the header already said it.
     const same: Invoice = { ...base, period, lines: [{ ...base.lines[0], period }] };
-    const rows = printed(same).filter((t) => t.startsWith("Leistungszeitraum "));
+    const rows = (await printed(same)).filter((t) => t.startsWith("Leistungszeitraum "));
     expect(rows).toEqual([]); // the header uses a separate label/value pair, not this string
   });
 
-  it("still prints a line period when the document has none", () => {
+  it("still prints a line period when the document has none", async () => {
     const lineOnly: Invoice = { ...base, lines: [{ ...base.lines[0], period }] };
-    expect(printed(lineOnly).join("\n")).toContain("Leistungszeitraum Mai 2026");
+    expect((await printed(lineOnly)).join("\n")).toContain("Leistungszeitraum Mai 2026");
   });
 });

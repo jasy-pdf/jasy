@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { beforeAll, describe, it, expect } from "vitest";
 import { Invoice } from "../src/invoice.ts";
 import { toCII } from "../src/cii.ts";
 import { toUBL } from "../src/ubl.ts";
@@ -19,14 +19,16 @@ import { hardInvoice, hardTotals } from "./support/hard-numbers.ts";
 
 const cii = (inv: Invoice) => toCII(inv, computeInvoice(inv));
 const ubl = (inv: Invoice) => toUBL(inv, computeInvoice(inv));
-const paper = (inv: Invoice) =>
-  printedText(
-    defaultInvoiceTemplate(
-      inv,
-      computeInvoice(inv),
-      resolveLabels("en"),
-      makeFormatters("en", "EUR"),
-    ),
+const paper = async (inv: Invoice) =>
+  (
+    await printedText(
+      defaultInvoiceTemplate(
+        inv,
+        computeInvoice(inv),
+        resolveLabels("en"),
+        makeFormatters("en", "EUR"),
+      ),
+    )
   ).join("\n");
 
 const ciiAmount = (tag: string, v: string) => `<ram:${tag}>${v}</ram:${tag}>`;
@@ -112,8 +114,8 @@ describe("a unit price is written as stated, not cut to two decimals", () => {
     expect(ubl(inv)).toContain(ublAmount("PriceAmount", written));
   });
 
-  it("and the paper shows the same price the XML states", () => {
-    expect(paper(one(3, 1.505))).toContain("€1.505");
+  it("and the paper shows the same price the XML states", async () => {
+    expect(await paper(one(3, 1.505))).toContain("€1.505");
   });
 });
 
@@ -121,7 +123,10 @@ describe("the hard invoice, figure by figure", () => {
   const T = hardTotals;
   const xmlC = cii(hardInvoice);
   const xmlU = ubl(hardInvoice);
-  const text = paper(hardInvoice);
+  let text = "";
+  beforeAll(async () => {
+    text = await paper(hardInvoice);
+  });
 
   it("every line total", () => {
     for (const v of T.lineNets) {

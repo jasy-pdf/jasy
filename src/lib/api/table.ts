@@ -9,8 +9,9 @@ import { Insets } from "./insets.ts";
 import { ColorInput } from "./color.ts";
 
 /**
- * A column width: a `number` of points (fixed), an `"Nfr"` fraction (splits the leftover
- * width), or `"auto"` (as wide as the widest cell in that column - measured at layout time).
+ * A column width, as in CSS grid with points for units: a `number` of points (fixed), an `"Nfr"`
+ * fraction (splits the leftover width), `"auto"` (as wide as the widest cell in that column -
+ * measured at layout time), or `"minmax(40, auto)"` (like `auto`, but never narrower than 40pt).
  */
 export type ColumnWidth = number | string;
 
@@ -18,7 +19,7 @@ export type ColumnWidth = number | string;
 export type Cell = PDFElement | string;
 
 export interface TableOptions {
-  /** One entry per column: a fixed point width, an `"Nfr"` fraction, or `"auto"`. */
+  /** One entry per column: a fixed point width, an `"Nfr"` fraction, `"auto"` or `"minmax(<pt>, auto)"`. */
   columns: ColumnWidth[];
   /** A header row that REPEATS at the top of every page the table flows onto. */
   header?: Cell[];
@@ -49,25 +50,44 @@ function fractionOf(col: ColumnWidth): number | null {
   return Number.isFinite(n) ? n : 1;
 }
 
+const MINMAX_AUTO = /^minmax\(\s*(\d+(?:\.\d+)?)\s*,\s*auto\s*\)$/;
+
+/**
+ * The floor of a content-sized column: 0 for `"auto"`, N for `"minmax(N, auto)"`, null for any other
+ * width. Other `minmax()` forms are not supported yet and say so, rather than being read as something else.
+ */
+function autoMinimum(col: ColumnWidth): number | null {
+  if (col === "auto") return 0;
+  if (typeof col !== "string" || !col.startsWith("minmax(")) return null;
+  const min = MINMAX_AUTO.exec(col);
+  if (!min) {
+    throw new Error(
+      `Unsupported column width "${col}" - minmax() takes a minimum in points and "auto", e.g. "minmax(40, auto)"`,
+    );
+  }
+  return parseFloat(min[1]!);
+}
+
 /** The cell's unbounded (max-content) width - what an `"auto"` column sizes to. */
 function naturalWidth(cell: Cell, cellPadding: Insets | undefined, ctx: LayoutContext): number {
   const el = cellPadding !== undefined ? Padding(cellPadding, asElement(cell)) : asElement(cell);
   return el.calculateLayout(BoxConstraints.loose(Infinity, Infinity), { x: 0, y: 0 }, ctx).width;
 }
 
-/** Replaces every `"auto"` column with the widest cell width measured down that column. */
+/** Replaces every content-sized column with the widest cell width measured down it, at least its floor. */
 function resolveAutoColumns(opts: TableOptions, rows: Cell[][], ctx: LayoutContext): ColumnWidth[] {
   // The composed cell sits in a 1pt-border Box (border-box) that eats 1pt each side, which the
   // measured content doesn't include; add it back, and `ceil` so a single-word cell can't land
   // a hair over the width and wrap to an empty first line.
   const slack = opts.cellBorder !== undefined || opts.rule !== undefined ? 2 : 0;
   return opts.columns.map((col, i) => {
-    if (col !== "auto") return col;
+    const floor = autoMinimum(col);
+    if (floor === null) return col;
     let w = opts.header ? naturalWidth(opts.header[i], opts.cellPadding, ctx) : 0;
     for (const r of rows) {
       if (r[i] !== undefined) w = Math.max(w, naturalWidth(r[i], opts.cellPadding, ctx));
     }
-    return Math.ceil(w + slack);
+    return Math.max(floor, Math.ceil(w + slack));
   });
 }
 
@@ -153,7 +173,7 @@ function composeTable(opts: TableOptions, rows: Cell[][], columns: ColumnWidth[]
  * columns are resolved at layout time (a `DeferredElement`), once metrics are available.
  */
 export function Table(opts: TableOptions, rows: Cell[][]): PDFElement {
-  if (opts.columns.some((c) => c === "auto")) {
+  if (opts.columns.some((c) => autoMinimum(c) !== null)) {
     return new DeferredElement((ctx) =>
       composeTable(opts, rows, resolveAutoColumns(opts, rows, ctx)),
     );

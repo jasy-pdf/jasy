@@ -110,30 +110,32 @@ describe("more than one, because a correction may settle several", () => {
 });
 
 describe("the paper names it too", () => {
-  const printed = (invoice: Invoice) =>
-    printedText(
-      defaultInvoiceTemplate(
-        invoice,
-        computeInvoice(invoice),
-        resolveLabels("de"),
-        makeFormatters("de", "EUR"),
-      ),
+  const printed = async (invoice: Invoice) =>
+    (
+      await printedText(
+        defaultInvoiceTemplate(
+          invoice,
+          computeInvoice(invoice),
+          resolveLabels("de"),
+          makeFormatters("de", "EUR"),
+        ),
+      )
     ).join("\n");
 
-  it("shows the number and the date in the reference box", () => {
-    const text = printed(withRefs([{ number: "RE-2026-0100", issueDate: "2026-08-01" }]));
+  it("shows the number and the date in the reference box", async () => {
+    const text = await printed(withRefs([{ number: "RE-2026-0100", issueDate: "2026-08-01" }]));
     expect(text).toContain("Bezug auf Rechnung");
     expect(text).toContain("RE-2026-0100");
     expect(text).toContain("01.08.2026");
   });
 
-  it("lists several on one line", () => {
-    const text = printed(withRefs([{ number: "RE-1" }, { number: "RE-2" }]));
+  it("lists several on one line", async () => {
+    const text = await printed(withRefs([{ number: "RE-1" }, { number: "RE-2" }]));
     expect(text).toMatch(/RE-1, RE-2/);
   });
 
-  it("says nothing at all when there is no reference", () => {
-    expect(printed(base)).not.toContain("Bezug auf Rechnung");
+  it("says nothing at all when there is no reference", async () => {
+    expect(await printed(base)).not.toContain("Bezug auf Rechnung");
   });
 });
 

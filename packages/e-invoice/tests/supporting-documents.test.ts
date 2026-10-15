@@ -188,18 +188,20 @@ describe("a name collision is refused, because no validator catches it", () => {
 });
 
 describe("the paper says an attachment exists", () => {
-  const printed = (invoice: Invoice) =>
-    printedText(
-      defaultInvoiceTemplate(
-        invoice,
-        computeInvoice(invoice),
-        resolveLabels("de"),
-        makeFormatters("de", "EUR"),
-      ),
+  const printed = async (invoice: Invoice) =>
+    (
+      await printedText(
+        defaultInvoiceTemplate(
+          invoice,
+          computeInvoice(invoice),
+          resolveLabels("de"),
+          makeFormatters("de", "EUR"),
+        ),
+      )
     ).join("\n");
 
-  it("names the description, the reference and the file", () => {
-    const text = printed(
+  it("names the description, the reference and the file", async () => {
+    const text = await printed(
       withDocs([
         {
           reference: "TIMESHEET-09",
@@ -213,13 +215,15 @@ describe("the paper says an attachment exists", () => {
     expect(text).toContain("stunden.csv");
   });
 
-  it("shows the link when there is no file", () => {
-    const text = printed(withDocs([{ reference: "L", url: "https://example.invalid/n.pdf" }]));
+  it("shows the link when there is no file", async () => {
+    const text = await printed(
+      withDocs([{ reference: "L", url: "https://example.invalid/n.pdf" }]),
+    );
     expect(text).toContain("https://example.invalid/n.pdf");
   });
 
-  it("stays silent with no attachments", () => {
-    expect(printed(base)).not.toContain("Anlagen");
+  it("stays silent with no attachments", async () => {
+    expect(await printed(base)).not.toContain("Anlagen");
   });
 });
 
