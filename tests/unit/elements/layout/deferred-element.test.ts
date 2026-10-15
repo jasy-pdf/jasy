@@ -40,8 +40,8 @@ describe("a Deferred keeps the subtree it built", () => {
     expect(state.builds).toBeGreaterThan(1);
   });
 
-  it("builds again per page when a cell depends on the page - each page shows its own number", async () => {
-    const { state, doc } = counted(() => PageNumber());
+  it("shows each page its own number when a cell depends on the page", async () => {
+    const { doc } = counted(() => PageNumber());
     const pages = await drawnPages(() => renderToBytes(doc));
     expect(pages.length).toBeGreaterThan(1);
     pages.forEach((runs, i) => {
@@ -50,6 +50,5 @@ describe("a Deferred keeps the subtree it built", () => {
       expect(numbers.length).toBeGreaterThan(0);
       expect(new Set(numbers)).toEqual(new Set([String(i + 1)]));
     });
-    expect(state.builds).toBeGreaterThan(1);
   });
 });

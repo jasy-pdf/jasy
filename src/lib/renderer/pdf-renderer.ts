@@ -57,7 +57,6 @@ import { RotatedElement } from "../elements/layout/rotated-element.ts";
 import { RotatedBoxElement } from "../elements/layout/rotated-box-element.ts";
 import { RotatedRenderer } from "./rotated-renderer.ts";
 import { PdfBackend } from "./pdf-backend.ts";
-import { BoxConstraints } from "../layout/box-constraints.ts";
 import { collectImageElements } from "../layout/collect-images.ts";
 import { LayoutContext } from "../elements/pdf-element.ts";
 import { DEFAULT_TEXT_STYLE, mergeTextStyle } from "../text/text-style.ts";
@@ -104,8 +103,8 @@ export class PDFRenderer {
     // matches the xref offset calculation).
     pdfContent += objectManager.getHeader();
 
-    // Layout pass: thread the context explicitly. The seed page config is the document
-    // default; each PageElement overrides it for its own subtree.
+    // The layout context, threaded explicitly. The seed page config is the document default; each
+    // PageElement overrides it for its own subtree.
     const ctx: LayoutContext = {
       metrics: objectManager,
       pageConfig: objectManager.getPDFConfig(),
@@ -117,9 +116,7 @@ export class PDFRenderer {
     const images = collectImageElements(document);
     if (images.length > 0) await Promise.all(images.map((img) => img.resolveIntrinsicSize()));
 
-    document.calculateLayout(new BoxConstraints(), { x: 0, y: 0 }, ctx);
-
-    // Render pages and contents (the driver paginates overflowing pages).
+    // Paginate, then lay out and render page by page (the driver does both; nothing is laid out before).
     await PDFDocumentRenderer.render(document, objectManager, ctx);
 
     // Add the catalog. XMP metadata (/Metadata) and embedded files (/AF + /Names/EmbeddedFiles)

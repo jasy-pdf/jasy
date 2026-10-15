@@ -4,7 +4,7 @@ import { TextElement } from "../../../src/lib/elements/text-element.ts";
 import { RectangleElement } from "../../../src/lib/elements/rectangle-element.ts";
 import { PageBuilderElement } from "../../../src/lib/elements/layout/page-builder-element.ts";
 import { BoxConstraints, type Offset, type Size } from "../../../src/lib/layout/box-constraints.ts";
-import { layoutCache } from "../../../src/lib/layout/layout-cache.ts";
+import { BuiltFromContext, layoutCache } from "../../../src/lib/layout/layout-cache.ts";
 import { DEFAULT_TEXT_STYLE, mergeTextStyle } from "../../../src/lib/text/text-style.ts";
 import { PageSize } from "../../../src/lib/constants/page-sizes.ts";
 import type { PageInfo } from "../../../src/lib/elements/pdf-element.ts";
@@ -234,5 +234,63 @@ describe("the layout cache", () => {
     const a4 = builder.measure(loose(100), ctx());
     const a6 = builder.measure(loose(100), ctx({ pageConfig: { pageSize: PageSize.A6 } }));
     expect(a6.height).toBeLessThan(a4.height);
+  });
+});
+
+// A subtree built at layout time (a table's rows) is kept under the context half of the same key.
+describe("a subtree built from the context", () => {
+  const building = (make: () => PDFElement) => {
+    const built = new BuiltFromContext<PDFElement>();
+    let builds = 0;
+    const get = (c: LayoutContext) => built.get(c, () => (builds++, make()));
+    return { get, builds: () => builds };
+  };
+  const page = (pageNumber: number): PageInfo => ({
+    pageNumber,
+    pageCount: 2,
+    subPageNumber: pageNumber,
+    subPageTotalPages: 2,
+    pageSize: { width: 595, height: 842 },
+  });
+
+  it("is built once for the same context", () => {
+    const b = building(() => new Counted());
+    b.get(ctx());
+    b.get(ctx());
+    expect(b.builds()).toBe(1);
+  });
+
+  it("is built again when the inherited style changes", () => {
+    const b = building(() => new Counted());
+    b.get(ctx());
+    b.get(ctx({ textStyle: mergeTextStyle(DEFAULT_TEXT_STYLE, { fontSize: 30 }) }));
+    expect(b.builds()).toBe(2);
+  });
+
+  it("is reused across pages when what it built does not depend on the page", () => {
+    const b = building(() => new Counted());
+    b.get(ctx({ pageInfo: page(1) }));
+    b.get(ctx({ pageInfo: page(2) }));
+    expect(b.builds()).toBe(1);
+  });
+
+  it("is built again per page when what it built depends on the page", () => {
+    const b = building(
+      () =>
+        new PageBuilderElement({
+          build: () => new RectangleElement({ x: 0, y: 0, borderWidth: 0, children: [] }),
+        }),
+    );
+    b.get(ctx({ pageInfo: page(1) }));
+    b.get(ctx({ pageInfo: page(2) }));
+    expect(b.builds()).toBe(2);
+  });
+
+  it("is built every time with the cache switched off", () => {
+    layoutCache.enabled = false;
+    const b = building(() => new Counted());
+    b.get(ctx());
+    b.get(ctx());
+    expect(b.builds()).toBe(2);
   });
 });

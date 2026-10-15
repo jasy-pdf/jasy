@@ -21,7 +21,7 @@ type PhysicalPage =
   | { kind: "whole"; page: PageElement }
   | {
       kind: "fragment";
-      config: PDFPageConfig | undefined;
+      config: PDFPageConfig;
       content: PDFElement;
       header: PDFElement | undefined;
       footer: PDFElement | undefined;
@@ -85,17 +85,11 @@ export class PDFDocumentRenderer {
     return pagesObjectNumber;
   }
 
-  /**
-   * The page geometry a physical page will use. `PageElement.calculateLayout` has already folded the
-   * document defaults into every page's config by the time we get here (`PDFRenderer` lays the document
-   * out before it calls us, and it is our only caller). Merging again is therefore a no-op today - it is
-   * here so this stays correct BY CONSTRUCTION rather than by call order: were that order ever changed,
-   * an unmerged config would otherwise make `resolvePageSize` fall back to A4 and quietly report the
-   * wrong page size.
-   */
+  /** The page geometry a physical page will use: resolved, never read back from an earlier layout. */
   private static configOf(physical: PhysicalPage, ctx: LayoutContext): PDFPageConfig {
-    const config = physical.kind === "whole" ? physical.page.getProps().config : physical.config;
-    return { ...ctx.pageConfig, ...config };
+    return physical.kind === "whole"
+      ? physical.page.resolveConfig(ctx.pageConfig)
+      : physical.config;
   }
 
   /**
@@ -115,7 +109,7 @@ export class PDFDocumentRenderer {
     }
 
     // Header/footer repeat on every physical page, so the body only ever flows into the
-    // band between them. Resolve that band once (config is already merged by pass 1).
+    // band between them. Resolve that band once.
     // The frame is a throwaway: this pass only wants the band HEIGHTS, and an out-of-flow child
     // contributes none. It exists because a `Positioned` in a band demands one; pass 2 builds the
     // real frame (in `PageElement`) and drains it.

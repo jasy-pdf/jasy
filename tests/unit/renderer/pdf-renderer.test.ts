@@ -62,7 +62,7 @@ describe("PDFRenderer", () => {
     expect(RendererRegistry.register).toHaveBeenCalledWith(ImageElement, expect.any(Function));
   });
 
-  it("should call calculateLayout on the document element", async () => {
+  it("does not lay the whole document out up front - the page driver lays out each page", async () => {
     const mockDocumentElement = {
       calculateLayout: vi.fn(),
       getDefaultTextStyle: vi.fn(),
@@ -71,8 +71,8 @@ describe("PDFRenderer", () => {
 
     await PDFRenderer.render(mockDocumentElement, mockObjectManager);
 
-    // Check that calculateLayout was called
-    expect(mockDocumentElement.calculateLayout).toHaveBeenCalled();
+    // A layout of everything before pagination was thrown away by the per-page layouts that follow.
+    expect(mockDocumentElement.calculateLayout).not.toHaveBeenCalled();
   });
 
   it("should generate correct PDF content", async () => {
