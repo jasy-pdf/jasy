@@ -83,7 +83,8 @@ function resolveAutoColumns(opts: TableOptions, rows: Cell[][], ctx: LayoutConte
   return opts.columns.map((col, i) => {
     const floor = autoMinimum(col);
     if (floor === null) return col;
-    let w = opts.header ? naturalWidth(opts.header[i], opts.cellPadding, ctx) : 0;
+    const head = opts.header?.[i];
+    let w = head !== undefined ? naturalWidth(head, opts.cellPadding, ctx) : 0;
     for (const r of rows) {
       if (r[i] !== undefined) w = Math.max(w, naturalWidth(r[i], opts.cellPadding, ctx));
     }

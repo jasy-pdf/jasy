@@ -158,6 +158,14 @@ describe('a "minmax(<points>, auto)" column', () => {
     expect(await firstColumnWidth("auto", wide)).toBeGreaterThan(60);
   });
 
+  it("measures past a header that is shorter than the columns", async () => {
+    // A missing header cell is skipped, as a missing body cell is.
+    const doc = Document([
+      Page([Table({ columns: ["1fr", "minmax(40, auto)"], header: ["Item"] }, [["a", "b"]])]),
+    ]);
+    await expect(renderToBytes(doc)).resolves.toBeInstanceOf(Uint8Array);
+  });
+
   it("is resolved at layout time, like `auto`", () => {
     expect(Table({ columns: ["minmax(40, auto)"] }, [["a"]])).toBeInstanceOf(DeferredElement);
   });
