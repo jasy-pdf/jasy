@@ -32,6 +32,7 @@ import { lineBoxForSegmentLine, lineBoxForString } from "../text/line-metrics.ts
 import { HorizontalAlignment, LayoutContext, SizedPDFElement } from "./pdf-element.ts";
 import { normalizeContent } from "../text/whitespace.ts";
 import { coverText } from "../text/glyph-coverage.ts";
+import { textMeasureCache } from "../text/measure-cache.ts";
 import type { Hyphenator } from "../text/word-splitting.ts";
 export interface TextSegment {
   content: string;
@@ -543,24 +544,100 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       : this.naturalWidth(ctx.metrics);
 
     const wrapWidth = this.width ?? 0;
-    this.height = TextRenderer.calculateTextHeight(
-      this.resolved,
+    this.height = this.measuredHeight(ctx.metrics, wrapWidth);
+
+    // Top-left coordinates (y = top of the text box). The baseline offset and the
+    // Y-flip are applied downstream (the line-builder positions baselines, the seam
+    // flips to PDF), so the element stays coordinate-system-blind.
+    return { width: wrapWidth, height: this.height };
+  }
+
+  /**
+   * The last measured height, with every argument `calculateTextHeight` took - it is pure in them, so
+   * the arguments ARE the key and nothing it reads can be missed. Flex measures a child and then
+   * places it under the same constraints, and pagination lays a page out again; without this a
+   * paragraph was broken into lines ~27 times per render. `content` compares by identity: `display`
+   * hands back the same value while its own inputs hold, and a new value is simply a miss.
+   */
+  private measured?: {
+    metrics: FontMetrics;
+    epoch: number;
+    content: string | TextSegment[];
+    width: number;
+    fontSize: number;
+    fontFamily: string;
+    fontStyle: FontStyle;
+    maxLines?: number;
+    overflow?: TextOverflow;
+    lineHeight?: number;
+    letterSpacing: number;
+    wordSpacing?: number;
+    indent?: number;
+    breakWord?: boolean;
+    hyphenate?: Hyphenator;
+    ligatures?: boolean;
+    alignment: HorizontalAlignment;
+    height: number;
+  };
+
+  private measuredHeight(metrics: FontMetrics, width: number): number {
+    const m = this.measured;
+    if (
+      textMeasureCache.enabled &&
+      m &&
+      m.metrics === metrics &&
+      m.epoch === (metrics.fontEpoch ?? 0) &&
+      m.content === this.resolved &&
+      m.width === width &&
+      m.fontSize === this.fontSize &&
+      m.fontFamily === this.fontFamily &&
+      m.fontStyle === this.fontStyle &&
+      m.maxLines === this.maxLines &&
+      m.overflow === this.overflow &&
+      m.lineHeight === this.lineHeight &&
+      m.letterSpacing === this.letterSpacing &&
+      m.wordSpacing === this.wordSpacing &&
+      m.indent === this.textIndent &&
+      m.breakWord === this.breakWord &&
+      m.hyphenate === this.hyphenate &&
+      m.ligatures === this.ligatures &&
+      m.alignment === this.textAlignment
+    )
+      return m.height;
+    const height = TextRenderer.calculateTextHeight(
+      this.resolved!,
       this.fontSize,
       this.fontFamily,
       this.fontStyle,
-      ctx.metrics,
-      wrapWidth,
+      metrics,
+      width,
       this.maxLines,
       this.overflow,
       this.lineHeight,
       this.letterSpacing,
       this.lineOptions(),
     );
-
-    // Top-left coordinates (y = top of the text box). The baseline offset and the
-    // Y-flip are applied downstream (the line-builder positions baselines, the seam
-    // flips to PDF), so the element stays coordinate-system-blind.
-    return { width: wrapWidth, height: this.height };
+    this.measured = {
+      metrics,
+      epoch: metrics.fontEpoch ?? 0,
+      content: this.resolved!,
+      width,
+      fontSize: this.fontSize,
+      fontFamily: this.fontFamily,
+      fontStyle: this.fontStyle,
+      maxLines: this.maxLines,
+      overflow: this.overflow,
+      lineHeight: this.lineHeight,
+      letterSpacing: this.letterSpacing,
+      wordSpacing: this.wordSpacing,
+      indent: this.textIndent,
+      breakWord: this.breakWord,
+      hyphenate: this.hyphenate,
+      ligatures: this.ligatures,
+      alignment: this.textAlignment,
+      height,
+    };
+    return height;
   }
 
   /** The unwrapped single-line width of the content (used when width is unbounded, e.g. inside a Row).
