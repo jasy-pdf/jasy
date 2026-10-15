@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { toDecimalString } from "@jasy/decy";
 import { renderZugferd } from "@jasy/e-invoice";
 import { readInvoice } from "../src/core/read";
 
@@ -46,6 +47,6 @@ describe("readInvoice", () => {
     expect(r.invoice?.number).toBe("RE-READ-1");
     expect(r.invoice?.seller.name).toBe("M GmbH");
     expect(r.invoice?.lines).toHaveLength(1);
-    expect(r.totals?.grandTotal).toBe(119); // 100 net + 19% VAT
+    expect(toDecimalString(r.totals!.grandTotal)).toBe("119.00"); // 100 net + 19% VAT
   });
 });

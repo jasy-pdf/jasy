@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { toDecimalString as text } from "@jasy/decy";
+import { cents } from "../src/money.ts";
 import { Invoice } from "../src/invoice.ts";
 import { toCII } from "../src/cii.ts";
 import { toUBL } from "../src/ubl.ts";
@@ -47,21 +49,21 @@ describe("the numbers", () => {
     const invoice = withSkonto({ days: 14, percent: 2 });
     const gross = computeInvoice(invoice).grandTotal; // 1000 + 19 % = 1190
     const [d] = resolveDiscounts(invoice.payment!.cashDiscounts, invoice.issueDate, gross);
-    expect(d!.baseAmount).toBe(1190);
-    expect(d!.discountAmount).toBe(23.8);
-    expect(d!.discountedTotal).toBe(1166.2);
+    expect(text(d!.baseAmount)).toBe("1190.00");
+    expect(text(d!.discountAmount)).toBe("23.80");
+    expect(text(d!.discountedTotal)).toBe("1166.20");
   });
 
   it("counts the deadline from the issue date", () => {
-    const [d] = resolveDiscounts([{ days: 14, percent: 2 }], "2026-09-09", 100);
+    const [d] = resolveDiscounts([{ days: 14, percent: 2 }], "2026-09-09", cents(100));
     expect(d!.deadline).toBe("2026-09-23");
   });
 
   it("crosses a month and a leap day without drifting", () => {
-    expect(resolveDiscounts([{ days: 30, percent: 1 }], "2026-12-20", 100)[0]!.deadline).toBe(
-      "2027-01-19",
-    );
-    expect(resolveDiscounts([{ days: 1, percent: 1 }], "2028-02-28", 100)[0]!.deadline).toBe(
+    expect(
+      resolveDiscounts([{ days: 30, percent: 1 }], "2026-12-20", cents(100))[0]!.deadline,
+    ).toBe("2027-01-19");
+    expect(resolveDiscounts([{ days: 1, percent: 1 }], "2028-02-28", cents(100))[0]!.deadline).toBe(
       "2028-02-29",
     );
   });
@@ -69,9 +71,9 @@ describe("the numbers", () => {
   it("NEVER changes the invoice totals - that is the whole reason it is not an allowance", () => {
     const plain = computeInvoice(base);
     const skonto = computeInvoice(withSkonto({ days: 14, percent: 2 }));
-    expect(skonto.grandTotal).toBe(plain.grandTotal);
-    expect(skonto.duePayable).toBe(plain.duePayable);
-    expect(skonto.taxBasisTotal).toBe(plain.taxBasisTotal);
+    expect(skonto.grandTotal).toEqual(plain.grandTotal);
+    expect(skonto.duePayable).toEqual(plain.duePayable);
+    expect(skonto.taxBasisTotal).toEqual(plain.taxBasisTotal);
   });
 });
 
@@ -81,9 +83,31 @@ describe("the BT-20 payload", () => {
       "Zahlbar in 30 Tagen.",
       [{ days: 14, percent: 2 }],
       "2026-09-09",
-      1190,
+      cents(1190),
     );
-    expect(text).toBe("Zahlbar in 30 Tagen.\n#SKONTO#TAGE=14#PROZENT=2.00#");
+    expect(text).toBe("Zahlbar in 30 Tagen.\n#SKONTO#TAGE=14#PROZENT=2.00#\n");
+  });
+
+  it("passes BR-DE-18 exactly as the XRechnung schematron states it", () => {
+    // Ported from XRechnung-CII-validation.sch 2.6.0: every '#' line matches the regex, and the
+    // text after the last '#...#' token starts with a line break.
+    const XR_SKONTO =
+      /(^|\r?\n)#(SKONTO)#TAGE=([0-9]+#PROZENT=[0-9]+\.[0-9]{2})(#BASISBETRAG=-?[0-9]+\.[0-9]{2})?#$/;
+    for (const terms of ["Zahlbar in 30 Tagen.", undefined]) {
+      const text = paymentTermsText(
+        terms,
+        [
+          { days: 14, percent: 2 },
+          { days: 30, percent: 1.5, baseAmount: 500 },
+        ],
+        "2026-09-09",
+        cents(1190),
+      )!;
+      const skontoLines = text.split(/\r?\n/).filter((l) => l.trim().startsWith("#"));
+      expect(skontoLines).toHaveLength(2);
+      for (const l of skontoLines) expect(l.trim()).toMatch(XR_SKONTO);
+      expect(text.split(/#.+#/).at(-1)).toMatch(/^\s*\n/);
+    }
   });
 
   it("writes BASISBETRAG only when the user gave one", () => {
@@ -94,22 +118,22 @@ describe("the BT-20 payload", () => {
         { days: 30, percent: 1.5, baseAmount: 500 },
       ],
       "2026-09-09",
-      1190,
+      cents(1190),
     );
     expect(text).toBe(
-      "#SKONTO#TAGE=14#PROZENT=2.00#\n#SKONTO#TAGE=30#PROZENT=1.50#BASISBETRAG=500.00#",
+      "#SKONTO#TAGE=14#PROZENT=2.00#\n#SKONTO#TAGE=30#PROZENT=1.50#BASISBETRAG=500.00#\n",
     );
   });
 
   it("always writes two decimals, because a machine reads this", () => {
-    const text = paymentTermsText(undefined, [{ days: 7, percent: 3 }], "2026-09-09", 100);
+    const text = paymentTermsText(undefined, [{ days: 7, percent: 3 }], "2026-09-09", cents(100));
     expect(text).toContain("PROZENT=3.00#");
   });
 
   it("leaves the terms untouched when there is no discount, so old output stays byte-identical", () => {
-    expect(paymentTermsText("Nur Text.", undefined, "2026-09-09", 100)).toBe("Nur Text.");
-    expect(paymentTermsText("Nur Text.", [], "2026-09-09", 100)).toBe("Nur Text.");
-    expect(paymentTermsText(undefined, undefined, "2026-09-09", 100)).toBeUndefined();
+    expect(paymentTermsText("Nur Text.", undefined, "2026-09-09", cents(100))).toBe("Nur Text.");
+    expect(paymentTermsText("Nur Text.", [], "2026-09-09", cents(100))).toBe("Nur Text.");
+    expect(paymentTermsText(undefined, undefined, "2026-09-09", cents(100))).toBeUndefined();
   });
 });
 

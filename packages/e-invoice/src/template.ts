@@ -16,7 +16,9 @@ import { AllowanceCharge, Delivery, Invoice, PostalAddress, Seller } from "./inv
 import { ComputedInvoice, VatBreakdownEntry } from "./compute.ts";
 import { Formatters, InvoiceLabels } from "./i18n.ts";
 import { resolveDiscounts } from "./skonto.ts";
+import { abs, isNegative, isZero } from "@jasy/decy";
 import { acAmount, hasPercentage } from "./allowance.ts";
+import { cents, unitPrice } from "./money.ts";
 
 // The built-in invoice layout: a complete, §14-UStG-aware invoice that renders everything the
 // Invoice carries. That is not a promise in prose - `tests/completeness.test.ts` sets EVERY field to
@@ -296,8 +298,8 @@ function lineItemsTable(
       right(`${fmt.number(line.quantity)} ${line.unit}`),
       right(
         line.priceBaseQuantity && line.priceBaseQuantity !== 1
-          ? `${fmt.money(line.netUnitPrice)} ${L.perQuantity} ${fmt.number(line.priceBaseQuantity)} ${line.unit}`
-          : fmt.money(line.netUnitPrice),
+          ? `${fmt.price(unitPrice(line.netUnitPrice))} ${L.perQuantity} ${fmt.number(line.priceBaseQuantity)} ${line.unit}`
+          : fmt.price(unitPrice(line.netUnitPrice)),
       ),
       right(fmt.percent(line.vat.ratePercent ?? 0)),
       right(fmt.money(c.lineNets[i]), true),
@@ -331,7 +333,7 @@ function totals(
   valueLine: (l: string, v: string, o?: { strong?: boolean; size?: number }) => PDFElement,
 ): PDFElement {
   const lines: PDFElement[] = [];
-  const hasDocAC = c.allowanceTotal > 0 || c.chargeTotal > 0;
+  const hasDocAC = !isZero(c.allowanceTotal) || !isZero(c.chargeTotal);
 
   if (hasDocAC) {
     lines.push(valueLine(L.subtotal, fmt.money(c.lineTotal)));
@@ -356,12 +358,13 @@ function totals(
 
   lines.push(Divider({ color: HAIR, margin: { y: 2 } }));
   lines.push(valueLine(L.grandTotal, fmt.money(c.grandTotal), { strong: true, size: 11 }));
-  if (c.paidAmount > 0) lines.push(valueLine(L.alreadyPaid, `-${fmt.money(c.paidAmount)}`));
+  if (!isNegative(c.paidAmount) && !isZero(c.paidAmount))
+    lines.push(valueLine(L.alreadyPaid, `-${fmt.money(c.paidAmount)}`));
   // BT-114. A payable that does not equal the total minus what was paid looks like an arithmetic
   // error unless the difference is named, so the line is printed with its sign.
-  if (c.roundingAmount !== 0) {
-    const sign = c.roundingAmount > 0 ? "+" : "-";
-    lines.push(valueLine(L.rounding, `${sign}${fmt.money(Math.abs(c.roundingAmount))}`));
+  if (!isZero(c.roundingAmount)) {
+    const sign = isNegative(c.roundingAmount) ? "-" : "+";
+    lines.push(valueLine(L.rounding, `${sign}${fmt.money(abs(c.roundingAmount))}`));
   }
   lines.push(valueLine(L.amountDue, fmt.money(c.duePayable), { strong: true, size: 12 }));
   // BT-111. The whole reason the field exists is that a tax office wants this figure on the
@@ -370,7 +373,7 @@ function totals(
     lines.push(
       valueLine(
         `${L.vatIn} ${invoice.taxCurrency}`,
-        fmt.moneyIn(invoice.taxTotalInTaxCurrency, invoice.taxCurrency),
+        fmt.moneyIn(cents(invoice.taxTotalInTaxCurrency), invoice.taxCurrency),
       ),
     );
   }
@@ -444,7 +447,7 @@ function vatLabel(v: VatBreakdownEntry, L: InvoiceLabels, fmt: Formatters): stri
  */
 function acPercentSuffix(ac: AllowanceCharge, L: InvoiceLabels, fmt: Formatters): string {
   return hasPercentage(ac)
-    ? ` (${fmt.percent(ac.percent)} ${L.percentOf} ${fmt.money(ac.baseAmount)})`
+    ? ` (${fmt.percent(ac.percent)} ${L.percentOf} ${fmt.money(cents(ac.baseAmount))})`
     : "";
 }
 

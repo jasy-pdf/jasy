@@ -7,7 +7,9 @@ import {
   PostalAddress,
   Seller,
 } from "./invoice.ts";
+import { isZero, toDecimalString, type Decimal } from "@jasy/decy";
 import { ComputedInvoice, VatBreakdownEntry } from "./compute.ts";
+import { cents, unitPrice } from "./money.ts";
 import { BUSINESS_PROCESS, CiiProfile, GUIDELINE } from "./cii.ts";
 import { paymentTermsText } from "./skonto.ts";
 import { acAmount, hasPercentage } from "./allowance.ts";
@@ -56,8 +58,8 @@ function wrap(tag: string, children: string[]): string {
 }
 
 /** A monetary amount with the document currency (UBL requires the currencyID attribute). */
-const money = (tag: string, n: number, currency: string) =>
-  el(tag, n.toFixed(2), { currencyID: currency });
+const money = (tag: string, value: Decimal, currency: string) =>
+  el(tag, toDecimalString(value), { currencyID: currency });
 
 function address(a: PostalAddress): string {
   return wrapAddress("cac:PostalAddress", a);
@@ -167,7 +169,7 @@ function docAllowanceCharge(ac: AllowanceCharge, currency: string): string {
     // UBL splits the pair around the amount: the factor before it, the base after.
     hasPercentage(ac) ? el("cbc:MultiplierFactorNumeric", ac.percent) : "", // BT-94 / BT-101
     money("cbc:Amount", acAmount(ac), currency), // BT-92 / BT-99
-    hasPercentage(ac) ? money("cbc:BaseAmount", ac.baseAmount, currency) : "", // BT-93 / BT-100
+    hasPercentage(ac) ? money("cbc:BaseAmount", cents(ac.baseAmount), currency) : "", // BT-93 / BT-100
     taxCategory("cac:TaxCategory", ac.vat.category, ac.vat.ratePercent ?? 0),
   ]);
 }
@@ -180,7 +182,7 @@ function lineAllowanceCharge(ac: AllowanceCharge, currency: string): string {
     el("cbc:AllowanceChargeReason", ac.reason), // BT-139 / BT-144
     hasPercentage(ac) ? el("cbc:MultiplierFactorNumeric", ac.percent) : "", // BT-138 / BT-143
     money("cbc:Amount", acAmount(ac), currency), // BT-136 / BT-141
-    hasPercentage(ac) ? money("cbc:BaseAmount", ac.baseAmount, currency) : "", // BT-137 / BT-142
+    hasPercentage(ac) ? money("cbc:BaseAmount", cents(ac.baseAmount), currency) : "", // BT-137 / BT-142
   ]);
 }
 
@@ -230,7 +232,7 @@ function invoicePeriod(p?: ServicePeriod): string {
     : "";
 }
 
-function invoiceLine(l: InvoiceLine, net: number, index: number, currency: string): string {
+function invoiceLine(l: InvoiceLine, net: Decimal, index: number, currency: string): string {
   return wrap("cac:InvoiceLine", [
     el("cbc:ID", l.id ?? String(index + 1)), // BT-126
     l.note ? el("cbc:Note", l.note) : "", // BT-127
@@ -260,7 +262,7 @@ function invoiceLine(l: InvoiceLine, net: number, index: number, currency: strin
       taxCategory("cac:ClassifiedTaxCategory", l.vat.category, l.vat.ratePercent ?? 0), // BG-30
     ]),
     wrap("cac:Price", [
-      money("cbc:PriceAmount", l.netUnitPrice, currency), // BT-146
+      money("cbc:PriceAmount", unitPrice(l.netUnitPrice), currency), // BT-146
       l.priceBaseQuantity
         ? el("cbc:BaseQuantity", l.priceBaseQuantity, { unitCode: l.unit }) // BT-149 / BT-150
         : "",
@@ -384,7 +386,7 @@ export function toUBL(
     // because it is the same tax expressed in another currency, not a second tax.
     (invoice.taxCurrency && invoice.taxTotalInTaxCurrency !== undefined
       ? wrap("cac:TaxTotal", [
-          money("cbc:TaxAmount", invoice.taxTotalInTaxCurrency, invoice.taxCurrency),
+          money("cbc:TaxAmount", cents(invoice.taxTotalInTaxCurrency), invoice.taxCurrency),
         ])
       : "");
 
@@ -396,8 +398,10 @@ export function toUBL(
       ? money("cbc:AllowanceTotalAmount", computed.allowanceTotal, cur)
       : "", // BT-107
     docAC.some((a) => a.isCharge) ? money("cbc:ChargeTotalAmount", computed.chargeTotal, cur) : "", // BT-108
-    computed.paidAmount ? money("cbc:PrepaidAmount", computed.paidAmount, cur) : "", // BT-113
-    computed.roundingAmount ? money("cbc:PayableRoundingAmount", computed.roundingAmount, cur) : "", // BT-114
+    !isZero(computed.paidAmount) ? money("cbc:PrepaidAmount", computed.paidAmount, cur) : "", // BT-113
+    !isZero(computed.roundingAmount)
+      ? money("cbc:PayableRoundingAmount", computed.roundingAmount, cur)
+      : "", // BT-114
     money("cbc:PayableAmount", computed.duePayable, cur), // BT-115
   ]);
 

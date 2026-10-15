@@ -1,4 +1,6 @@
+import { equals, toDecimalString } from "@jasy/decy";
 import { Invoice } from "./invoice.ts";
+import { cents } from "./money.ts";
 import { computeInvoice } from "./compute.ts";
 import { acDerivedAmount } from "./allowance.ts";
 import { supportingDocumentProblems } from "./attachment.ts";
@@ -116,9 +118,9 @@ export function en16931Problems(invoice: Invoice): string[] {
   ];
   for (const [where, ac] of everyAC) {
     const derived = acDerivedAmount(ac);
-    if (derived !== null && ac.amount !== undefined && Math.abs(derived - ac.amount) > 0.005) {
+    if (derived !== null && ac.amount !== undefined && !equals(derived, cents(ac.amount))) {
       problems.push(
-        `${where}: amount is ${ac.amount}, but ${ac.percent}% of ${ac.baseAmount} is ${derived}. The amount is what gets billed - drop it to have it derived, or correct one of the two.`,
+        `${where}: amount is ${ac.amount}, but ${ac.percent}% of ${ac.baseAmount} is ${toDecimalString(derived)}. The amount is what gets billed - drop it to have it derived, or correct one of the two.`,
       );
     }
     if (ac.percent !== undefined && (ac.percent <= 0 || ac.percent > 100)) {

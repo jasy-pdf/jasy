@@ -84,6 +84,15 @@ four real invoices rejected. `tests/completeness.test.ts` sets EVERY optional fi
 marker and insists each reaches the page; anything deliberately left off the paper is listed there
 with a reason. A value in the XML the paper does not show is a bug, not a decision.
 
+**Money never touches a float.** `4.515` is stored as `4.51499...`, so float rounding lands a cent
+short exactly where EN 16931 rounds half away from zero (42.50 at 19 % gave 8.07 VAT). `money.ts` is
+the ONE boundary: every input number becomes a `@jasy/decy` Decimal there, from its shortest text, and
+`ComputedInvoice` is Decimal throughout. Rounding happens per line net (BT-131), per VAT group tax
+(BT-117) and for stated amounts - nowhere else. A unit price (BT-146) keeps up to FOUR decimals (the
+standard sets no limit; cutting `1.505` to `1.50` made the XML contradict its own line total) and the
+line net is computed from exactly the price written. Output is `toDecimalString`, never `toFixed`
+(`(1.005).toFixed(2)` is `"1.00"`); the paper formats the same decimal TEXT through `Intl`.
+
 **Percent and amount can contradict.** An allowance may state both; the amount WINS (it is what the
 totals use) and `profile-check` reports the disagreement with both figures. Overruling the user
 silently would hide a typo.
@@ -101,6 +110,9 @@ silently would hide a typo.
 - **`cii-order` / `ubl-order`** - sequence derived from the vendored XSDs.
 - **`determinism`** - the same invoice twice is byte-identical, with a counter-test that a changed
   number DOES change the bytes so it cannot pass vacuously. Byte-stable per library VERSION.
+- **`exact-money`** - `tests/support/hard-numbers.ts` lands every derived figure on a half cent; the
+  expected figures were worked out with integers, never with the code under test. Plus a sweep of
+  every net amount 0.01-200.00 at 7 % and 19 %.
 - **`packages/cli/tests/parse.test.ts`** - `generate → parse → regenerate` is byte-identical against
   `maximalInvoice`, both syntaxes. A field the writer learns and the reader does not fails here.
 
@@ -115,8 +127,12 @@ silently would hide a typo.
      `xmllint --noout --schema schema/ubl/maindoc/UBL-Invoice-2.1.xsd <ubl>.xml`.
    - Attachments really embedded: `pdfdetach -list <file>.pdf`, and `pdfdetach -save N` to prove the
      bytes survive.
-   - **KoSIT schematron (EN 16931 + XRechnung business rules): NOT available locally.** It runs on
-     server02 and is Flo's run. Nothing here is "done" until he has run it.
+   - **Business rules locally: `node packages/cli/dist/index.js validate <file>`** runs the official
+     EN 16931 schematron plus the KoSIT XRechnung rules (compiled, `packages/cli/assets/validation/`).
+     It caught BR-DE-18 (the line break after the last Skonto line) that no test of ours had. Run it on
+     EVERY profile and syntax, and pass the profile to `toUBL` - it defaults to EN 16931.
+   - **The full KoSIT validator runs on server02 and is Flo's run.** Nothing here is "done" until he
+     has run it.
 
 A demo render goes to `claude-data/out/<topic>/` and its path is named in the report, every time.
 

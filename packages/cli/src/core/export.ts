@@ -1,6 +1,14 @@
 import { deflateRawSync } from "node:zlib";
-import { resolveDiscounts, acAmount, hasPercentage } from "@jasy/e-invoice";
+import { resolveDiscounts, acAmount, hasPercentage, cents } from "@jasy/e-invoice";
 import type { Invoice, ComputedInvoice } from "@jasy/e-invoice";
+import {
+  abs,
+  equals,
+  isNegative,
+  isZero,
+  toDecimalString as money,
+  type Decimal,
+} from "@jasy/decy";
 
 // Export a parsed invoice for humans / downstream systems: JSON (full model + totals), TXT (a readable
 // receipt) and XLSX (a minimal hand-rolled spreadsheet - an .xlsx is just a ZIP of XML parts, so we
@@ -8,7 +16,6 @@ import type { Invoice, ComputedInvoice } from "@jasy/e-invoice";
 
 export type ExportFormat = "json" | "txt" | "xlsx";
 
-const money = (n: number): string => n.toFixed(2);
 const addressLine = (a: {
   line1?: string;
   postCode?: string;
@@ -27,6 +34,9 @@ function summary(inv: Invoice, t: ComputedInvoice) {
     currency: inv.currency,
   };
 }
+
+/** JSON and spreadsheets take numbers. Built from the exact text, so it is the cent the XML states. */
+const asNumber = (value: Decimal): number => Number(money(value));
 
 /**
  * Everything on the invoice beyond the receipt - references, payment, discounts, attachments - as
@@ -89,20 +99,20 @@ export function detailLines(inv: Invoice, t: ComputedInvoice): string[] {
 
   // what moved the money between the lines and the total
   const acs = inv.allowancesCharges ?? [];
-  if (acs.length || t.roundingAmount !== 0 || inv.taxCurrency) {
+  if (acs.length || !isZero(t.roundingAmount) || inv.taxCurrency) {
     L.push("");
     for (const ac of acs) {
-      const rate = hasPercentage(ac) ? ` (${ac.percent}% of ${money(ac.baseAmount)})` : "";
+      const rate = hasPercentage(ac) ? ` (${ac.percent}% of ${money(cents(ac.baseAmount))})` : "";
       row(
         ac.isCharge ? "Charge" : "Discount",
         `${ac.reason ?? ""}${rate}  ${ac.isCharge ? "+" : "-"}${money(acAmount(ac))}`,
       );
     }
-    if (t.roundingAmount !== 0) {
-      row("Rounding", `${t.roundingAmount > 0 ? "+" : "-"}${money(Math.abs(t.roundingAmount))}`);
+    if (!isZero(t.roundingAmount)) {
+      row("Rounding", `${isNegative(t.roundingAmount) ? "-" : "+"}${money(abs(t.roundingAmount))}`);
     }
     if (inv.taxCurrency && inv.taxTotalInTaxCurrency !== undefined) {
-      row(`VAT in ${inv.taxCurrency}`, money(inv.taxTotalInTaxCurrency));
+      row(`VAT in ${inv.taxCurrency}`, money(cents(inv.taxTotalInTaxCurrency)));
     }
   }
 
@@ -120,7 +130,15 @@ export function detailLines(inv: Invoice, t: ComputedInvoice): string[] {
 
 /** Full invoice model + a computed totals block, pretty-printed. */
 export function exportJson(inv: Invoice, t: ComputedInvoice): string {
-  return JSON.stringify({ ...inv, totals: summary(inv, t) }, null, 2);
+  const s = summary(inv, t);
+  const totals = {
+    net: asNumber(s.net),
+    vat: asNumber(s.vat),
+    gross: asNumber(s.gross),
+    due: asNumber(s.due),
+    currency: s.currency,
+  };
+  return JSON.stringify({ ...inv, totals }, null, 2);
 }
 
 /** A plain-text receipt - no ANSI, safe to pipe or save. */
@@ -149,8 +167,9 @@ export function exportText(inv: Invoice, t: ComputedInvoice): string {
   L.push(`${"VAT".padStart(48)}${money(s.vat).padStart(12)}`);
   L.push(`${`Total ${s.currency}`.padStart(48)}${money(s.gross).padStart(12)}`);
   // Only when they differ: an amount already paid or a rounding makes the payable a second figure.
-  if (s.due !== s.gross) {
-    if (inv.paidAmount) L.push(`${"Paid".padStart(48)}${`-${money(inv.paidAmount)}`.padStart(12)}`);
+  if (!equals(s.due, s.gross)) {
+    if (!isZero(t.paidAmount))
+      L.push(`${"Paid".padStart(48)}${`-${money(t.paidAmount)}`.padStart(12)}`);
     L.push(`${`Due ${s.currency}`.padStart(48)}${money(s.due).padStart(12)}`);
   }
   const details = detailLines(inv, t);
@@ -162,7 +181,7 @@ export function exportText(inv: Invoice, t: ComputedInvoice): string {
 export function lineDetailLines(l: Invoice["lines"][number]): string[] {
   const L: string[] = [];
   for (const ac of l.allowancesCharges ?? []) {
-    const rate = hasPercentage(ac) ? ` (${ac.percent}% of ${money(ac.baseAmount)})` : "";
+    const rate = hasPercentage(ac) ? ` (${ac.percent}% of ${money(cents(ac.baseAmount))})` : "";
     L.push(
       `${ac.isCharge ? "charge" : "discount"} ${ac.reason ?? ""}${rate} ${ac.isCharge ? "+" : "-"}${money(acAmount(ac))}`,
     );
@@ -260,11 +279,13 @@ export function exportXlsx(inv: Invoice, t: ComputedInvoice): Buffer {
   rows.push(row(r++, ["To", inv.buyer.name]));
   r++; // blank
   rows.push(row(r++, ["Qty", "Unit", "Item", "Net"]));
-  inv.lines.forEach((l, i) => rows.push(row(r++, [l.quantity, l.unit, l.name, t.lineNets[i]])));
+  inv.lines.forEach((l, i) =>
+    rows.push(row(r++, [l.quantity, l.unit, l.name, asNumber(t.lineNets[i]!)])),
+  );
   r++; // blank
-  rows.push(row(r++, ["", "", "Net", s.net]));
-  rows.push(row(r++, ["", "", "VAT", s.vat]));
-  rows.push(row(r++, ["", "", `Total ${s.currency}`, s.gross]));
+  rows.push(row(r++, ["", "", "Net", asNumber(s.net)]));
+  rows.push(row(r++, ["", "", "VAT", asNumber(s.vat)]));
+  rows.push(row(r++, ["", "", `Total ${s.currency}`, asNumber(s.gross)]));
 
   const sheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${rows.join("")}</sheetData></worksheet>`;
   const workbook = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Invoice" sheetId="1" r:id="rId1"/></sheets></workbook>`;

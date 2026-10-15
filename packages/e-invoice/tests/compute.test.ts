@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { computeInvoice, round2 } from "../src/compute";
+import { toDecimalString as text } from "@jasy/decy";
+import { computeInvoice } from "../src/compute";
 import { Invoice } from "../src/invoice";
 
 const base = {
@@ -32,17 +33,19 @@ describe("computeInvoice", () => {
       ],
     };
     const c = computeInvoice(inv);
-    expect(c.lineNets).toEqual([200, 50]);
-    expect(c.lineTotal).toBe(250);
-    expect(c.taxBasisTotal).toBe(250);
+    expect(c.lineNets.map(text)).toEqual(["200.00", "50.00"]);
+    expect(text(c.lineTotal)).toBe("250.00");
+    expect(text(c.taxBasisTotal)).toBe("250.00");
     // two groups: 19% on 200 → 38, 7% on 50 → 3.5
-    expect(c.vatBreakdown).toEqual([
-      { category: "S", ratePercent: 19, taxableAmount: 200, taxAmount: 38 },
-      { category: "S", ratePercent: 7, taxableAmount: 50, taxAmount: 3.5 },
+    expect(
+      c.vatBreakdown.map((g) => [g.ratePercent, text(g.taxableAmount), text(g.taxAmount)]),
+    ).toEqual([
+      [19, "200.00", "38.00"],
+      [7, "50.00", "3.50"],
     ]);
-    expect(c.taxTotal).toBe(41.5);
-    expect(c.grandTotal).toBe(291.5);
-    expect(c.duePayable).toBe(291.5);
+    expect(text(c.taxTotal)).toBe("41.50");
+    expect(text(c.grandTotal)).toBe("291.50");
+    expect(text(c.duePayable)).toBe("291.50");
   });
 
   it("applies the price base quantity and line allowances to the line net", () => {
@@ -64,9 +67,9 @@ describe("computeInvoice", () => {
       ],
     };
     const c = computeInvoice(inv);
-    expect(c.lineNets).toEqual([24]);
-    expect(c.taxTotal).toBe(round2(24 * 0.19)); // 4.56
-    expect(c.grandTotal).toBe(28.56);
+    expect(c.lineNets.map(text)).toEqual(["24.00"]);
+    expect(text(c.taxTotal)).toBe("4.56"); // 24 x 19 % = 4.56
+    expect(text(c.grandTotal)).toBe("28.56");
   });
 
   it("subtracts a document-level allowance from its VAT group and the totals", () => {
@@ -84,12 +87,12 @@ describe("computeInvoice", () => {
       allowancesCharges: [{ isCharge: false, amount: 10, vat: { category: "S", ratePercent: 19 } }],
     };
     const c = computeInvoice(inv);
-    expect(c.lineTotal).toBe(100);
-    expect(c.allowanceTotal).toBe(10);
-    expect(c.taxBasisTotal).toBe(90);
-    expect(c.vatBreakdown[0].taxableAmount).toBe(90); // 100 - 10
-    expect(c.taxTotal).toBe(17.1); // 90 × 19%
-    expect(c.grandTotal).toBe(107.1);
+    expect(text(c.lineTotal)).toBe("100.00");
+    expect(text(c.allowanceTotal)).toBe("10.00");
+    expect(text(c.taxBasisTotal)).toBe("90.00");
+    expect(text(c.vatBreakdown[0].taxableAmount)).toBe("90.00"); // 100 - 10
+    expect(text(c.taxTotal)).toBe("17.10"); // 90 × 19%
+    expect(text(c.grandTotal)).toBe("107.10");
   });
 
   it("handles reverse charge (AE): no tax, exemption reason on the group, due = net", () => {
@@ -101,15 +104,16 @@ describe("computeInvoice", () => {
       vatExemptionReasons: { AE: { text: "Reverse charge (§13b UStG)", code: "VATEX-EU-AE" } },
     };
     const c = computeInvoice(inv);
-    expect(c.taxTotal).toBe(0);
-    expect(c.grandTotal).toBe(1000);
-    expect(c.vatBreakdown[0]).toEqual({
-      category: "AE",
-      ratePercent: 0,
-      taxableAmount: 1000,
-      taxAmount: 0,
-      exemption: { text: "Reverse charge (§13b UStG)", code: "VATEX-EU-AE" },
-    });
+    expect(text(c.taxTotal)).toBe("0.00");
+    expect(text(c.grandTotal)).toBe("1000.00");
+    const [g] = c.vatBreakdown;
+    expect([g.category, g.ratePercent, text(g.taxableAmount), text(g.taxAmount)]).toEqual([
+      "AE",
+      0,
+      "1000.00",
+      "0.00",
+    ]);
+    expect(g.exemption).toEqual({ text: "Reverse charge (§13b UStG)", code: "VATEX-EU-AE" });
   });
 
   it("subtracts the paid amount to get the amount due", () => {
@@ -127,7 +131,7 @@ describe("computeInvoice", () => {
       paidAmount: 50,
     };
     const c = computeInvoice(inv);
-    expect(c.grandTotal).toBe(119);
-    expect(c.duePayable).toBe(69);
+    expect(text(c.grandTotal)).toBe("119.00");
+    expect(text(c.duePayable)).toBe("69.00");
   });
 });

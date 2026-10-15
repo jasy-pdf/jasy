@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { add, decimal, isZero, subtract } from "@jasy/decy";
 import { Invoice } from "../src/invoice.ts";
 import { toCII } from "../src/cii.ts";
 import { toUBL } from "../src/ubl.ts";
@@ -39,26 +40,26 @@ describe("what it moves, and what it leaves alone", () => {
   it("moves the payable and nothing else", () => {
     const plain = computeInvoice(base);
     const rounded = computeInvoice({ ...base, roundingAmount: 0.02 });
-    expect(rounded.grandTotal).toBe(plain.grandTotal); // BT-112 untouched
-    expect(rounded.taxTotal).toBe(plain.taxTotal); // BT-110 untouched
-    expect(rounded.taxBasisTotal).toBe(plain.taxBasisTotal); // BT-109 untouched
-    expect(rounded.duePayable).toBe(round(plain.duePayable + 0.02));
+    expect(rounded.grandTotal).toEqual(plain.grandTotal); // BT-112 untouched
+    expect(rounded.taxTotal).toEqual(plain.taxTotal); // BT-110 untouched
+    expect(rounded.taxBasisTotal).toEqual(plain.taxBasisTotal); // BT-109 untouched
+    expect(rounded.duePayable).toEqual(add(plain.duePayable, decimal("0.02")));
   });
 
   it("rounds DOWN when the figure is negative", () => {
     const c = computeInvoice({ ...base, roundingAmount: -0.03 });
-    expect(c.duePayable).toBe(round(c.grandTotal - 0.03));
+    expect(c.duePayable).toEqual(subtract(c.grandTotal, decimal("0.03")));
   });
 
   it("stacks with an amount already paid", () => {
     const c = computeInvoice({ ...base, paidAmount: 50, roundingAmount: 0.05 });
-    expect(c.duePayable).toBe(round(c.grandTotal - 50 + 0.05));
+    expect(c.duePayable).toEqual(add(subtract(c.grandTotal, decimal("50.00")), decimal("0.05")));
   });
 
   it("is 0 when nobody asked, and changes nothing", () => {
     const c = computeInvoice(base);
-    expect(c.roundingAmount).toBe(0);
-    expect(c.duePayable).toBe(c.grandTotal);
+    expect(isZero(c.roundingAmount)).toBe(true);
+    expect(c.duePayable).toEqual(c.grandTotal);
   });
 });
 
@@ -122,5 +123,3 @@ describe("the paper explains the difference", () => {
     expect(printed(base)).not.toContain("Rundung");
   });
 });
-
-const round = (n: number) => Math.round(n * 100) / 100;

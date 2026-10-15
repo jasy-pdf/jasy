@@ -3,7 +3,7 @@
 // validation live here, NOT in the layout core.
 
 export * from "./invoice.ts";
-export { computeInvoice, round2 } from "./compute.ts";
+export { computeInvoice } from "./compute.ts";
 export type { ComputedInvoice, VatBreakdownEntry } from "./compute.ts";
 export { toCII } from "./cii.ts";
 export { toUBL } from "./ubl.ts";
@@ -14,6 +14,10 @@ export { en16931Problems, xrechnungProblems } from "./profile-check.ts";
 export { resolveDiscounts } from "./skonto.ts";
 export type { ResolvedDiscount } from "./skonto.ts";
 export { acAmount, hasPercentage } from "./allowance.ts";
+// Every amount is an exact decimal (`@jasy/decy`). `cents` and `unitPrice` are the rounding the
+// invoice itself uses, so a caller printing a stated amount prints what the XML says.
+export { cents, unitPrice } from "./money.ts";
+export { toDecimalString, type Decimal } from "@jasy/decy";
 export { bundledFonts } from "./fonts.ts";
 export { facturxXmp } from "./xmp.ts";
 export type { XmpOptions } from "./xmp.ts";

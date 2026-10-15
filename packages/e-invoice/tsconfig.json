@@ -3,7 +3,9 @@
   "compilerOptions": {
     "outDir": "./dist",
     "rootDir": "./src",
-    "types": ["node"]
+    "types": ["node"],
+    // Intl.NumberFormat formats decimal strings exactly (ES2023); amounts are never handed over as floats.
+    "lib": ["ES2020", "ES2023.Intl", "DOM"]
   },
   "include": ["src/**/*"]
 }
