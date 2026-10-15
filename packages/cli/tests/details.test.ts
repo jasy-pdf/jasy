@@ -87,6 +87,30 @@ describe("what is shown only when it is there", () => {
     expect(text).toMatch(/Paid\s+-40\.00/);
     expect(text).toMatch(/Due EUR\s+79\.00/);
   });
+
+  it("prints a negative paid amount as an addition", () => {
+    const paid = { ...base, paidAmount: -40 };
+    const text = exportText(paid, computeInvoice(paid));
+    expect(text).toMatch(/Paid\s+\+40\.00/);
+    expect(text).toMatch(/Due EUR\s+159\.00/);
+  });
+});
+
+describe("a paid amount is explained in every text view", () => {
+  // `detailLines` feeds `jasy read`, the TUI and the TXT export alike.
+  it("is part of the shared details, with its sign", () => {
+    const paid = { ...base, paidAmount: 40 };
+    expect(detailLines(paid, computeInvoice(paid))).toContain("Paid         -40.00");
+    const back = { ...base, paidAmount: -40 };
+    expect(detailLines(back, computeInvoice(back))).toContain("Paid         +40.00");
+  });
+
+  it("is shown even when a rounding cancels it out", () => {
+    const even = { ...base, paidAmount: 0.02, roundingAmount: 0.02 };
+    const text = exportText(even, computeInvoice(even));
+    expect(text).toMatch(/Paid\s+-0\.02/);
+    expect(text).toMatch(/Rounding\s+\+0\.02/);
+  });
 });
 
 describe("the label column never glues onto its value", () => {

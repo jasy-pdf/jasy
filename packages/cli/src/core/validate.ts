@@ -76,11 +76,15 @@ function parseSvrl(svrl: string): { errors: Violation[]; warnings: Violation[] }
     const text = (m[2].match(/<svrl:text>([\s\S]*?)<\/svrl:text>/)?.[1] ?? "")
       .replace(/\s+/g, " ")
       .trim();
+    // The SVRL id attribute first: a message need not start with its id (PEPPOL rules do not).
+    const id = attr(m[1], "id") ?? text.match(/\[((?:BR|BG|PEPPOL)-?[A-Z0-9-]+)\]/)?.[1];
     const violation: Violation = {
-      id: text.match(/\[((?:BR|BG)-?[A-Z0-9-]+)\]/)?.[1],
+      id,
       test: attr(m[1], "test"),
       location: attr(m[1], "location"),
-      text,
+      // Many messages repeat their id in front ("[BR-CL-22]-Tax ..."); every reader prints the id itself.
+      text:
+        id && text.startsWith(`[${id}]`) ? text.slice(id.length + 2).replace(/^[\s-]+/, "") : text,
     };
     // only fatal asserts fail validity; warning/information are advisory (Schematron flag levels)
     (/warn|info/i.test(flag) ? warnings : errors).push(violation);

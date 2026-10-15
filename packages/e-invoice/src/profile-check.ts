@@ -221,5 +221,14 @@ export function xrechnungProblems(invoice: Invoice): string[] {
         (l) => l.period,
       )), "XRechnung needs a delivery date or a service period - set invoice.delivery.date (BT-72), invoice.period (BG-14), or a period on every line (BG-26).");
 
+  // BR-TMP-2 (fatal since KoSIT 2.6.0), its regex verbatim: a link without a scheme is rejected.
+  for (const [i, d] of (invoice.supportingDocuments ?? []).entries()) {
+    if (d.url !== undefined && !/^([a-zA-Z])([a-zA-Z0-9+.-])+:.*/.test(d.url)) {
+      problems.push(
+        `invoice.supportingDocuments[${i}].url must be an absolute URL with a scheme, e.g. "https://...", got "${d.url}" (BT-124, BR-TMP-2).`,
+      );
+    }
+  }
+
   return problems;
 }

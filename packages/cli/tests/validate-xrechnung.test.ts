@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { renderZugferd } from "@jasy/e-invoice";
+import { renderZugferd, toCII, toUBL, computeInvoice } from "@jasy/e-invoice";
+import type { Invoice } from "@jasy/e-invoice";
+import { hardInvoice } from "../../e-invoice/tests/support/hard-numbers.ts";
 import { validateInvoiceXml, profileFor } from "../src/core/validate";
 
 // a fully XRechnung-ready invoice (Leitweg-ID, seller contact + e-address, buyer e-address, IBAN …)
@@ -61,5 +63,40 @@ describe("XRechnung validation (EN 16931 + BR-DE delta)", () => {
     );
     expect(profileFor({ syntax: "UBL", profile: "en16931", guideline: null })).toBe("en16931-ubl");
     expect(profileFor({ syntax: "CII", profile: "en16931", guideline: null })).toBe("en16931-cii");
+  });
+});
+
+/**
+ * Both syntaxes through the official rules, not only CII - a UBL-only rule (PEPPOL-EN16931-R101 on a
+ * line's object reference) once rejected every UBL XRechnung that used it, and nothing here ran UBL.
+ */
+describe("what we write passes the official rules in both syntaxes", () => {
+  const rich: Invoice = {
+    ...hardInvoice,
+    lines: hardInvoice.lines.map((l, i) => (i === 0 ? { ...l, objectRef: "OBJ-7" } : l)),
+    supportingDocuments: [{ reference: "TS-1", url: "https://example.com/timesheet.pdf" }],
+    paidAmount: 10,
+  };
+  const c = computeInvoice(rich);
+
+  it.each([
+    ["EN 16931, CII", () => toCII(rich, c, "en16931"), "en16931-cii"],
+    ["EN 16931, UBL", () => toUBL(rich, c, "en16931"), "en16931-ubl"],
+    ["XRechnung, CII", () => toCII(rich, c, "xrechnung"), "xrechnung-cii"],
+    ["XRechnung, UBL", () => toUBL(rich, c, "xrechnung"), "xrechnung-ubl"],
+  ] as const)("%s", (_what, write, profile) => {
+    expect(validateInvoiceXml(write(), profile).errors).toEqual([]);
+  });
+
+  it("the UBL rule is really applied: without type code 130 R101 rejects the line reference", () => {
+    const broken = toUBL(rich, c, "xrechnung").replace(
+      "<cbc:DocumentTypeCode>130</cbc:DocumentTypeCode></cac:DocumentReference>",
+      "</cac:DocumentReference>",
+    );
+    const report = validateInvoiceXml(broken, "xrechnung-ubl");
+    const r101 = report.errors.find((e) => e.id === "PEPPOL-EN16931-R101");
+    expect(r101).toBeDefined();
+    // The id is carried once, in `id` - not repeated in front of the message.
+    expect(r101!.text).toMatch(/^Element Document reference/);
   });
 });

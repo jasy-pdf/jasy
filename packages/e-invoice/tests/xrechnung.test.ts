@@ -65,3 +65,22 @@ describe("XRechnung profile", () => {
     expect(problems.some((p) => p.includes("BT-43"))).toBe(true);
   });
 });
+
+describe("an attachment link (BT-124)", () => {
+  // BR-TMP-2, fatal since KoSIT 2.6.0: an absolute URL with a scheme, `^([a-zA-Z])([a-zA-Z0-9+.-])+:.*`.
+  const withUrl = (url: string): Invoice => ({
+    ...complete,
+    supportingDocuments: [{ reference: "TS-1", url }],
+  });
+
+  it.each(["www.example.com/doc.pdf", "/docs/doc.pdf", "doc.pdf"])("refuses %s", (url) => {
+    expect(xrechnungProblems(withUrl(url)).some((p) => p.includes("BR-TMP-2"))).toBe(true);
+  });
+
+  it.each(["https://example.com/doc.pdf", "ftp://example.com/doc.pdf", "urn:isbn:0451450523"])(
+    "accepts %s",
+    (url) => {
+      expect(xrechnungProblems(withUrl(url))).toEqual([]);
+    },
+  );
+});

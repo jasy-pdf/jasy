@@ -73,6 +73,13 @@ describe("export", () => {
     expect(sheet).toContain("ABC"); // control chars dropped, XML stays well-formed
   });
 
+  it("xlsx: a prepaid invoice shows what was paid and what is due", () => {
+    const paid = { ...invoice, paidAmount: 50 };
+    const sheet = unzip(exportXlsx(paid, computeInvoice(paid)))["xl/worksheets/sheet1.xml"];
+    expect(sheet).toMatch(/>Paid<\/t><\/is><\/c><c r="D\d+"><v>50<\/v>/);
+    expect(sheet).toMatch(/>Due EUR<\/t><\/is><\/c><c r="D\d+"><v>69<\/v>/);
+  });
+
   it("exportInvoice dispatches by format", () => {
     expect(typeof exportInvoice(invoice, totals, "json")).toBe("string");
     expect(Buffer.isBuffer(exportInvoice(invoice, totals, "xlsx"))).toBe(true);

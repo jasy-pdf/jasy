@@ -13,7 +13,7 @@ the XRechnung rules, and the findings are merged.
 | --------------------------- | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `en16931-cii.sef.json.gz`   | EN 16931 — UN/CEFACT **CII** (ZUGFeRD / Factur-X) | [ConnectingEurope/eInvoicing-EN16931](https://github.com/ConnectingEurope/eInvoicing-EN16931) (Apache-2.0), `cii/xslt/EN16931-CII-validation.xslt`         |
 | `en16931-ubl.sef.json.gz`   | EN 16931 — OASIS **UBL** (PEPPOL)                 | same repo, `ubl/xslt/EN16931-UBL-validation.xslt`                                                                                                          |
-| `xrechnung-cii.sef.json.gz` | XRechnung 3.0 BR-DE delta — **CII**               | [itplr-kosit/xrechnung-schematron](https://github.com/itplr-kosit/xrechnung-schematron) v2.5.0 (Apache-2.0), `schematron/cii/XRechnung-CII-validation.xsl` |
+| `xrechnung-cii.sef.json.gz` | XRechnung 3.0 BR-DE delta — **CII**               | [itplr-kosit/xrechnung-schematron](https://github.com/itplr-kosit/xrechnung-schematron) v2.6.0 (Apache-2.0), `schematron/cii/XRechnung-CII-validation.xsl` |
 | `xrechnung-ubl.sef.json.gz` | XRechnung 3.0 BR-DE delta — **UBL**               | same release, `schematron/ubl/XRechnung-UBL-validation.xsl`                                                                                                |
 
 **To refresh / add a profile:** fetch the upstream `.xslt`/`.xsl`, then

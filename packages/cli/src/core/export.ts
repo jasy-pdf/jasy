@@ -99,7 +99,7 @@ export function detailLines(inv: Invoice, t: ComputedInvoice): string[] {
 
   // what moved the money between the lines and the total
   const acs = inv.allowancesCharges ?? [];
-  if (acs.length || !isZero(t.roundingAmount) || inv.taxCurrency) {
+  if (acs.length || !isZero(t.paidAmount) || !isZero(t.roundingAmount) || inv.taxCurrency) {
     L.push("");
     for (const ac of acs) {
       const rate = hasPercentage(ac) ? ` (${ac.percent}% of ${money(cents(ac.baseAmount))})` : "";
@@ -107,6 +107,9 @@ export function detailLines(inv: Invoice, t: ComputedInvoice): string[] {
         ac.isCharge ? "Charge" : "Discount",
         `${ac.reason ?? ""}${rate}  ${ac.isCharge ? "+" : "-"}${money(acAmount(ac))}`,
       );
+    }
+    if (!isZero(t.paidAmount)) {
+      row("Paid", `${isNegative(t.paidAmount) ? "+" : "-"}${money(abs(t.paidAmount))}`);
     }
     if (!isZero(t.roundingAmount)) {
       row("Rounding", `${isNegative(t.roundingAmount) ? "-" : "+"}${money(abs(t.roundingAmount))}`);
@@ -167,9 +170,8 @@ export function exportText(inv: Invoice, t: ComputedInvoice): string {
   L.push(`${"VAT".padStart(48)}${money(s.vat).padStart(12)}`);
   L.push(`${`Total ${s.currency}`.padStart(48)}${money(s.gross).padStart(12)}`);
   // Only when they differ: an amount already paid or a rounding makes the payable a second figure.
+  // What moved it (paid, rounding) is explained in the details below, shared with `jasy read`.
   if (!equals(s.due, s.gross)) {
-    if (!isZero(t.paidAmount))
-      L.push(`${"Paid".padStart(48)}${`-${money(t.paidAmount)}`.padStart(12)}`);
     L.push(`${`Due ${s.currency}`.padStart(48)}${money(s.due).padStart(12)}`);
   }
   const details = detailLines(inv, t);
@@ -286,6 +288,10 @@ export function exportXlsx(inv: Invoice, t: ComputedInvoice): Buffer {
   rows.push(row(r++, ["", "", "Net", asNumber(s.net)]));
   rows.push(row(r++, ["", "", "VAT", asNumber(s.vat)]));
   rows.push(row(r++, ["", "", `Total ${s.currency}`, asNumber(s.gross)]));
+  if (!isZero(t.paidAmount)) rows.push(row(r++, ["", "", "Paid", asNumber(t.paidAmount)]));
+  if (!isZero(t.roundingAmount))
+    rows.push(row(r++, ["", "", "Rounding", asNumber(t.roundingAmount)]));
+  if (!equals(s.due, s.gross)) rows.push(row(r++, ["", "", `Due ${s.currency}`, asNumber(s.due)]));
 
   const sheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${rows.join("")}</sheetData></worksheet>`;
   const workbook = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Invoice" sheetId="1" r:id="rId1"/></sheets></workbook>`;
