@@ -244,7 +244,7 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
     return this.sizeWith(constraints, ctx, offset);
   }
 
-  override measure(constraints: BoxConstraints, ctx: LayoutContext): Size {
+  protected override computeSize(constraints: BoxConstraints, ctx: LayoutContext): Size {
     return this.sizeWith(constraints, ctx, null);
   }
 

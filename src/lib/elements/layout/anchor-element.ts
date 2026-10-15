@@ -24,7 +24,7 @@ export class AnchorElement extends PDFElement {
     return size;
   }
 
-  override measure(constraints: BoxConstraints, ctx: LayoutContext): Size {
+  protected override computeSize(constraints: BoxConstraints, ctx: LayoutContext): Size {
     return this.child.measure(constraints, ctx);
   }
 

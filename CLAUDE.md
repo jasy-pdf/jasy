@@ -290,7 +290,8 @@ rendering. This is the standing visual check; prefer it over one-off `scripts/ru
   Flutter-style. Sensible defaults in the destructure (e.g. `fontFamily = "Helvetica"`).
 - Elements expose state via `getProps()`; renderers consume `getProps()`, never reach into privates.
 - Renderers return `IRNode[]`, never PDF strings. PDF operators live **only** in `PdfBackend`.
-- New element = new file in `elements/`, export from `elements/index.ts`, write a renderer in
+- New element = new file in `elements/` implementing `calculateLayout` and `computeSize` from ONE sizing
+  path (never override `measure` - the base class owns it), export from `elements/index.ts`, write a renderer in
   `renderer/` that returns `IRNode[]`, **register it in `PDFRenderer.render()`**, export from
   `renderer/index.ts`, add a test under `tests/unit/<group>/` (mirror the source path; import the
   subject via a relative path to `src/lib/<group>/<module>.ts` — count the `../` from the test's OWN
@@ -455,7 +456,7 @@ enforces it (`skonto.ts` for "Skonto is not an allowance"), and everywhere else 
 
 ## Genuine remaining gaps
 
-1. **`z-index`** within a positioning frame (Stage 3 of absolute positioning) and a public `measure()`.
+1. **`z-index`** within a positioning frame (Stage 3 of absolute positioning).
 2. **`slice` border mode** at a page break (a split box left open) and true multi-column.
 3. **OTF/CFF fonts** are not parsed (TTF, TrueType-flavoured OTF, WOFF1, WOFF2 are). Colour-emoji
    deferrals: COLR v1 rotate/skew, variable paints, sweep gradients, CFF/sbix/CBDT bitmap fonts (so no

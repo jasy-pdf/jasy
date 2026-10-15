@@ -60,7 +60,7 @@ export class PositionedElement extends PDFElement {
   }
 
   /** Out of flow: it takes no room, and measuring registers nothing with the frame. */
-  override measure(): Size {
+  protected override computeSize(): Size {
     return { width: 0, height: 0 };
   }
 

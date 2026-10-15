@@ -552,7 +552,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
    * and filling the memos below are its only writes, and both are a pure function of the context:
    * the same inputs leave the same state, which a later layout reads back unchanged.
    */
-  override measure(constraints: BoxConstraints, ctx: LayoutContext): Size {
+  protected override computeSize(constraints: BoxConstraints, ctx: LayoutContext): Size {
     this.resolveStyle(ctx);
     const content = this.display(ctx.metrics);
     const width = constraints.hasBoundedWidth

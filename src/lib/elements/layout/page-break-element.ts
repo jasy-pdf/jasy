@@ -15,7 +15,7 @@ export class PageBreakElement extends PDFElement {
     return { width: 0, height: 0 };
   }
 
-  override measure(): Size {
+  protected override computeSize(): Size {
     return { width: 0, height: 0 };
   }
 

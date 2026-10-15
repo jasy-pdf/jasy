@@ -39,7 +39,7 @@ export class KeepTogetherElement extends PDFElement implements Fragmentable {
     return this.child.calculateLayout(constraints, offset, ctx);
   }
 
-  override measure(constraints: BoxConstraints, ctx: LayoutContext): Size {
+  protected override computeSize(constraints: BoxConstraints, ctx: LayoutContext): Size {
     return this.child.measure(constraints, ctx);
   }
 

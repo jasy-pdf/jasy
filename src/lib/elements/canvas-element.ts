@@ -66,7 +66,7 @@ export class CanvasElement extends SizedPDFElement {
     return size;
   }
 
-  override measure(constraints: BoxConstraints): Size {
+  protected override computeSize(constraints: BoxConstraints): Size {
     return this.sizeFor(constraints);
   }
 

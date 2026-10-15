@@ -75,7 +75,7 @@ export class RadioElement extends SizedPDFElement {
     return size;
   }
 
-  override measure(_constraints: BoxConstraints): Size {
+  protected override computeSize(_constraints: BoxConstraints): Size {
     return this.sizeFor(_constraints);
   }
 

@@ -29,7 +29,7 @@ class MockBox extends PDFElement {
     this.offeredMaxHeight = c.maxHeight;
     return this.size;
   }
-  measure(): Size {
+  protected computeSize(): Size {
     return this.size;
   }
 }

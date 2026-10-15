@@ -55,7 +55,7 @@ export class LineElement extends SizedPDFElement {
     return { width: this.width ?? 0, height: this.height ?? 0 };
   }
 
-  override measure(constraints: BoxConstraints): Size {
+  protected override computeSize(constraints: BoxConstraints): Size {
     if (!constraints.hasBoundedWidth) {
       throw new Error(
         "The LineElement must be placed inside a parent container that defines its width",

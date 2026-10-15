@@ -182,7 +182,7 @@ export class PageElement extends PDFElement {
   }
 
   /** A page is as large as its content box, whatever it holds. */
-  override measure(_constraints: BoxConstraints, ctx: LayoutContext): Size {
+  protected override computeSize(_constraints: BoxConstraints, ctx: LayoutContext): Size {
     const { width, height } = resolvePageContentBox(this.resolveConfig(ctx.pageConfig));
     return { width, height };
   }

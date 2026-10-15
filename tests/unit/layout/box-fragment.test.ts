@@ -72,7 +72,7 @@ class FixedBox extends PDFElement {
   calculateLayout(_c: BoxConstraints, _o: Offset): Size {
     return this.measure();
   }
-  measure(): Size {
+  protected computeSize(): Size {
     return { width: 0, height: this.h };
   }
 }

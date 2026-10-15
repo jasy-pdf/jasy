@@ -225,7 +225,7 @@ export class ImageElement extends SizedPDFElement {
     return { width: size.width ?? 0, height: size.height ?? 0 };
   }
 
-  override measure(constraints: BoxConstraints): Size {
+  protected override computeSize(constraints: BoxConstraints): Size {
     const size = this.sizeFor(constraints);
     return { width: size.width ?? 0, height: size.height ?? 0 };
   }

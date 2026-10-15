@@ -32,7 +32,7 @@ export class PDFDocumentElement extends PDFElement {
   }
 
   /** The root has no size of its own. */
-  override measure(): Size {
+  protected override computeSize(): Size {
     return { width: 0, height: 0 };
   }
 

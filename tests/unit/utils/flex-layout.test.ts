@@ -26,7 +26,7 @@ class MockBox extends PDFElement {
     this.placedAt = offset;
     return this.size;
   }
-  measure(): Size {
+  protected computeSize(): Size {
     return this.size;
   }
 }
@@ -43,7 +43,7 @@ class MockFlex extends FlexiblePDFElement {
     this.placedAt = offset;
     return this.measure(c);
   }
-  measure(c: BoxConstraints): Size {
+  protected computeSize(c: BoxConstraints): Size {
     return {
       width: c.maxWidth === Infinity ? 0 : c.maxWidth,
       height: c.maxHeight === Infinity ? 0 : c.maxHeight,

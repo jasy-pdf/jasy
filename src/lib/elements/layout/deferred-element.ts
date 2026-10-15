@@ -24,7 +24,7 @@ export class DeferredElement extends PDFElement implements Fragmentable {
   }
 
   /** Builds a throwaway subtree to size it; only a real layout keeps what it built. */
-  override measure(constraints: BoxConstraints, ctx: LayoutContext): Size {
+  protected override computeSize(constraints: BoxConstraints, ctx: LayoutContext): Size {
     return this.resolve(ctx).measure(constraints, ctx);
   }
 

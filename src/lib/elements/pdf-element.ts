@@ -90,7 +90,8 @@ export abstract class PDFElement {
 
   /**
    * Lays the element out: `constraints` bound its size (flows DOWN), `offset` is the
-   * absolute top-left position the parent assigns it, and the returned `Size` is the
+   * top-left position the parent assigns it, relative to the parent's own top-left (absolute
+   * coordinates exist only in the render pass), and the returned `Size` is the
    * space it actually took (flows UP). Layout works in a top-left origin; the Y-flip
    * happens once at the IR -> backend seam.
    */
@@ -100,9 +101,17 @@ export abstract class PDFElement {
    * The size `calculateLayout` would return under these constraints - with NO side effects: no
    * position, no stored size, nothing registered with a frame. A parent asks this to decide, and lays
    * a child out once afterwards; asking with a full layout doubled the work at every nesting level.
-   * Both must come from ONE sizing computation, or a measured size and a laid-out one can differ.
+   * Do not override it - implement `computeSize` (as Flutter's `getDryLayout` / `computeDryLayout`).
    */
-  abstract measure(constraints: BoxConstraints, ctx: LayoutContext): Size;
+  measure(constraints: BoxConstraints, ctx: LayoutContext): Size {
+    return this.computeSize(constraints, ctx);
+  }
+
+  /**
+   * How this element sizes itself for `measure`. It must come from the SAME sizing computation as
+   * `calculateLayout`, or a measured size and a laid-out one can differ.
+   */
+  protected abstract computeSize(constraints: BoxConstraints, ctx: LayoutContext): Size;
 
   /** The elements this one lays out, for walks that must see the whole tree. Leaves have none. */
   layoutChildren(): readonly PDFElement[] {
