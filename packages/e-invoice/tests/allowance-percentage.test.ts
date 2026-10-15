@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { toDecimalString as text } from "@jasy/decy";
 import { Invoice, AllowanceCharge } from "../src/invoice.ts";
 import { toCII } from "../src/cii.ts";
 import { toUBL } from "../src/ubl.ts";
@@ -48,23 +49,23 @@ const RATE: AllowanceCharge = {
 
 describe("a percentage becomes an amount, in exactly one place", () => {
   it("derives it", () => {
-    expect(acAmount(RATE)).toBe(100);
+    expect(text(acAmount(RATE))).toBe("100.00");
   });
 
   it("rounds to the cent, the way money is rounded", () => {
-    expect(acAmount({ ...RATE, baseAmount: 33.33, percent: 3 })).toBe(1); // 0.9999
+    expect(text(acAmount({ ...RATE, baseAmount: 33.33, percent: 3 }))).toBe("1.00"); // 0.9999
   });
 
   it("lets an explicit amount win, because overruling a user hides their typo", () => {
-    expect(acAmount({ ...RATE, amount: 99 })).toBe(99);
+    expect(text(acAmount({ ...RATE, amount: 99 }))).toBe("99.00");
   });
 
   it("feeds the totals, so the discount actually reduces what is owed", () => {
     const c = computeInvoice(withDocAC(RATE));
-    expect(c.allowanceTotal).toBe(100);
-    expect(c.taxBasisTotal).toBe(900);
-    expect(c.taxTotal).toBe(171); // 19 % of 900, not of 1000
-    expect(c.grandTotal).toBe(1071);
+    expect(text(c.allowanceTotal)).toBe("100.00");
+    expect(text(c.taxBasisTotal)).toBe("900.00");
+    expect(text(c.taxTotal)).toBe("171.00"); // 19 % of 900, not of 1000
+    expect(text(c.grandTotal)).toBe("1071.00");
   });
 
   it("gives the same totals whichever way it was written", () => {
@@ -72,8 +73,8 @@ describe("a percentage becomes an amount, in exactly one place", () => {
     const asAmount = computeInvoice(
       withDocAC({ isCharge: false, amount: 100, vat: RATE.vat, reason: RATE.reason }),
     );
-    expect(asRate.grandTotal).toBe(asAmount.grandTotal);
-    expect(asRate.taxBasisTotal).toBe(asAmount.taxBasisTotal);
+    expect(asRate.grandTotal).toEqual(asAmount.grandTotal);
+    expect(asRate.taxBasisTotal).toEqual(asAmount.taxBasisTotal);
   });
 });
 

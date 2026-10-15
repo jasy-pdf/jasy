@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { cents } from "../src/money.ts";
 import { makeFormatters, resolveLabels } from "../src/i18n";
 
 describe("i18n", () => {
@@ -13,8 +14,8 @@ describe("i18n", () => {
   it("formats amounts, percentages and dates per locale via Intl", () => {
     const de = makeFormatters("de", "EUR");
     const en = makeFormatters("en", "EUR");
-    expect(de.money(1234.56)).toContain("1.234,56");
-    expect(en.money(1234.56)).toContain("1,234.56");
+    expect(de.money(cents(1234.56))).toContain("1.234,56");
+    expect(en.money(cents(1234.56))).toContain("1,234.56");
     expect(de.percent(19)).toMatch(/19\s*%/);
     expect(en.percent(19)).toBe("19%");
     expect(de.date("2026-06-17")).toBe("17.06.2026"); // UTC → no timezone drift
