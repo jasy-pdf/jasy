@@ -243,7 +243,12 @@ function invoiceLine(l: InvoiceLine, net: Decimal, index: number, currency: stri
     l.orderLineRef
       ? wrap("cac:OrderLineReference", [el("cbc:LineID", l.orderLineRef)]) // BT-132
       : "",
-    l.objectRef ? wrap("cac:DocumentReference", [el("cbc:ID", l.objectRef)]) : "", // BT-128
+    l.objectRef
+      ? wrap("cac:DocumentReference", [
+          el("cbc:ID", l.objectRef),
+          el("cbc:DocumentTypeCode", "130"),
+        ])
+      : "", // BT-128 - 130 is required on a line (PEPPOL-EN16931-R101)
     ...(l.allowancesCharges ?? []).map((ac) => lineAllowanceCharge(ac, currency)), // BG-27 / BG-28
     wrap("cac:Item", [
       el("cbc:Description", l.description), // BT-154

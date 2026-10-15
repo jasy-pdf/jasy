@@ -51,3 +51,15 @@ describe("toUBL", () => {
     expect(xml).toContain("<cbc:ProfileID>urn:fdc:peppol.eu:2017:poacc:billing:01:1.0");
   });
 });
+
+describe("a line's object reference (BT-128)", () => {
+  it("carries type code 130, or PEPPOL-EN16931-R101 rejects the invoice", () => {
+    const withRef: Invoice = {
+      ...invoice,
+      lines: [{ ...invoice.lines[0]!, objectRef: "OBJ-7" }],
+    };
+    expect(toUBL(withRef, computeInvoice(withRef))).toContain(
+      "<cac:DocumentReference><cbc:ID>OBJ-7</cbc:ID><cbc:DocumentTypeCode>130</cbc:DocumentTypeCode></cac:DocumentReference>",
+    );
+  });
+});
