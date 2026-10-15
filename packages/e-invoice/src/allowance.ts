@@ -1,4 +1,6 @@
+import { fromNumber, percentageOf, type Decimal } from "@jasy/decy";
 import { AllowanceCharge } from "./invoice.ts";
+import { cents } from "./money.ts";
 
 // The ONE place an allowance/charge turns into a number.
 //
@@ -7,8 +9,6 @@ import { AllowanceCharge } from "./invoice.ts";
 // Four separate `ac.amount ?? base * percent / 100` expressions is exactly how the totals and the
 // printed figure start disagreeing, which is the defect class this package cares about most.
 
-const round2 = (n: number) => Math.round(n * 100) / 100;
-
 /**
  * What this allowance/charge is worth, in currency.
  *
@@ -16,17 +16,21 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
  * silently overruling them would hide a typo rather than surface it. `profile-check` reports the
  * disagreement instead, where the message can name the field.
  */
-export function acAmount(ac: AllowanceCharge): number {
-  if (ac.amount !== undefined) return round2(ac.amount);
+export function acAmount(ac: AllowanceCharge): Decimal {
+  if (ac.amount !== undefined) return cents(ac.amount);
   // The union guarantees these are present when `amount` is not.
-  return round2((ac.baseAmount! * ac.percent!) / 100);
+  return percentOfBase(ac.baseAmount!, ac.percent!);
 }
 
 /** The amount a percentage WOULD produce, or null when it was not stated that way. */
-export function acDerivedAmount(ac: AllowanceCharge): number | null {
+export function acDerivedAmount(ac: AllowanceCharge): Decimal | null {
   if (ac.baseAmount === undefined || ac.percent === undefined) return null;
-  return round2((ac.baseAmount * ac.percent) / 100);
+  return percentOfBase(ac.baseAmount, ac.percent);
 }
+
+/** `percent` of the base AS WRITTEN (BT-93 is to the cent), so a reader can redo the sum. */
+const percentOfBase = (base: number, percent: number): Decimal =>
+  cents(percentageOf(cents(base), fromNumber(percent)));
 
 /**
  * Whether the percentage pair should be written to XML and paper. Both halves or neither: BT-94

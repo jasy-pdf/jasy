@@ -1,4 +1,5 @@
 import { writeFileSync } from "node:fs";
+import { equals, toDecimalString as money } from "@jasy/decy";
 import { resolve, basename } from "node:path";
 import { readInvoiceFile, type ReadResult } from "../core/read.js";
 import { describeInvoice } from "../core/detect.js";
@@ -11,7 +12,6 @@ const tty = process.stdout.isTTY;
 const paint = (c: string, s: string): string => (tty ? `\x1b[${c}m${s}\x1b[0m` : s);
 const bold = (s: string): string => paint("1", s);
 const dim = (s: string): string => paint("2", s);
-const money = (n: number): string => n.toFixed(2);
 
 export function readCommand(args: string[]): void {
   let file: string | undefined;
@@ -70,7 +70,7 @@ export function readCommand(args: string[]): void {
       `  ${dim("net")} ${money(t.taxBasisTotal)}   ${dim("VAT")} ${money(t.taxTotal)}   ${bold(`total ${money(t.grandTotal)} ${inv.currency}`)}`,
     );
     // The payable is a second figure only when something moved it - a payment already made, a rounding.
-    if (t.duePayable !== t.grandTotal) {
+    if (!equals(t.duePayable, t.grandTotal)) {
       console.log(`  ${dim("due")}   ${bold(`${money(t.duePayable)} ${inv.currency}`)}`);
     }
     // The same lines the TXT export prints - one source, so the two views cannot drift apart.

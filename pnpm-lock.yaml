@@ -57,6 +57,9 @@ importers:
       '@jano-editor/ui':
         specifier: 1.0.0-alpha.8
         version: 1.0.0-alpha.8
+      '@jasy/decy':
+        specifier: ^0.1.0
+        version: 0.1.0
       '@jasy/e-invoice':
         specifier: workspace:^
         version: link:../e-invoice
@@ -76,6 +79,9 @@ importers:
 
   packages/e-invoice:
     dependencies:
+      '@jasy/decy':
+        specifier: ^0.1.0
+        version: 0.1.0
       '@jasy/pdf':
         specifier: workspace:^
         version: link:../..
@@ -887,6 +893,10 @@ packages:
 
   '@jano-editor/ui@1.0.0-alpha.8':
     resolution: {integrity: sha512-r+RIB8ooYbJwRnbbI+kzupgGrr3+VxZiBTIL8NHCYw/TC7tUsAi/S+WE9WQBsz8eLrSwaXlm7OYy9CyRGVWOoQ==}
+
+  '@jasy/decy@0.1.0':
+    resolution: {integrity: sha512-7/fVrm6nUnRfq9z5oNeyKc8h3wzR4ulSX/rU+fzgLSBc3eZG7QSWIjCsljho0LtT111nFP7He9BZRNS7/kjEgA==}
+    engines: {node: '>=22'}
 
   '@jimp/core@1.6.1':
     resolution: {integrity: sha512-+BoKC5G6hkrSy501zcJ2EpfnllP+avPevcBfRcZe/CW+EwEfY6X1EZ8QWyT7NpDIvEEJb1fdJnMMfUnFkxmw9A==}
@@ -6039,6 +6049,8 @@ snapshots:
   '@istanbuljs/schema@0.1.6': {}
 
   '@jano-editor/ui@1.0.0-alpha.8': {}
+
+  '@jasy/decy@0.1.0': {}
 
   '@jimp/core@1.6.1':
     dependencies:

@@ -3,6 +3,8 @@
 // it stays in whatever language the user supplied. Formatting uses the built-in `Intl` API (ECMA-402,
 // no dependency). Default locale is `de` (ZUGFeRD is a German standard / German-market-first).
 
+import { toDecimalString, type Decimal } from "@jasy/decy";
+
 export type Locale = "de" | "en" | "fr";
 
 /** Every label the default template draws. A custom language = supply a full `InvoiceLabels`. */
@@ -303,13 +305,15 @@ export function resolveLabels(
 /** Locale-aware formatters for the amounts, percentages and dates the template prints. */
 export interface Formatters {
   /** A currency amount, e.g. de → "1.234,56 €", en → "€1,234.56". */
-  money(n: number): string;
+  money(value: Decimal): string;
+  /** A unit price: like `money`, but with up to four decimals when it has them ("1,505 €"). */
+  price(value: Decimal): string;
   /**
    * The same, in a currency that is NOT the document's - only BT-111 needs this. `money` binds
    * the document currency at construction, and `number` drops the second decimal, which on a
    * tax figure reads as a typo.
    */
-  moneyIn(n: number, currency: string): string;
+  moneyIn(value: Decimal, currency: string): string;
   /** A plain number, e.g. a quantity. */
   number(n: number): string;
   /** A VAT rate given in percent (19 → de "19 %", en "19%"). */
@@ -328,7 +332,15 @@ export interface Formatters {
 
 export function makeFormatters(locale: Locale = "de", currency: string): Formatters {
   const tag = LOCALE_TAG[locale];
+  // Intl formats decimal TEXT exactly; handing it a number would round the float again.
+  const text = (value: Decimal) => toDecimalString(value) as `${number}`;
   const money = new Intl.NumberFormat(tag, { style: "currency", currency });
+  const price = new Intl.NumberFormat(tag, {
+    style: "currency",
+    currency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 4,
+  });
   const number = new Intl.NumberFormat(tag, { maximumFractionDigits: 2 });
   const percent = new Intl.NumberFormat(tag, { style: "percent", maximumFractionDigits: 2 });
   const date = new Intl.DateTimeFormat(tag, {
@@ -342,9 +354,10 @@ export function makeFormatters(locale: Locale = "de", currency: string): Formatt
   // Intl knows the names in every locale; a table of our own would be one more thing to keep right.
   const currencyNames = new Intl.DisplayNames([tag], { type: "currency" });
   return {
-    money: (n) => money.format(n),
-    moneyIn: (n, other) =>
-      new Intl.NumberFormat(tag, { style: "currency", currency: other }).format(n),
+    money: (value) => money.format(text(value)),
+    price: (value) => price.format(text(value)),
+    moneyIn: (value, other) =>
+      new Intl.NumberFormat(tag, { style: "currency", currency: other }).format(text(value)),
     number: (n) => number.format(n),
     percent: (ratePercent) => percent.format(ratePercent / 100),
     date: (iso) => date.format(utc(iso)),

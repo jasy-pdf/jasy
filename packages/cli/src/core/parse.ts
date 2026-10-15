@@ -253,6 +253,9 @@ function parseSkonto(description: string | undefined): {
 } {
   if (!description) return {};
   const lines = description.split("\n");
+  // The break that closes the last Skonto line is part of the format, not an empty line of terms.
+  if (lines[lines.length - 1] === "" && lines[lines.length - 2]?.startsWith("#SKONTO#"))
+    lines.pop();
   const human = lines.filter((l) => !l.startsWith("#SKONTO#"));
   const discounts: CashDiscount[] = [];
   for (const l of lines) {

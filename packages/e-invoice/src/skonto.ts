@@ -1,4 +1,13 @@
+import {
+  fromNumber,
+  percentageOf,
+  round,
+  subtract,
+  toDecimalString,
+  type Decimal,
+} from "@jasy/decy";
 import { CashDiscount, IsoDate } from "./invoice.ts";
+import { cents, MODE } from "./money.ts";
 
 // Skonto (early-payment discount) - the ONE place it is turned into numbers and into text.
 //
@@ -19,16 +28,14 @@ export interface ResolvedDiscount {
   days: number;
   percent: number;
   /** The amount the percentage applies to (BASISBETRAG). */
-  baseAmount: number;
+  baseAmount: Decimal;
   /** What the buyer saves by paying in time. */
-  discountAmount: number;
+  discountAmount: Decimal;
   /** What is left to pay when the discount is taken. */
-  discountedTotal: number;
+  discountedTotal: Decimal;
   /** Last day the discount applies: issue date + `days`. */
   deadline: IsoDate;
 }
-
-const round2 = (n: number) => Math.round(n * 100) / 100;
 
 /** `issueDate` plus `days`, in UTC so the result never depends on the machine's zone. */
 function addDays(issueDate: IsoDate, days: number): IsoDate {
@@ -44,24 +51,24 @@ function addDays(issueDate: IsoDate, days: number): IsoDate {
 export function resolveDiscounts(
   discounts: CashDiscount[] | undefined,
   issueDate: IsoDate,
-  grossTotal: number,
+  grossTotal: Decimal,
 ): ResolvedDiscount[] {
   return (discounts ?? []).map((d) => {
-    const baseAmount = round2(d.baseAmount ?? grossTotal);
-    const discountAmount = round2((baseAmount * d.percent) / 100);
+    const baseAmount = cents(d.baseAmount ?? grossTotal);
+    const discountAmount = cents(percentageOf(baseAmount, fromNumber(d.percent)));
     return {
       days: d.days,
       percent: d.percent,
       baseAmount,
       discountAmount,
-      discountedTotal: round2(baseAmount - discountAmount),
+      discountedTotal: subtract(baseAmount, discountAmount),
       deadline: addDays(issueDate, d.days),
     };
   });
 }
 
 /** Fixed two decimals with a dot, whatever the locale - this string is read by machines. */
-const decimal2 = (n: number) => n.toFixed(2);
+const decimal2 = (value: Decimal) => toDecimalString(round(value, { scale: 2, mode: MODE }));
 
 /**
  * The structured line XRechnung reads Skonto out of. `BASISBETRAG` is written whenever the user gave
@@ -69,7 +76,7 @@ const decimal2 = (n: number) => n.toFixed(2);
  */
 export function skontoLine(d: ResolvedDiscount, explicitBase: boolean): string {
   const base = explicitBase ? `BASISBETRAG=${decimal2(d.baseAmount)}#` : "";
-  return `#SKONTO#TAGE=${d.days}#PROZENT=${decimal2(d.percent)}#${base}`;
+  return `#SKONTO#TAGE=${d.days}#PROZENT=${decimal2(fromNumber(d.percent))}#${base}`;
 }
 
 /**
@@ -82,10 +89,11 @@ export function paymentTermsText(
   terms: string | undefined,
   discounts: CashDiscount[] | undefined,
   issueDate: IsoDate,
-  grossTotal: number,
+  grossTotal: Decimal,
 ): string | undefined {
   if (!discounts?.length) return terms;
   const resolved = resolveDiscounts(discounts, issueDate, grossTotal);
   const lines = resolved.map((d, i) => skontoLine(d, discounts[i]!.baseAmount !== undefined));
-  return [terms, ...lines].filter(Boolean).join("\n");
+  // Every Skonto line ENDS with a line break, the last one too - XRechnung rejects it otherwise (BR-DE-18).
+  return [terms, ...lines].filter(Boolean).join("\n") + "\n";
 }

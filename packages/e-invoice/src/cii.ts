@@ -9,7 +9,9 @@ import {
   Seller,
   ServicePeriod,
 } from "./invoice.ts";
+import { isZero, toDecimalString, type Decimal } from "@jasy/decy";
 import { ComputedInvoice, VatBreakdownEntry } from "./compute.ts";
+import { cents, unitPrice } from "./money.ts";
 import { paymentTermsText } from "./skonto.ts";
 import { acAmount, hasPercentage } from "./allowance.ts";
 import { toBase64 } from "./attachment.ts";
@@ -112,7 +114,7 @@ function precedingInvoice(ref: PrecedingInvoice): string {
     ref.issueDate ? wrap("ram:FormattedIssueDateTime", [qdtDate102(ref.issueDate)]) : "", // BT-26
   ]);
 }
-const amount = (n: number) => n.toFixed(2);
+const amount = (value: Decimal) => toDecimalString(value);
 
 function address(a: PostalAddress): string {
   return wrap("ram:PostalTradeAddress", [
@@ -191,7 +193,7 @@ function docAllowanceCharge(ac: AllowanceCharge): string {
     wrap("ram:ChargeIndicator", [el("udt:Indicator", String(ac.isCharge))]),
     // PERCENT and BASIS before the amount - TradeAllowanceChargeType's sequence in the XSD.
     hasPercentage(ac) ? el("ram:CalculationPercent", ac.percent) : "", // BT-94 / BT-101
-    hasPercentage(ac) ? el("ram:BasisAmount", amount(ac.baseAmount)) : "", // BT-93 / BT-100
+    hasPercentage(ac) ? el("ram:BasisAmount", amount(cents(ac.baseAmount))) : "", // BT-93 / BT-100
     el("ram:ActualAmount", amount(acAmount(ac))), // BT-92 / BT-99
     // CODE before REASON - the XSD sequence, which reads backwards from how one says it.
     el("ram:ReasonCode", ac.reasonCode), // BT-98 / BT-105
@@ -213,7 +215,7 @@ function lineAllowanceCharge(ac: AllowanceCharge): string {
   return wrap("ram:SpecifiedTradeAllowanceCharge", [
     wrap("ram:ChargeIndicator", [el("udt:Indicator", String(ac.isCharge))]),
     hasPercentage(ac) ? el("ram:CalculationPercent", ac.percent) : "", // BT-138 / BT-143
-    hasPercentage(ac) ? el("ram:BasisAmount", amount(ac.baseAmount)) : "", // BT-137 / BT-142
+    hasPercentage(ac) ? el("ram:BasisAmount", amount(cents(ac.baseAmount))) : "", // BT-137 / BT-142
     el("ram:ActualAmount", amount(acAmount(ac))), // BT-136 / BT-141
     el("ram:ReasonCode", ac.reasonCode), // BT-140 / BT-145
     el("ram:Reason", ac.reason), // BT-139 / BT-144
@@ -248,7 +250,7 @@ function billingPeriod(p?: ServicePeriod): string {
     : "";
 }
 
-function line(l: InvoiceLine, net: number, index: number): string {
+function line(l: InvoiceLine, net: Decimal, index: number): string {
   return wrap("ram:IncludedSupplyChainTradeLineItem", [
     wrap("ram:AssociatedDocumentLineDocument", [
       el("ram:LineID", l.id ?? String(index + 1)), // BT-126
@@ -271,7 +273,7 @@ function line(l: InvoiceLine, net: number, index: number): string {
         ? wrap("ram:BuyerOrderReferencedDocument", [el("ram:LineID", l.orderLineRef)]) // BT-132
         : "",
       wrap("ram:NetPriceProductTradePrice", [
-        el("ram:ChargeAmount", amount(l.netUnitPrice)), // BT-146
+        el("ram:ChargeAmount", amount(unitPrice(l.netUnitPrice))), // BT-146
         l.priceBaseQuantity
           ? el("ram:BasisQuantity", l.priceBaseQuantity, { unitCode: l.unit }) // BT-149 / BT-150
           : "",
@@ -438,13 +440,15 @@ export function toCII(
     // The schema allows this element exactly TWICE, which is how BT-110 and BT-111 are told
     // apart: same tag, different currencyID.
     invoice.taxCurrency && invoice.taxTotalInTaxCurrency !== undefined
-      ? el("ram:TaxTotalAmount", amount(invoice.taxTotalInTaxCurrency), {
+      ? el("ram:TaxTotalAmount", amount(cents(invoice.taxTotalInTaxCurrency)), {
           currencyID: invoice.taxCurrency,
         }) // BT-111
       : "",
-    computed.roundingAmount ? el("ram:RoundingAmount", amount(computed.roundingAmount)) : "", // BT-114
+    !isZero(computed.roundingAmount)
+      ? el("ram:RoundingAmount", amount(computed.roundingAmount))
+      : "", // BT-114
     el("ram:GrandTotalAmount", amount(computed.grandTotal)), // BT-112
-    computed.paidAmount ? el("ram:TotalPrepaidAmount", amount(computed.paidAmount)) : "", // BT-113
+    !isZero(computed.paidAmount) ? el("ram:TotalPrepaidAmount", amount(computed.paidAmount)) : "", // BT-113
     el("ram:DuePayableAmount", amount(computed.duePayable)), // BT-115
   ]);
 

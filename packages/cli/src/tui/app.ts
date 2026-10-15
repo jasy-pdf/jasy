@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { basename, resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createScreen, createDraw, createInputManager, type RGB } from "@jano-editor/ui";
+import { equals, toDecimalString as money } from "@jasy/decy";
 import { readInvoice, type ReadResult } from "../core/read.js";
 import { describeInvoice } from "../core/detect.js";
 import { checkPdfA3, type PdfaReport } from "../core/pdfa.js";
@@ -54,7 +55,6 @@ interface Row {
 
 // clip a line so it never spills past the framed box
 const fit = (s: string, max: number): string => (s.length > max ? s.slice(0, max - 1) + "…" : s);
-const money = (n: number): string => n.toFixed(2);
 
 export function launchTui(): void {
   if (!process.stdout.isTTY || !process.stdin.isTTY) {
@@ -137,7 +137,7 @@ export function launchTui(): void {
         status: `${money(t.grandTotal)} ${inv.currency}`,
         statusFg: INK,
       });
-      if (t.duePayable !== t.grandTotal) {
+      if (!equals(t.duePayable, t.grandTotal)) {
         rows.push({
           text: "due",
           fg: MUTED,
