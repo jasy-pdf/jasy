@@ -72,3 +72,28 @@ describe("what fits on no page at all is still reported", () => {
     await expect(renderToBytes(pushedDown(10, tooTall))).rejects.toThrow(/Layout overflow/);
   });
 });
+
+// A Box of fixed height whose content fits (or that is empty) used to report "fits whole" without
+// checking its OWN height, so it was drawn past the page end - over the footer, silently.
+const RED = "1.000 0.000 0.000 RG";
+const uncompressed = async (doc: Parameters<typeof renderToBytes>[0]) =>
+  new TextDecoder("latin1").decode(await renderToBytes(doc, { compress: false }));
+// 1-based content stream (= physical page) that draws `marker`.
+const pageOf = (pdf: string, marker: string): number =>
+  [...pdf.matchAll(/stream\n([\s\S]*?)\nendstream/g)].findIndex((m) => m[1].includes(marker)) + 1;
+
+describe("a Box of fixed height that does not fit the rest of the page moves on whole", () => {
+  it.each([
+    ["empty", () => Box({ height: 200, border: "red" })],
+    ["with short content", () => Box({ height: 200, border: "red" }, [Text("short")])],
+  ])("%s", async (_what, box) => {
+    expect(pageOf(await uncompressed(pushedDown(600, box())), RED)).toBe(2);
+    // The control: with room left it stays where it is.
+    expect(pageOf(await uncompressed(pushedDown(300, box())), RED)).toBe(1);
+  });
+
+  it("a fixed Box taller than a whole page is reported, not drawn past the page", async () => {
+    const tooTall = Box({ height: A4_BODY + 100, border: "red" });
+    await expect(renderToBytes(pushedDown(10, tooTall))).rejects.toThrow(/Layout overflow/);
+  });
+});

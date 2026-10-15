@@ -151,7 +151,17 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
     // Fits with no forced cut: return the whole box unchanged. A trailing forced break is the
     // exception - fall through so the box is rebuilt from the packed children (without the consumed
     // break marker), rather than handing back the original that still holds it.
-    if (remainder.length === 0 && !forceBreak) return { fitted: this, remainder: null };
+    if (remainder.length === 0 && !forceBreak) {
+      // The content fits, but a fixed height may not - such a box cannot shrink, so it moves on whole.
+      const own = this.calculateLayout(
+        BoxConstraints.loose(width, Infinity),
+        { x: 0, y: 0 },
+        ctx,
+      ).height;
+      return own <= maxHeight
+        ? { fitted: this, remainder: null }
+        : { fitted: null, remainder: this };
+    }
     // Nothing fit below the content above: move on whole, not as an empty bordered box.
     if (fitted.length === 0 && !forceBreak) return { fitted: null, remainder: this };
 
