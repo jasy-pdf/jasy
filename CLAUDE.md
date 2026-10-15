@@ -53,7 +53,10 @@ PDFDocument (abstract, user subclasses it, implements build())
 
 - Defined on every element (`PDFElement.calculateLayout`). Signature: `calculateLayout(constraints:
 BoxConstraints, offset: Offset, ctx: LayoutContext): Size` — constraints (min/max w/h) flow **down**,
-  the parent assigns each child its absolute `offset`, the element returns the `Size` it took **up**.
+  the parent assigns each child its `offset` RELATIVE to the parent's own top-left, the element returns
+  the `Size` it took **up**. Absolute coordinates exist only in the render pass (`RenderScope`,
+  `docs/layout-model.md` 3.1); compare positions in different parents through what is DRAWN
+  (`tests/unit/support/drawn.ts`), never through `getProps().x`.
   The clean Flutter `RenderObject` contract (since Phase 4; `layout/box-constraints.ts`).
 - `FlexLayoutHelper` (`utils/flex-layout.ts`) is axis-generic: it measures **and** places both `Column`
   (`VERTICAL_AXIS`) and `Row` (`HORIZONTAL_AXIS`), distributing leftover main-axis space to

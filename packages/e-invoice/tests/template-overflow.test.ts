@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { renderZugferd } from "../src/render";
-import { Invoice } from "../src/invoice";
+import { renderZugferd } from "../src/render.ts";
+import { Invoice } from "../src/invoice.ts";
 import { Document, Page, Row, Text, TextElement, renderToBytes } from "@jasy/pdf";
-import type { PDFElement } from "@jasy/pdf";
+import { drawnTextRuns, runOf } from "../../../tests/unit/support/drawn.ts";
 import { computeInvoice } from "../src/compute.ts";
 import { defaultInvoiceTemplate } from "../src/template.ts";
 import { resolveLabels, makeFormatters } from "../src/i18n.ts";
@@ -107,26 +107,6 @@ describe("nothing is drawn outside the page", () => {
 // A line id is one unbreakable word; in a column too narrow for it, it is drawn across the item name.
 // Measured after layout: the id must END before the description BEGINS.
 describe("a line id never runs into the item name", () => {
-  const textNode = (root: PDFElement, content: string): TextElement => {
-    const seen = new Set<unknown>();
-    const walk = (node: unknown): TextElement | undefined => {
-      if (!node || typeof node !== "object" || seen.has(node)) return undefined;
-      seen.add(node);
-      if (node instanceof TextElement && node.getProps().content === content) return node;
-      for (const value of Object.values(node as Record<string, unknown>)) {
-        const kids = Array.isArray(value) ? value : [value];
-        for (const kid of kids) {
-          const hit = walk(kid);
-          if (hit) return hit;
-        }
-      }
-      return undefined;
-    };
-    const hit = walk(root);
-    if (!hit) throw new Error(`no text "${content}"`);
-    return hit;
-  };
-
   /** The id's natural one-line width, in the template's own font and size. */
   const naturalWidth = async (id: string): Promise<number> => {
     const probe = Text(id, { size: 9.5 });
@@ -145,9 +125,9 @@ describe("a line id never runs into the item name", () => {
       resolveLabels("en"),
       makeFormatters("en", "EUR"),
     );
-    await renderZugferd(invoice, { pdf });
-    const idText = textNode(pdf, id);
-    const name = textNode(pdf, "Item name");
-    expect(idText.getProps().x + (await naturalWidth(id))).toBeLessThanOrEqual(name.getProps().x);
+    const runs = await drawnTextRuns(() => renderZugferd(invoice, { pdf }));
+    const idRun = runOf(runs, id);
+    const name = runOf(runs, "Item name");
+    expect(idRun.x + (await naturalWidth(id))).toBeLessThanOrEqual(name.x);
   });
 });

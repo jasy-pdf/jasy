@@ -6,7 +6,13 @@ import {
   extentSpecs,
   resolveSize,
 } from "../layout/box-constraints.ts";
-import { FlexLayoutHelper, HORIZONTAL_AXIS, MainAlign, CrossAlign } from "../utils/flex-layout.ts";
+import {
+  FlexLayoutHelper,
+  HORIZONTAL_AXIS,
+  MainAlign,
+  CrossAlign,
+  type FlexMode,
+} from "../utils/flex-layout.ts";
 import { stackMinIntrinsic, withDeclaredExtent } from "../layout/min-intrinsic.ts";
 import {
   FlexiblePDFElement,
@@ -146,18 +152,18 @@ export class RowElement extends SizedPDFElement {
   calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
     this.x = offset.x;
     this.y = offset.y;
-    const size = this.sizeWith(constraints, ctx, offset);
+    const size = this.sizeWith(constraints, ctx, "layout");
     this.width = size.width;
     this.height = size.height;
     return size;
   }
 
   override measure(constraints: BoxConstraints, ctx: LayoutContext): Size {
-    return this.sizeWith(constraints, ctx, null);
+    return this.sizeWith(constraints, ctx, "measure");
   }
 
-  /** The one sizing path: `origin` places the children (layout); `null` only sizes them (measure). */
-  private sizeWith(constraints: BoxConstraints, ctx: LayoutContext, origin: Offset | null): Size {
+  /** The one sizing path: `layout` places the children (relative to this box), `measure` only sizes them. */
+  private sizeWith(constraints: BoxConstraints, ctx: LayoutContext, mode: FlexMode): Size {
     // Relative sizing: a pinned extent (fixed or a fraction of the offered box, clamped) wins; else
     // width fills the offered space (flex children split the leftover) and height is the tallest child.
     const specs = extentSpecs(this.requested);
@@ -193,8 +199,6 @@ export class RowElement extends SizedPDFElement {
         HORIZONTAL_AXIS,
         mainAvail,
         crossAvail,
-        origin?.x ?? 0,
-        origin?.y ?? 0,
         {
           gap: this.gap,
           main: this.main,
@@ -204,7 +208,7 @@ export class RowElement extends SizedPDFElement {
           alignContent: this.alignContent,
         },
         ctx,
-        origin ? "layout" : "measure",
+        mode,
       );
     }
 

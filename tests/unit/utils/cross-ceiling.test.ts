@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { FlexLayoutHelper, VERTICAL_AXIS } from "../../../src/lib/utils/flex-layout";
-import { LayoutContext, PDFElement } from "../../../src/lib/elements/pdf-element";
-import { BoxConstraints, Offset, Size } from "../../../src/lib/layout/box-constraints";
+import { FlexLayoutHelper, VERTICAL_AXIS } from "../../../src/lib/utils/flex-layout.ts";
+import { LayoutContext, PDFElement } from "../../../src/lib/elements/pdf-element.ts";
+import { BoxConstraints, Offset, Size } from "../../../src/lib/layout/box-constraints.ts";
 
 // Records the max width it was OFFERED, and reports a "wrapping" height: the narrower the
 // offered width, the taller it gets (like a paragraph). This lets us assert the ceiling is
@@ -35,8 +35,6 @@ describe("cross-axis ceiling - nothing overflows regardless of alignment", () =>
         VERTICAL_AXIS,
         /*mainAvail*/ 500,
         /*crossAvail*/ 120,
-        0,
-        0,
         { cross },
         ctx,
       );

@@ -25,9 +25,9 @@ export class RotatedElement extends PDFElement {
   }
 
   calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
-    // Delegate entirely to the child, then record its box (position + size) as our own - the
+    // Delegate entirely to the child (at our own top-left), then record its size as our own - the
     // rotation does not change what space we take, only how the child is painted.
-    const size = this.child.calculateLayout(constraints, offset, ctx);
+    const size = this.child.calculateLayout(constraints, { x: 0, y: 0 }, ctx);
     this.x = offset.x;
     this.y = offset.y;
     this.width = size.width;

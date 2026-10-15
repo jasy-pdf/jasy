@@ -43,7 +43,7 @@ export interface FlexAxis {
   measureConstraints(crossAvail: number, mainMax?: number): BoxConstraints;
   /** Constraints for a flex child (fills the cross axis like a stretched child). */
   flexConstraints(mainExtent: number, crossAvail: number): BoxConstraints;
-  /** Absolute offset for a child at main position `mainPos`, cross position `crossPos`. */
+  /** Offset (from the stack's top-left) of a child at main position `mainPos`, cross `crossPos`. */
   offsetAt(mainPos: number, crossPos: number): Offset;
 }
 
@@ -121,8 +121,6 @@ export class FlexLayoutHelper {
     axis: FlexAxis,
     mainAvail: number,
     crossAvail: number,
-    mainStart: number,
-    crossOrigin: number,
     options: FlexOptions,
     ctx: LayoutContext,
     mode: FlexMode = "layout",
@@ -134,8 +132,7 @@ export class FlexLayoutHelper {
         axis,
         mainAvail,
         crossAvail,
-        mainStart,
-        crossOrigin,
+        0,
         options,
         ctx,
         mode,
@@ -146,8 +143,6 @@ export class FlexLayoutHelper {
       axis,
       mainAvail,
       crossAvail,
-      mainStart,
-      crossOrigin,
       options,
       ctx,
       mode,
@@ -166,8 +161,6 @@ export class FlexLayoutHelper {
     axis: FlexAxis,
     mainAvail: number,
     crossAvail: number,
-    mainStart: number,
-    crossOrigin: number,
     options: FlexOptions,
     ctx: LayoutContext,
     mode: FlexMode,
@@ -228,8 +221,7 @@ export class FlexLayoutHelper {
         axis,
         mainAvail,
         Infinity, // let each line report the cross extent it actually needs
-        mainStart,
-        crossOrigin,
+        0,
         lineOptions,
         ctx,
         "measure",
@@ -243,7 +235,7 @@ export class FlexLayoutHelper {
     // axis uses. Only meaningful in a bounded cross axis with room left over.
     const slack = Number.isFinite(crossAvail) ? crossAvail - totalCross : 0;
     const align = options.alignContent ?? "start";
-    let cursor = crossOrigin;
+    let cursor = 0;
     let between = gap;
     if (slack > 0) {
       if (align === "center") cursor += slack / 2;
@@ -262,7 +254,6 @@ export class FlexLayoutHelper {
         axis,
         mainAvail,
         heights[i], // the line's own extent, so `stretch` fills the line and not the container
-        mainStart,
         cursor,
         lineOptions,
         ctx,
@@ -272,7 +263,7 @@ export class FlexLayoutHelper {
       if (i < lines.length - 1) cursor += between;
     });
 
-    return { mainUsed: mainAvail, crossUsed: Math.max(totalCross, cursor - crossOrigin) };
+    return { mainUsed: mainAvail, crossUsed: Math.max(totalCross, cursor) };
   }
 
   private static layoutLine(
@@ -280,7 +271,6 @@ export class FlexLayoutHelper {
     axis: FlexAxis,
     mainAvail: number,
     crossAvail: number,
-    mainStart: number,
     crossOrigin: number,
     options: FlexOptions,
     ctx: LayoutContext,
@@ -468,7 +458,7 @@ export class FlexLayoutHelper {
         ? fixedSize.get(child)!
         : child.measure(constraints, ctx);
     };
-    let mainPos = mainStart + leadingSpace;
+    let mainPos = leadingSpace;
     let placedCross = 0;
     children.forEach((child, index) => {
       const align = alignFor(child);
@@ -505,6 +495,6 @@ export class FlexLayoutHelper {
       if (index < count - 1) mainPos += betweenSpace;
     });
 
-    return { mainUsed: mainPos - mainStart, crossUsed: placedCross };
+    return { mainUsed: mainPos, crossUsed: placedCross };
   }
 }

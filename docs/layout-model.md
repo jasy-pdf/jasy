@@ -75,10 +75,15 @@ leaves the width out of the key.
 - An element's layout computes **its size** from its constraints and lays out each child **once**.
 - It then **places** each child by setting the child's `offset`: the child's top-left, relative to
   this element's top-left.
+- A wrapper that puts its child exactly where it is itself (`Expanded`, `Link`, `Anchor`, `Bookmark`,
+  `DefaultTextStyle`, `KeepTogether`, `StructGroup`, `Deferred`, `PageBuilder`) gives the child its
+  own offset and passes the render scope on unchanged: both are relative to the same origin.
 - An element stores only `size` and `offset`. No element holds an absolute coordinate.
-- Absolute coordinates are formed in the render pass. Each renderer receives `origin`, its element's
-  absolute top-left, and computes a child's origin as `origin + child.offset`. The IR stays absolute,
-  exactly as today, so `PdfBackend`, `flipY` and serialization do not change.
+- Absolute coordinates are formed in the render pass. Each renderer receives a `RenderScope`:
+  `origin` is the absolute point its element's offset is relative to (the parent's top-left), and
+  `frame` the nearest positioning frame. A renderer that places children hands them
+  `origin + its own offset` (`within()` in `renderer-registry.ts`). The IR stays absolute, exactly as
+  before, so `PdfBackend`, `flipY` and serialization do not change.
 - Offsets are **not** emitted as PDF `cm` transforms. Links, anchors, outlines and form fields need
   absolute page rectangles (`page-renderer.ts` reads them straight from the nodes), and the backend has
   no matrix stack.

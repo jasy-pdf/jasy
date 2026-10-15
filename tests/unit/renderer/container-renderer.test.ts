@@ -5,8 +5,10 @@ import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager.ts";
 import { ContainerElement } from "../../../src/lib/elements/container-element.ts";
 import { PDFElement } from "../../../src/lib/elements/pdf-element.ts";
 
-// The scope a renderer is handed must reach its children unchanged (it has no box of its own).
+// A container's children are placed relative to its own top-left: they get the origin moved by its
+// offset, and the frame unchanged.
 const SCOPE = { origin: { x: 12, y: 34 }, frame: { x: 5, y: 6 } };
+const CHILD_SCOPE = { origin: { x: 15, y: 38 }, frame: { x: 5, y: 6 } };
 
 describe("ContainerRenderer", () => {
   it("should render children elements using their respective renderers", async () => {
@@ -26,8 +28,8 @@ describe("ContainerRenderer", () => {
     // Mock the ContainerElement with two children
     const mockContainerElement: ContainerElement = {
       getProps: () => ({
-        x: 0,
-        y: 0,
+        x: 3,
+        y: 4,
         width: 100,
         height: 200,
         children: [mockChild1, mockChild2],
@@ -53,8 +55,8 @@ describe("ContainerRenderer", () => {
     const result = await ContainerRenderer.render(mockContainerElement, mockObjectManager, SCOPE);
 
     // Check if the correct renderers were called for each child
-    expect(mockRenderer1).toHaveBeenCalledWith(mockChild1, mockObjectManager, SCOPE);
-    expect(mockRenderer2).toHaveBeenCalledWith(mockChild2, mockObjectManager, SCOPE);
+    expect(mockRenderer1).toHaveBeenCalledWith(mockChild1, mockObjectManager, CHILD_SCOPE);
+    expect(mockRenderer2).toHaveBeenCalledWith(mockChild2, mockObjectManager, CHILD_SCOPE);
 
     // The container concatenates its children's display lists in order.
     expect(result).toEqual(["node-1", "node-2"]);

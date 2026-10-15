@@ -196,8 +196,8 @@ const fingerprint = async (make: () => JasyDocument, fonts?: Record<string, Buff
     .slice(0, 16);
 
 const EXPECTED: Record<string, string> = {
-  "deep nesting": "621c1af048708b8e",
-  "a wrapping row": "eb6b1d9a3d89ddce",
+  "deep nesting": "633ca2c81de7aeb5",
+  "a wrapping row": "b5cdb47c10542bca",
   "a text shrunk by its row": "bc99bf7e05ea2d27",
   "the same words in three widths": "f5816a1e5006ddbf",
   "paragraphs across pages": "c4ac3647040a72be",
@@ -205,7 +205,7 @@ const EXPECTED: Record<string, string> = {
   "bands on every page": "965fba41b58298ff",
   "text options": "ee90de939e9ea0ea",
   "fonts, fallback and direction": "ead45b9da5622b2c",
-  "a measured table across pages": "06d2523d4d0c87f5",
+  "a measured table across pages": "d6d10f1917879e0f",
   "many boxes": "89d9730dea6f0d0c",
   "many paragraphs": "22f6801b2554d620",
 };

@@ -8,7 +8,7 @@ import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager.ts";
 import { ExpandedElement } from "../../../src/lib/elements/index.ts";
 import { PDFElement } from "../../../src/lib/elements/pdf-element.ts";
 
-// The scope a renderer is handed must reach its children unchanged (it has no box of its own).
+// An Expanded lays its child out at its own offset, so the scope reaches the child unchanged.
 const SCOPE = { origin: { x: 12, y: 34 }, frame: { x: 5, y: 6 } };
 
 describe("ExpandedRenderer", () => {

@@ -71,8 +71,9 @@ export class RectangleRenderer {
     if (clip) {
       nodes.push({ type: "clip-push", x, y, width, height: h, ...(radius ? { radius } : {}) });
     }
-    // A `relative` box is the frame its `Positioned` descendants were placed against.
-    const childScope: RenderScope = relative ? { ...scope, frame: { x, y } } : scope;
+    // Its children are placed relative to its own top-left; a `relative` box is also the frame its
+    // `Positioned` descendants were placed against.
+    const childScope: RenderScope = { origin: { x, y }, frame: relative ? { x, y } : scope.frame };
     if (children)
       for (const child of children) {
         const renderer = RendererRegistry.getRenderer(child);

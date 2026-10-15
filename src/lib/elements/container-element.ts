@@ -1,4 +1,10 @@
-import { FlexLayoutHelper, VERTICAL_AXIS, MainAlign, CrossAlign } from "../utils/flex-layout.ts";
+import {
+  FlexLayoutHelper,
+  VERTICAL_AXIS,
+  MainAlign,
+  CrossAlign,
+  type FlexMode,
+} from "../utils/flex-layout.ts";
 import { stackMinIntrinsic, withDeclaredExtent } from "../layout/min-intrinsic.ts";
 import {
   BoxConstraints,
@@ -211,18 +217,18 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
   calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
     this.x = offset.x;
     this.y = offset.y;
-    const size = this.sizeWith(constraints, ctx, offset);
+    const size = this.sizeWith(constraints, ctx, "layout");
     this.width = size.width;
     this.height = size.height;
     return size;
   }
 
   override measure(constraints: BoxConstraints, ctx: LayoutContext): Size {
-    return this.sizeWith(constraints, ctx, null);
+    return this.sizeWith(constraints, ctx, "measure");
   }
 
-  /** The one sizing path: `origin` places the children (layout); `null` only sizes them (measure). */
-  private sizeWith(constraints: BoxConstraints, ctx: LayoutContext, origin: Offset | null): Size {
+  /** The one sizing path: `layout` places the children (relative to this box), `measure` only sizes them. */
+  private sizeWith(constraints: BoxConstraints, ctx: LayoutContext, mode: FlexMode): Size {
     // Relative sizing: a pinned extent (fixed points or a fraction of the offered box, clamped into
     // the constraints) wins; else fill a bounded axis; else stay `undefined` and shrink-wrap below.
     // A Column nested in a Row gets unbounded width - passing 0 there would collapse children to 0.
@@ -262,8 +268,6 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
         VERTICAL_AXIS,
         mainAvail,
         crossAvail,
-        origin?.y ?? 0,
-        origin?.x ?? 0,
         {
           gap: this.gap,
           main: this.main,
@@ -273,7 +277,7 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
           alignContent: this.alignContent,
         },
         ctx,
-        origin ? "layout" : "measure",
+        mode,
       );
     }
 

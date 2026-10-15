@@ -43,6 +43,25 @@ describe("PaddingRenderer", () => {
     expect(result).toContain("rendered child content");
   });
 
+  it("hands its child its own top-left as the origin", async () => {
+    const child = { getProps: vi.fn() };
+    const childRenderer = vi.fn().mockResolvedValue([]);
+    vi.spyOn(RendererRegistry, "getRenderer").mockReturnValueOnce(childRenderer);
+    const padding = {
+      getProps: () => ({ x: 10, y: 20, width: 100, height: 50, child }),
+    } as unknown as PaddingElement;
+    const scope = { origin: { x: 5, y: 7 }, frame: { x: 1, y: 1 } };
+
+    await PaddingRenderer.render(padding, {} as PDFObjectManager, scope);
+
+    // The child's own offset (the margins) is relative to the padding box at (5 + 10, 7 + 20).
+    expect(childRenderer).toHaveBeenCalledWith(
+      child,
+      {},
+      { origin: { x: 15, y: 27 }, frame: { x: 1, y: 1 } },
+    );
+  });
+
   // A child with no renderer used to yield an empty display list - silently. It is a bug either way,
   // so the renderer now lets the registry's error through (ISSUE-11).
   it("propagates the error when no renderer is found", async () => {

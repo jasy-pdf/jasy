@@ -10,6 +10,7 @@ import {
   renderToBytes,
 } from "../../../../src/lib/index.ts";
 import { TextElement } from "../../../../src/lib/elements/text-element.ts";
+import { drawnTextRuns, runOf } from "../../support/drawn.ts";
 
 // An Expanded fills its MAIN axis. Across it, it is an ordinary child: with no width bound it takes
 // its content's natural width. It used to keep the width of its previous layout call instead - 0 on
@@ -65,7 +66,8 @@ describe("an Expanded with no width bound", () => {
     ]);
     await renderToBytes(alone);
     const natural = textNode(alone, "hello wide world").getProps().width!;
-    const { hello, next } = await layout();
-    expect(next.x).toBeGreaterThanOrEqual(hello.x + natural);
+    // Compared where they are DRAWN: the two texts sit in different parents.
+    const runs = await drawnTextRuns(layout);
+    expect(runOf(runs, "R").x).toBeGreaterThanOrEqual(runOf(runs, "hello wide world").x + natural);
   });
 });

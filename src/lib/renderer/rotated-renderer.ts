@@ -1,7 +1,7 @@
 import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 import { RotatedElement } from "../elements/layout/rotated-element.ts";
 import { RotatedBoxElement } from "../elements/layout/rotated-box-element.ts";
-import { RendererRegistry, type RenderScope } from "../utils/renderer-registry.ts";
+import { RendererRegistry, within, type RenderScope } from "../utils/renderer-registry.ts";
 import { IRNode } from "../ir/display-list.ts";
 
 export class RotatedRenderer {
@@ -36,7 +36,8 @@ export class RotatedRenderer {
     ];
 
     const renderer = RendererRegistry.getRenderer(child);
-    const childNodes = await renderer(child, objectManager, scope);
+    // The child is placed relative to the box top-left.
+    const childNodes = await renderer(child, objectManager, within(scope, { x: ownX, y: ownY }));
 
     // Wrap the child's drawing between a push (apply the matrix) and a pop (restore).
     return [{ type: "transform-push", matrix }, ...childNodes, { type: "transform-pop" }];

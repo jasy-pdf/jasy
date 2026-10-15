@@ -35,13 +35,12 @@ export class RotatedBoxElement extends PDFElement {
     this.x = offset.x;
     this.y = offset.y;
 
-    // Place the child CENTERED on the box center: a rotation around that center then maps the
-    // child's (w x h) box exactly onto our (swapped) box - so the shared renderer needs no special case.
-    const cx = this.x + this.width / 2;
-    const cy = this.y + this.height / 2;
+    // Place the child CENTERED on the box center (relative to our top-left): a rotation around that
+    // center then maps the child's (w x h) box exactly onto our (swapped) box - so the shared renderer
+    // needs no special case.
     this.child.calculateLayout(
       this.childConstraints(constraints),
-      { x: cx - child.width / 2, y: cy - child.height / 2 },
+      { x: (this.width - child.width) / 2, y: (this.height - child.height) / 2 },
       ctx,
     );
     return size;

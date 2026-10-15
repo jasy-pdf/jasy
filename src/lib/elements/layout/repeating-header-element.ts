@@ -23,7 +23,7 @@ export class RepeatingHeaderElement extends PDFElement implements Fragmentable {
   }
 
   calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
-    const size = this.sizeWith(constraints, ctx, offset);
+    const size = this.sizeWith(constraints, ctx, "layout");
     this.x = offset.x;
     this.y = offset.y;
     this.width = size.width;
@@ -32,19 +32,25 @@ export class RepeatingHeaderElement extends PDFElement implements Fragmentable {
   }
 
   override measure(constraints: BoxConstraints, ctx: LayoutContext): Size {
-    return this.sizeWith(constraints, ctx, null);
+    return this.sizeWith(constraints, ctx, "measure");
   }
 
-  /** The one sizing path: with an `offset` header and body are laid out there, with `null` measured. */
-  private sizeWith(constraints: BoxConstraints, ctx: LayoutContext, offset: Offset | null): Size {
+  /** The one sizing path: `layout` places header and body (relative to this box), `measure` sizes. */
+  private sizeWith(
+    constraints: BoxConstraints,
+    ctx: LayoutContext,
+    mode: "layout" | "measure",
+  ): Size {
     const width = constraints.hasBoundedWidth ? constraints.maxWidth : 0;
     const inner = BoxConstraints.loose(width, Infinity);
-    const h = offset
-      ? this.header.calculateLayout(inner, { x: offset.x, y: offset.y }, ctx)
-      : this.header.measure(inner, ctx);
-    const b = offset
-      ? this.body.calculateLayout(inner, { x: offset.x, y: offset.y + h.height + this.gap }, ctx)
-      : this.body.measure(inner, ctx);
+    const h =
+      mode === "layout"
+        ? this.header.calculateLayout(inner, { x: 0, y: 0 }, ctx)
+        : this.header.measure(inner, ctx);
+    const b =
+      mode === "layout"
+        ? this.body.calculateLayout(inner, { x: 0, y: h.height + this.gap }, ctx)
+        : this.body.measure(inner, ctx);
     return { width, height: h.height + this.gap + b.height };
   }
 

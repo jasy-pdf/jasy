@@ -74,7 +74,7 @@ export class PaddingElement extends SizedPDFElement implements Fragmentable {
   }
 
   calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
-    const size = this.sizeWith(constraints, ctx, offset);
+    const size = this.sizeWith(constraints, ctx, "layout");
     this.x = offset.x;
     this.y = offset.y;
     this.width = size.width;
@@ -84,11 +84,15 @@ export class PaddingElement extends SizedPDFElement implements Fragmentable {
   }
 
   override measure(constraints: BoxConstraints, ctx: LayoutContext): Size {
-    return this.sizeWith(constraints, ctx, null);
+    return this.sizeWith(constraints, ctx, "measure");
   }
 
-  /** The one sizing path: with an `offset` the child is laid out there, with `null` only measured. */
-  private sizeWith(constraints: BoxConstraints, ctx: LayoutContext, offset: Offset | null): Size {
+  /** The one sizing path: `layout` places the child (relative to this box), `measure` only sizes it. */
+  private sizeWith(
+    constraints: BoxConstraints,
+    ctx: LayoutContext,
+    mode: "layout" | "measure",
+  ): Size {
     // Percentages resolve against the width we were OFFERED, so every pass gets the same answer.
     const [marginTop, marginRight, marginBottom, marginLeft] = resolveEdges(
       this.margin,
@@ -101,13 +105,10 @@ export class PaddingElement extends SizedPDFElement implements Fragmentable {
       ? Math.max(0, constraints.maxWidth - marginLeft - marginRight)
       : Infinity;
     const childConstraints = BoxConstraints.loose(childWidth, Infinity);
-    const childSize = offset
-      ? this.child.calculateLayout(
-          childConstraints,
-          { x: offset.x + marginLeft, y: offset.y + marginTop },
-          ctx,
-        )
-      : this.child.measure(childConstraints, ctx);
+    const childSize =
+      mode === "layout"
+        ? this.child.calculateLayout(childConstraints, { x: marginLeft, y: marginTop }, ctx)
+        : this.child.measure(childConstraints, ctx);
 
     // Padding takes the width it is offered; its height shrink-wraps the child. Unbounded width (a
     // fixed child in a Row) shrink-wraps to the child + insets, as Container/Row do.

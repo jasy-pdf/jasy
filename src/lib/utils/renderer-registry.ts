@@ -14,6 +14,14 @@ export interface RenderScope {
   frame: Offset;
 }
 
+/** The scope for the children of an element at `offset` (relative to `scope.origin`). */
+export function within(scope: RenderScope, offset: { x?: number; y?: number }): RenderScope {
+  return {
+    ...scope,
+    origin: { x: scope.origin.x + (offset.x ?? 0), y: scope.origin.y + (offset.y ?? 0) },
+  };
+}
+
 /**
  * Renders one element to IR. Typed so that a call which forgets to pass the scope on does not
  * compile - a forgotten origin draws at the page corner without a word.

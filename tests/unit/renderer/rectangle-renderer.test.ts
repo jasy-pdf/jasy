@@ -134,8 +134,11 @@ describe("RectangleRenderer", () => {
     });
     expect(result[result.length - 1]).toBe(childNode);
     expect(RendererRegistry.getRenderer).toHaveBeenCalledWith(mockChildElement);
-    // A plain box is no frame: its children keep the frame they were handed.
-    expect(childRenderer).toHaveBeenCalledWith(mockChildElement, mockObjectManager, PAGE_SCOPE);
+    // Its children are placed relative to its top-left; a plain box is no frame, so theirs is kept.
+    expect(childRenderer).toHaveBeenCalledWith(mockChildElement, mockObjectManager, {
+      origin: { x: 10, y: 20 },
+      frame: PAGE_SCOPE.frame,
+    });
   });
 
   it("makes a relative box the frame for its subtree", async () => {
@@ -158,9 +161,10 @@ describe("RectangleRenderer", () => {
     const scope = { origin: { x: 5, y: 7 }, frame: { x: 1, y: 1 } };
     await RectangleRenderer.render(box, mockObjectManager, scope);
 
-    // Its absolute top-left (origin + own offset) is where its `Positioned` descendants draw from.
+    // Its absolute top-left (origin + own offset) is both its children's origin and the frame its
+    // `Positioned` descendants draw from.
     expect(childRenderer).toHaveBeenCalledWith(child, mockObjectManager, {
-      origin: { x: 5, y: 7 },
+      origin: { x: 15, y: 27 },
       frame: { x: 15, y: 27 },
     });
   });

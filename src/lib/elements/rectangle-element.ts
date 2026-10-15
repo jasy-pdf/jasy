@@ -314,9 +314,10 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
       : Math.max(0, (height ?? 0) - 2 * this.borderWidth);
     let contentWidth = 0;
     let contentHeight = 0;
-    let yCursor = y + this.borderWidth;
+    // Children are placed relative to this box's top-left, inside the border.
+    let yCursor = this.borderWidth;
     for (const child of this.children) {
-      const consumed = yCursor - (y + this.borderWidth);
+      const consumed = yCursor - this.borderWidth;
       // Same rule the flex helper applies: a child gets a finite main extent when it cannot lay itself
       // out without one - a stack holding an `Expanded`/`Spacer`, or a child sized as a percentage of us.
       const needsBound =
@@ -326,7 +327,7 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
         : Infinity;
       const childConstraints = BoxConstraints.loose(innerWidth, childHeight);
       const childSize = offset
-        ? child.calculateLayout(childConstraints, { x: x + this.borderWidth, y: yCursor }, childCtx)
+        ? child.calculateLayout(childConstraints, { x: this.borderWidth, y: yCursor }, childCtx)
         : child.measure(childConstraints, childCtx);
       yCursor += childSize.height;
       contentHeight += childSize.height;
