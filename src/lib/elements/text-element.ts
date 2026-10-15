@@ -32,7 +32,6 @@ import { lineBoxForSegmentLine, lineBoxForString } from "../text/line-metrics.ts
 import { HorizontalAlignment, LayoutContext, SizedPDFElement } from "./pdf-element.ts";
 import { normalizeContent } from "../text/whitespace.ts";
 import { coverText } from "../text/glyph-coverage.ts";
-import { textMeasureCache } from "../text/measure-cache.ts";
 import type { Hyphenator } from "../text/word-splitting.ts";
 export interface TextSegment {
   content: string;
@@ -534,7 +533,9 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
   calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
     // Bounded width (e.g. inside a Column) wraps to that width; an unbounded width
     // (e.g. inside a Row) means the text takes its natural single-line width and does
-    // not wrap. Sized by `measure`, so a measured text and a laid-out one cannot differ.
+    // not wrap. Sized by `measure`, so a measured text and a laid-out one cannot differ. The style is
+    // resolved here too: a size from the cache skips `computeSize`, and drawing reads the style.
+    this.resolveStyle(ctx);
     const size = this.measure(constraints, ctx);
     this.x = offset.x;
     this.y = offset.y;
@@ -552,6 +553,12 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
    * and filling the memos below are its only writes, and both are a pure function of the context:
    * the same inputs leave the same state, which a later layout reads back unchanged.
    */
+  /** A text's size reads only the width it may take: it wraps to it, and a height bound never changes
+   *  the lines (a box that is too short cuts them, it does not reflow them). */
+  protected override sizeInputs(constraints: BoxConstraints): BoxConstraints {
+    return BoxConstraints.loose(constraints.maxWidth, Infinity);
+  }
+
   protected override computeSize(constraints: BoxConstraints, ctx: LayoutContext): Size {
     this.resolveStyle(ctx);
     const content = this.display(ctx.metrics);
@@ -561,63 +568,12 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     return { width, height: this.measuredHeight(ctx.metrics, width, content) };
   }
 
-  /**
-   * The last measured height, with every argument `calculateTextHeight` took - it is pure in them, so
-   * the arguments ARE the key and nothing it reads can be missed. Flex measures a child and then
-   * places it under the same constraints, and pagination lays a page out again; without this a
-   * paragraph was broken into lines ~27 times per render. `content` compares by identity: `display`
-   * hands back the same value while its own inputs hold, and a new value is simply a miss.
-   */
-  private measured?: {
-    metrics: FontMetrics;
-    epoch: number;
-    content: string | TextSegment[];
-    width: number;
-    fontSize: number;
-    fontFamily: string;
-    fontStyle: FontStyle;
-    maxLines?: number;
-    overflow?: TextOverflow;
-    lineHeight?: number;
-    letterSpacing: number;
-    wordSpacing?: number;
-    indent?: number;
-    breakWord?: boolean;
-    hyphenate?: Hyphenator;
-    ligatures?: boolean;
-    alignment: HorizontalAlignment;
-    height: number;
-  };
-
   private measuredHeight(
     metrics: FontMetrics,
     width: number,
     content: string | TextSegment[],
   ): number {
-    const m = this.measured;
-    if (
-      textMeasureCache.enabled &&
-      m &&
-      m.metrics === metrics &&
-      m.epoch === (metrics.fontEpoch ?? 0) &&
-      m.content === content &&
-      m.width === width &&
-      m.fontSize === this.fontSize &&
-      m.fontFamily === this.fontFamily &&
-      m.fontStyle === this.fontStyle &&
-      m.maxLines === this.maxLines &&
-      m.overflow === this.overflow &&
-      m.lineHeight === this.lineHeight &&
-      m.letterSpacing === this.letterSpacing &&
-      m.wordSpacing === this.wordSpacing &&
-      m.indent === this.textIndent &&
-      m.breakWord === this.breakWord &&
-      m.hyphenate === this.hyphenate &&
-      m.ligatures === this.ligatures &&
-      m.alignment === this.textAlignment
-    )
-      return m.height;
-    const height = TextRenderer.calculateTextHeight(
+    return TextRenderer.calculateTextHeight(
       content,
       this.fontSize,
       this.fontFamily,
@@ -630,27 +586,6 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       this.letterSpacing,
       this.lineOptions(),
     );
-    this.measured = {
-      metrics,
-      epoch: metrics.fontEpoch ?? 0,
-      content,
-      width,
-      fontSize: this.fontSize,
-      fontFamily: this.fontFamily,
-      fontStyle: this.fontStyle,
-      maxLines: this.maxLines,
-      overflow: this.overflow,
-      lineHeight: this.lineHeight,
-      letterSpacing: this.letterSpacing,
-      wordSpacing: this.wordSpacing,
-      indent: this.textIndent,
-      breakWord: this.breakWord,
-      hyphenate: this.hyphenate,
-      ligatures: this.ligatures,
-      alignment: this.textAlignment,
-      height,
-    };
-    return height;
   }
 
   /** The unwrapped single-line width of the content (used when width is unbounded, e.g. inside a Row).

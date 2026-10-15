@@ -17,7 +17,7 @@ import {
 } from "../../../src/lib/index.ts";
 import type { JasyDocument } from "../../../src/lib/api/structure.ts";
 import { deeplyNested } from "../support/deep-nesting.ts";
-import { textMeasureCache } from "../../../src/lib/text/measure-cache.ts";
+import { layoutCache } from "../../../src/lib/layout/layout-cache.ts";
 
 // The output of a fixed set of documents, pinned to the byte. Output is byte-stable (no dates, a
 // content-hash /ID), so ANY change to layout - a moved line, a word wrapped elsewhere, a page split
@@ -222,16 +222,16 @@ describe("the layout of a fixed set of documents is pinned to the byte", () => {
   });
 });
 
-describe("the text measurement cache changes nothing", () => {
+describe("the layout cache changes nothing", () => {
   // The hashes above pin today's output; this keeps proving it after a deliberate change to them.
   it.each(Object.keys(documents))("%s", async (name) => {
     const render = () => renderToBytes(documents[name]!(), { fonts: FONTS[name] });
     let without: Uint8Array;
-    textMeasureCache.enabled = false;
+    layoutCache.enabled = false;
     try {
       without = await render();
     } finally {
-      textMeasureCache.enabled = true;
+      layoutCache.enabled = true;
     }
     expect(Buffer.from(await render()).equals(Buffer.from(without))).toBe(true);
   });

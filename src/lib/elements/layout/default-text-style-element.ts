@@ -24,10 +24,17 @@ export class DefaultTextStyleElement extends SizedPDFElement implements Fragment
   }
 
   private childCtx(ctx: LayoutContext): LayoutContext {
-    return {
-      ...ctx,
-      textStyle: mergeTextStyle(ctx.textStyle ?? DEFAULT_TEXT_STYLE, this.style),
-    };
+    return { ...ctx, textStyle: this.mergedOnto(ctx.textStyle ?? DEFAULT_TEXT_STYLE) };
+  }
+
+  // The same inherited style gives back the SAME merged object: the layout cache compares context
+  // values by identity, so a fresh merge per call would make everything below miss.
+  private merged?: { onto: ResolvedTextStyle; style: ResolvedTextStyle };
+  private mergedOnto(inherited: ResolvedTextStyle): ResolvedTextStyle {
+    if (this.merged?.onto !== inherited) {
+      this.merged = { onto: inherited, style: mergeTextStyle(inherited, this.style) };
+    }
+    return this.merged.style;
   }
 
   // Transparent to fragmentation too: split the child against the merged context, re-wrapping each

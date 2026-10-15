@@ -46,6 +46,11 @@ export class PageBuilderElement extends PDFElement {
     return this.composed.calculateLayout(constraints, offset, ctx);
   }
 
+  /** It is built from the page it lands on. */
+  override dependsOnPage(): boolean {
+    return true;
+  }
+
   /** Builds a throwaway subtree to size it; only a real layout keeps what it built. */
   protected override computeSize(constraints: BoxConstraints, ctx: LayoutContext): Size {
     return this.build(this.infoFrom(ctx)).measure(constraints, ctx);

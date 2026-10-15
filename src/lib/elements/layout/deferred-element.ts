@@ -23,6 +23,11 @@ export class DeferredElement extends PDFElement implements Fragmentable {
     return this.build(ctx).calculateLayout(constraints, offset, ctx);
   }
 
+  /** Its subtree is unknown until built, and could hold a `PageBuilder`; until then assume it does. */
+  override dependsOnPage(): boolean {
+    return this.composed?.dependsOnPage() ?? true;
+  }
+
   /** Builds a throwaway subtree to size it; only a real layout keeps what it built. */
   protected override computeSize(constraints: BoxConstraints, ctx: LayoutContext): Size {
     return this.resolve(ctx).measure(constraints, ctx);

@@ -1,4 +1,5 @@
 import type { FontMetrics } from "../utils/font-metrics.ts";
+import { SizeCache } from "../layout/layout-cache.ts";
 import type { PDFPageConfig } from "./page-element.ts";
 import type { ResolvedTextStyle } from "../text/text-style.ts";
 import type { OverflowPolicy } from "../layout/fragmentation.ts";
@@ -102,10 +103,42 @@ export abstract class PDFElement {
    * position, no stored size, nothing registered with a frame. A parent asks this to decide, and lays
    * a child out once afterwards; asking with a full layout doubled the work at every nesting level.
    * Do not override it - implement `computeSize` (as Flutter's `getDryLayout` / `computeDryLayout`).
+   * The same question twice is answered from the layout cache (`layout/layout-cache.ts`).
    */
   measure(constraints: BoxConstraints, ctx: LayoutContext): Size {
-    return this.computeSize(constraints, ctx);
+    const cache = (this.sizeCache ??= new SizeCache());
+    const asked = this.sizeInputs(constraints);
+    const onPage = this.dependsOnPage();
+    const known = cache.get(asked, ctx, onPage);
+    if (known) return known;
+    const size = this.computeSize(constraints, ctx);
+    cache.set(asked, ctx, onPage, size);
+    return size;
   }
+
+  /**
+   * The part of the constraints this element's size actually reads - what the layout cache keys on.
+   * All of it by default. An element whose size ignores a bound returns it opened up, so two questions
+   * that differ only there share one answer. It must be TRUE for `computeSize`: reading a bound that
+   * is dropped here makes the cache hand back a wrong size.
+   */
+  protected sizeInputs(constraints: BoxConstraints): BoxConstraints {
+    return constraints;
+  }
+
+  private sizeCache?: SizeCache;
+
+  /**
+   * Whether this element's size can depend on the page it lands on (`pageConfig`, `pageInfo`): a
+   * `PageBuilder`, a `Page`, and everything holding one. Only those key a cached size on the page, so
+   * every other size is reused across pages and across the pagination and render passes. Remembered:
+   * the tree does not change, and an answer that was `false` can never become `true`.
+   */
+  dependsOnPage(): boolean {
+    return (this.pageDependent ??= this.layoutChildren().some((child) => child.dependsOnPage()));
+  }
+
+  private pageDependent?: boolean;
 
   /**
    * How this element sizes itself for `measure`. It must come from the SAME sizing computation as

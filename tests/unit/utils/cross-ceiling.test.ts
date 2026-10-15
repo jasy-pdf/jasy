@@ -12,10 +12,10 @@ class WrappingBox extends PDFElement {
   getProps(): unknown {
     return {};
   }
-  calculateLayout(c: BoxConstraints, offset: Offset): Size {
+  calculateLayout(c: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
     this.offeredMaxWidth = c.maxWidth;
     this.placedAt = offset;
-    return this.measure(c);
+    return this.measure(c, ctx);
   }
   protected computeSize(c: BoxConstraints): Size {
     // Fill the offered width (like Text under bounded width); height grows as width shrinks.

@@ -110,25 +110,26 @@ leaves the width out of the key.
 
 ### 3.3 The cache
 
-- One layout result per element (the last one) and a small measure cache (a few entries, as Yoga and
-  LayoutNG keep 8). They are separate, because a measurement must never replace the layout that gets
-  drawn.
-- **The key is the complete input of the sizing function.** It consists of:
-  - the constraints, compared by value;
-  - the font metrics' identity and `fontEpoch`, and the kerning flag;
-  - the inherited text style, compared by value. `DefaultTextStyle` creates a new style object per
-    call today, so it is interned or compared field by field;
-  - `pageInfo`, only for elements that depend on it (see 3.5).
+Built in stage 4 as ONE mechanism: `PDFElement.measure` asks `layout/layout-cache.ts`, which keeps a
+few remembered sizes per element (4, as Yoga keeps a handful: flex asks one child at more than one
+width). There is no layout cache: measured, only 0-5% of `calculateLayout` calls repeat in real
+documents (header and footer per page), so caching placement would add risk for nothing.
+
+- **The key is the complete input of the sizing function:**
+  - the constraints - only the part the element's size reads (`sizeInputs`; a `Text` reads only its
+    width, so an overflowing Column's capped-height question shares the answer);
+  - the font metrics' identity, `fontEpoch` and the kerning flag;
+  - the inherited text style, by identity. `DefaultTextStyle` returns the same merged object for the
+    same inherited one, so identity is enough;
+  - `pageConfig` and `pageInfo`, only for an element that `dependsOnPage()` (see 3.5).
 - **The rule that makes the cache safe** (LayoutNG's): sizing reads nothing outside the element's own
-  props, its children, the constraints and the declared inputs above. Anything that affects only
-  pagination decisions (`belowContent`, `onOverflow`, `pageBodyHeight`) or side effects is not a
-  sizing input, and must not be readable from the sizing function.
+  props, its children, the constraints and the inputs above. Anything that affects only pagination
+  decisions (`belowContent`, `onOverflow`, `pageBodyHeight`) or placement (`frame`) is not a sizing
+  input.
 - **Invalidation:** elements are immutable after construction, so the only reason to re-size is a
-  different key. Nothing is "dirty". A document rendered again with other options gets different
-  metrics, which gives a different key.
-- **A cache hit is free.** The children keep their relative offsets, so there is nothing to move.
-  This is why relative offsets come before the cache: with absolute offsets a hit would still have to
-  shift the subtree.
+  different key. Nothing is "dirty".
+- **Held by tests:** `tests/unit/layout/layout-cache.test.ts` changes one key field at a time (each
+  sabotage-probed), and every pinned document renders byte-identically with the cache on and off.
 
 ### 3.4 Out-of-flow children (`Positioned`)
 
@@ -161,9 +162,10 @@ New rule:
 - **`Deferred`** (tables with measured columns) keeps its built subtree and rebuilds only when its
   inputs change. A table is then built once per render instead of once per layout call.
 - **`PageBuilder`** builds with the real page info on each page, so its size may differ per page (a
-  conditional header may shrink on later pages). It is marked `dependsOnPage`. The mark bubbles up at
-  construction (the tree is immutable), and only marked elements carry `pageInfo` in their cache key.
-  Everything else caches across pages.
+  conditional header may shrink on later pages). `dependsOnPage()` is true for it, for `Page`, and for
+  every element holding one (asked through `layoutChildren`, remembered - the tree is immutable). A
+  `Deferred` that has not built yet answers true. Only those elements key on the page; every other
+  size is reused across pages and across the pagination and render passes.
 
 ### 3.6 Pages and pagination
 
@@ -222,7 +224,7 @@ results, and then decide.
 | 1     | Pre-work: `Expanded` reuses the previous call's width on an unbounded axis (history-dependent, `expanded-element.ts:156`); `SizedContainerElement` is dead code; the page config merge moves out of layout | `Expanded` only where it was wrong                               |
 | 2     | `measure()` with no side effects, one sizing function per element, used for every measurement                                                                                                              | none                                                             |
 | 3     | Relative offsets: elements store `offset`, renderers receive `origin`, frame-origin stack for `Positioned`, side channels from `origin`                                                                    | `Positioned` paints on top (CSS) where it was not the last child |
-| 4     | Layout and measure caches with the declared inputs; `dependsOnPage`; `Deferred` keeps its subtree                                                                                                          | none                                                             |
+| 4     | One measure cache with the declared inputs; `dependsOnPage`; `Deferred` keeps its subtree. (A layout cache was dropped after measuring: 0-5% repeats.)                                                     | none                                                             |
 | 5     | Pass 1 removed                                                                                                                                                                                             | none                                                             |
 | 6     | Shared wrapper base, all signals forwarded                                                                                                                                                                 | yes, visible                                                     |
 | 7     | Fragment clones keep all properties (`Container` drops min/max/aspectRatio, `Text` drops `breakWord`, `hyphenate`, `ligatures`, the fallback stack)                                                        | yes, visible                                                     |
