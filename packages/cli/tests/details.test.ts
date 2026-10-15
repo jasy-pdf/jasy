@@ -87,6 +87,13 @@ describe("what is shown only when it is there", () => {
     expect(text).toMatch(/Paid\s+-40\.00/);
     expect(text).toMatch(/Due EUR\s+79\.00/);
   });
+
+  it("prints a negative paid amount as an addition", () => {
+    const paid = { ...base, paidAmount: -40 };
+    const text = exportText(paid, computeInvoice(paid));
+    expect(text).toMatch(/Paid\s+\+40\.00/);
+    expect(text).toMatch(/Due EUR\s+159\.00/);
+  });
 });
 
 describe("the label column never glues onto its value", () => {

@@ -122,4 +122,14 @@ describe("the paper explains the difference", () => {
   it("prints no rounding line when there is none", () => {
     expect(printed(base)).not.toContain("Rundung");
   });
+
+  // BT-113 may be negative (EN 16931 only demands BR-CO-16), and whatever reaches the XML reaches
+  // the paper - or the payable on the page has no explanation.
+  it("shows an amount already paid as a subtraction", () => {
+    expect(printed({ ...base, paidAmount: 50 })).toMatch(/bereits gezahlt\n-50,00/);
+  });
+
+  it("shows a negative amount already paid as an addition", () => {
+    expect(printed({ ...base, paidAmount: -50 })).toMatch(/bereits gezahlt\n\+50,00/);
+  });
 });

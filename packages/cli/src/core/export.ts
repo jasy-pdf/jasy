@@ -168,8 +168,10 @@ export function exportText(inv: Invoice, t: ComputedInvoice): string {
   L.push(`${`Total ${s.currency}`.padStart(48)}${money(s.gross).padStart(12)}`);
   // Only when they differ: an amount already paid or a rounding makes the payable a second figure.
   if (!equals(s.due, s.gross)) {
-    if (!isZero(t.paidAmount))
-      L.push(`${"Paid".padStart(48)}${`-${money(t.paidAmount)}`.padStart(12)}`);
+    if (!isZero(t.paidAmount)) {
+      const paid = `${isNegative(t.paidAmount) ? "+" : "-"}${money(abs(t.paidAmount))}`;
+      L.push(`${"Paid".padStart(48)}${paid.padStart(12)}`);
+    }
     L.push(`${`Due ${s.currency}`.padStart(48)}${money(s.due).padStart(12)}`);
   }
   const details = detailLines(inv, t);

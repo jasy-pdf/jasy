@@ -358,8 +358,11 @@ function totals(
 
   lines.push(Divider({ color: HAIR, margin: { y: 2 } }));
   lines.push(valueLine(L.grandTotal, fmt.money(c.grandTotal), { strong: true, size: 11 }));
-  if (!isNegative(c.paidAmount) && !isZero(c.paidAmount))
-    lines.push(valueLine(L.alreadyPaid, `-${fmt.money(c.paidAmount)}`));
+  // BT-113 may be negative; with its sign, like the rounding below, so the payable adds up on paper.
+  if (!isZero(c.paidAmount)) {
+    const sign = isNegative(c.paidAmount) ? "+" : "-";
+    lines.push(valueLine(L.alreadyPaid, `${sign}${fmt.money(abs(c.paidAmount))}`));
+  }
   // BT-114. A payable that does not equal the total minus what was paid looks like an arithmetic
   // error unless the difference is named, so the line is printed with its sign.
   if (!isZero(c.roundingAmount)) {
