@@ -26,6 +26,10 @@ export type { PageInfo };
  * content decides the count that the content displays): in the flowing BODY the box is reserved before the
  * total is known, so a much wider final string can paint slightly past it; and a conditional header may
  * SHRINK on later pages but must not GROW, because the body band was measured against the first build.
+ *
+ * What it builds is placed WHOLE: it never splits across pages, and a `PageBreak` inside it has no
+ * effect. Its content belongs to one page by construction - a piece continued on the next page would
+ * have been built for the wrong one. Keep it to what fits on a page; flowing content goes beside it.
  */
 export function PageBuilder(build: (info: PageInfo) => PDFElement): PageBuilderElement {
   return new PageBuilderElement({ build });

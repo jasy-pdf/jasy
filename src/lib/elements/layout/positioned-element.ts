@@ -41,6 +41,9 @@ interface PositionedElementParams extends WithChild, PositionedInsets {}
 export class PositionedElement extends PDFElement {
   private child: PDFElement;
   private insets: PositionedInsets;
+  // The context at its own place in the tree: what it inherits (a `DefaultTextStyle` around it) comes
+  // from there, not from the frame owner that places it.
+  private placeCtx?: LayoutContext;
 
   constructor({ child, top, right, bottom, left, h, v, x, y }: PositionedElementParams) {
     super();
@@ -56,6 +59,7 @@ export class PositionedElement extends PDFElement {
       );
     }
     // Out of flow: it takes no room here. The frame's owner places it once it knows its own size.
+    this.placeCtx = ctx;
     return { width: 0, height: 0 };
   }
 
@@ -72,7 +76,8 @@ export class PositionedElement extends PDFElement {
    * Lays the child out at the resolved position inside (or overflowing) a frame of `frameSize`. The
    * offset is relative to the frame's top-left; its owner draws the child from there.
    */
-  placeIn(frameSize: Size, ctx: LayoutContext): void {
+  placeIn(frameSize: Size, frameCtx: LayoutContext): void {
+    const ctx = this.placeCtx ?? frameCtx;
     const frame = { origin: { x: 0, y: 0 }, size: frameSize };
     const { top, right, bottom, left, h, v, x: nudgeX, y: nudgeY } = this.insets;
 

@@ -175,7 +175,11 @@ New rule:
   function that the page driver calls. Each physical page is then laid out exactly once, right before
   it is rendered.
 - **Shared instances** are header, footer and the repeating table header, which are reused on every
-  page. They become safe by construction, because positions live in the parent.
+  page. That is safe ACROSS pages: each page lays them out on its own, right before it is drawn.
+  WITHIN one page it is not: an element still holds one position (the one its last layout gave it),
+  so one instance placed twice on a page would draw both copies in the same place. The render pass
+  refuses that by name (`ElementReusedError`, checked in `RendererRegistry.render`, the one place every
+  draw passes).
 - Fragment results are not cached at first. LayoutNG caches per fragment, keyed on page height and
   position on the page. That is a later step, and only if measurement shows it is needed.
 

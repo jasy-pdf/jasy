@@ -13,8 +13,7 @@ export class BookmarkRenderer {
     // Its own position is relative to `scope.origin`; the IR wants page coordinates.
     const y = scope.origin.y + (ownY ?? 0);
 
-    const renderer = RendererRegistry.getRenderer(child);
-    const childNodes = await renderer(child, objectManager, scope);
+    const childNodes = await RendererRegistry.render(child, objectManager, scope);
 
     // The child draws normally; an Outline IR node carries the title + nesting + scroll target for the
     // page renderer to collect into the /Outlines tree (it produces no content-stream ops itself).

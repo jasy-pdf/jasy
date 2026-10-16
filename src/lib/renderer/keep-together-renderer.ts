@@ -14,7 +14,6 @@ export class KeepTogetherRenderer {
     scope: RenderScope,
   ): Promise<IRNode[]> {
     const { child } = group.getProps();
-    const renderer = RendererRegistry.getRenderer(child);
-    return renderer(child, objectManager, scope);
+    return RendererRegistry.render(child, objectManager, scope);
   }
 }

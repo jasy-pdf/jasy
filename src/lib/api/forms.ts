@@ -401,6 +401,9 @@ export interface PushButtonOptions {
  * A clickable push button (AcroForm /Btn). It holds no value - it fires an action. Its caption is baked
  * into the appearance, so the button looks the same in every viewer and in print.
  *
+ * Not for PDF/A: PDF/A forbids an action on a form field (ISO 19005-2/-3, 6.4.1), and an action is all a
+ * push button does.
+ *
  * ```ts
  * PushButton({ name: "send", label: "Submit", action: { submit: "https://example.com/f" }, width: 120 })
  * PushButton({ name: "clear", label: "Reset", action: "reset", width: 90 })

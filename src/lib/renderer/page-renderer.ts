@@ -9,6 +9,7 @@ import { PdfBackend } from "./pdf-backend.ts";
 export class PageRenderer {
   static async render(page: PageElement, objectManager: PDFObjectManager): Promise<number> {
     const { children, config, header, footer } = page.getProps();
+    RendererRegistry.beginPage(objectManager); // an element may be drawn once per page
     // A page is the outermost box: its children's offsets are page coordinates. Its content box is the
     // frame a `Positioned` with no `relative` ancestor was placed against.
     const scope: RenderScope = {
@@ -33,8 +34,7 @@ export class PageRenderer {
     // fonts/images used below, so it must run before the resource section.
     const nodes: IRNode[] = [];
     for (const element of renderables) {
-      const renderer = RendererRegistry.getRenderer(element);
-      nodes.push(...(await renderer(element, objectManager, scope)));
+      nodes.push(...(await RendererRegistry.render(element, objectManager, scope)));
     }
     // Accessible tagging: one struct context per page (allocates its StructParents index), threaded into
     // serialize so each drawable node is wrapped in marked content. Undefined = tagging off (byte-identical).
@@ -95,13 +95,24 @@ export class PageRenderer {
     const num = (n: number) => Number(n.toFixed(2));
     const annotRefs: string[] = [];
     for (const node of flipped) {
+      if (node.type !== "link" && node.type !== "formfield") continue;
+      // Tagged, every annotation names its structure element (PDF/UA 7.18).
+      const structKey = structCtx ? node.structKey : undefined;
+      const structParent =
+        structKey === undefined ? undefined : objectManager.struct.annotationParent(structKey);
+      const tag = (obj: number) => {
+        if (structKey !== undefined) {
+          objectManager.struct.linkAnnotation(structKey, obj, structCtx!.structParents);
+        }
+      };
       // A form field: build its Widget annotation + register it as an /AcroForm field (the logic lives in
       // forms/acroform.ts), then reference it here in the page /Annots - the same side channel as a link.
       if (node.type === "formfield") {
-        annotRefs.push(`${objectManager.acroform.addField(node, objectManager)} 0 R`);
+        const widget = objectManager.acroform.addField(node, objectManager, structParent);
+        tag(widget);
+        annotRefs.push(`${widget} 0 R`);
         continue;
       }
-      if (node.type !== "link") continue;
       const rect = `[${num(node.x)} ${num(node.y)} ${num(node.x + node.width)} ${num(node.y + node.height)}]`;
       // Either an external URL (/URI) or an internal named destination (/GoTo, resolved via /Names /Dests).
       // The Link IR guarantees exactly one is set; prefer `dest` when present.
@@ -109,9 +120,14 @@ export class PageRenderer {
         node.dest !== undefined
           ? `/A << /S /GoTo /D ${objectManager.pdfString(node.dest)} >>`
           : `/A << /S /URI /URI ${objectManager.pdfString(node.href ?? "")} >>`;
+      const tagged =
+        structParent === undefined
+          ? ""
+          : ` /StructParent ${structParent} /Contents ${objectManager.pdfString(node.alt ?? "")}`;
       const annot = objectManager.addObject(
-        `<< /Type /Annot /Subtype /Link /Rect ${rect} /Border [0 0 0] ${action} >>`,
+        `<< /Type /Annot /Subtype /Link /Rect ${rect} /Border [0 0 0] ${action}${tagged} >>`,
       );
+      tag(annot);
       annotRefs.push(`${annot} 0 R`);
     }
     const annotsCode = annotRefs.length > 0 ? ` /Annots [${annotRefs.join(" ")}]` : "";

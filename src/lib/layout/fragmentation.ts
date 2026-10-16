@@ -51,6 +51,16 @@ export function isFragmentable(element: PDFElement): element is PDFElement & Fra
  */
 export type OverflowPolicy = "error" | "warn" | "ignore";
 
+/**
+ * The context for content inset by `chrome` on every page (a border, padding, a repeated header): a
+ * fresh page gives it that much less room. Every element that shrinks the region for its children
+ * hands this down with it.
+ */
+export function insetContext(ctx: LayoutContext, chrome: number): LayoutContext {
+  if (ctx.pageBodyHeight === undefined || chrome === 0) return ctx;
+  return { ...ctx, pageBodyHeight: ctx.pageBodyHeight - chrome };
+}
+
 export function reportOverflow(
   child: PDFElement,
   childHeight: number,

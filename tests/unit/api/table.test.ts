@@ -10,11 +10,25 @@ import { PDFElement } from "../../../src/lib/elements/pdf-element";
 import { StructGroup } from "../../../src/lib/elements/layout/struct-group";
 import { TextElement } from "../../../src/lib/elements/text-element.ts";
 import { Document, Page, renderToBytes } from "../../../src/lib/api/structure.ts";
+import { BoxConstraints } from "../../../src/lib/layout/box-constraints.ts";
+import type { LayoutContext } from "../../../src/lib/elements/pdf-element.ts";
+import { testMetrics } from "../support/metrics.ts";
+import { drawnTextRuns, runOf } from "../support/drawn.ts";
+import { PDFObjectManager, FontStyle } from "../../../src/lib/utils/pdf-object-manager.ts";
+import { Box } from "../../../src/lib/api/layout.ts";
 
 // Tables now wrap the table / rows / cells in layout-transparent StructGroups (accessibility). These
-// helpers see through them, so the tests still assert the underlying Column / Row / Box structure.
-const unwrap = (el: PDFElement): PDFElement =>
-  el instanceof StructGroup ? unwrap((el.getProps() as { child: PDFElement }).child) : el;
+// helpers see through them, so the tests still assert the underlying Column / Row / Box structure. A
+// table with `fr` or `auto` columns is built at layout time, for its width: laid out 500 wide here.
+const ctx = { metrics: testMetrics(), pageConfig: {} } as LayoutContext;
+const unwrap = (el: PDFElement): PDFElement => {
+  if (el instanceof StructGroup) return unwrap((el.getProps() as { child: PDFElement }).child);
+  if (el instanceof DeferredElement) {
+    el.calculateLayout(BoxConstraints.loose(500, Infinity), { x: 0, y: 0 }, ctx);
+    return unwrap(el.getProps().composed!);
+  }
+  return el;
+};
 const rowsOf = (t: PDFElement) =>
   (unwrap(t).getProps() as { children: PDFElement[] }).children.map(unwrap) as RowElement[];
 const cellsOf = (r: RowElement) => (unwrap(r).getProps() as { children: unknown[] }).children;
@@ -176,4 +190,64 @@ describe('a "minmax(<points>, auto)" column', () => {
       expect(() => Table({ columns: [column] }, [["a"]])).toThrow(/minmax\(40, auto\)/);
     },
   );
+});
+
+// Columns are sized as CSS grid sizes its tracks: an `fr` column never gets narrower than its longest
+// word, `auto` columns give way first, and a row never shrinks on its own - its cells stay in their
+// columns even when the table is wider than its box.
+describe("column widths fit the table's width", () => {
+  const om = new PDFObjectManager();
+  om.registerFont("Helvetica");
+  const header = ["Code", "Description", "Total"];
+  const data = [
+    ["A-1", "Short", "1.00"],
+    ["LONG-CODE-2", "A longer description that wraps in the narrow box", "12,345.67"],
+  ];
+  const drawn = (width: number, columns: (string | number)[]) =>
+    drawnTextRuns(() =>
+      renderToBytes(
+        Document({ size: 9 }, [
+          Page({ size: "A5", margin: 24 }, [
+            Box({ width }, [
+              Table({ columns, header, cellPadding: { y: 2, x: 4 }, cellBorder: "gray" }, data),
+            ]),
+          ]),
+        ]),
+      ),
+    );
+  const right = (r: { text: string; x: number; fontSize: number }) =>
+    r.x + om.getStringWidth(r.text, "Helvetica", r.fontSize, FontStyle.Normal);
+
+  it("an fr column keeps its longest word: the header does not run into the next column", async () => {
+    const runs = await drawn(150, ["auto", "1fr", "auto"]);
+    expect(right(runOf(runs, "Description"))).toBeLessThanOrEqual(runOf(runs, "Total").x);
+  });
+
+  it("a row never shrinks on its own: every cell of a column starts at the same x", async () => {
+    for (const columns of [
+      ["auto", "1fr", "auto"],
+      ["auto", "auto", "auto"],
+    ]) {
+      const runs = await drawn(150, columns);
+      expect(runOf(runs, "Short").x).toBe(runOf(runs, "Description").x);
+      expect(runOf(runs, "1.00").x).toBe(runOf(runs, "Total").x);
+    }
+  });
+
+  it("auto columns give way down to their longest word when the table would not fit", async () => {
+    const runs = await drawn(180, ["auto", "auto", "auto"]);
+    // The description wraps instead of pushing the total out of the box.
+    expect(right(runOf(runs, "12,345.67"))).toBeLessThanOrEqual(24 + 180);
+    expect(runs.filter((r) => r.text.includes("description")).length).toBeGreaterThan(0);
+    expect(runs.some((r) => r.text === "A longer description that wraps in the narrow box")).toBe(
+      false,
+    );
+  });
+
+  it("a table that fits keeps its auto columns at their widest cell", async () => {
+    const runs = await drawn(360, ["auto", "1fr", "auto"]);
+    expect(runs.some((r) => r.text === "A longer description that wraps in the narrow box")).toBe(
+      true,
+    );
+  });
 });

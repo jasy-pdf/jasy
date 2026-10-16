@@ -1,5 +1,17 @@
 import { describe, it, expect } from "vitest";
-import { Document, Page, Column, Row, Box, Text, Spacer, renderPdf } from "../../../src/lib/api";
+import {
+  Document,
+  Page,
+  Column,
+  Row,
+  Box,
+  Text,
+  Spacer,
+  Expanded,
+  Canvas,
+  DefaultTextStyle,
+  renderPdf,
+} from "../../../src/lib/api";
 import { PdfBackend } from "../../../src/lib/renderer/pdf-backend";
 import { IRNode } from "../../../src/lib/ir/display-list";
 
@@ -125,5 +137,106 @@ describe("the backend refuses non-finite geometry", () => {
   it("does not trip on a document that merely contains the word Infinity", async () => {
     const pdf = await render(Document([Page([Text("Infinity and NaN are fine words")])]));
     expect(pdf).toContain("(Infinity and NaN are fine words)");
+  });
+});
+
+// A nested stack holding a Spacer needs a bounded height to lay out. It used to get the WHOLE column,
+// was then as tall as the column, and the line "overflowed" by its siblings - who were squeezed for it.
+// It gets what its siblings leave instead.
+describe("a nested stack with a Spacer takes what its siblings leave", () => {
+  const drawn = async (doc: Parameters<typeof renderPdf>[0]) => {
+    const nodes: IRNode[] = [];
+    const flip = PdfBackend.flipY.bind(PdfBackend);
+    PdfBackend.flipY = (n, h) => (nodes.push(...n), flip(n, h));
+    try {
+      await render(doc);
+    } finally {
+      PdfBackend.flipY = flip;
+    }
+    return nodes;
+  };
+  const clipHeight = (nodes: IRNode[]) =>
+    nodes.flatMap((n) => (n.type === "clip-push" ? [n.height] : []))[0];
+
+  it("a fixed sibling keeps its size, and what follows stays on the page", async () => {
+    const pdf = await render(
+      Document([
+        Page({ size: "A4", margin: 56 }, [
+          Column([Canvas({ width: 50, height: 300 }, () => {}), Column([Spacer()]), Text("after")]),
+        ]),
+      ]),
+    );
+    expect(yOf(pdf, "after")).toBeGreaterThan(56); // above the bottom margin, not below it
+    const nodes = await drawn(
+      Document([
+        Page({ size: "A4", margin: 56 }, [
+          Column([Canvas({ width: 50, height: 300 }, () => {}), Column([Spacer()]), Text("after")]),
+        ]),
+      ]),
+    );
+    expect(clipHeight(nodes)).toBe(300);
+  });
+
+  it("the same through a wrapper (a DefaultTextStyle passes the need on)", async () => {
+    const nodes = await drawn(
+      Document([
+        Page([Column([Canvas({ height: 20 }, () => {}), DefaultTextStyle({}, [Spacer()])])]),
+      ]),
+    );
+    expect(clipHeight(nodes)).toBe(20);
+  });
+
+  it("alone in the page it still fills it: a Spacer pushes the tail to the bottom", async () => {
+    const pdf = await render(
+      Document([
+        Page({ size: "A4", margin: 56 }, [
+          Column([Text("top"), Column([Text("inner"), Spacer(), Text("tail")])]),
+        ]),
+      ]),
+    );
+    expect(yOf(pdf, "tail")).toBeLessThan(70);
+  });
+});
+
+// The stack grows like an Expanded of flex 1 whose basis is its content, AFTER the line is settled: a
+// share handed out before the shrink pass left it less than its content - text past the box.
+describe("a nested stack with a Spacer grows only into what is left", () => {
+  const RIGHT = 10 + 200; // page margin + box width
+  const drawnIn = async (row: Parameters<typeof Box>[1][number]) => {
+    const nodes: IRNode[] = [];
+    const flip = PdfBackend.flipY.bind(PdfBackend);
+    PdfBackend.flipY = (n, h) => (nodes.push(...n), flip(n, h));
+    try {
+      await render(
+        Document([
+          Page({ size: { width: 220, height: 300 }, margin: 10 }, [Box({ width: 200 }, [row])]),
+        ]),
+      );
+    } finally {
+      PdfBackend.flipY = flip;
+    }
+    return Object.fromEntries(
+      nodes.flatMap((n) => (n.type === "text" ? [[n.text, n.x] as const] : [])),
+    ) as Record<string, number>;
+  };
+  const T = (s: string) => Text(s, { size: 10 });
+
+  it("next to a paragraph that shrinks, it keeps its content inside the box", async () => {
+    const x = await drawnIn(
+      Row([
+        T(
+          "This paragraph is longer than the line it sits on, so the shrink pass has to squeeze it.",
+        ),
+        Row([T("Total"), Spacer(), T("99.00")]),
+      ]),
+    );
+    expect(x["99.00"]! + 25.02).toBeLessThanOrEqual(RIGHT + 0.01); // "99.00" is 25.02 wide at 10pt
+    expect(x["Total"]!).toBeLessThan(x["99.00"]!);
+  });
+
+  it("next to an Expanded, both share the leftover", async () => {
+    const x = await drawnIn(Row([Row([T("L"), Spacer(), T("R")]), Expanded(T("EXP"))]));
+    expect(x["EXP"]!).toBeGreaterThan(10 + 50); // the Expanded got a share, it did not collapse to 0
+    expect(x["EXP"]! + 20.01).toBeLessThanOrEqual(RIGHT + 0.01);
   });
 });

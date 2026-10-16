@@ -1,6 +1,6 @@
 import type { FontStyle } from "../utils/pdf-object-manager.ts";
 import type { FontMetrics } from "../utils/font-metrics.ts";
-import { runAdvance } from "./advance.ts";
+import { runAdvance, SOFT_HYPHEN } from "./advance.ts";
 
 /**
  * What to do with a word that is wider than the box it has to fit in.
@@ -94,8 +94,6 @@ export function splitLongWord(
   if (pieces.length === 0) return null;
   return [...pieces, { text: rest, hyphen: false, source: restSource.length }];
 }
-
-const SOFT_HYPHEN = "\u00AD";
 
 /**
  * How many characters of `source` the drawn `prefix` covers, with a soft hyphen at the break. A

@@ -13,7 +13,6 @@ export class PageBuilderRenderer {
     const { composed } = element.getProps();
     if (!composed) return [];
 
-    const renderer = RendererRegistry.getRenderer(composed);
-    return renderer(composed, objectManager, scope);
+    return RendererRegistry.render(composed, objectManager, scope);
   }
 }

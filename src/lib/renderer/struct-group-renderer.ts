@@ -15,8 +15,7 @@ export class StructGroupRenderer {
   ): Promise<IRNode[]> {
     const { role, child } = group.getProps();
     const renderChild = async (): Promise<IRNode[]> => {
-      const renderer = RendererRegistry.getRenderer(child);
-      return renderer(child, objectManager, scope);
+      return RendererRegistry.render(child, objectManager, scope);
     };
     if (!objectManager.struct.enabled) return renderChild();
 

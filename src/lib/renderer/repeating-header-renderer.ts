@@ -14,8 +14,7 @@ export class RepeatingHeaderRenderer {
     // Header and body are placed relative to its own top-left.
     const inner = within(scope, { x, y });
     for (const child of [header, body]) {
-      const renderer = RendererRegistry.getRenderer(child);
-      nodes.push(...(await renderer(child, objectManager, inner)));
+      nodes.push(...(await RendererRegistry.render(child, objectManager, inner)));
     }
     return nodes;
   }

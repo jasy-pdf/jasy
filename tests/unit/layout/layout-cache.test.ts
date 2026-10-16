@@ -242,7 +242,7 @@ describe("a subtree built from the context", () => {
   const building = (make: () => PDFElement) => {
     const built = new BuiltFromContext<PDFElement>();
     let builds = 0;
-    const get = (c: LayoutContext) => built.get(c, () => (builds++, make()));
+    const get = (c: LayoutContext, width = 300) => built.get(c, width, () => (builds++, make()));
     return { get, builds: () => builds };
   };
   const page = (pageNumber: number): PageInfo => ({
@@ -258,6 +258,14 @@ describe("a subtree built from the context", () => {
     b.get(ctx());
     b.get(ctx());
     expect(b.builds()).toBe(1);
+  });
+
+  it("is built again when the width changes (a table fits its columns to it)", () => {
+    const b = building(() => new Counted());
+    b.get(ctx(), 300);
+    b.get(ctx(), 300);
+    b.get(ctx(), 200);
+    expect(b.builds()).toBe(2);
   });
 
   it("is built again when the inherited style changes", () => {

@@ -1,5 +1,10 @@
 import { BoxConstraints, Offset, Size } from "../../layout/box-constraints.ts";
-import { Fragmentable, FragmentResult, isFragmentable } from "../../layout/fragmentation.ts";
+import {
+  Fragmentable,
+  FragmentResult,
+  insetContext,
+  isFragmentable,
+} from "../../layout/fragmentation.ts";
 import { LayoutContext, PDFElement } from "../pdf-element.ts";
 
 /**
@@ -60,7 +65,12 @@ export class RepeatingHeaderElement extends PDFElement implements Fragmentable {
 
     if (!isFragmentable(this.body)) return { fitted: this, remainder: null };
 
-    const split = this.body.fragment(Math.max(0, maxHeight - headerHeight - this.gap), width, ctx);
+    const chrome = headerHeight + this.gap;
+    const split = this.body.fragment(
+      Math.max(0, maxHeight - chrome),
+      width,
+      insetContext(ctx, chrome),
+    );
     // Body fits whole, no break inside → the whole thing fits on this page.
     if (split.remainder === null && !split.forceBreak) return { fitted: this, remainder: null };
 

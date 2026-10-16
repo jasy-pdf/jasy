@@ -52,8 +52,24 @@ export class MissingRendererError extends Error {
   }
 }
 
+/**
+ * Thrown when one element INSTANCE is drawn twice on the same page. An element holds one position - the
+ * place its last layout gave it - so both copies would land there and one would silently go missing.
+ */
+export class ElementReusedError extends Error {
+  constructor(readonly elementName: string) {
+    super(
+      `@jasy/pdf: the same ${elementName} element is used twice on one page. An element has ONE ` +
+        `position, so both copies would be drawn in the same place. Create it twice instead - call the ` +
+        `factory again (e.g. a function \`const divider = () => Divider()\`) rather than reusing one value.`,
+    );
+  }
+}
+
 export class RendererRegistry {
   private static renderers = new Map<Function, ElementRenderer>();
+  // What each document has drawn on its current page (keyed per document: two can render at once).
+  private static drawnOnPage = new WeakMap<PDFObjectManager, WeakSet<object>>();
 
   static register(elementClass: Function, renderer: ElementRenderer) {
     if (!RendererRegistry.renderers.has(elementClass)) {
@@ -67,6 +83,30 @@ export class RendererRegistry {
     if (!renderer) throw new MissingRendererError(element.constructor.name);
     return renderer;
   }
+  /** A new page starts for this document: nothing is drawn on it yet. */
+  static beginPage(objectManager: PDFObjectManager): void {
+    RendererRegistry.drawnOnPage.set(objectManager, new WeakSet());
+  }
+
+  /**
+   * Draws `element` with its renderer. Every draw goes through here, so it is where reuse is caught - for
+   * an element that DRAWS something: one that draws nothing (a Spacer) has no place to land wrongly, and
+   * reusing it stays harmless.
+   */
+  static async render(
+    element: object,
+    objectManager: PDFObjectManager,
+    scope: RenderScope,
+  ): Promise<IRNode[]> {
+    const nodes = await RendererRegistry.getRenderer(element)(element, objectManager, scope);
+    const drawn = RendererRegistry.drawnOnPage.get(objectManager);
+    if (drawn && nodes.length > 0) {
+      if (drawn.has(element)) throw new ElementReusedError(element.constructor.name);
+      drawn.add(element);
+    }
+    return nodes;
+  }
+
   static isRendererAsync(renderer: Function): boolean {
     return renderer.constructor.name === "AsyncFunction";
   }

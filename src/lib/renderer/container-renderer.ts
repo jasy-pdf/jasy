@@ -16,8 +16,7 @@ export class ContainerRenderer {
 
     if (children)
       for (const child of children) {
-        const renderer = RendererRegistry.getRenderer(child);
-        nodes.push(...(await renderer(child, objectManager, inner)));
+        nodes.push(...(await RendererRegistry.render(child, objectManager, inner)));
       }
 
     return nodes;

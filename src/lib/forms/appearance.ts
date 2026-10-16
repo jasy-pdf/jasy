@@ -4,6 +4,19 @@ import { wrapStringIntoLines } from "../text/line-breaker.ts";
 import type { FontMetrics } from "../utils/font-metrics.ts";
 import type { FontStyle } from "../utils/pdf-object-manager.ts";
 
+/**
+ * The font an appearance draws its text in: its resource name inside the appearance stream's own
+ * /Resources, and how a string becomes a `Tj` operand in it. One object, so the caller that picks the
+ * font also decides its encoding - a WinAnsi literal for Helvetica, glyph ids for an embedded font.
+ */
+export interface FaceFont {
+  res: string;
+  encode(text: string): string;
+}
+
+/** The standard Helvetica (`/Helv`) a field's /DA names: WinAnsi literal strings. */
+export const HELV: FaceFont = { res: "Helv", encode: (text) => `(${escPdf(text)})` };
+
 // Appearance streams (/AP): the actual drawn content of a field's box, in the field's OWN coordinate
 // space (bottom-left origin, [0 0 w h]). Shared between CREATE (bake the field's look now) and, later,
 // FILL-existing (regenerate a field's look after setting its value). This is why it is its own module.
@@ -79,8 +92,8 @@ export function radioOn(w: number, h: number, style: FieldStyle): string {
 /**
  * A push button's face: the box plus its caption, centred. The caller measures the caption (this module
  * stays free of font metrics and the writer) and passes `captionWidth` in points and `capHeight` as an em
- * fraction; the baseline is placed so the CAPITALS sit optically centred, not the em box. `fontRes` is
- * the font's resource name inside the appearance stream's own /Resources.
+ * fraction; the baseline is placed so the CAPITALS sit optically centred, not the em box. `font` is
+ * what the caption is drawn in.
  */
 export function pushButtonFace(
   w: number,
@@ -89,12 +102,12 @@ export function pushButtonFace(
   caption: string,
   captionWidth: number,
   capHeight: number,
-  fontRes: string,
+  font: FaceFont,
   size: number,
 ): string {
   // Baseline placed so the CAPITALS sit optically centred in the box, not the em square.
   const y = (h - capHeight * size) / 2;
-  const caption_ = caption ? centredText(w, h, style, caption, captionWidth, y, fontRes, size) : "";
+  const caption_ = caption ? centredText(w, h, style, caption, captionWidth, y, font, size) : "";
   return `${box(w, h, style)}\n${caption_}`;
 }
 
@@ -107,13 +120,13 @@ function centredText(
   text: string,
   textWidth: number,
   baselineY: number,
-  fontRes: string,
+  font: FaceFont,
   size: number,
 ): string {
   return (
     `q 0 0 ${num2(w)} ${num2(h)} re W n ` +
-    `BT /${fontRes} ${num2(size)} Tf ${pdfColor(style.color)} rg ` +
-    `${num2((w - textWidth) / 2)} ${num2(baselineY)} Td (${escPdf(text)}) Tj ET Q`
+    `BT /${font.res} ${num2(size)} Tf ${pdfColor(style.color)} rg ` +
+    `${num2((w - textWidth) / 2)} ${num2(baselineY)} Td ${font.encode(text)} Tj ET Q`
   );
 }
 
@@ -128,7 +141,7 @@ export function signatureFace(
   style: FieldStyle,
   label: string,
   labelWidth: number,
-  fontRes: string,
+  font: FaceFont,
   size: number,
 ): string {
   const ruleY = h * 0.3;
@@ -137,7 +150,7 @@ export function signatureFace(
   const rule =
     `${pdfColor(stroke)} RG ${num2(Math.max(0.5, style.borderWidth * 0.75))} w ` +
     `${num2(inset)} ${num2(ruleY)} m ${num2(w - inset)} ${num2(ruleY)} l S`;
-  const hint = label ? centredText(w, h, style, label, labelWidth, ruleY + 6, fontRes, size) : "";
+  const hint = label ? centredText(w, h, style, label, labelWidth, ruleY + 6, font, size) : "";
   return `${box(w, h, style)}\n${rule}\n${hint}`;
 }
 
@@ -221,12 +234,12 @@ function textBlock(
   lines: Array<{ text: string; x: number; y: number }>,
   style: FieldStyle,
   size: number,
-  fontRes: string,
+  font: FaceFont,
 ): string {
   const runs = lines
-    .map((l) => `1 0 0 1 ${num2(l.x)} ${num2(l.y)} Tm (${escPdf(l.text)}) Tj`)
+    .map((l) => `1 0 0 1 ${num2(l.x)} ${num2(l.y)} Tm ${font.encode(l.text)} Tj`)
     .join("\n");
-  return `BT /${fontRes} ${num2(size)} Tf ${pdfColor(style.color)} rg\n${runs}\nET`;
+  return `BT /${font.res} ${num2(size)} Tf ${pdfColor(style.color)} rg\n${runs}\nET`;
 }
 
 /** Everything a field draws is clipped to its own box, so a long value is cut at the frame rather than
@@ -247,7 +260,7 @@ export function textFieldFace(
   lines: FieldLine[],
   capHeight: number,
   size: number,
-  fontRes: string,
+  font: FaceFont,
   multiline: boolean,
   align: FieldAlign = "left",
 ): string {
@@ -262,7 +275,7 @@ export function textFieldFace(
     // Single line: centre the capitals in the box.
     y: multiline ? h - pad - capHeight * size - i * lineHeight : (h - capHeight * size) / 2,
   }));
-  return `${face}\n${clipped(w, h, textBlock(placed, style, size, fontRes))}`;
+  return `${face}\n${clipped(w, h, textBlock(placed, style, size, font))}`;
 }
 
 /**
@@ -276,7 +289,7 @@ export function listBoxFace(
   lines: FieldLine[],
   capHeight: number,
   size: number,
-  fontRes: string,
+  font: FaceFont,
   align: FieldAlign = "left",
 ): string {
   const pad = FIELD_PAD + style.borderWidth;
@@ -297,6 +310,6 @@ export function listBoxFace(
     // Baseline inside the row: lift it off the row bottom by the slack under the capitals.
     y: rowTop(i) + (lineHeight - capHeight * size) / 2,
   }));
-  const inner = [highlights, textBlock(placed, style, size, fontRes)].filter(Boolean).join("\n");
+  const inner = [highlights, textBlock(placed, style, size, font)].filter(Boolean).join("\n");
   return `${box(w, h, style)}\n${clipped(w, h, inner)}`;
 }

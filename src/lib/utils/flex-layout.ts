@@ -187,11 +187,9 @@ export class FlexLayoutHelper {
       if (cached !== undefined) return cached;
       // Measured UNCAPPED, the same way the single-line engine measures a plain child. Handing the
       // line width in as a cap would silently squash a child wider than the line - CSS lets such a
-      // child overflow, and so does our own non-wrapping path.
-      const needsBound = child.needsBoundedMain(axis.mainHorizontal);
-      const main = axis.mainOf(
-        child.measure(axis.measureConstraints(crossAvail, needsBound ? mainAvail : Infinity), ctx),
-      );
+      // child overflow, and so does our own non-wrapping path. A stack holding a Spacer counts with its
+      // content too: its Spacer only grows into what is left once the line is laid out.
+      const main = axis.mainOf(child.measure(axis.measureConstraints(crossAvail, Infinity), ctx));
       measured.set(child, main);
       return main;
     };
@@ -296,21 +294,25 @@ export class FlexLayoutHelper {
     // gaps (the flexbox `width: 33%` + gap trap). Only finite when the line's main axis is bounded -
     // a fraction of an unbounded main axis has no meaning, so `%` children fall back to shrink-wrap.
     const percentBase = mainAvail !== Infinity ? Math.max(0, mainAvail - totalGap) : Infinity;
-    // The main cap to hand a child: `percentBase` for a percentage child (so its fraction resolves) and
-    // for a child that cannot lay itself out without a bound (a nested stack holding an `Expanded`/
-    // `Spacer`); unbounded for everyone else, who keep their natural size and never fill the line.
+    // The main cap to hand a child: `percentBase` for a percentage child (so its fraction resolves); for
+    // a child that cannot lay itself out without a bound (a nested stack holding an `Expanded`/`Spacer`)
+    // its content, grown by its share of the leftover once the line is settled (`sharedCap`); unbounded
+    // for everyone else, who keep their natural size.
     // Filled by the shrink pass below; read by `mainCapFor` in pass 2. Declared here so the closure
     // can see it - it is empty for every document that does not ask for shrinking.
     const shrunkCap = new Map<PDFElement, number>();
+    const sharedCap = new Map<PDFElement, number>();
     const mainCapFor = (child: PDFElement): number => {
-      const target = shrunkCap.get(child);
+      const target = shrunkCap.get(child) ?? sharedCap.get(child);
       if (target !== undefined) return target;
       if (percentBase === Infinity) return Infinity;
-      const needsBound =
-        child.relativeSizeFactor(axis.mainHorizontal) !== undefined ||
-        child.needsBoundedMain(axis.mainHorizontal);
-      return needsBound ? percentBase : Infinity;
+      return child.relativeSizeFactor(axis.mainHorizontal) !== undefined ? percentBase : Infinity;
     };
+    const needsShare = (child: PDFElement): boolean =>
+      percentBase !== Infinity &&
+      !flexibleOf(child) &&
+      child.relativeSizeFactor(axis.mainHorizontal) === undefined &&
+      child.needsBoundedMain(axis.mainHorizontal);
 
     // Pass 1: measure the fixed children (main extent + cross size) and total the flex.
     // A flex child's BASIS is reserved here too: it is main extent the leftover no longer contains,
@@ -322,18 +324,21 @@ export class FlexLayoutHelper {
     const fixedSize = new Map<PDFElement, Size>();
     // The constraints each measured size answers, so the last pass can reuse it instead of asking again.
     const measuredUnder = new Map<PDFElement, BoxConstraints>();
+    const measureFixed = (child: PDFElement) => {
+      const constraints = axis.measureConstraints(crossAvail, mainCapFor(child));
+      const size = child.measure(constraints, ctx);
+      fixedMain += axis.mainOf(size);
+      crossUsed = Math.max(crossUsed, axis.crossOf(size));
+      fixedSize.set(child, size);
+      measuredUnder.set(child, constraints);
+    };
     for (const child of children) {
       const flexible = flexibleOf(child);
       if (flexible) {
         totalFlex += flexible.getFlex();
         totalBasis += flexible.getBasis(percentBase);
       } else {
-        const constraints = axis.measureConstraints(crossAvail, mainCapFor(child));
-        const size = child.measure(constraints, ctx);
-        fixedMain += axis.mainOf(size);
-        crossUsed = Math.max(crossUsed, axis.crossOf(size));
-        fixedSize.set(child, size);
-        measuredUnder.set(child, constraints);
+        measureFixed(child);
       }
     }
 
@@ -416,10 +421,30 @@ export class FlexLayoutHelper {
     // written into the content stream verbatim, silently corrupting the page from that point on.
     const remaining = Number.isFinite(leftover) ? Math.max(leftover, 0) : 0;
 
+    // A stack holding a Spacer grows like an `Expanded` of flex 1 whose basis is its content: measured
+    // above at that content (shrunk with its siblings if the line overflowed), it now shares what is
+    // left with the flex children. Handing it the whole line squeezed its siblings; handing it a share
+    // before the line was settled could leave it less than its own content.
+    const sharing = children.filter(needsShare);
+    const weight = totalFlex + sharing.length;
+    if (sharing.length > 0 && remaining > 0) {
+      for (const child of sharing) {
+        const content = axis.mainOf(fixedSize.get(child)!);
+        const grown = content + remaining / weight;
+        sharedCap.set(child, grown);
+        const constraints = axis.measureConstraints(crossAvail, grown);
+        const size = child.measure(constraints, ctx);
+        fixedMain += axis.mainOf(size) - content;
+        crossUsed = Math.max(crossUsed, axis.crossOf(size));
+        fixedSize.set(child, size);
+        measuredUnder.set(child, constraints);
+      }
+    }
+
     // Main-axis distribution only kicks in with no flex child and bounded, positive space.
     let leadingSpace = 0;
     let betweenSpace = gap;
-    if (totalFlex === 0 && mainAvail !== Infinity && leftover > 0) {
+    if (weight === 0 && mainAvail !== Infinity && leftover > 0) {
       if (main === "center") leadingSpace = leftover / 2;
       else if (main === "end") leadingSpace = leftover;
       else if (main === "between" && count > 1) betweenSpace = gap + leftover / (count - 1);
@@ -437,7 +462,7 @@ export class FlexLayoutHelper {
         const flexible = flexibleOf(child);
         if (flexible) {
           const mainExtent =
-            flexible.getBasis(percentBase) + (flexible.getFlex() / totalFlex) * remaining;
+            flexible.getBasis(percentBase) + (flexible.getFlex() / weight) * remaining;
           const constraints = axis.flexConstraints(mainExtent, crossAvail);
           const size = child.measure(constraints, ctx);
           crossUsed = Math.max(crossUsed, axis.crossOf(size));
@@ -477,7 +502,7 @@ export class FlexLayoutHelper {
         // `totalFlex` is 0 when every flex child asked for `flex: 0` (a pure `flexBasis` slot). The
         // share is then 0/0 - a NaN that becomes the offset of every later sibling, which is the
         // shape of the old Spacer bug. Such a child simply takes its basis.
-        const share = totalFlex > 0 ? (flexible.getFlex() / totalFlex) * remaining : 0;
+        const share = weight > 0 ? (flexible.getFlex() / weight) * remaining : 0;
         mainExtent = flexible.getBasis(percentBase) + share;
         // A flex child fills the MAIN axis, and its cross size is only known after layout - there is
         // nothing to align against. So alignSelf is a no-op here, and that has to hold for the CROSS

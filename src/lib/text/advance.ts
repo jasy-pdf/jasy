@@ -134,6 +134,11 @@ function measureAndStore(
   font: RunFont,
   byText: Map<string, number>,
 ): number {
+  // A soft hyphen is never drawn where it stands (a break there draws a real hyphen instead), so it has
+  // no width - taken out BEFORE measuring, so the kerning pair across it is the one drawn. Here, on a
+  // cache miss, and not on every call: the stored width is the drawn one, keyed by the source text.
+  const key = text;
+  text = withoutSoftHyphens(text);
   let advance = metrics.getStringWidth(
     text,
     font.fontFamily,
@@ -147,8 +152,16 @@ function measureAndStore(
       units += k;
     advance += (units / 1000) * font.fontSize; // kern units are em/1000
   }
-  byText.set(text, advance);
+  byText.set(key, advance);
   return advance;
+}
+
+/** U+00AD: "a line may break here, with a hyphen". Invisible wherever it does not. */
+export const SOFT_HYPHEN = "\u00AD";
+
+/** `text` as it is drawn: without its soft hyphens. */
+export function withoutSoftHyphens(text: string): string {
+  return text.includes(SOFT_HYPHEN) ? text.split(SOFT_HYPHEN).join("") : text;
 }
 
 /** The advance of `text` in points: the plain glyph widths, plus kerning (if the document has it on),
@@ -161,10 +174,12 @@ export function runAdvance(
 ): number {
   let advance = baseAdvance(metrics, text, font);
   if (letterSpacing !== 0) {
-    // Per DRAWN glyph, which is what `Tc` applies to; only a ligature makes that differ.
+    // Per DRAWN glyph, which is what `Tc` applies to; only a ligature makes that differ. A soft hyphen is
+    // not drawn.
+    const drawn = withoutSoftHyphens(text);
     const glyphs =
-      metrics.shapedGlyphCount?.(text, font.fontFamily, font.fontStyle, font.ligatures) ??
-      codePointCount(text);
+      metrics.shapedGlyphCount?.(drawn, font.fontFamily, font.fontStyle, font.ligatures) ??
+      codePointCount(drawn);
     advance += glyphs * letterSpacing;
   }
 

@@ -11,7 +11,6 @@ export class ExpandedRenderer {
   ): Promise<IRNode[]> {
     const { child } = expandedElement.getProps();
 
-    const renderer = RendererRegistry.getRenderer(child);
-    return renderer(child, objectManager, scope);
+    return RendererRegistry.render(child, objectManager, scope);
   }
 }

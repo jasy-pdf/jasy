@@ -13,6 +13,8 @@ import { testMetrics } from "../support/metrics.ts";
 import { RendererRegistry } from "../../../src/lib/utils/renderer-registry.ts";
 import { PositionedRenderer } from "../../../src/lib/renderer/positioned-renderer.ts";
 import { PAGE_SCOPE } from "../support/scope.ts";
+import { drawnTextRuns } from "../support/drawn.ts";
+import * as api from "../../../src/lib/index.ts";
 
 // Rendering a frame on its own: its renderers are registered here, as `PDFRenderer.render` would.
 RendererRegistry.register(RectangleElement, RectangleRenderer.render);
@@ -355,5 +357,38 @@ describe("RectangleElement - width shrink-wrap under unbounded width", () => {
     const box = new RectangleElement({ x: 0, y: 0, borderWidth: 0, children: [fixed(40, 10)] });
     const size = box.calculateLayout(BoxConstraints.loose(Infinity, Infinity), { x: 0, y: 0 }, ctx);
     expect(size.width).toBe(40);
+  });
+});
+
+// A Positioned is placed by its frame but INHERITS from its own place in the tree, like any element:
+// a DefaultTextStyle around it styles its text, whichever frame places it.
+describe("PositionedElement - inherits from where it sits", () => {
+  const fontSizes = async (body: (a: typeof api) => unknown) => {
+    const runs = await drawnTextRuns(() =>
+      api.renderToBytes(api.Document([api.Page([body(api) as never])])),
+    );
+    return Object.fromEntries(runs.map((r) => [r.text, r.fontSize]));
+  };
+
+  it("in the page frame", async () => {
+    const sizes = await fontSizes((a) =>
+      a.DefaultTextStyle({ size: 30 }, [
+        a.Text("flow"),
+        a.Positioned({ right: 0, top: 0 }, a.Text("POS")),
+      ]),
+    );
+    expect(sizes).toEqual({ flow: 30, POS: 30 });
+  });
+
+  it("in a relative Box", async () => {
+    const sizes = await fontSizes((a) =>
+      a.Box({ relative: true, height: 80 }, [
+        a.DefaultTextStyle({ size: 30 }, [
+          a.Text("flow"),
+          a.Positioned({ right: 0, bottom: 0 }, a.Text("POS")),
+        ]),
+      ]),
+    );
+    expect(sizes).toEqual({ flow: 30, POS: 30 });
   });
 });

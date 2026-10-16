@@ -7,6 +7,7 @@ import {
   Box,
   Text,
   PageBreak,
+  PageBuilder,
   renderToBytes,
 } from "../../../src/lib/api";
 
@@ -88,6 +89,21 @@ describe("PageBreak", () => {
     expect(pageCount(pdf)).toBe(1);
     expect(warn).toHaveBeenCalledOnce();
     expect(warn.mock.calls[0][0]).toMatch(/PageBreak had no effect/);
+    warn.mockRestore();
+  });
+
+  it("a PageBuilder is placed whole: a break inside it is ignored, and the warning says why", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const pdf = await render(
+      Document([
+        Page({ margin: 40 }, [
+          Column([Text("INTRO"), PageBuilder(() => Column([Text("A"), PageBreak(), Text("B")]))]),
+        ]),
+      ]),
+    );
+    expect(pageCount(pdf)).toBe(1);
+    expect(warn).toHaveBeenCalledOnce();
+    expect(warn.mock.calls[0][0]).toMatch(/PageBuilder/);
     warn.mockRestore();
   });
 

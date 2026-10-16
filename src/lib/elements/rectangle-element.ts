@@ -16,6 +16,7 @@ import {
   Fragmentable,
   FragmentResult,
   childrenForceBreak,
+  insetContext,
   packChildren,
 } from "../layout/fragmentation.ts";
 import {
@@ -117,8 +118,10 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
     this.sizeMemory = { ...sizing, x: 0, y: 0, width, height };
   }
 
+  // A break before the FIRST child is a break before this stack (CSS propagates it): the whole stack
+  // moves to the next page, instead of leaving an empty piece - or an empty border - behind.
   override breaksBefore(): boolean {
-    return this.breakBefore;
+    return this.breakBefore || (this.children[0]?.breaksBefore() ?? false);
   }
 
   override breaksAfter(): boolean {
@@ -146,7 +149,7 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
       this.children,
       innerMaxHeight,
       innerWidth,
-      ctx,
+      insetContext(ctx, 2 * this.borderWidth),
     );
     // Fits with no forced cut: return the whole box unchanged. A trailing forced break is the
     // exception - fall through so the box is rebuilt from the packed children (without the consumed

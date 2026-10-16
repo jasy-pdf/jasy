@@ -35,9 +35,12 @@ export class RotatedRenderer {
       cy - sin * cx - cos * cy,
     ];
 
-    const renderer = RendererRegistry.getRenderer(child);
     // The child is placed relative to the box top-left.
-    const childNodes = await renderer(child, objectManager, within(scope, { x: ownX, y: ownY }));
+    const childNodes = await RendererRegistry.render(
+      child,
+      objectManager,
+      within(scope, { x: ownX, y: ownY }),
+    );
 
     // Wrap the child's drawing between a push (apply the matrix) and a pop (restore).
     return [{ type: "transform-push", matrix }, ...childNodes, { type: "transform-pop" }];

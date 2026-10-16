@@ -12,7 +12,6 @@ export class DefaultTextStyleRenderer {
     scope: RenderScope,
   ): Promise<IRNode[]> {
     const { child } = element.getProps();
-    const renderer = RendererRegistry.getRenderer(child);
-    return renderer(child, objectManager, scope);
+    return RendererRegistry.render(child, objectManager, scope);
   }
 }

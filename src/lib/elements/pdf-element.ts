@@ -59,9 +59,10 @@ export interface LayoutContext {
   /** What to do when an element overflows a page region and cannot break (set from the render option;
    *  absent = clip silently). Evaluated in `packChildren` where the forced placement happens. */
   onOverflow?: OverflowPolicy;
-  /** The FULL body height of the current page (between header and footer), set by the page driver. A
-   *  `keepTogether` group reads it to decide the degrade rule: veto splitting only when the group would
-   *  fit on a fresh page; a group taller than a whole page drops the veto and splits. */
+  /** The height a FRESH page gives this region: the page body (between header and footer, set by the
+   *  page driver) minus what encloses the region on every page - a border, padding, a repeated table
+   *  header (`insetContext`). A `keepTogether` group reads it to decide the degrade rule: veto splitting
+   *  only when the group would fit on a fresh page; a group taller than that drops the veto and splits. */
   pageBodyHeight?: number;
   /** Something already sits above this element in the current page region. Then "does not fit"
    *  means "move to the next page", never an overflow - only content at the top of a fresh page is

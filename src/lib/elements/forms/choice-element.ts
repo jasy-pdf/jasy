@@ -1,6 +1,7 @@
 import { Color } from "../../common/color.ts";
 import { BoxConstraints, Offset, Size } from "../../layout/box-constraints.ts";
 import { LayoutContext, SizedPDFElement } from "../pdf-element.ts";
+import { FieldFont, inheritedFieldFont } from "./field-font.ts";
 import type { ChoiceOption, ChoiceSpec, FieldAlign, FieldStyle } from "../../forms/field.ts";
 
 export interface ChoiceParams {
@@ -72,7 +73,11 @@ export class ChoiceElement extends SizedPDFElement {
     this.requested = { width: p.width, height: p.height, fontSize, combo: p.combo };
   }
 
-  calculateLayout(constraints: BoxConstraints, offset: Offset, _ctx: LayoutContext): Size {
+  // Inherited at layout: the font its baked appearance draws text in.
+  private font?: FieldFont;
+
+  calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
+    this.font = inheritedFieldFont(ctx);
     const size = this.sizeFor(constraints);
     this.x = offset.x;
     this.y = offset.y;
@@ -105,6 +110,7 @@ export class ChoiceElement extends SizedPDFElement {
       height: this.height ?? 0,
       spec: this.spec,
       style: this.style,
+      font: this.font,
     };
   }
 }

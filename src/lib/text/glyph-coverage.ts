@@ -56,6 +56,9 @@ export function coverText(
   fontFamily: string,
   fontStyle: FontStyle,
   metrics: FontMetrics,
+  // Whether colour emoji count as drawable: in `Text` they are drawn from the emoji source; a form
+  // field's appearance has only its own font.
+  emoji = true,
 ): CoverageResult {
   let out: string | null = null; // built only once something has to change
   const dropped: number[] = [];
@@ -63,14 +66,15 @@ export function coverText(
 
   for (const char of text) {
     const cp = char.codePointAt(0)!;
-    // A space and a line break are handled by the breaker, never drawn as a glyph.
+    // A space, a line break and a soft hyphen are handled by the breaker, never drawn as a glyph.
     const drawable =
       cp === 0x20 ||
       cp === 0x0a ||
+      cp === 0xad ||
       metrics.hasGlyph(cp, fontFamily, fontStyle) ||
       // Colour emoji is drawn from a fallback font or an image, NOT from the text font - it is missing
       // there by design, and removing it would delete the very thing `Document({ emoji })` exists for.
-      metrics.rendersAsEmoji?.(cp, fontFamily, fontStyle) === true;
+      (emoji && metrics.rendersAsEmoji?.(cp, fontFamily, fontStyle) === true);
     if (!drawable) {
       if (out === null) out = text.slice(0, index);
       const equivalent = EQUIVALENTS[cp];

@@ -1,8 +1,11 @@
-import type { PDFObjectManager } from "../utils/pdf-object-manager.ts";
+import type { FontStyle, PDFObjectManager } from "../utils/pdf-object-manager.ts";
 import type { FormFieldNode } from "../ir/display-list.ts";
+import { coverText } from "../text/glyph-coverage.ts";
 import { NORMAL_STYLE, escName, num2, pdfColor } from "./pdf.ts";
 import {
   type FieldLine,
+  type FaceFont,
+  HELV,
   checkboxOff,
   checkboxOn,
   listBoxFace,
@@ -45,6 +48,23 @@ function boxChrome(node: FormFieldNode, extraMK = ""): string {
 
 /** The annotation flags (/F). Bit 2 = Hidden, bit 3 = Print. A widget prints by default; `hidden`
  *  removes it from screen AND print, `print: false` keeps it on screen only. */
+/** The font a baked appearance draws in, with what measuring needs and the stream's /Resources. */
+interface AppearanceFont {
+  family: string;
+  style: FontStyle;
+  face: FaceFont;
+  resources: string;
+  /** The text as this font can draw it: what it lacks is replaced or removed and reported, as in `Text`. */
+  cover(text: string): string;
+}
+
+/** A widget in the structure tree (accessible tagging) names its slot in the ParentTree. */
+function withStructParent(dict: string, structParent: number | undefined): string {
+  return structParent === undefined
+    ? dict
+    : dict.replace(/^<< /, `<< /StructParent ${structParent} `);
+}
+
 function annotFlags(f: FormFieldSpec): number {
   if (f.hidden) return 2;
   return f.print === false ? 0 : 4;
@@ -233,33 +253,74 @@ export class AcroFormCollector {
     return fieldDrawSize(style.fontSize, height, style.borderWidth, capHeight);
   }
 
+  /**
+   * The font a field's baked appearance draws its text in: the font the field inherits when it is
+   * EMBEDDED, else the standard Helvetica. PDF/A and PDF/UA require every font that draws to be
+   * embedded, and a document that embeds its fonts means that. The /DA keeps naming Helvetica - it is
+   * what a viewer redraws with once someone types, and a subset font could not draw the new characters.
+   * Measuring and drawing both take the font from here.
+   */
+  private faceFont(node: FormFieldNode, om: PDFObjectManager): AppearanceFont {
+    const inherited = node.font;
+    if (inherited && om.isCustomFont(inherited.family, inherited.style)) {
+      const { family, style } = inherited;
+      const resource = om.getCustomFontResource(family, style)!;
+      return {
+        family,
+        style,
+        // Drawn SHAPED (ligatures, joining forms) - the shaping `getStringWidth` measures with.
+        face: {
+          res: `F${resource.fontIndex}`,
+          encode: (text) => `<${om.encodeCustomText(family, text, style)}>`,
+        },
+        resources: `/Font << /F${resource.fontIndex} ${resource.resourceIndex} 0 R >>`,
+        // A glyph the font lacks would draw as .notdef, which PDF/A forbids.
+        cover: (text) => {
+          const { text: drawable, dropped } = coverText(text, family, style, om, false);
+          if (dropped.length > 0) om.reportMissingGlyph?.(dropped);
+          return drawable;
+        },
+      };
+    }
+    return {
+      family: "Helvetica",
+      style: NORMAL_STYLE,
+      face: HELV,
+      resources: `/Font << /Helv ${this.helv(om)} 0 R >>`,
+      cover: (text) => text,
+    };
+  }
+
   /** Measure one line for the appearance generator. */
-  private line(om: PDFObjectManager, text: string, size: number): FieldLine {
-    return { text, width: om.getStringWidth(text, "Helvetica", size, NORMAL_STYLE) };
+  private line(om: PDFObjectManager, font: AppearanceFont, text: string, size: number): FieldLine {
+    return { text, width: om.getStringWidth(text, font.family, size, font.style) };
   }
 
   /** Bake a text field's value into an appearance stream; returns the XObject number. */
   private bakeText(node: FormFieldNode, om: PDFObjectManager): number {
     const f = node.field;
     if (f.kind !== "text") throw new Error("bakeText: not a text field");
-    const { capHeight } = om.getFontDecoration("Helvetica", NORMAL_STYLE);
+    const font = this.faceFont(node, om);
+    const { capHeight } = om.getFontDecoration(font.family, font.style);
     const size = this.drawSize(node.style, node.height, capHeight);
     // A password field shows the mask, never the characters - the value still lives in /V.
-    const value = f.password ? "•".repeat([...(f.value ?? "")].length) : (f.value ?? "");
+    const value = font.cover(
+      f.password ? "•".repeat([...(f.value ?? "")].length) : (f.value ?? ""),
+    );
     const innerWidth = Math.max(1, node.width - 2 * (2 + node.style.borderWidth));
 
     let lines: FieldLine[] = [];
     if (value) {
       const texts = wrapFieldValue(
         value,
-        "Helvetica",
+        font.family,
         size,
-        NORMAL_STYLE,
+        font.style,
         innerWidth,
         om,
         f.multiline ?? false,
       );
-      lines = texts.map((t) => this.line(om, t, size));
+      lines = texts.map((t) => this.line(om, font, t, size));
     }
     const face = textFieldFace(
       node.width,
@@ -268,14 +329,14 @@ export class AcroFormCollector {
       lines,
       capHeight,
       size,
-      "Helv",
+      font.face,
       f.multiline ?? false,
       f.align,
     );
     return om.addFormXObject(
       `[0 0 ${num2(node.width)} ${num2(node.height)}]`,
       face,
-      `/Font << /Helv ${this.helv(om)} 0 R >>`,
+      font.resources,
     );
   }
 
@@ -284,7 +345,8 @@ export class AcroFormCollector {
   private bakeChoice(node: FormFieldNode, om: PDFObjectManager): number {
     const f = node.field;
     if (f.kind !== "choice") throw new Error("bakeChoice: not a choice");
-    const { capHeight } = om.getFontDecoration("Helvetica", NORMAL_STYLE);
+    const font = this.faceFont(node, om);
+    const { capHeight } = om.getFontDecoration(font.family, font.style);
     const size = this.drawSize(node.style, node.height, capHeight);
     const shown = (v: string) => f.options.find((o) => o.value === v)?.label ?? v;
     const chosen = choiceSelection(f);
@@ -292,7 +354,9 @@ export class AcroFormCollector {
 
     let face: string;
     if (f.combo) {
-      const current = chosen.length ? [this.line(om, shown(chosen[0]), size)] : [];
+      const current = chosen.length
+        ? [this.line(om, font, font.cover(shown(chosen[0])), size)]
+        : [];
       face = textFieldFace(
         node.width,
         node.height,
@@ -300,13 +364,13 @@ export class AcroFormCollector {
         current,
         capHeight,
         size,
-        "Helv",
+        font.face,
         false,
         f.align,
       );
     } else {
       const rows = f.options.map((o) => ({
-        ...this.line(om, o.label ?? o.value, size),
+        ...this.line(om, font, font.cover(o.label ?? o.value), size),
         selected: selected.has(o.value),
       }));
       face = listBoxFace(
@@ -316,14 +380,14 @@ export class AcroFormCollector {
         rows,
         capHeight,
         size,
-        "Helv",
+        font.face,
         f.align,
       );
     }
     return om.addFormXObject(
       `[0 0 ${num2(node.width)} ${num2(node.height)}]`,
       face,
-      `/Font << /Helv ${this.helv(om)} 0 R >>`,
+      font.resources,
     );
   }
 
@@ -372,8 +436,8 @@ export class AcroFormCollector {
 
   /** Emit the widget object for one form-field IR node, register it as a field, and return its object
    *  number so the PageRenderer can add it to that page's /Annots. */
-  addField(node: FormFieldNode, om: PDFObjectManager): number {
-    if (node.field.kind === "radio") return this.addRadio(node, om);
+  addField(node: FormFieldNode, om: PDFObjectManager, structParent?: number): number {
+    if (node.field.kind === "radio") return this.addRadio(node, om, structParent);
     this.claimName(node.field.name, node.field.kind);
     let dict: string;
     if (node.field.kind === "checkbox") {
@@ -394,7 +458,7 @@ export class AcroFormCollector {
       dict = buildTextWidget(node, "Helv", om, this.bake ? this.bakeText(node, om) : undefined);
       if (!this.bake) this.needAppearances = true;
     }
-    const objNum = om.addObject(dict);
+    const objNum = om.addObject(withStructParent(dict, structParent));
     this.fieldRefs.push(objNum);
     return objNum;
   }
@@ -405,25 +469,27 @@ export class AcroFormCollector {
   private buildPushButtonWidget(node: FormFieldNode, om: PDFObjectManager): string {
     const f = node.field;
     if (f.kind !== "pushbutton") throw new Error("buildPushButtonWidget: not a push button");
-    const { capHeight } = om.getFontDecoration("Helvetica", NORMAL_STYLE);
+    const font = this.faceFont(node, om);
+    const { capHeight } = om.getFontDecoration(font.family, font.style);
     // `fontSize: 0` means auto-size, here as everywhere: resolve it before measuring or drawing.
     const size = this.drawSize(node.style, node.height, capHeight);
-    const width = om.getStringWidth(f.label, "Helvetica", size, NORMAL_STYLE);
-    const fontNum = this.helv(om);
+    const caption = font.cover(f.label);
+    const width = om.getStringWidth(caption, font.family, size, font.style);
+    this.helv(om); // the /DA below names it
     const face = pushButtonFace(
       node.width,
       node.height,
       node.style,
-      f.label,
+      caption,
       width,
       capHeight,
-      "Helv",
+      font.face,
       size,
     );
     const apRef = om.addFormXObject(
       `[0 0 ${num2(node.width)} ${num2(node.height)}]`,
       face,
-      `/Font << /Helv ${fontNum} 0 R >>`,
+      font.resources,
     );
 
     const parts = [`/Type /Annot /Subtype /Widget /FT /Btn`, `/T ${om.pdfString(f.name)}`];
@@ -443,7 +509,7 @@ export class AcroFormCollector {
   /** A radio button: one KID widget of its group's shared field. The group field is reserved on first
    *  sight (and added to /Fields); each button adds itself to that field's /Kids. Returns the kid widget
    *  number, which goes into the PAGE /Annots (the parent field does not). */
-  private addRadio(node: FormFieldNode, om: PDFObjectManager): number {
+  private addRadio(node: FormFieldNode, om: PDFObjectManager, structParent?: number): number {
     const f = node.field;
     if (f.kind !== "radio") throw new Error("addRadio: not a radio");
     let g = this.radioGroups.get(f.group);
@@ -474,7 +540,9 @@ export class AcroFormCollector {
       `/AS /${escName(as)}`,
       `/DA ${om.pdfString(`/ZaDb 0 Tf ${pdfColor(node.style.color)} rg`)}`,
     ];
-    const kidNum = om.addObject(`<< ${parts.join(" ")}${boxChrome(node)} >>`);
+    const kidNum = om.addObject(
+      withStructParent(`<< ${parts.join(" ")}${boxChrome(node)} >>`, structParent),
+    );
     g.kids.push(kidNum);
     return kidNum;
   }
@@ -485,15 +553,15 @@ export class AcroFormCollector {
     const f = node.field;
     if (f.kind !== "signature") throw new Error("buildSignatureWidget: not a signature");
     this.hasSignature = true;
-    const label = f.label ?? "";
-    const { capHeight } = om.getFontDecoration("Helvetica", NORMAL_STYLE);
+    const font = this.faceFont(node, om);
+    const label = font.cover(f.label ?? "");
+    const { capHeight } = om.getFontDecoration(font.family, font.style);
     const size = this.drawSize(node.style, node.height, capHeight);
-    const labelWidth = label ? om.getStringWidth(label, "Helvetica", size, NORMAL_STYLE) : 0;
-    const fontNum = this.helv(om);
+    const labelWidth = label ? om.getStringWidth(label, font.family, size, font.style) : 0;
     const apRef = om.addFormXObject(
       `[0 0 ${num2(node.width)} ${num2(node.height)}]`,
-      signatureFace(node.width, node.height, node.style, label, labelWidth, "Helv", size),
-      `/Font << /Helv ${fontNum} 0 R >>`,
+      signatureFace(node.width, node.height, node.style, label, labelWidth, font.face, size),
+      font.resources,
     );
 
     const parts = [`/Type /Annot /Subtype /Widget /FT /Sig`, `/T ${om.pdfString(f.name)}`];

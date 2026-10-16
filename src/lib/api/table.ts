@@ -10,8 +10,9 @@ import { ColorInput } from "./color.ts";
 
 /**
  * A column width, as in CSS grid with points for units: a `number` of points (fixed), an `"Nfr"`
- * fraction (splits the leftover width), `"auto"` (as wide as the widest cell in that column -
- * measured at layout time), or `"minmax(40, auto)"` (like `auto`, but never narrower than 40pt).
+ * fraction (splits the leftover width, never narrower than its longest word), `"auto"` (as wide as the
+ * widest cell in that column, giving way down to its longest word when the table would not fit), or
+ * `"minmax(40, auto)"` (like `auto`, but never narrower than 40pt). Measured at layout time.
  */
 export type ColumnWidth = number | string;
 
@@ -68,28 +69,98 @@ function autoMinimum(col: ColumnWidth): number | null {
   return parseFloat(min[1]!);
 }
 
-/** The cell's unbounded (max-content) width - what an `"auto"` column sizes to. */
-function naturalWidth(cell: Cell, cellPadding: Insets | undefined, ctx: LayoutContext): number {
-  const el = cellPadding !== undefined ? Padding(cellPadding, asElement(cell)) : asElement(cell);
-  return el.measure(BoxConstraints.loose(Infinity, Infinity), ctx).width;
-}
-
-/** Replaces every content-sized column with the widest cell width measured down it, at least its floor. */
-function resolveAutoColumns(opts: TableOptions, rows: Cell[][], ctx: LayoutContext): ColumnWidth[] {
+/**
+ * What the cells of column `i` need: `max` is the widest cell on one line (max-content), `min` the
+ * widest piece that cannot break (min-content, its longest word).
+ */
+function cellWidths(
+  opts: TableOptions,
+  rows: Cell[][],
+  i: number,
+  ctx: LayoutContext,
+): { min: number; max: number } {
   // The composed cell sits in a 1pt-border Box (border-box) that eats 1pt each side, which the
   // measured content doesn't include; add it back, and `ceil` so a single-word cell can't land
   // a hair over the width and wrap to an empty first line.
   const slack = opts.cellBorder !== undefined || opts.rule !== undefined ? 2 : 0;
-  return opts.columns.map((col, i) => {
-    const floor = autoMinimum(col);
-    if (floor === null) return col;
-    const head = opts.header?.[i];
-    let w = head !== undefined ? naturalWidth(head, opts.cellPadding, ctx) : 0;
-    for (const r of rows) {
-      if (r[i] !== undefined) w = Math.max(w, naturalWidth(r[i], opts.cellPadding, ctx));
+  let min = 0;
+  let max = 0;
+  for (const cell of [opts.header?.[i], ...rows.map((r) => r[i])]) {
+    if (cell === undefined) continue;
+    const el =
+      opts.cellPadding !== undefined ? Padding(opts.cellPadding, asElement(cell)) : asElement(cell);
+    max = Math.max(max, el.measure(BoxConstraints.loose(Infinity, Infinity), ctx).width);
+    min = Math.max(min, el.minIntrinsicMain(true, ctx));
+  }
+  return { min: Math.ceil(min + slack), max: Math.ceil(max + slack) };
+}
+
+/** Grows `lo` toward `hi` by `extra`, in equal steps - each column stops at its own `hi`. */
+function growEvenly(lo: number[], hi: number[], extra: number): number[] {
+  const out = [...lo];
+  let open = out.map((_, k) => k).filter((k) => hi[k]! > out[k]!);
+  while (extra > 1e-9 && open.length > 0) {
+    const each = extra / open.length;
+    for (const k of open) {
+      const add = Math.min(each, hi[k]! - out[k]!);
+      out[k]! += add;
+      extra -= add;
     }
-    return Math.max(floor, Math.ceil(w + slack));
-  });
+    open = open.filter((k) => hi[k]! - out[k]! > 1e-9);
+  }
+  return out;
+}
+
+/**
+ * The column widths for a table `width` wide, as CSS grid sizes its tracks. An `"auto"` column takes
+ * its widest cell while that leaves every `fr` column its longest word; when it does not, the `auto`
+ * columns give way evenly, down to their own longest word. The `fr` columns then share what is left -
+ * one whose share would be narrower than its longest word gets exactly that, and the table overflows
+ * instead of drawing words over each other. With no width to fit (a table in a Row), nothing gives way.
+ */
+function resolveColumns(
+  opts: TableOptions,
+  rows: Cell[][],
+  ctx: LayoutContext,
+  width: number,
+): ColumnWidth[] {
+  const columns = opts.columns;
+  const colGap = opts.colGap ?? opts.gap ?? 0;
+  const room = width - Math.max(0, columns.length - 1) * colGap;
+  const fixed = columns.reduce<number>((n, c) => n + (typeof c === "number" ? c : 0), 0);
+
+  const autos = columns.flatMap((c, i) => (autoMinimum(c) === null ? [] : [i]));
+  const fractions = Number.isFinite(room)
+    ? columns.flatMap((c, i) => (fractionOf(c) === null ? [] : [i]))
+    : [];
+  const need = new Map<number, { min: number; max: number }>();
+  for (const i of [...autos, ...fractions]) need.set(i, cellWidths(opts, rows, i, ctx));
+
+  const resolved = [...columns];
+  // 1. The auto columns: their widest cell, or less while an fr column would lose its longest word.
+  const lo = autos.map((i) => Math.max(autoMinimum(columns[i]!)!, need.get(i)!.min));
+  const hi = autos.map((i) => Math.max(autoMinimum(columns[i]!)!, need.get(i)!.max));
+  const frMin = fractions.reduce((n, i) => n + need.get(i)!.min, 0);
+  const free = room - fixed - frMin;
+  const sum = (xs: number[]) => xs.reduce((n, x) => n + x, 0);
+  const autoWidths =
+    free >= sum(hi) ? hi : free <= sum(lo) ? lo : growEvenly(lo, hi, free - sum(lo));
+  autos.forEach((i, k) => (resolved[i] = autoWidths[k]!));
+
+  // 2. The fr columns share the rest; one that would get less than its longest word is fixed at it.
+  let left = room - fixed - sum(autoWidths);
+  let flexible = fractions;
+  for (;;) {
+    const unit = left / flexible.reduce((n, i) => n + fractionOf(columns[i]!)!, 0);
+    const short = flexible.filter((i) => need.get(i)!.min > fractionOf(columns[i]!)! * unit);
+    if (short.length === 0) break;
+    for (const i of short) {
+      resolved[i] = need.get(i)!.min;
+      left -= need.get(i)!.min;
+    }
+    flexible = flexible.filter((i) => !short.includes(i));
+  }
+  return resolved;
 }
 
 /** Builds the table tree for already-resolved column widths (no `"auto"`). */
@@ -131,10 +202,9 @@ function composeTable(opts: TableOptions, rows: Cell[][], columns: ColumnWidth[]
       ...(ruled && rule !== undefined ? { borderBottom: rule } : {}),
     };
     const boxed = cb !== undefined || (ruled && rule !== undefined);
-    if (typeof col === "number") return Box({ width: col, ...border }, [inner]);
-    const fr = fractionOf(col);
-    if (fr !== null) return Expanded({ flex: fr }, boxed ? Box({ ...border }, [inner]) : inner);
-    throw new Error(`Unsupported column width "${col}" - use a number of points or "<n>fr"`);
+    // The columns are the grid: a row never shrinks one on its own, or its cells leave their columns.
+    if (typeof col === "number") return Box({ width: col, flexShrink: 0, ...border }, [inner]);
+    return Expanded({ flex: fractionOf(col)! }, boxed ? Box({ ...border }, [inner]) : inner);
   };
 
   // align:stretch → equal-height cells, so a wrapping cell keeps the row's bottom rule straight.
@@ -174,9 +244,17 @@ function composeTable(opts: TableOptions, rows: Cell[][], columns: ColumnWidth[]
  * columns are resolved at layout time (a `DeferredElement`), once metrics are available.
  */
 export function Table(opts: TableOptions, rows: Cell[][]): PDFElement {
-  if (opts.columns.some((c) => autoMinimum(c) !== null)) {
-    return new DeferredElement((ctx) =>
-      composeTable(opts, rows, resolveAutoColumns(opts, rows, ctx)),
+  // Checked here, where the table is written, not at layout: a typo names its line.
+  for (const col of opts.columns) {
+    if (typeof col !== "number" && fractionOf(col) === null && autoMinimum(col) === null) {
+      throw new Error(
+        `Unsupported column width "${col}" - use a number of points, "<n>fr", "auto" or "minmax(<pt>, auto)"`,
+      );
+    }
+  }
+  if (opts.columns.some((c) => typeof c !== "number")) {
+    return new DeferredElement((ctx, width) =>
+      composeTable(opts, rows, resolveColumns(opts, rows, ctx, width)),
     );
   }
   return composeTable(opts, rows, opts.columns);
