@@ -4,31 +4,31 @@ import { LayoutContext, PDFElement } from "../pdf-element.ts";
 import { BuiltFromContext } from "../../layout/layout-cache.ts";
 
 /**
- * Builds its subtree at layout time via `resolve(ctx)`, so the tree can depend on font
- * metrics (e.g. a Table resolving `"auto"` column widths from cell content). The engine
- * stays table-agnostic - the closure comes from the API layer.
+ * Builds its subtree at layout time via `resolve(ctx, width)`, so the tree can depend on font
+ * metrics and on the width it gets (e.g. a Table fitting its `"auto"` and `fr` columns to the cell
+ * content and its own width). The engine stays table-agnostic - the closure comes from the API layer.
  */
 export class DeferredElement extends PDFElement implements Fragmentable {
   // The subtree that was laid out last, and so gets drawn. Measuring never replaces it.
   private composed?: PDFElement;
   private built = new BuiltFromContext<PDFElement>();
 
-  constructor(private resolve: (ctx: LayoutContext) => PDFElement) {
+  constructor(private resolve: (ctx: LayoutContext, width: number) => PDFElement) {
     super();
   }
 
-  /** The subtree for this context: built once, and again only when the context changes. */
-  private subtree(ctx: LayoutContext): PDFElement {
-    return this.built.get(ctx, () => this.resolve(ctx));
+  /** The subtree for this context and width: built once, and again only when one of them changes. */
+  private subtree(ctx: LayoutContext, width: number): PDFElement {
+    return this.built.get(ctx, width, () => this.resolve(ctx, width));
   }
 
-  private build(ctx: LayoutContext): PDFElement {
-    this.composed = this.subtree(ctx);
+  private build(ctx: LayoutContext, width: number): PDFElement {
+    this.composed = this.subtree(ctx, width);
     return this.composed;
   }
 
   calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
-    return this.build(ctx).calculateLayout(constraints, offset, ctx);
+    return this.build(ctx, constraints.maxWidth).calculateLayout(constraints, offset, ctx);
   }
 
   /** Its subtree is unknown until built, and could hold a `PageBuilder`; until then assume it does. */
@@ -38,11 +38,11 @@ export class DeferredElement extends PDFElement implements Fragmentable {
 
   /** Sizes the subtree for this context - the same one a layout under it will draw. */
   protected override computeSize(constraints: BoxConstraints, ctx: LayoutContext): Size {
-    return this.subtree(ctx).measure(constraints, ctx);
+    return this.subtree(ctx, constraints.maxWidth).measure(constraints, ctx);
   }
 
   fragment(maxHeight: number, width: number, ctx: LayoutContext): FragmentResult {
-    const c = this.build(ctx);
+    const c = this.build(ctx, width);
     return isFragmentable(c)
       ? c.fragment(maxHeight, width, ctx)
       : { fitted: this, remainder: null };

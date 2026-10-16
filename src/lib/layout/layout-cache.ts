@@ -113,23 +113,25 @@ export class SizeCache {
 
 /**
  * A subtree an element builds from the context at layout time (`Deferred`: a table whose `auto`
- * columns are measured from its cells). It is built again only when the context key changes - the
- * size rules, without constraints, because building never reads them. Whether the page belongs to
- * the key is decided by what was built: a subtree without a `PageBuilder` is the same on every page.
+ * columns are measured from its cells and fitted to its width). It is built again only when the
+ * context key or the width changes - the size rules and the one constraint building reads. Whether the
+ * page belongs to the key is decided by what was built: a subtree without a `PageBuilder` is the same
+ * on every page.
  */
 export class BuiltFromContext<T extends { dependsOnPage(): boolean }> {
-  private last?: { key: ContextKey; value: T };
+  private last?: { key: ContextKey; width: number; value: T };
 
-  get(ctx: LayoutContext, build: () => T): T {
+  get(ctx: LayoutContext, width: number, build: () => T): T {
     const last = this.last;
     if (
       layoutCache.enabled &&
       last &&
+      last.width === width &&
       sameContext(last.key, contextKeyOf(ctx, last.value.dependsOnPage()))
     )
       return last.value;
     const value = build();
-    this.last = { key: contextKeyOf(ctx, value.dependsOnPage()), value };
+    this.last = { key: contextKeyOf(ctx, value.dependsOnPage()), width, value };
     return value;
   }
 }
