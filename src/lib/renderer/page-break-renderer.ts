@@ -1,3 +1,4 @@
+import type { RenderScope } from "../utils/renderer-registry.ts";
 import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 import { PageBreakElement } from "../elements/layout/page-break-element.ts";
 import { IRNode } from "../ir/display-list.ts";
@@ -14,6 +15,7 @@ export class PageBreakRenderer {
   static async render(
     _element: PageBreakElement,
     _objectManager: PDFObjectManager,
+    _scope: RenderScope,
   ): Promise<IRNode[]> {
     console.warn(
       "PageBreak had no effect: it is not in a paginating flow (e.g. it is inside a Row, which is a " +

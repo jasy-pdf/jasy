@@ -1,7 +1,7 @@
 import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 
 import { RectangleElement, SideBorders } from "../elements/rectangle-element.ts";
-import { RendererRegistry } from "../utils/renderer-registry.ts";
+import { RendererRegistry, type RenderScope } from "../utils/renderer-registry.ts";
 import { IRNode, Rect, Line } from "../ir/display-list.ts";
 import { isGradientInput, resolveGradient } from "../api/gradient.ts";
 import { Color } from "../common/color.ts";
@@ -10,10 +10,11 @@ export class RectangleRenderer {
   static async render(
     rectangleElement: RectangleElement,
     objectManager: PDFObjectManager,
+    scope: RenderScope,
   ): Promise<IRNode[]> {
     const {
-      x,
-      y,
+      x: ownX,
+      y: ownY,
       width,
       height,
       children,
@@ -23,7 +24,11 @@ export class RectangleRenderer {
       radius,
       sideBorders,
       overflow,
+      relative,
     } = rectangleElement.getProps();
+    // Its own position is relative to `scope.origin`; the IR wants page coordinates.
+    const x = scope.origin.x + (ownX ?? 0);
+    const y = scope.origin.y + (ownY ?? 0);
 
     const h = height!;
     const nodes: IRNode[] = [];
@@ -66,10 +71,13 @@ export class RectangleRenderer {
     if (clip) {
       nodes.push({ type: "clip-push", x, y, width, height: h, ...(radius ? { radius } : {}) });
     }
+    // Its children are placed relative to its own top-left; a `relative` box is also the frame its
+    // `Positioned` descendants were placed against.
+    const childScope: RenderScope = { origin: { x, y }, frame: relative ? { x, y } : scope.frame };
     if (children)
       for (const child of children) {
         const renderer = RendererRegistry.getRenderer(child);
-        nodes.push(...(await renderer(child, objectManager)));
+        nodes.push(...(await renderer(child, objectManager, childScope)));
       }
     if (clip) nodes.push({ type: "clip-pop" });
 

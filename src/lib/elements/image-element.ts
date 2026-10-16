@@ -216,9 +216,22 @@ export class ImageElement extends SizedPDFElement {
   }
 
   calculateLayout(constraints: BoxConstraints, offset: Offset, _ctx: LayoutContext): Size {
+    const size = this.sizeFor(constraints);
     this.x = offset.x;
     this.y = offset.y;
+    // Kept as resolved, `undefined` included: the renderer reads an unset axis differently from 0.
+    this.width = size.width;
+    this.height = size.height;
+    return { width: size.width ?? 0, height: size.height ?? 0 };
+  }
 
+  protected override computeSize(constraints: BoxConstraints): Size {
+    const size = this.sizeFor(constraints);
+    return { width: size.width ?? 0, height: size.height ?? 0 };
+  }
+
+  /** Its size under these constraints - the one computation both `measure` and layout use. */
+  private sizeFor(constraints: BoxConstraints): { width?: number; height?: number } {
     // Relative sizing: a fixed size or a fraction of the offered box (fraction only in a bounded axis).
     // Read from `requested` (not this.width/height, which we overwrite below) so every pass re-resolves.
     const specs = extentSpecs({
@@ -251,11 +264,11 @@ export class ImageElement extends SizedPDFElement {
 
     // Fall back to the prior behavior for an unpinned axis: a bounded axis fills, otherwise keep the
     // requested fixed size (or undefined). Read from `requested`, never the mutated this.width/height.
-    this.width = w ?? (bounds.hasBoundedWidth ? bounds.maxWidth : this.requested.width);
-    this.height = h ?? (bounds.hasBoundedHeight ? bounds.maxHeight : this.requested.height);
+    const width = w ?? (bounds.hasBoundedWidth ? bounds.maxWidth : this.requested.width);
+    const height = h ?? (bounds.hasBoundedHeight ? bounds.maxHeight : this.requested.height);
 
     // Top-left coordinates; the fit logic (renderer) and the Y-flip (seam) run later.
-    return { width: this.width ?? 0, height: this.height ?? 0 };
+    return { width, height };
   }
 
   override getProps() {

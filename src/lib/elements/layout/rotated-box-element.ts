@@ -27,9 +27,36 @@ export class RotatedBoxElement extends PDFElement {
   }
 
   calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
-    const quarter = this.turns % 2 === 1; // 90 or 270: axes swap
-    // A quarter-turned child experiences the box's constraints with the axes swapped.
-    const childConstraints = quarter
+    // Measure the child to learn its natural size, then take that size swapped as our own box.
+    const child = this.child.measure(this.childConstraints(constraints), ctx);
+    const size = this.swap(child);
+    this.width = size.width;
+    this.height = size.height;
+    this.x = offset.x;
+    this.y = offset.y;
+
+    // Place the child CENTERED on the box center (relative to our top-left): a rotation around that
+    // center then maps the child's (w x h) box exactly onto our (swapped) box - so the shared renderer
+    // needs no special case.
+    this.child.calculateLayout(
+      this.childConstraints(constraints),
+      { x: (this.width - child.width) / 2, y: (this.height - child.height) / 2 },
+      ctx,
+    );
+    return size;
+  }
+
+  protected override computeSize(constraints: BoxConstraints, ctx: LayoutContext): Size {
+    return this.swap(this.child.measure(this.childConstraints(constraints), ctx));
+  }
+
+  /** 90 or 270 degrees swap the axes: the child experiences the box's constraints turned. */
+  private get quarter(): boolean {
+    return this.turns % 2 === 1;
+  }
+
+  private childConstraints(constraints: BoxConstraints): BoxConstraints {
+    return this.quarter
       ? new BoxConstraints(
           constraints.minHeight,
           constraints.maxHeight,
@@ -37,28 +64,17 @@ export class RotatedBoxElement extends PDFElement {
           constraints.maxWidth,
         )
       : constraints;
+  }
 
-    // Measure the child to learn its natural size, then take that size swapped as our own box.
-    const child = this.child.calculateLayout(childConstraints, offset, ctx);
-    this.width = quarter ? child.height : child.width;
-    this.height = quarter ? child.width : child.height;
-    this.x = offset.x;
-    this.y = offset.y;
-
-    // Re-place the child CENTERED on the box center: a rotation around that center then maps the
-    // child's (w x h) box exactly onto our (swapped) box - so the shared renderer needs no special case.
-    const cx = this.x + this.width / 2;
-    const cy = this.y + this.height / 2;
-    this.child.calculateLayout(
-      childConstraints,
-      { x: cx - child.width / 2, y: cy - child.height / 2 },
-      ctx,
-    );
-
-    return { width: this.width, height: this.height };
+  private swap(child: Size): Size {
+    return this.quarter ? { width: child.height, height: child.width } : child;
   }
 
   /** Same shape as `RotatedElement` (angle + box), so both share `RotatedRenderer`. */
+  override layoutChildren(): readonly PDFElement[] {
+    return [this.child];
+  }
+
   override getProps() {
     return {
       angle: this.turns * 90,

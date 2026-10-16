@@ -31,6 +31,15 @@ export class PDFDocumentElement extends PDFElement {
     return { width: 0, height: 0 };
   }
 
+  /** The root has no size of its own. */
+  protected override computeSize(): Size {
+    return { width: 0, height: 0 };
+  }
+
+  override layoutChildren(): readonly PDFElement[] {
+    return this.children;
+  }
+
   override getProps(): PDFDocumentParams {
     return { children: this.children, defaultTextStyle: this.defaultTextStyle };
   }

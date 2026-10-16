@@ -68,3 +68,39 @@ describe("mixed page sizes - per-page config", () => {
     expect(a4.y).not.toBe(a5.y); // different page heights -> different placement
   });
 });
+
+// A page's own config is merged with the document defaults on every layout - from what the page
+// SAYS, not from the result of the last merge. Merging into its own field made the first defaults
+// stick, and pagination read a config that existed only because an earlier pass had mutated it.
+describe("the page config is resolved, not accumulated", () => {
+  const om = new PDFObjectManager();
+  om.registerFont("Helvetica");
+  const ctxWith = (margin: number): LayoutContext => ({
+    metrics: om,
+    pageConfig: {
+      ...om.getPDFConfig(),
+      margin: { top: margin, right: margin, bottom: margin, left: margin },
+    },
+  });
+
+  it("a second layout under other defaults uses those defaults", () => {
+    const text = new TextElement({ fontSize: 12, content: "X" });
+    const page = new PageElement({ config: { pageSize: PageSize.A5 }, children: [text] });
+    page.calculateLayout(new BoxConstraints(), { x: 0, y: 0 }, ctxWith(10));
+    page.calculateLayout(new BoxConstraints(), { x: 0, y: 0 }, ctxWith(40));
+    expect(text.getProps().x).toBe(40);
+  });
+
+  it("the page's own settings still win over the defaults", () => {
+    const page = new PageElement({ config: { pageSize: PageSize.A5 }, children: [] });
+    expect(
+      page.resolveConfig({
+        pageSize: PageSize.A4,
+        margin: { top: 5, right: 5, bottom: 5, left: 5 },
+      }),
+    ).toMatchObject({
+      pageSize: PageSize.A5,
+      margin: { top: 5, right: 5, bottom: 5, left: 5 },
+    });
+  });
+});

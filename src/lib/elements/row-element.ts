@@ -1,3 +1,4 @@
+import { flexibleOf } from "../layout/flex-item.ts";
 import {
   BoxConstraints,
   Offset,
@@ -6,15 +7,15 @@ import {
   extentSpecs,
   resolveSize,
 } from "../layout/box-constraints.ts";
-import { FlexLayoutHelper, HORIZONTAL_AXIS, MainAlign, CrossAlign } from "../utils/flex-layout.ts";
-import { stackMinIntrinsic, withDeclaredExtent } from "../layout/min-intrinsic.ts";
 import {
-  FlexiblePDFElement,
-  LayoutContext,
-  PDFElement,
-  SizedPDFElement,
-  WithChildren,
-} from "./pdf-element.ts";
+  FlexLayoutHelper,
+  HORIZONTAL_AXIS,
+  MainAlign,
+  CrossAlign,
+  type FlexMode,
+} from "../utils/flex-layout.ts";
+import { stackMinIntrinsic, withDeclaredExtent } from "../layout/min-intrinsic.ts";
+import { LayoutContext, PDFElement, SizedPDFElement, WithChildren } from "./pdf-element.ts";
 
 interface RowElementParams extends WithChildren {
   /** Space inserted between children, in points. */
@@ -122,7 +123,7 @@ export class RowElement extends SizedPDFElement {
       ? [this.requested.width, this.requested.widthFactor]
       : [this.requested.height, this.requested.heightFactor];
     if (requested.some((v) => v !== undefined)) return false;
-    const ownFlexChild = horizontal && this.children.some((c) => c instanceof FlexiblePDFElement);
+    const ownFlexChild = horizontal && this.children.some((c) => flexibleOf(c) !== undefined);
     return ownFlexChild || this.children.some((c) => c.needsBoundedMain(horizontal));
   }
 
@@ -146,7 +147,18 @@ export class RowElement extends SizedPDFElement {
   calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
     this.x = offset.x;
     this.y = offset.y;
+    const size = this.sizeWith(constraints, ctx, "layout");
+    this.width = size.width;
+    this.height = size.height;
+    return size;
+  }
 
+  protected override computeSize(constraints: BoxConstraints, ctx: LayoutContext): Size {
+    return this.sizeWith(constraints, ctx, "measure");
+  }
+
+  /** The one sizing path: `layout` places the children (relative to this box), `measure` only sizes them. */
+  private sizeWith(constraints: BoxConstraints, ctx: LayoutContext, mode: FlexMode): Size {
     // Relative sizing: a pinned extent (fixed or a fraction of the offered box, clamped) wins; else
     // width fills the offered space (flex children split the leftover) and height is the tallest child.
     const specs = extentSpecs(this.requested);
@@ -182,8 +194,6 @@ export class RowElement extends SizedPDFElement {
         HORIZONTAL_AXIS,
         mainAvail,
         crossAvail,
-        this.x,
-        this.y,
         {
           gap: this.gap,
           main: this.main,
@@ -193,13 +203,15 @@ export class RowElement extends SizedPDFElement {
           alignContent: this.alignContent,
         },
         ctx,
+        mode,
       );
     }
 
-    this.width = boundedWidth ?? result.mainUsed;
-    this.height = boundedHeight ?? result.crossUsed;
+    return { width: boundedWidth ?? result.mainUsed, height: boundedHeight ?? result.crossUsed };
+  }
 
-    return { width: this.width, height: this.height };
+  override layoutChildren(): readonly PDFElement[] {
+    return this.children;
   }
 
   override getProps() {

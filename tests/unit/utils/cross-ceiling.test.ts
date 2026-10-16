@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { FlexLayoutHelper, VERTICAL_AXIS } from "../../../src/lib/utils/flex-layout";
-import { LayoutContext, PDFElement } from "../../../src/lib/elements/pdf-element";
-import { BoxConstraints, Offset, Size } from "../../../src/lib/layout/box-constraints";
+import { FlexLayoutHelper, VERTICAL_AXIS } from "../../../src/lib/utils/flex-layout.ts";
+import { LayoutContext, PDFElement } from "../../../src/lib/elements/pdf-element.ts";
+import { BoxConstraints, Offset, Size } from "../../../src/lib/layout/box-constraints.ts";
 
 // Records the max width it was OFFERED, and reports a "wrapping" height: the narrower the
 // offered width, the taller it gets (like a paragraph). This lets us assert the ceiling is
@@ -12,9 +12,12 @@ class WrappingBox extends PDFElement {
   getProps(): unknown {
     return {};
   }
-  calculateLayout(c: BoxConstraints, offset: Offset): Size {
+  calculateLayout(c: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
     this.offeredMaxWidth = c.maxWidth;
     this.placedAt = offset;
+    return this.measure(c, ctx);
+  }
+  protected computeSize(c: BoxConstraints): Size {
     // Fill the offered width (like Text under bounded width); height grows as width shrinks.
     const width = c.maxWidth === Infinity ? 1000 : c.maxWidth;
     return { width, height: width === Infinity ? 20 : Math.ceil(1000 / width) * 20 };
@@ -32,8 +35,6 @@ describe("cross-axis ceiling - nothing overflows regardless of alignment", () =>
         VERTICAL_AXIS,
         /*mainAvail*/ 500,
         /*crossAvail*/ 120,
-        0,
-        0,
         { cross },
         ctx,
       );

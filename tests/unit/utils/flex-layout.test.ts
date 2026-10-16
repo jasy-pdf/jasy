@@ -3,17 +3,17 @@ import {
   FlexLayoutHelper,
   VERTICAL_AXIS,
   HORIZONTAL_AXIS,
-} from "../../../src/lib/utils/flex-layout";
+} from "../../../src/lib/utils/flex-layout.ts";
 import {
   PDFElement,
   LayoutContext,
   FlexiblePDFElement,
   VerticalAlignment,
-} from "../../../src/lib/elements/pdf-element";
-import { BoxConstraints, Offset, Size } from "../../../src/lib/layout/box-constraints";
+} from "../../../src/lib/elements/pdf-element.ts";
+import { BoxConstraints, Offset, Size } from "../../../src/lib/layout/box-constraints.ts";
 
-// The helper PLACES children (calls calculateLayout with their offset), so the mocks
-// record where they were placed and report a fixed size.
+// The helper MEASURES children (no side effects) and then PLACES each once (calculateLayout with
+// its offset), so the mocks record where they were placed and report a fixed size either way.
 class MockBox extends PDFElement {
   placedAt?: Offset;
   constructor(private size: Size) {
@@ -26,6 +26,9 @@ class MockBox extends PDFElement {
     this.placedAt = offset;
     return this.size;
   }
+  protected computeSize(): Size {
+    return this.size;
+  }
 }
 
 class MockFlex extends FlexiblePDFElement {
@@ -36,8 +39,11 @@ class MockFlex extends FlexiblePDFElement {
   getProps(): unknown {
     return {};
   }
-  calculateLayout(c: BoxConstraints, offset: Offset): Size {
+  calculateLayout(c: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
     this.placedAt = offset;
+    return this.measure(c, ctx);
+  }
+  protected computeSize(c: BoxConstraints): Size {
     return {
       width: c.maxWidth === Infinity ? 0 : c.maxWidth,
       height: c.maxHeight === Infinity ? 0 : c.maxHeight,
@@ -54,7 +60,7 @@ describe("FlexLayoutHelper.layout - vertical (Column)", () => {
     const x1 = new MockFlex(1);
     const x2 = new MockFlex(2);
 
-    const r = FlexLayoutHelper.layout([f1, f2, x1, x2], VERTICAL_AXIS, 500, 0, 0, 0, {}, ctx);
+    const r = FlexLayoutHelper.layout([f1, f2, x1, x2], VERTICAL_AXIS, 500, 0, {}, ctx);
 
     expect(f1.placedAt!.y).toBe(0);
     expect(f2.placedAt!.y).toBe(100);
@@ -68,7 +74,7 @@ describe("FlexLayoutHelper.layout - vertical (Column)", () => {
     const body = new MockFlex(1);
     const footer = new MockBox({ width: 0, height: 50 });
 
-    FlexLayoutHelper.layout([header, body, footer], VERTICAL_AXIS, 500, 0, 0, 0, {}, ctx);
+    FlexLayoutHelper.layout([header, body, footer], VERTICAL_AXIS, 500, 0, {}, ctx);
 
     expect(footer.placedAt!.y).toBe(450); // 100 + (500 - 150)
   });
@@ -77,7 +83,7 @@ describe("FlexLayoutHelper.layout - vertical (Column)", () => {
     const a = new MockBox({ width: 0, height: 100 });
     const b = new MockBox({ width: 0, height: 50 });
 
-    const r = FlexLayoutHelper.layout([a, b], VERTICAL_AXIS, 500, 0, 0, 0, { gap: 10 }, ctx);
+    const r = FlexLayoutHelper.layout([a, b], VERTICAL_AXIS, 500, 0, { gap: 10 }, ctx);
 
     expect(b.placedAt!.y).toBe(110);
     expect(r.mainUsed).toBe(160);
@@ -92,7 +98,7 @@ describe("FlexLayoutHelper.layout - main-axis distribution (no flex)", () => {
 
   it("center: the group is centered, leftover split before/after", () => {
     const [a, b] = boxes();
-    FlexLayoutHelper.layout([a, b], VERTICAL_AXIS, 500, 0, 0, 0, { main: "center" }, ctx);
+    FlexLayoutHelper.layout([a, b], VERTICAL_AXIS, 500, 0, { main: "center" }, ctx);
     // leftover 350 -> leading 175.
     expect(a.placedAt!.y).toBe(175);
     expect(b.placedAt!.y).toBe(275);
@@ -100,14 +106,14 @@ describe("FlexLayoutHelper.layout - main-axis distribution (no flex)", () => {
 
   it("end: the group is pushed to the end", () => {
     const [a, b] = boxes();
-    FlexLayoutHelper.layout([a, b], VERTICAL_AXIS, 500, 0, 0, 0, { main: "end" }, ctx);
+    FlexLayoutHelper.layout([a, b], VERTICAL_AXIS, 500, 0, { main: "end" }, ctx);
     expect(a.placedAt!.y).toBe(350); // leftover before
     expect(b.placedAt!.y).toBe(450);
   });
 
   it("between: leftover goes between the children", () => {
     const [a, b] = boxes();
-    FlexLayoutHelper.layout([a, b], VERTICAL_AXIS, 500, 0, 0, 0, { main: "between" }, ctx);
+    FlexLayoutHelper.layout([a, b], VERTICAL_AXIS, 500, 0, { main: "between" }, ctx);
     expect(a.placedAt!.y).toBe(0);
     expect(b.placedAt!.y).toBe(450); // 100 + leftover 350 between the two
   });
@@ -121,8 +127,6 @@ describe("FlexLayoutHelper.layout - cross-axis alignment", () => {
       VERTICAL_AXIS,
       /*main*/ 500,
       /*crossAvail*/ 100,
-      0,
-      0,
       { cross: "center" },
       ctx,
     );
@@ -131,7 +135,7 @@ describe("FlexLayoutHelper.layout - cross-axis alignment", () => {
 
   it("end: a narrow child is pushed to the cross end", () => {
     const child = new MockBox({ width: 40, height: 20 });
-    FlexLayoutHelper.layout([child], VERTICAL_AXIS, 500, 100, 0, 0, { cross: "end" }, ctx);
+    FlexLayoutHelper.layout([child], VERTICAL_AXIS, 500, 100, { cross: "end" }, ctx);
     expect(child.placedAt!.x).toBe(60); // 100 - 40
   });
 });
@@ -141,7 +145,7 @@ describe("FlexLayoutHelper.layout - horizontal (Row), same algorithm", () => {
     const a = new MockBox({ width: 30, height: 12 });
     const b = new MockBox({ width: 40, height: 20 });
 
-    const r = FlexLayoutHelper.layout([a, b], HORIZONTAL_AXIS, 500, 100, 0, 0, { gap: 8 }, ctx);
+    const r = FlexLayoutHelper.layout([a, b], HORIZONTAL_AXIS, 500, 100, { gap: 8 }, ctx);
 
     expect(a.placedAt!.x).toBe(0);
     expect(b.placedAt!.x).toBe(38);
@@ -157,8 +161,6 @@ describe("FlexLayoutHelper.layout - horizontal (Row), same algorithm", () => {
       HORIZONTAL_AXIS,
       500,
       Infinity,
-      0,
-      0,
       { cross: "center" },
       ctx,
     );

@@ -1,7 +1,7 @@
 import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 import { RotatedElement } from "../elements/layout/rotated-element.ts";
 import { RotatedBoxElement } from "../elements/layout/rotated-box-element.ts";
-import { RendererRegistry } from "../utils/renderer-registry.ts";
+import { RendererRegistry, within, type RenderScope } from "../utils/renderer-registry.ts";
 import { IRNode } from "../ir/display-list.ts";
 
 export class RotatedRenderer {
@@ -10,8 +10,12 @@ export class RotatedRenderer {
   static async render(
     element: RotatedElement | RotatedBoxElement,
     objectManager: PDFObjectManager,
+    scope: RenderScope,
   ): Promise<IRNode[]> {
-    const { angle, child, x, y, width, height } = element.getProps();
+    const { angle, child, x: ownX, y: ownY, width, height } = element.getProps();
+    // Its own position is relative to `scope.origin`; the IR wants page coordinates.
+    const x = scope.origin.x + (ownX ?? 0);
+    const y = scope.origin.y + (ownY ?? 0);
 
     // Rotate around the box CENTER, in the engine's top-left coordinates (the IR->backend seam flips
     // the matrix to PDF space per page). A positive angle reads clockwise on the page.
@@ -32,7 +36,8 @@ export class RotatedRenderer {
     ];
 
     const renderer = RendererRegistry.getRenderer(child);
-    const childNodes = await renderer(child, objectManager);
+    // The child is placed relative to the box top-left.
+    const childNodes = await renderer(child, objectManager, within(scope, { x: ownX, y: ownY }));
 
     // Wrap the child's drawing between a push (apply the matrix) and a pop (restore).
     return [{ type: "transform-push", matrix }, ...childNodes, { type: "transform-pop" }];

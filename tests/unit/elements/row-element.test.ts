@@ -1,11 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { RowElement } from "../../../src/lib/elements/row-element";
-import { RectangleElement } from "../../../src/lib/elements/rectangle-element";
-import { ExpandedElement } from "../../../src/lib/elements/layout/expanded-element";
-import { TextElement } from "../../../src/lib/elements/text-element";
-import { BoxConstraints } from "../../../src/lib/layout/box-constraints";
-import { LayoutContext } from "../../../src/lib/elements/pdf-element";
-import { FontMetrics } from "../../../src/lib/utils/font-metrics";
+import { RowElement } from "../../../src/lib/elements/row-element.ts";
+import { RectangleElement } from "../../../src/lib/elements/rectangle-element.ts";
+import { ExpandedElement } from "../../../src/lib/elements/layout/expanded-element.ts";
+import { TextElement } from "../../../src/lib/elements/text-element.ts";
+import { BoxConstraints } from "../../../src/lib/layout/box-constraints.ts";
+import { LayoutContext } from "../../../src/lib/elements/pdf-element.ts";
+import { FontMetrics } from "../../../src/lib/utils/font-metrics.ts";
 import { testMetrics } from "../support/metrics.ts";
 
 const box = (width: number, height: number) =>
@@ -23,8 +23,10 @@ describe("RowElement", () => {
       {} as LayoutContext,
     );
 
-    expect(a.getProps().x).toBe(10);
-    expect(b.getProps().x).toBe(58); // 10 + 40 + gap 8
+    // The row sits at (10, 5); its children are placed relative to its own top-left.
+    expect(row.getProps().x).toBe(10);
+    expect(a.getProps().x).toBe(0);
+    expect(b.getProps().x).toBe(48); // 40 + gap 8
     expect(size.width).toBe(200); // fills the offered width
     expect(size.height).toBe(30); // tallest child
   });

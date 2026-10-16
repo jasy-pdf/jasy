@@ -1,3 +1,4 @@
+import { flexibleOf } from "../layout/flex-item.ts";
 import { PDFDocumentElement } from "../elements/pdf-document-element.ts";
 import {
   PDFElement,
@@ -76,7 +77,7 @@ export class Validator {
 
     // Ensure a flexible element does not contain another flexible element
     if (hasChildProp<FlexiblePDFElement>(element)) {
-      if (element.child instanceof FlexiblePDFElement) {
+      if (flexibleOf(element.child) !== undefined) {
         throw new Error(
           `Flexible element ${element.constructor.name} cannot hold another flexible element`,
         );

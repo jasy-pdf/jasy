@@ -4,6 +4,7 @@ import type { ColorMode, DefaultFont, Margin } from "../renderer/index.ts";
 import { BoxConstraints, Offset, Size } from "../layout/box-constraints.ts";
 import { LayoutContext, PDFElement, PositioningFrame, WithChildren } from "./pdf-element.ts";
 import { TextElement } from "./text-element.ts";
+import { positionedIn } from "./layout/positioned-element.ts";
 
 export interface PDFPageConfig {
   pageSize?: PageSize;
@@ -77,13 +78,12 @@ export interface PageBands {
  * resolve a `Positioned` against this same box, so `top`/`bottom` mean the same thing in each.
  *
  * `layoutPageBands` lays the bands out, so its caller must hand it a context carrying this frame -
- * otherwise a `Positioned` in a band has nothing to resolve against (ISSUE-4). A caller that only
- * wants the band HEIGHTS may throw the frame away without draining it: an out-of-flow child
- * contributes no height.
+ * otherwise a `Positioned` in a band has nothing to resolve against (ISSUE-4). An out-of-flow child
+ * contributes no height, so a caller that only wants the band HEIGHTS needs nothing more.
  */
 export function pageFrame(config: PDFPageConfig): PositioningFrame {
   const { origin, width, height } = resolvePageContentBox(config);
-  return { origin, size: { width, height }, place: [] };
+  return { origin, size: { width, height } };
 }
 
 export function layoutPageBands(
@@ -105,17 +105,8 @@ export function layoutPageBands(
 
   let footerHeight = 0;
   if (footer) {
-    // Measure first to learn its height, then place it flush against the bottom edge. The MEASURING
-    // pass gets a throwaway `place` list: an out-of-flow child registers a placement every time it is
-    // laid out, and this subtree is laid out twice. Only the second, real pass may register.
-    const measureCtx: LayoutContext = ctx.frame
-      ? { ...ctx, frame: { ...ctx.frame, place: [] } }
-      : ctx;
-    footerHeight = footer.calculateLayout(
-      BoxConstraints.loose(width, Infinity),
-      origin,
-      measureCtx,
-    ).height;
+    // Measure first to learn its height, then place it flush against the bottom edge.
+    footerHeight = footer.measure(BoxConstraints.loose(width, Infinity), ctx).height;
     footer.calculateLayout(
       BoxConstraints.loose(width, Infinity),
       { x: origin.x, y: origin.y + height - footerHeight },
@@ -132,7 +123,9 @@ export function layoutPageBands(
   };
 }
 export class PageElement extends PDFElement {
-  // This page's own (partial) config; merged with the document defaults during layout.
+  // What the page itself says (partial). Never overwritten: every layout resolves it afresh.
+  private readonly ownConfig: PDFPageConfig;
+  // The resolved config of the last layout, for the renderer (MediaBox) and the bands.
   private config: PDFPageConfig;
   private children: PDFElement[];
   private header?: PDFElement;
@@ -141,16 +134,16 @@ export class PageElement extends PDFElement {
   constructor({ children, config, header, footer }: PDFPageParams) {
     super();
     this.children = children;
-    this.config = config ?? {};
+    this.ownConfig = config ?? {};
+    this.config = this.ownConfig;
     this.header = header;
     this.footer = footer;
   }
 
   calculateLayout(_constraints: BoxConstraints, _offset: Offset, ctx: LayoutContext): Size {
-    // Merge the document defaults (carried in the context) with this page's overrides,
-    // then hand descendants a context bound to THIS page's geometry. This is what
-    // fixes the old last-page-wins global page-config bug.
-    this.config = { ...ctx.pageConfig, ...this.config };
+    // Hand descendants a context bound to THIS page's geometry. This is what fixes the old
+    // last-page-wins global page-config bug.
+    this.config = this.resolveConfig(ctx.pageConfig);
     const pageCtx: LayoutContext = {
       metrics: ctx.metrics,
       pageConfig: this.config,
@@ -180,15 +173,34 @@ export class PageElement extends PDFElement {
       child.calculateLayout(childConstraints, bands.bodyOrigin, frameCtx),
     );
 
-    // Drained last, once every band and the body have registered: an out-of-flow child is placed
-    // against the final frame box and paints on top of the flow content.
-    //
-    // The callback gets `frameCtx`, not `pageCtx`: a `Positioned` NESTED inside an out-of-flow child
-    // must still see a frame. It appends to `frame.place` while we walk it, and a `for..of` over an
-    // array visits what was appended, so nested placements drain in the same loop.
-    for (const place of frame.place) place(frame, frameCtx);
+    // Last, once the bands and the body are laid out: the page's out-of-flow descendants, placed
+    // relative to its content box. Each is drawn at its own place in the tree (tree order).
+    for (const p of positionedIn([this.header, ...this.children, this.footer]))
+      p.placeIn(frame.size, frameCtx);
 
     return { width: frame.size.width, height: frame.size.height };
+  }
+
+  /** Its size is its own page config. */
+  override dependsOnPage(): boolean {
+    return true;
+  }
+
+  /** A page is as large as its content box, whatever it holds. */
+  protected override computeSize(_constraints: BoxConstraints, ctx: LayoutContext): Size {
+    const { width, height } = resolvePageContentBox(this.resolveConfig(ctx.pageConfig));
+    return { width, height };
+  }
+
+  /** The document defaults with this page's own settings on top. Pure: no pass has to run first. */
+  resolveConfig(defaults: PDFPageConfig | undefined): PDFPageConfig {
+    return { ...defaults, ...this.ownConfig };
+  }
+
+  override layoutChildren(): readonly PDFElement[] {
+    return [this.header, ...this.children, this.footer].filter(
+      (el): el is PDFElement => el !== undefined,
+    );
   }
 
   override getProps(): PDFPageParams {

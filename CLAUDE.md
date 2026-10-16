@@ -40,21 +40,30 @@ PDFDocument (abstract, user subclasses it, implements build())
   └─ build() → PDFDocumentElement
        ↓  PDFRenderer.render(documentElement)        src/lib/renderer/pdf-renderer.ts
        ├─ RendererRegistry.register(...) all element→renderer pairs
-       ├─ document.calculateLayout()                 ← PASS 1: layout (recursive, mutates elements)
-       └─ PDFDocumentRenderer.render(...)            ← PASS 2: build display list, then serialize
-            └─ PageRenderer → element renderers → IRNode[] → PdfBackend.serialize → content stream
+       └─ PDFDocumentRenderer.render(...)            ← the page driver
+            ├─ pass A: paginate every logical page (fragment + measure, nothing drawn) → page count
+            └─ pass B, per physical page: page.calculateLayout() then PageRenderer
+                 └─ element renderers → IRNode[] → PdfBackend.serialize → content stream
        → assembles objects, xref table, trailer → returns the PDF as a string
 ```
 
-> "Pass 1 / Pass 2" are the two render passes inside one `render()` call. Don't confuse them with the
-> **roadmap Phases** in `todo.md` (Phase 1 = IR seam, Phase 2 = kill singleton, …). Different things.
+Nothing is laid out before pagination: each page is laid out once, right before it is drawn, with
+its real `PageInfo`. Don't confuse passes A/B with the **roadmap Phases** in `todo.md`.
 
-### Pass 1 — `calculateLayout(constraints, offset, ctx)`
+### Layout — `calculateLayout(constraints, offset, ctx)` and `measure`
 
 - Defined on every element (`PDFElement.calculateLayout`). Signature: `calculateLayout(constraints:
 BoxConstraints, offset: Offset, ctx: LayoutContext): Size` — constraints (min/max w/h) flow **down**,
-  the parent assigns each child its absolute `offset`, the element returns the `Size` it took **up**.
+  the parent assigns each child its `offset` RELATIVE to the parent's own top-left, the element returns
+  the `Size` it took **up**. Absolute coordinates exist only in the render pass (`RenderScope`,
+  `docs/layout-model.md` 3.1); compare positions in different parents through what is DRAWN
+  (`tests/unit/support/drawn.ts`), never through `getProps().x`.
   The clean Flutter `RenderObject` contract (since Phase 4; `layout/box-constraints.ts`).
+- `measure(constraints, ctx)` is the size WITHOUT placing anything, side-effect free (Flutter's dry
+  layout). It is answered from ONE cache, `layout/layout-cache.ts`, keyed on exactly what a size reads
+  (constraints via `sizeInputs`, metrics/fontEpoch/kerning, inherited style, the page only where
+  `dependsOnPage()`); a table keeps its built rows under the same key (`BuiltFromContext`). Elements
+  implement `computeSize`. A new context field that can change a size goes into that key, nowhere else.
 - `FlexLayoutHelper` (`utils/flex-layout.ts`) is axis-generic: it measures **and** places both `Column`
   (`VERTICAL_AXIS`) and `Row` (`HORIZONTAL_AXIS`), distributing leftover main-axis space to
   `ExpandedElement`s by `flex` and offsetting children per `main`/`cross` alignment.
@@ -66,13 +75,13 @@ BoxConstraints, offset: Offset, ctx: LayoutContext): Size` — constraints (min/
   origin and are coordinate-blind; `PdfBackend.flipY(nodes, pageHeight)` flips once per page. `grep
 normalizeCoordinates src/` is empty.
 
-### Pass 2 — render: display list → backend (the IR seam)
+### Render — display list → backend (the IR seam)
 
 The render pass is split at a hard seam — **the display list (IR)** — so the PDF byte writer never
 sees a component:
 
 - **Producers** (`src/lib/renderer/*`, one class per element, dispatched via `RendererRegistry` keyed
-  on the element's constructor): each `render(element, objectManager)` returns an **`IRNode[]`**, not
+  on the element's constructor): each `render(element, objectManager, scope)` returns an **`IRNode[]`**, not
   a string. Leaves (`TextRenderer`→`TextRun[]`, `LineRenderer`, `ImageRenderer`, `RectangleRenderer`)
   emit primitives; structural renderers (`Container`/`Expanded`/`Padding`, and `Rectangle` for its
   children) **concatenate** their children's lists. Producers still know about components and still do
@@ -182,43 +191,42 @@ gone). Each `PDFDocument` instance owns one `PDFObjectManager`, created in its c
 explicitly into `PDFRenderer.render(document, objectManager)`. Two documents render independently — no
 shared state.
 
-- **Layout pass (Pass 1)** threads a `LayoutContext { metrics, pageConfig }` through `calculateLayout`
+- **Layout** threads a `LayoutContext { metrics, pageConfig }` through `calculateLayout`
   (defined in `elements/pdf-element.ts`). `metrics` is a `FontMetrics` interface (`utils/font-metrics.ts`,
   implemented by `PDFObjectManager`) — deliberately _not_ the byte writer, so layout/measuring can never
   touch PDF object creation. `pageConfig` is the geometry of the page currently being laid out:
   `PageElement.calculateLayout` merges the document defaults with its own config and hands its subtree a
   context bound to **its** geometry. This is why each page flips Y against its own height.
-- **Render pass (Pass 2)** passes the `objectManager` explicitly to each renderer (for font/image
+- **Render** passes the `objectManager` explicitly to each renderer (for font/image
   resource registration via the backend).
 - This shape is what the fragmentation pass needs: it threads exactly metrics +
   per-page geometry, nothing more. A `relative` positioning frame would thread one more geometry here.
 
 ## Element & renderer inventory
 
-| Element                 | File                                         | Renderer               | Notes                                                                                     |
-| ----------------------- | -------------------------------------------- | ---------------------- | ----------------------------------------------------------------------------------------- |
-| `PDFDocumentElement`    | `elements/pdf-document-element.ts`           | `PDFDocumentRenderer`  | root, holds pages                                                                         |
-| `PageElement`           | `elements/page-element.ts`                   | `PageRenderer`         | per-page `config` (size/orientation/margin)                                               |
-| `ContainerElement`      | `elements/container-element.ts`              | `ContainerRenderer`    | sized box, flex column of children                                                        |
-| `TextElement`           | `elements/text-element.ts`                   | `TextRenderer`         | string or `TextSegment[]` (mixed font/size/color), alignment, word-wrap                   |
-| `PaddingElement`        | `elements/layout/padding-element.ts`         | `PaddingRenderer`      | margin `[top,right,bottom,left]`, sizes to child                                          |
-| `ExpandedElement`       | `elements/layout/expanded-element.ts`        | `ExpandedRenderer`     | flex child, fills remaining height                                                        |
-| `SizedContainerElement` | `elements/layout/sized-container-element.ts` | —                      |                                                                                           |
-| `ImageElement`          | `elements/image-element.ts`                  | `ImageRenderer`        | via `jimp`; `BoxFit`, grayscale; `CustomLocalImage`                                       |
-| `LineElement`           | `elements/line-element.ts`                   | `LineRenderer`         | stroke                                                                                    |
-| `RectangleElement`      | `elements/rectangle-element.ts`              | `RectangleRenderer`    | fill + stroke                                                                             |
-| `Color`                 | `common/color.ts`                            | —                      | RGB → PDF color string                                                                    |
-| `LinkElement`           | `elements/layout/link-element.ts`            | `LinkRenderer`         | `href` (URL) or `dest` (an `Anchor`) → a /Link annotation                                 |
-| `AnchorElement`         | `elements/layout/anchor-element.ts`          | `AnchorRenderer`       | named jump target → catalog /Names /Dests                                                 |
-| `BookmarkElement`       | `elements/layout/bookmark-element.ts`        | `BookmarkRenderer`     | outline entry, nested by `level` → /Outlines                                              |
-| `RotatedElement`        | `elements/layout/rotated-element.ts`         | `RotatedRenderer`      | paint-only spin at any angle (stamps)                                                     |
-| `RotatedBoxElement`     | `elements/layout/rotated-box-element.ts`     | `RotatedRenderer`      | layout-aware quarter-turns (vertical labels)                                              |
-| `PageBuilderElement`    | `elements/layout/page-builder-element.ts`    | `PageBuilderRenderer`  | builds from `PageInfo` (pageNumber/pageCount/pageSize)                                    |
-| `PageBreakElement`      | `elements/layout/page-break-element.ts`      | `PageBreakRenderer`    | forced page break; zero-size, packer cuts at it (`forceBreak` bubbles up)                 |
-| `KeepTogetherElement`   | `elements/layout/keep-together-element.ts`   | `KeepTogetherRenderer` | transparent wrapper; vetoes a page-split (break-inside: avoid), degrades if > 1 page      |
-| form fields (6 classes) | `elements/forms/*.ts`                        | `FormFieldRenderer`    | AcroForm widgets; reserve a rect, emit a widget annotation. Shared spec: `forms/field.ts` |
-| `SvgElement`            | `elements/svg-element.ts`                    | `SvgRenderer`          | an SVG drawing; parsed at construction, `svg/` turns it into `Path` IR                    |
-| `CanvasElement`         | `elements/canvas-element.ts`                 | `CanvasRenderer`       | a box drawn by a callback; `canvas/painter.ts` records into `Path` IR                     |
+| Element                 | File                                       | Renderer               | Notes                                                                                     |
+| ----------------------- | ------------------------------------------ | ---------------------- | ----------------------------------------------------------------------------------------- |
+| `PDFDocumentElement`    | `elements/pdf-document-element.ts`         | `PDFDocumentRenderer`  | root, holds pages                                                                         |
+| `PageElement`           | `elements/page-element.ts`                 | `PageRenderer`         | per-page `config` (size/orientation/margin)                                               |
+| `ContainerElement`      | `elements/container-element.ts`            | `ContainerRenderer`    | sized box, flex column of children                                                        |
+| `TextElement`           | `elements/text-element.ts`                 | `TextRenderer`         | string or `TextSegment[]` (mixed font/size/color), alignment, word-wrap                   |
+| `PaddingElement`        | `elements/layout/padding-element.ts`       | `PaddingRenderer`      | margin `[top,right,bottom,left]`, sizes to child                                          |
+| `ExpandedElement`       | `elements/layout/expanded-element.ts`      | `ExpandedRenderer`     | flex child, fills remaining height                                                        |
+| `ImageElement`          | `elements/image-element.ts`                | `ImageRenderer`        | via `jimp`; `BoxFit`, grayscale; `CustomLocalImage`                                       |
+| `LineElement`           | `elements/line-element.ts`                 | `LineRenderer`         | stroke                                                                                    |
+| `RectangleElement`      | `elements/rectangle-element.ts`            | `RectangleRenderer`    | fill + stroke                                                                             |
+| `Color`                 | `common/color.ts`                          | —                      | RGB → PDF color string                                                                    |
+| `LinkElement`           | `elements/layout/link-element.ts`          | `LinkRenderer`         | `href` (URL) or `dest` (an `Anchor`) → a /Link annotation                                 |
+| `AnchorElement`         | `elements/layout/anchor-element.ts`        | `AnchorRenderer`       | named jump target → catalog /Names /Dests                                                 |
+| `BookmarkElement`       | `elements/layout/bookmark-element.ts`      | `BookmarkRenderer`     | outline entry, nested by `level` → /Outlines                                              |
+| `RotatedElement`        | `elements/layout/rotated-element.ts`       | `RotatedRenderer`      | paint-only spin at any angle (stamps)                                                     |
+| `RotatedBoxElement`     | `elements/layout/rotated-box-element.ts`   | `RotatedRenderer`      | layout-aware quarter-turns (vertical labels)                                              |
+| `PageBuilderElement`    | `elements/layout/page-builder-element.ts`  | `PageBuilderRenderer`  | builds from `PageInfo` (pageNumber/pageCount/pageSize)                                    |
+| `PageBreakElement`      | `elements/layout/page-break-element.ts`    | `PageBreakRenderer`    | forced page break; zero-size, packer cuts at it (`forceBreak` bubbles up)                 |
+| `KeepTogetherElement`   | `elements/layout/keep-together-element.ts` | `KeepTogetherRenderer` | transparent wrapper; vetoes a page-split (break-inside: avoid), degrades if > 1 page      |
+| form fields (6 classes) | `elements/forms/*.ts`                      | `FormFieldRenderer`    | AcroForm widgets; reserve a rect, emit a widget annotation. Shared spec: `forms/field.ts` |
+| `SvgElement`            | `elements/svg-element.ts`                  | `SvgRenderer`          | an SVG drawing; parsed at construction, `svg/` turns it into `Path` IR                    |
+| `CanvasElement`         | `elements/canvas-element.ts`               | `CanvasRenderer`       | a box drawn by a callback; `canvas/painter.ts` records into `Path` IR                     |
 
 Every renderer's `render()` returns `Promise<IRNode[]>`. Adding an element =
 new element + renderer that returns IR + (if it draws something new) a primitive in `ir/display-list.ts`
@@ -288,7 +296,10 @@ rendering. This is the standing visual check; prefer it over one-off `scripts/ru
   Flutter-style. Sensible defaults in the destructure (e.g. `fontFamily = "Helvetica"`).
 - Elements expose state via `getProps()`; renderers consume `getProps()`, never reach into privates.
 - Renderers return `IRNode[]`, never PDF strings. PDF operators live **only** in `PdfBackend`.
-- New element = new file in `elements/`, export from `elements/index.ts`, write a renderer in
+- New element = new file in `elements/` implementing `calculateLayout` and `computeSize` from ONE sizing
+  path (never override `measure` - the base class owns it). A wrapper that only MARKS its one child (a
+  link, a role, inherited defaults) extends `ProxyElement` and adds `childContext`/`rewrap` - it then
+  sizes and breaks across pages exactly like its child, export from `elements/index.ts`, write a renderer in
   `renderer/` that returns `IRNode[]`, **register it in `PDFRenderer.render()`**, export from
   `renderer/index.ts`, add a test under `tests/unit/<group>/` (mirror the source path; import the
   subject via a relative path to `src/lib/<group>/<module>.ts` — count the `../` from the test's OWN
@@ -453,7 +464,7 @@ enforces it (`skonto.ts` for "Skonto is not an allowance"), and everywhere else 
 
 ## Genuine remaining gaps
 
-1. **`z-index`** within a positioning frame (Stage 3 of absolute positioning) and a public `measure()`.
+1. **`z-index`** within a positioning frame (Stage 3 of absolute positioning).
 2. **`slice` border mode** at a page break (a split box left open) and true multi-column.
 3. **OTF/CFF fonts** are not parsed (TTF, TrueType-flavoured OTF, WOFF1, WOFF2 are). Colour-emoji
    deferrals: COLR v1 rotate/skew, variable paints, sweep gradients, CFF/sbix/CBDT bitmap fonts (so no

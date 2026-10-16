@@ -23,7 +23,7 @@ const chunks = (size: number) => (word: string) =>
   word.match(new RegExp(`.{1,${size}}`, "g")) ?? [word];
 
 const split = (word: string, room: number, options: object) =>
-  splitLongWord(word, room, FONT, metrics, 0, options);
+  splitLongWord(word, room, FONT, metrics, 0, options)?.map((piece) => piece.text) ?? null;
 
 describe("when nothing applies", () => {
   it("returns null with neither layer on - the old behaviour, untouched", () => {
@@ -58,6 +58,17 @@ describe("break-word", () => {
 describe("hyphenation", () => {
   it("splits only at offered points, and draws the hyphen", () => {
     expect(split("aaaabbbbcccc", 60, { hyphenate: chunks(4) })).toEqual(["aaaa-", "bbbb-", "cccc"]);
+    // Each piece says whether the hyphen was ADDED: the source holds "aaaa", not "aaaa-".
+    expect(
+      splitLongWord("aaaabbbbcccc", 60, FONT, metrics, 0, { hyphenate: chunks(4) })?.map(
+        (p) => p.hyphen,
+      ),
+    ).toEqual([true, true, false]);
+    expect(
+      splitLongWord("abcdefghijkl", 50, FONT, metrics, 0, { breakWord: true })?.map(
+        (p) => p.hyphen,
+      ),
+    ).toEqual([false, false, false]);
   });
 
   it("counts the hyphen against the box, or the line overflows by exactly that hyphen", () => {

@@ -1,11 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { TextRenderer } from "../../../src/lib/renderer/text-renderer";
-import { TextElement } from "../../../src/lib/elements/text-element";
-import { PDFObjectManager, FontStyle } from "../../../src/lib/utils/pdf-object-manager";
-import { HorizontalAlignment } from "../../../src/lib/elements/pdf-element";
-import { Color } from "../../../src/lib/common/color";
-import { IRNode, Path, TextRun } from "../../../src/lib/ir/display-list";
-import { buildTestTtf, buildColorTtf, buildColorV1Ttf } from "../utils/ttf-fixture";
+import { TextRenderer } from "../../../src/lib/renderer/text-renderer.ts";
+import { TextElement } from "../../../src/lib/elements/text-element.ts";
+import { PDFObjectManager, FontStyle } from "../../../src/lib/utils/pdf-object-manager.ts";
+import { HorizontalAlignment } from "../../../src/lib/elements/pdf-element.ts";
+import { Color } from "../../../src/lib/common/color.ts";
+import { IRNode, Path, TextRun } from "../../../src/lib/ir/display-list.ts";
+import { buildTestTtf, buildColorTtf, buildColorV1Ttf } from "../utils/ttf-fixture.ts";
+import { PAGE_SCOPE } from "../support/scope.ts";
 
 // A laid-out TextElement carrying `content` in the "Emoji" family at a known origin.
 const textElement = (content: string): TextElement =>
@@ -34,7 +35,7 @@ const withColorFont = (): PDFObjectManager => {
 
 describe("TextRenderer - COLR color glyph expansion", () => {
   it("expands a lone emoji into one filled Path per palette layer (red then blue)", async () => {
-    const nodes = await TextRenderer.render(textElement("😀"), withColorFont());
+    const nodes = await TextRenderer.render(textElement("😀"), withColorFont(), PAGE_SCOPE);
 
     const paths = nodes.filter((n): n is Path => n.type === "path");
     expect(nodes).toHaveLength(2); // only the two layers, no text run
@@ -46,7 +47,7 @@ describe("TextRenderer - COLR color glyph expansion", () => {
   });
 
   it("keeps surrounding text as runs and places the emoji layers between them", async () => {
-    const nodes = await TextRenderer.render(textElement("A😀B"), withColorFont());
+    const nodes = await TextRenderer.render(textElement("A😀B"), withColorFont(), PAGE_SCOPE);
 
     expect(nodes.map((n) => n.type)).toEqual(["text", "path", "path", "text"]);
     const before = nodes[0] as TextRun;
@@ -60,7 +61,7 @@ describe("TextRenderer - COLR color glyph expansion", () => {
   it("expands a COLR v1 glyph into a solid layer + a gradient layer", async () => {
     const om = new PDFObjectManager();
     om.registerCustomFont("Emoji", buildColorV1Ttf(0x1f600));
-    const nodes = await TextRenderer.render(textElement("😀"), om);
+    const nodes = await TextRenderer.render(textElement("😀"), om, PAGE_SCOPE);
 
     const paths = nodes.filter((n): n is Path => n.type === "path");
     expect(paths).toHaveLength(2);
@@ -72,7 +73,7 @@ describe("TextRenderer - COLR color glyph expansion", () => {
     // Layer 1: a linear gradient, red -> blue, positioned in page space.
     const grad = paths[1].fill;
     expect(grad).not.toBeInstanceOf(Color);
-    if (!(grad instanceof Color) && grad.type === "linear") {
+    if (grad && !(grad instanceof Color) && grad.type === "linear") {
       expect(grad.stops.map((s) => s.color.toPDFColorString())).toEqual([
         "1.000 0.000 0.000",
         "0.000 0.000 1.000",
@@ -99,6 +100,7 @@ describe("TextRenderer - COLR color glyph expansion", () => {
         }),
       } as unknown as TextElement,
       om,
+      PAGE_SCOPE,
     );
     expect(nodes).toHaveLength(1);
     expect(nodes[0].type).toBe("text");
@@ -108,8 +110,8 @@ describe("TextRenderer - COLR color glyph expansion", () => {
   // font's embedding/subsetting - the normal font still embeds (one /FontFile2), and the emoji draws
   // as a vector fill rather than as embedded-font text (so the color font itself is not embedded).
   it("a co-registered color font does not interfere with a normal font's embedding", async () => {
-    const { renderPdf, Document, Page } = await import("../../../src/lib/api/structure");
-    const { Text } = await import("../../../src/lib/api");
+    const { renderPdf, Document, Page } = await import("../../../src/lib/api/structure.ts");
+    const { Text } = await import("../../../src/lib/api/index.ts");
 
     const pdf = await renderPdf(
       Document([Page([Text("AB", { font: "Normal" }), Text("😀", { font: "Emoji", size: 20 })])]),
@@ -148,7 +150,7 @@ describe("TextRenderer - COLR color glyph expansion", () => {
       }),
     } as unknown as TextElement;
 
-    const nodes = await TextRenderer.render(el, om);
+    const nodes = await TextRenderer.render(el, om, PAGE_SCOPE);
     expect(nodes.map((n) => n.type)).toEqual(["text", "path", "path", "text"]);
     const before = nodes[0] as TextRun;
     const after = nodes[3] as TextRun;
@@ -179,7 +181,7 @@ describe("TextRenderer - COLR color glyph expansion", () => {
       }),
     } as unknown as TextElement;
 
-    const nodes = await TextRenderer.render(el, om);
+    const nodes = await TextRenderer.render(el, om, PAGE_SCOPE);
     expect(nodes).toHaveLength(1);
     expect(nodes[0].type).toBe("text");
   });

@@ -1,11 +1,11 @@
-import { BoxConstraints, Offset, Size } from "../../layout/box-constraints.ts";
-import { Fragmentable, FragmentResult, isFragmentable } from "../../layout/fragmentation.ts";
+import { BoxConstraints } from "../../layout/box-constraints.ts";
+import { FragmentResult } from "../../layout/fragmentation.ts";
 import { LayoutContext, PDFElement } from "../pdf-element.ts";
+import { ProxyElement } from "./proxy-element.ts";
 
 /**
- * A layout-TRANSPARENT wrapper that tries to keep its content on ONE page (CSS `break-inside: avoid`).
- * It delegates all layout and rendering to its child, so the visual result is byte-identical to the
- * unwrapped content; only pagination behaves differently.
+ * A layout-transparent wrapper (a `ProxyElement`) that tries to keep its content on ONE page (CSS
+ * `break-inside: avoid`). Only pagination behaves differently from the unwrapped content.
  *
  * The rule, decided in `fragment`:
  *   1. Fits in the space offered here           -> place it whole.
@@ -21,49 +21,19 @@ import { LayoutContext, PDFElement } from "../pdf-element.ts";
  * keeping it together: the break wins (CSS behaves the same), and we WARN once rather than silently
  * swallowing either intent.
  */
-export class KeepTogetherElement extends PDFElement implements Fragmentable {
-  private child: PDFElement;
+export class KeepTogetherElement extends ProxyElement {
   private warnedBreakConflict = false;
 
   constructor({ child }: { child: PDFElement }) {
-    super();
-    this.child = child;
+    super(child);
   }
 
-  /** Layout-transparent: the floor is whatever the wrapped child needs. */
-  override minIntrinsicMain(horizontal: boolean, ctx: LayoutContext): number {
-    return this.child.minIntrinsicMain(horizontal, ctx);
+  // Once the group is broken, its pieces flow bare (see `splitChild`).
+  protected override rewrap(child: PDFElement): PDFElement {
+    return child;
   }
 
-  calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
-    return this.child.calculateLayout(constraints, offset, ctx);
-  }
-
-  // Transparent: forward the sizing hints the flex parent reads, so a %-sized or Spacer-holding child
-  // keeps working when it is wrapped (the wrapper must not swallow these).
-  override relativeSizeFactor(horizontal: boolean): number | undefined {
-    return this.child.relativeSizeFactor(horizontal);
-  }
-
-  override needsBoundedMain(horizontal: boolean): boolean {
-    return this.child.needsBoundedMain(horizontal);
-  }
-
-  // Transparent to break control: a break-before/after on the wrapped element still applies to the group
-  // as a whole, and an inner forced break still forces the parent to fragment us (so `fragment` runs).
-  override hasForcedBreak(): boolean {
-    return this.child.hasForcedBreak();
-  }
-
-  override breaksBefore(): boolean {
-    return this.child.breaksBefore();
-  }
-
-  override breaksAfter(): boolean {
-    return this.child.breaksAfter();
-  }
-
-  fragment(maxHeight: number, width: number, ctx: LayoutContext): FragmentResult {
+  override fragment(maxHeight: number, width: number, ctx: LayoutContext): FragmentResult {
     // Contradiction: a forced break inside the group beats keeping it together. Split at the break by
     // delegating to the child (which honours it), and say so once - never keep such a group whole.
     if (this.child.hasForcedBreak()) {
@@ -77,11 +47,7 @@ export class KeepTogetherElement extends PDFElement implements Fragmentable {
       return this.splitChild(maxHeight, width, ctx);
     }
 
-    const natural = this.child.calculateLayout(
-      BoxConstraints.loose(width, Infinity),
-      { x: 0, y: 0 },
-      ctx,
-    ).height;
+    const natural = this.child.measure(BoxConstraints.loose(width, Infinity), ctx).height;
 
     // 1. Fits in the offered space: keep whole.
     if (natural <= maxHeight) return { fitted: this, remainder: null };
@@ -96,11 +62,10 @@ export class KeepTogetherElement extends PDFElement implements Fragmentable {
     return this.splitChild(maxHeight, width, ctx);
   }
 
-  /** Delegate the actual split to the child, unwrapping - once we have decided to break the group, the
-   *  pieces just flow (any INNER keepTogether lives in the child subtree and still vetoes there). */
+  /** Split like any wrapper - once we have decided to break the group, the pieces flow bare but keep
+   *  the group's place in the flex line (any INNER keepTogether lives in the child and still vetoes). */
   private splitChild(maxHeight: number, width: number, ctx: LayoutContext): FragmentResult {
-    if (!isFragmentable(this.child)) return { fitted: null, remainder: this };
-    return this.child.fragment(maxHeight, width, ctx);
+    return super.fragment(maxHeight, width, ctx);
   }
 
   override getProps() {

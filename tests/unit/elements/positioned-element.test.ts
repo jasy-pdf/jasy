@@ -1,28 +1,44 @@
-import { describe, it, expect } from "vitest";
-import { PositionedElement } from "../../../src/lib/elements/layout/positioned-element";
-import { RectangleElement } from "../../../src/lib/elements/rectangle-element";
-import { ContainerElement } from "../../../src/lib/elements/container-element";
-import { layoutPageBands, PageElement, pageFrame } from "../../../src/lib/elements/page-element";
-import { RectangleRenderer } from "../../../src/lib/renderer/rectangle-renderer";
-import { LayoutContext } from "../../../src/lib/elements/pdf-element";
-import { BoxConstraints } from "../../../src/lib/layout/box-constraints";
-import { Orientation } from "../../../src/lib/renderer/pdf-config";
-import { PageSize } from "../../../src/lib/constants/page-sizes";
-import type { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager";
+import { describe, it, expect, vi } from "vitest";
+import { PositionedElement } from "../../../src/lib/elements/layout/positioned-element.ts";
+import { RectangleElement } from "../../../src/lib/elements/rectangle-element.ts";
+import { ContainerElement } from "../../../src/lib/elements/container-element.ts";
+import { PageElement } from "../../../src/lib/elements/page-element.ts";
+import { RectangleRenderer } from "../../../src/lib/renderer/rectangle-renderer.ts";
+import { LayoutContext } from "../../../src/lib/elements/pdf-element.ts";
+import { BoxConstraints } from "../../../src/lib/layout/box-constraints.ts";
+import { Orientation } from "../../../src/lib/renderer/pdf-config.ts";
+import { PageSize } from "../../../src/lib/constants/page-sizes.ts";
+import type { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager.ts";
 import { testMetrics } from "../support/metrics.ts";
+import { RendererRegistry } from "../../../src/lib/utils/renderer-registry.ts";
+import { PositionedRenderer } from "../../../src/lib/renderer/positioned-renderer.ts";
+import { PAGE_SCOPE } from "../support/scope.ts";
+
+// Rendering a frame on its own: its renderers are registered here, as `PDFRenderer.render` would.
+RendererRegistry.register(RectangleElement, RectangleRenderer.render);
+RendererRegistry.register(PositionedElement, PositionedRenderer.render);
 
 const metrics = testMetrics({
   getStringWidth: (text) => text.length * 10,
   getCharWidth: () => 0,
 });
 const ctx = { metrics } as LayoutContext;
-// A `Positioned` refuses to lay out without a frame, so the out-of-flow tests below need one. It is
-// never drained: they assert what the element does NOT do to the flow, not where the child lands.
+// A `Positioned` refuses to lay out without a frame, so the out-of-flow tests below need one. They
+// assert what the element does NOT do to the flow, not where the child lands.
 const ctxWithFrame = {
   metrics,
   pageConfig: {},
-  frame: { origin: { x: 0, y: 0 }, size: { width: 100, height: 100 }, place: [] },
+  frame: { origin: { x: 0, y: 0 }, size: { width: 100, height: 100 } },
 } as LayoutContext;
+
+// A placement is an offset RELATIVE to the frame's top-left; the frame draws it from there. This is
+// where it ends up on the page when `frame` is rendered at the page origin.
+const drawnAt = async (frameEl: RectangleElement, child: RectangleElement) => {
+  const { width, height } = child.getSize();
+  const nodes = await RectangleRenderer.render(frameEl, {} as PDFObjectManager, PAGE_SCOPE);
+  const box = nodes.find((n) => n.type === "rect" && n.width === width && n.height === height);
+  return box && box.type === "rect" ? { x: box.x, y: box.y } : undefined;
+};
 
 // A fixed-size box with no border, easy to read coordinates off via getSize().
 const fixed = (width: number, height: number) =>
@@ -74,14 +90,16 @@ describe("PositionedElement - out of flow", () => {
 });
 
 describe("PositionedElement - placement against the frame", () => {
-  it("anchors top/left to the frame origin (plus the frame's own offset)", () => {
+  it("anchors top/left to the frame origin (plus the frame's own offset)", async () => {
     const child = fixed(20, 10);
-    frame({ width: 100, height: 60 }, [
+    const f = frame({ width: 100, height: 60 }, [
       new PositionedElement({ child, top: 5, left: 8 }),
-    ]).calculateLayout(BoxConstraints.loose(100, 60), { x: 30, y: 40 }, ctx);
-    // frame origin = (30, 40); child = origin + (left, top).
-    expect(child.getSize().x).toBe(38);
-    expect(child.getSize().y).toBe(45);
+    ]);
+    f.calculateLayout(BoxConstraints.loose(100, 60), { x: 30, y: 40 }, ctx);
+    // Relative to the frame: (left, top). Drawn at the frame's origin (30, 40) plus that.
+    expect(child.getSize().x).toBe(8);
+    expect(child.getSize().y).toBe(5);
+    expect(await drawnAt(f, child)).toEqual({ x: 38, y: 45 });
   });
 
   it("anchors right/bottom to the opposite edge, accounting for the child size", () => {
@@ -94,14 +112,16 @@ describe("PositionedElement - placement against the frame", () => {
     expect(child.getSize().y).toBe(45);
   });
 
-  it("lets a negative offset poke outside the frame", () => {
+  it("lets a negative offset poke outside the frame", async () => {
     const child = fixed(24, 14);
-    frame({ width: 100, height: 60 }, [
+    const f = frame({ width: 100, height: 60 }, [
       new PositionedElement({ child, top: -12, left: -10 }),
-    ]).calculateLayout(BoxConstraints.loose(100, 60), { x: 50, y: 50 }, ctx);
-    // (50 - 10, 50 - 12) - above and left of the frame's top-left corner.
-    expect(child.getSize().x).toBe(40);
-    expect(child.getSize().y).toBe(38);
+    ]);
+    f.calculateLayout(BoxConstraints.loose(100, 60), { x: 50, y: 50 }, ctx);
+    // Above and left of the frame's top-left corner: drawn at (50 - 10, 50 - 12).
+    expect(child.getSize().x).toBe(-10);
+    expect(child.getSize().y).toBe(-12);
+    expect(await drawnAt(f, child)).toEqual({ x: 40, y: 38 });
   });
 });
 
@@ -153,9 +173,9 @@ describe("PositionedElement - the page is the default frame", () => {
       metrics,
       pageConfig: {},
     } as LayoutContext);
-    // Content-box origin = the top-left margin (50, 50); child = origin + (left, top).
-    expect(child.getSize().x).toBe(58);
-    expect(child.getSize().y).toBe(55);
+    // Relative to the content box, which the page draws from its top-left margin (50, 50).
+    expect(child.getSize().x).toBe(8);
+    expect(child.getSize().y).toBe(5);
   });
 
   // ISSUE-4. A band used to be laid out BEFORE the frame existed, so a `Positioned` in it had
@@ -180,36 +200,37 @@ describe("PositionedElement - the page is the default frame", () => {
   it("anchors a Positioned in the HEADER to the page, exactly like one in the body", () => {
     const child = fixed(20, 10);
     pageWith({ header: new PositionedElement({ child, top: 5, left: 8 }) });
-    expect(child.getSize().x).toBe(A4_CONTENT.left + 8);
-    expect(child.getSize().y).toBe(A4_CONTENT.top + 5);
+    expect(child.getSize().x).toBe(8);
+    expect(child.getSize().y).toBe(5);
   });
 
   it("anchors a Positioned in the FOOTER to the page, so bottom:0 is the foot of the page", () => {
     const child = fixed(20, 10);
     pageWith({ footer: new PositionedElement({ child, bottom: 0, right: 0 }) });
-    expect(child.getSize().x).toBe(A4_CONTENT.right - 20);
-    expect(child.getSize().y).toBe(A4_CONTENT.bottom - 10);
+    expect(child.getSize().x).toBe(A4_CONTENT.right - A4_CONTENT.left - 20);
+    expect(child.getSize().y).toBe(A4_CONTENT.bottom - A4_CONTENT.top - 10);
   });
 
-  it("registers a band's placement ONCE, though the footer subtree is laid out twice", () => {
-    // `layoutPageBands` measures the footer to learn its height, then lays it out again at the
-    // bottom edge. Without a throwaway frame for the measuring pass, its `Positioned` registers on
-    // both and the child is placed twice.
-    const config = {
-      pageSize: PageSize.A4,
-      orientation: Orientation.portrait,
-      margin: { top: 50, right: 50, bottom: 50, left: 50 },
-    };
+  it("places a band's Positioned ONCE, though the footer is measured and then laid out", () => {
+    // `layoutPageBands` measures the footer to learn its height, then lays it out at the bottom edge.
+    // Placement is the page's job after layout, so measuring can never add a second one.
     for (const band of ["header", "footer"] as const) {
-      const frame = pageFrame(config);
       const positioned = new PositionedElement({ child: fixed(20, 10), top: 5, left: 5 });
-      layoutPageBands(
-        config,
-        band === "header" ? positioned : undefined,
-        band === "footer" ? positioned : undefined,
-        { metrics, pageConfig: {}, frame } as LayoutContext,
-      );
-      expect(frame.place, `${band} registered more than once`).toHaveLength(1);
+      const page = new PageElement({
+        children: [fixed(10, 10)],
+        config: {
+          pageSize: PageSize.A4,
+          orientation: Orientation.portrait,
+          margin: { top: 50, right: 50, bottom: 50, left: 50 },
+        },
+        [band]: positioned,
+      });
+      const placeIn = vi.spyOn(positioned, "placeIn");
+      page.calculateLayout(new BoxConstraints(), { x: 0, y: 0 }, {
+        metrics,
+        pageConfig: {},
+      } as LayoutContext);
+      expect(placeIn, `${band} placed more than once`).toHaveBeenCalledTimes(1);
     }
   });
 
@@ -237,9 +258,10 @@ describe("PositionedElement - the page is the default frame", () => {
       metrics,
       pageConfig: {},
     } as LayoutContext);
-    // The page is the nearest frame (the outer Positioned is not one), so 50 + 10 on both axes.
-    expect(inner.getSize().x).toBe(60);
-    expect(inner.getSize().y).toBe(60);
+    // The page is the nearest frame (the outer Positioned is not one): (10, 10) from its content box,
+    // not from the outer one's box at (100, 100).
+    expect(inner.getSize().x).toBe(10);
+    expect(inner.getSize().y).toBe(10);
   });
 
   it("keeps a body Positioned put when a header is added (the frame is the page, not the body band)", () => {
@@ -256,7 +278,44 @@ describe("PositionedElement - the page is the default frame", () => {
       metrics,
       pageConfig: {},
     } as LayoutContext);
-    expect(child.getSize().y).toBe(A4_CONTENT.top + 5); // not 50 + 40 + 5
+    expect(child.getSize().y).toBe(5); // from the content box, not from below the 40pt header
+  });
+});
+
+// Tree order is paint order (Flutter's `Stack`): a `Positioned` is drawn where it sits in the tree, so
+// the author picks its layer by placing it. Until `z-index` exists this is the only way to put a
+// watermark UNDER the content, and it must stay that way.
+describe("PositionedElement - paints in tree order", () => {
+  const paintOrder = async (children: (RectangleElement | PositionedElement)[]) => {
+    const f = new RectangleElement({
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 60,
+      borderWidth: 0,
+      relative: true,
+      children,
+    });
+    f.calculateLayout(BoxConstraints.loose(100, 60), { x: 0, y: 0 }, ctx);
+    const nodes = await RectangleRenderer.render(f, {} as PDFObjectManager, PAGE_SCOPE);
+    // Each test box has its own width; the frame itself is the 100-wide one.
+    return nodes.flatMap((n) => (n.type === "rect" && n.width !== 100 ? [n.width] : []));
+  };
+
+  it("draws a Positioned placed BEFORE the flow content under it (a watermark)", async () => {
+    const order = await paintOrder([
+      new PositionedElement({ child: fixed(11, 10), top: 0, left: 0 }),
+      fixed(22, 10),
+    ]);
+    expect(order).toEqual([11, 22]);
+  });
+
+  it("draws a Positioned placed AFTER the flow content on top of it (a badge)", async () => {
+    const order = await paintOrder([
+      fixed(22, 10),
+      new PositionedElement({ child: fixed(11, 10), top: 0, left: 0 }),
+    ]);
+    expect(order).toEqual([22, 11]);
   });
 });
 
@@ -276,13 +335,17 @@ describe("RectangleElement - overflow clips the children", () => {
   };
 
   it('wraps children in clip-push/clip-pop when overflow is "hidden"', async () => {
-    const nodes = await RectangleRenderer.render(laidOut("hidden"), {} as PDFObjectManager);
+    const nodes = await RectangleRenderer.render(
+      laidOut("hidden"),
+      {} as PDFObjectManager,
+      PAGE_SCOPE,
+    );
     expect(nodes.some((n) => n.type === "clip-push")).toBe(true);
     expect(nodes.some((n) => n.type === "clip-pop")).toBe(true);
   });
 
   it("emits no clip by default (visible) - byte-identical to before", async () => {
-    const nodes = await RectangleRenderer.render(laidOut(), {} as PDFObjectManager);
+    const nodes = await RectangleRenderer.render(laidOut(), {} as PDFObjectManager, PAGE_SCOPE);
     expect(nodes.some((n) => n.type === "clip-push" || n.type === "clip-pop")).toBe(false);
   });
 });

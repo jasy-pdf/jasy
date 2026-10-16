@@ -6,6 +6,7 @@ import { HorizontalAlignment } from "../../../src/lib/elements/pdf-element.ts";
 import { BoxConstraints } from "../../../src/lib/layout/box-constraints.ts";
 import { testMetrics } from "../support/metrics.ts";
 import type { TextRun } from "../../../src/lib/ir/display-list.ts";
+import { PAGE_SCOPE } from "../support/scope.ts";
 
 // Justification spreads a line's leftover space into its SPACES. Every glyph here is 10 wide at size
 // 10 and a space is 10 too, so a run's x reads as "how many glyphs came before me" and the stretch is
@@ -35,7 +36,7 @@ const drawn = async (content: string, width: number, align?: HorizontalAlignment
   el.calculateLayout(BoxConstraints.tight(width, 400), { x: 0, y: 0 }, {
     metrics: manager,
   } as never);
-  const runs = (await TextRenderer.render(el, manager)).filter(
+  const runs = (await TextRenderer.render(el, manager, PAGE_SCOPE)).filter(
     (n): n is TextRun => n.type === "text",
   );
   return runs.map((r) => ({ x: r.x, y: r.y, text: r.text }));

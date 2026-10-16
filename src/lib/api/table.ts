@@ -71,7 +71,7 @@ function autoMinimum(col: ColumnWidth): number | null {
 /** The cell's unbounded (max-content) width - what an `"auto"` column sizes to. */
 function naturalWidth(cell: Cell, cellPadding: Insets | undefined, ctx: LayoutContext): number {
   const el = cellPadding !== undefined ? Padding(cellPadding, asElement(cell)) : asElement(cell);
-  return el.calculateLayout(BoxConstraints.loose(Infinity, Infinity), { x: 0, y: 0 }, ctx).width;
+  return el.measure(BoxConstraints.loose(Infinity, Infinity), ctx).width;
 }
 
 /** Replaces every content-sized column with the widest cell width measured down it, at least its floor. */

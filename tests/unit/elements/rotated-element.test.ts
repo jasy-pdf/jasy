@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { RotatedElement } from "../../../src/lib/elements/layout/rotated-element";
-import { Rotated } from "../../../src/lib/api/layout";
-import { RectangleElement } from "../../../src/lib/elements/rectangle-element";
-import { BoxConstraints } from "../../../src/lib/layout/box-constraints";
-import { LayoutContext } from "../../../src/lib/elements/pdf-element";
+import { RotatedElement } from "../../../src/lib/elements/layout/rotated-element.ts";
+import { Rotated } from "../../../src/lib/api/layout.ts";
+import { RectangleElement } from "../../../src/lib/elements/rectangle-element.ts";
+import { BoxConstraints } from "../../../src/lib/layout/box-constraints.ts";
+import { LayoutContext } from "../../../src/lib/elements/pdf-element.ts";
 
 const ctx = {} as LayoutContext;
 const box = (w: number, h: number) =>
@@ -20,7 +20,7 @@ describe("RotatedElement (paint-only, layout-transparent)", () => {
     expect(size).toEqual({ width: 100, height: 50 }); // same as the child, rotation is paint-only
   });
 
-  it("lays the child out at the given offset and records the box + angle for the renderer", () => {
+  it("lays the child out at its own top-left and records the box + angle for the renderer", () => {
     const child = box(100, 50);
     const rot = new RotatedElement({ angle: 30, child });
     rot.calculateLayout(BoxConstraints.loose(200, Infinity), { x: 10, y: 20 }, ctx);
@@ -32,7 +32,8 @@ describe("RotatedElement (paint-only, layout-transparent)", () => {
       width: 100,
       height: 50,
     });
-    expect(child.getProps().x).toBe(10); // child was actually placed at the offset
+    // The child sits at the rotated box's own top-left; the renderer adds the box position.
+    expect({ x: child.getProps().x, y: child.getProps().y }).toEqual({ x: 0, y: 0 });
   });
 
   it("the Rotated factory wraps the child in a RotatedElement carrying the angle", () => {

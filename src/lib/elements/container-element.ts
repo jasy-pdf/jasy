@@ -1,4 +1,12 @@
-import { FlexLayoutHelper, VERTICAL_AXIS, MainAlign, CrossAlign } from "../utils/flex-layout.ts";
+import { widthRules } from "../layout/box-constraints.ts";
+import { flexibleOf } from "../layout/flex-item.ts";
+import {
+  FlexLayoutHelper,
+  VERTICAL_AXIS,
+  MainAlign,
+  CrossAlign,
+  type FlexMode,
+} from "../utils/flex-layout.ts";
 import { stackMinIntrinsic, withDeclaredExtent } from "../layout/min-intrinsic.ts";
 import {
   BoxConstraints,
@@ -15,7 +23,6 @@ import {
   packChildren,
 } from "../layout/fragmentation.ts";
 import {
-  FlexiblePDFElement,
   LayoutContext,
   PDFElement,
   SizedElement,
@@ -124,10 +131,13 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
   }
 
   fragment(maxHeight: number, width: number, ctx: LayoutContext): FragmentResult {
+    // Pack at the width the column is drawn at: its own rules (fixed, %, min/max) resolved against the
+    // region, the same sizing path as `measure`. A narrower column has taller children.
+    const ownWidth = this.measure(BoxConstraints.loose(width, Infinity), ctx).width;
     const { fitted, remainder, forceBreak } = packChildren(
       this.children,
       maxHeight,
-      width,
+      ownWidth,
       ctx,
       this.gap,
     );
@@ -153,10 +163,9 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
     return new ContainerElement({
       x: this.x,
       y: this.y,
-      // Carry the requested WIDTH (a %-width column keeps its width on every page); the height is
+      // Carry the WIDTH rules (a %-width or max-width column keeps them on every page); the height is
       // intentionally dropped so each fragment shrink-wraps to the content it actually holds.
-      width: this.requested.width,
-      widthFactor: this.requested.widthFactor,
+      ...widthRules(this.requested),
       children,
       gap: this.gap,
       main: this.main,
@@ -165,7 +174,7 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
       wrap: this.wrap,
       alignContent: this.alignContent,
       breakAfter,
-    });
+    }).asPieceOf(this);
   }
 
   override relativeSizeFactor(horizontal: boolean): number | undefined {
@@ -187,7 +196,7 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
       ? [this.requested.width, this.requested.widthFactor]
       : [this.requested.height, this.requested.heightFactor];
     if (requested.some((v) => v !== undefined)) return false;
-    const ownFlexChild = !horizontal && this.children.some((c) => c instanceof FlexiblePDFElement);
+    const ownFlexChild = !horizontal && this.children.some((c) => flexibleOf(c) !== undefined);
     return ownFlexChild || this.children.some((c) => c.needsBoundedMain(horizontal));
   }
 
@@ -211,7 +220,18 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
   calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
     this.x = offset.x;
     this.y = offset.y;
+    const size = this.sizeWith(constraints, ctx, "layout");
+    this.width = size.width;
+    this.height = size.height;
+    return size;
+  }
 
+  protected override computeSize(constraints: BoxConstraints, ctx: LayoutContext): Size {
+    return this.sizeWith(constraints, ctx, "measure");
+  }
+
+  /** The one sizing path: `layout` places the children (relative to this box), `measure` only sizes them. */
+  private sizeWith(constraints: BoxConstraints, ctx: LayoutContext, mode: FlexMode): Size {
     // Relative sizing: a pinned extent (fixed points or a fraction of the offered box, clamped into
     // the constraints) wins; else fill a bounded axis; else stay `undefined` and shrink-wrap below.
     // A Column nested in a Row gets unbounded width - passing 0 there would collapse children to 0.
@@ -251,8 +271,6 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
         VERTICAL_AXIS,
         mainAvail,
         crossAvail,
-        this.y,
-        this.x,
         {
           gap: this.gap,
           main: this.main,
@@ -262,15 +280,18 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
           alignContent: this.alignContent,
         },
         ctx,
+        mode,
       );
     }
 
     // Pinned/bounded axis takes that extent; an unbounded one shrink-wraps to the children (height =
     // the stack, width = the widest child). Top-left coordinates; the container draws nothing, and
     // the Y-flip happens once at the IR -> backend seam.
-    this.width = boundedWidth ?? result.crossUsed;
-    this.height = boundedHeight ?? result.mainUsed;
-    return { width: this.width, height: this.height };
+    return { width: boundedWidth ?? result.crossUsed, height: boundedHeight ?? result.mainUsed };
+  }
+
+  override layoutChildren(): readonly PDFElement[] {
+    return this.children ?? [];
   }
 
   override getProps(): ContainerElementParams {

@@ -1,34 +1,25 @@
-import { PDFElement, LayoutContext } from "../pdf-element.ts";
-import { BoxConstraints, Offset, Size } from "../../layout/box-constraints.ts";
+import { PDFElement } from "../pdf-element.ts";
+import { ProxyElement } from "./proxy-element.ts";
 
 /**
- * Marks its child as a named jump target for an internal `Link({ to: name })`. Layout-transparent: it
- * delegates `calculateLayout` to the child and records the child's top, which the renderer turns into an
- * `Anchor` IR node (and PDFRenderer into a /Names /Dests entry). It draws nothing - the child renders
- * exactly as it would on its own.
+ * Marks its child as a named jump target for an internal `Link({ to: name })`. Layout-transparent (a
+ * `ProxyElement`); the renderer turns the child's top into an `Anchor` IR node (and PDFRenderer into a
+ * /Names /Dests entry). It draws nothing. Split across pages, only the first piece is the target - a
+ * name must lead to one place.
  */
-export class AnchorElement extends PDFElement {
+export class AnchorElement extends ProxyElement {
   private name: string;
-  private child: PDFElement;
-  private y = 0;
 
   constructor({ name, child }: { name: string; child: PDFElement }) {
-    super();
+    super(child);
     this.name = name;
-    this.child = child;
   }
 
-  calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
-    const size = this.child.calculateLayout(constraints, offset, ctx);
-    this.y = offset.y; // the child's top - the scroll target for a link that jumps here
-    return size;
+  protected override rewrap(child: PDFElement, continued: boolean): PDFElement {
+    return continued ? child : new AnchorElement({ name: this.name, child });
   }
 
   override getProps() {
-    return {
-      name: this.name,
-      child: this.child,
-      y: this.y,
-    };
+    return { name: this.name, child: this.child, y: this.y };
   }
 }

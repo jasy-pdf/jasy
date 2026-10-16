@@ -1,3 +1,4 @@
+import type { RenderScope } from "../utils/renderer-registry.ts";
 import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 import { SvgElement } from "../elements/svg-element.ts";
 import type { IRNode } from "../ir/display-list.ts";
@@ -9,8 +10,15 @@ import { svgToIr } from "../svg/index.ts";
  * that colour emoji already draw through carries it.
  */
 export class SvgRenderer {
-  static async render(element: SvgElement, objectManager: PDFObjectManager): Promise<IRNode[]> {
-    const { x, y, width, height, source, alt } = element.getProps();
+  static async render(
+    element: SvgElement,
+    objectManager: PDFObjectManager,
+    scope: RenderScope,
+  ): Promise<IRNode[]> {
+    const { x: ownX, y: ownY, width, height, source, alt } = element.getProps();
+    // Its own position is relative to `scope.origin`; the IR wants page coordinates.
+    const x = scope.origin.x + (ownX ?? 0);
+    const y = scope.origin.y + (ownY ?? 0);
     const nodes = svgToIr(source, {
       x: x ?? 0,
       y: y ?? 0,

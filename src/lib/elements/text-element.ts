@@ -17,9 +17,8 @@ import {
   type LineOptions,
   singleLineWidth,
   MAX_SPACE_SHRINK,
-  wrapStringIntoLines,
+  breakStringIntoLines,
   breakSegmentsIntoLines,
-  segmentLinesToSegments,
   TextOverflow,
 } from "../text/line-breaker.ts";
 import {
@@ -117,6 +116,9 @@ interface TextElementParams {
   hyphenate?: Hyphenator;
   /** Accessibility role for the tagged structure tree (heading level or paragraph; default `"p"`). */
   role?: TextRole;
+  /** Set by pagination, not by authors: this element is the first N lines of a paragraph that
+   *  continues on the next page. See `LineOptions.shownLines`. */
+  shownLines?: number;
 }
 
 /**
@@ -183,6 +185,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
   private widows?: number;
   private overflow: TextOverflow;
   private readonly role?: TextRole; // accessibility role (tagged PDF); undefined = paragraph
+  private readonly shownLines?: number; // a piece of a split paragraph: its first N lines
 
   constructor({
     fontSize,
@@ -209,9 +212,11 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     hyphenate,
     ligatures,
     role,
+    shownLines,
   }: TextElementParams) {
     super({ x: 0, y: 0 });
     this.role = role;
+    this.shownLines = shownLines;
 
     this.rawFontSize = fontSize;
     this.rawFontFamily = fontFamily;
@@ -370,6 +375,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       ligatures: this.ligatures,
       // Justified lines may be squeezed to keep a word; every other alignment gets no slack.
       shrink: this.textAlignment === HorizontalAlignment.justify ? MAX_SPACE_SHRINK : 0,
+      shownLines: this.shownLines,
     };
   }
 
@@ -416,7 +422,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     width: number,
     ctx: LayoutContext,
   ): FragmentResult {
-    const lines = wrapStringIntoLines(
+    const lines = breakStringIntoLines(
       content,
       this.fontFamily,
       this.fontSize,
@@ -444,10 +450,18 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     if (fittedLineCount <= 0) return { fitted: null, remainder: this };
     if (fittedLineCount >= lines.length) return { fitted: this, remainder: null };
 
+    // A piece is a window onto the SAME text, not the lines glued back together: the first page draws
+    // the first lines of the whole paragraph (broken exactly as here, same text, same width), and the
+    // next one continues from where its first line starts in the source. Hard breaks, a word split
+    // over the break and the justified last line on the page all survive that way.
     return {
-      fitted: this.cloneWithContent(lines.slice(0, fittedLineCount).join(" ")),
-      // A continuation is no longer the paragraph's FIRST line, so it carries no indent.
-      remainder: this.cloneWithContent(lines.slice(fittedLineCount).join(" "), 0),
+      fitted: this.cloneWithContent(content, this.textIndent, { shownLines: fittedLineCount }),
+      // A continuation is no longer the paragraph's FIRST line, so it carries no indent; whatever is
+      // left of a line cap goes with it.
+      // (The lines are capped at `maxLines` already, so at least one of the cap is left.)
+      remainder: this.cloneWithContent(content.slice(lines[fittedLineCount]!.start), 0, {
+        maxLines: this.maxLines === undefined ? undefined : this.maxLines - fittedLineCount,
+      }),
     };
   }
 
@@ -459,15 +473,9 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     width: number,
     ctx: LayoutContext,
   ): FragmentResult {
-    const defaults = {
-      fontFamily: this.fontFamily,
-      fontSize: this.fontSize,
-      fontStyle: this.fontStyle,
-      letterSpacing: this.letterSpacing,
-      direction: this.direction,
-      wordSpacing: this.wordSpacing,
-      textIndent: this.textIndent,
-    };
+    // The SAME knobs measuring and drawing break with (`calculateTextHeight`, the renderer), or this
+    // would cut a paragraph at a line count it is never drawn with.
+    const defaults = this.segmentDefaults();
     const lines = breakSegmentsIntoLines(
       content,
       defaults,
@@ -490,9 +498,30 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     if (fittedLineCount <= 0) return { fitted: null, remainder: this };
     if (fittedLineCount >= lines.length) return { fitted: this, remainder: null };
 
+    // As for a plain string: a window onto the same spans, and the rest continues from where the
+    // next line starts in the source - inside its span, keeping that span's style.
+    const { segment, offset } = lines[fittedLineCount]!.start;
+    const rest = [
+      { ...content[segment]!, content: content[segment]!.content.slice(offset) },
+      ...content.slice(segment + 1),
+    ];
     return {
-      fitted: this.cloneWithContent(segmentLinesToSegments(lines.slice(0, fittedLineCount))),
-      remainder: this.cloneWithContent(segmentLinesToSegments(lines.slice(fittedLineCount)), 0),
+      fitted: this.cloneWithContent(content, this.textIndent, { shownLines: fittedLineCount }),
+      remainder: this.cloneWithContent(rest, 0, {
+        maxLines: this.maxLines === undefined ? undefined : this.maxLines - fittedLineCount,
+      }),
+    };
+  }
+
+  /** How span text is broken: the knobs `calculateTextHeight` and the renderer pass too. */
+  private segmentDefaults() {
+    return {
+      fontFamily: this.fontFamily,
+      fontSize: this.fontSize,
+      fontStyle: this.fontStyle,
+      letterSpacing: this.letterSpacing,
+      splitting: { breakWord: this.breakWord, hyphenate: this.hyphenate },
+      ligatures: this.ligatures,
     };
   }
 
@@ -506,7 +535,11 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
 
   // A copy carrying the same style but different (already-wrapped) content. Re-wrapping at
   // the same width reproduces exactly those lines (greedy is deterministic).
-  private cloneWithContent(content: string | TextSegment[], indent = this.textIndent): TextElement {
+  private cloneWithContent(
+    content: string | TextSegment[],
+    indent = this.textIndent,
+    piece: { shownLines?: number; maxLines?: number } = {},
+  ): TextElement {
     return new TextElement({
       content,
       fontSize: this.fontSize,
@@ -514,7 +547,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       fontStyle: this.fontStyle,
       color: this.color,
       textAlignment: this.textAlignment,
-      maxLines: this.maxLines,
+      maxLines: piece.maxLines ?? this.maxLines,
       orphans: this.orphans,
       widows: this.widows,
       overflow: this.overflow,
@@ -527,40 +560,73 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       wordSpacing: this.wordSpacing,
       textIndent: indent,
       role: this.role,
-    }).adoptStructId(this); // a wrapped remainder is the SAME logical paragraph (one P across pages)
+      fontFallback: this.fontFallback,
+      // The content is cut from `display()`, already recased: `capitalize` again would capitalise
+      // the half of a word continued on the next page.
+      textTransform: "none",
+      breakWord: this.breakWord,
+      hyphenate: this.hyphenate,
+      ligatures: this.ligatures,
+      shownLines: piece.shownLines,
+    }).asPieceOf(this); // a wrapped remainder is the SAME logical paragraph (one P across pages)
   }
 
   calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
-    this.resolveStyle(ctx);
-    this.x = offset.x;
-    this.y = offset.y;
     // Bounded width (e.g. inside a Column) wraps to that width; an unbounded width
     // (e.g. inside a Row) means the text takes its natural single-line width and does
-    // not wrap. Columns always bound the width, so this leaves their layout untouched.
+    // not wrap. Sized by `measure`, so a measured text and a laid-out one cannot differ. The style is
+    // resolved here too: a size from the cache skips `computeSize`, and drawing reads the style.
+    this.resolveStyle(ctx);
+    const size = this.measure(constraints, ctx);
+    this.x = offset.x;
+    this.y = offset.y;
     this.resolved = this.display(ctx.metrics);
-    this.width = constraints.hasBoundedWidth
+    this.width = size.width;
+    this.height = size.height;
+    // Top-left coordinates (y = top of the text box). The baseline offset and the
+    // Y-flip are applied downstream (the line-builder positions baselines, the seam
+    // flips to PDF), so the element stays coordinate-system-blind.
+    return size;
+  }
+
+  /**
+   * The size `calculateLayout` would take, without placing anything. Resolving the inherited style
+   * and filling the memos below are its only writes, and both are a pure function of the context:
+   * the same inputs leave the same state, which a later layout reads back unchanged.
+   */
+  /** A text's size reads only the width it may take: it wraps to it, and a height bound never changes
+   *  the lines (a box that is too short cuts them, it does not reflow them). */
+  protected override sizeInputs(constraints: BoxConstraints): BoxConstraints {
+    return BoxConstraints.loose(constraints.maxWidth, Infinity);
+  }
+
+  protected override computeSize(constraints: BoxConstraints, ctx: LayoutContext): Size {
+    this.resolveStyle(ctx);
+    const content = this.display(ctx.metrics);
+    const width = constraints.hasBoundedWidth
       ? constraints.maxWidth
       : this.naturalWidth(ctx.metrics);
+    return { width, height: this.measuredHeight(ctx.metrics, width, content) };
+  }
 
-    const wrapWidth = this.width ?? 0;
-    this.height = TextRenderer.calculateTextHeight(
-      this.resolved,
+  private measuredHeight(
+    metrics: FontMetrics,
+    width: number,
+    content: string | TextSegment[],
+  ): number {
+    return TextRenderer.calculateTextHeight(
+      content,
       this.fontSize,
       this.fontFamily,
       this.fontStyle,
-      ctx.metrics,
-      wrapWidth,
+      metrics,
+      width,
       this.maxLines,
       this.overflow,
       this.lineHeight,
       this.letterSpacing,
       this.lineOptions(),
     );
-
-    // Top-left coordinates (y = top of the text box). The baseline offset and the
-    // Y-flip are applied downstream (the line-builder positions baselines, the seam
-    // flips to PDF), so the element stays coordinate-system-blind.
-    return { width: wrapWidth, height: this.height };
   }
 
   /** The unwrapped single-line width of the content (used when width is unbounded, e.g. inside a Row).
@@ -697,6 +763,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       ligatures: this.ligatures,
       hyphenate: this.hyphenate,
       role: this.role,
+      shownLines: this.shownLines,
     };
   }
 }

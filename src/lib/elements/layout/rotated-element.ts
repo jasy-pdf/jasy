@@ -25,14 +25,44 @@ export class RotatedElement extends PDFElement {
   }
 
   calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
-    // Delegate entirely to the child, then record its box (position + size) as our own - the
+    // Delegate entirely to the child (at our own top-left), then record its size as our own - the
     // rotation does not change what space we take, only how the child is painted.
-    const size = this.child.calculateLayout(constraints, offset, ctx);
+    const size = this.child.calculateLayout(constraints, { x: 0, y: 0 }, ctx);
     this.x = offset.x;
     this.y = offset.y;
     this.width = size.width;
     this.height = size.height;
     return size;
+  }
+
+  protected override computeSize(constraints: BoxConstraints, ctx: LayoutContext): Size {
+    return this.child.measure(constraints, ctx);
+  }
+
+  override layoutChildren(): readonly PDFElement[] {
+    return [this.child];
+  }
+
+  // It takes the child's space, so the child's sizing hints and its break-before/after are its own.
+  // It is never split - half a rotation on each page means nothing - so a break INSIDE stays inside.
+  override relativeSizeFactor(horizontal: boolean): number | undefined {
+    return this.child.relativeSizeFactor(horizontal);
+  }
+
+  override needsBoundedMain(horizontal: boolean): boolean {
+    return this.child.needsBoundedMain(horizontal);
+  }
+
+  override minIntrinsicMain(horizontal: boolean, ctx: LayoutContext): number {
+    return this.child.minIntrinsicMain(horizontal, ctx);
+  }
+
+  override breaksBefore(): boolean {
+    return this.child.breaksBefore();
+  }
+
+  override breaksAfter(): boolean {
+    return this.child.breaksAfter();
   }
 
   override getProps() {

@@ -71,11 +71,23 @@ export class PushButtonElement extends SizedPDFElement {
   }
 
   calculateLayout(constraints: BoxConstraints, offset: Offset, _ctx: LayoutContext): Size {
+    const size = this.sizeFor(constraints);
     this.x = offset.x;
     this.y = offset.y;
-    this.width = this.requested.width ?? (constraints.hasBoundedWidth ? constraints.maxWidth : 120);
-    this.height = this.requested.height ?? this.requested.fontSize + 14;
-    return { width: this.width, height: this.height };
+    this.width = size.width;
+    this.height = size.height;
+    return size;
+  }
+
+  protected override computeSize(constraints: BoxConstraints): Size {
+    return this.sizeFor(constraints);
+  }
+
+  private sizeFor(constraints: BoxConstraints): Size {
+    const width =
+      this.requested.width ?? (constraints.hasBoundedWidth ? constraints.maxWidth : 120);
+    const height = this.requested.height ?? this.requested.fontSize + 14;
+    return { width, height };
   }
 
   getProps() {

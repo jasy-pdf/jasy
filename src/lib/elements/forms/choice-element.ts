@@ -73,16 +73,28 @@ export class ChoiceElement extends SizedPDFElement {
   }
 
   calculateLayout(constraints: BoxConstraints, offset: Offset, _ctx: LayoutContext): Size {
+    const size = this.sizeFor(constraints);
     this.x = offset.x;
     this.y = offset.y;
-    this.width = this.requested.width ?? (constraints.hasBoundedWidth ? constraints.maxWidth : 200);
+    this.width = size.width;
+    this.height = size.height;
+    return size;
+  }
+
+  protected override computeSize(constraints: BoxConstraints): Size {
+    return this.sizeFor(constraints);
+  }
+
+  private sizeFor(constraints: BoxConstraints): Size {
+    const width =
+      this.requested.width ?? (constraints.hasBoundedWidth ? constraints.maxWidth : 200);
     // Dropdown: one line. List box: a few rows tall so several options are visible.
     const oneLine = this.requested.fontSize + 9;
     const rows = Math.max(3, Math.min(this.spec.options.length, 5));
-    this.height =
+    const height =
       this.requested.height ??
       (this.requested.combo ? oneLine : rows * (this.requested.fontSize + 4));
-    return { width: this.width, height: this.height };
+    return { width, height };
   }
 
   getProps() {

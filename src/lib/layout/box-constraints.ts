@@ -157,6 +157,21 @@ export interface SizingParams {
   aspectRatio?: number;
 }
 
+/**
+ * The width rules of a box, for a piece of it split across pages: it keeps how wide it may be, and
+ * its height comes from what it holds on that page (CSS `box-decoration-break: clone`).
+ */
+export function widthRules(s: SizingParams): SizingParams {
+  return {
+    width: s.width,
+    widthFactor: s.widthFactor,
+    minWidth: s.minWidth,
+    maxWidth: s.maxWidth,
+    minWidthFactor: s.minWidthFactor,
+    maxWidthFactor: s.maxWidthFactor,
+  };
+}
+
 /** Split `SizingParams` into the per-axis form `resolveSize` takes. */
 export function extentSpecs(p: SizingParams): { width: ExtentSpec; height: ExtentSpec } {
   return {

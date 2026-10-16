@@ -23,45 +23,67 @@ export class RepeatingHeaderElement extends PDFElement implements Fragmentable {
   }
 
   calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
+    const size = this.sizeWith(constraints, ctx, "layout");
     this.x = offset.x;
     this.y = offset.y;
+    this.width = size.width;
+    this.height = size.height;
+    return size;
+  }
+
+  protected override computeSize(constraints: BoxConstraints, ctx: LayoutContext): Size {
+    return this.sizeWith(constraints, ctx, "measure");
+  }
+
+  /** The one sizing path: `layout` places header and body (relative to this box), `measure` sizes. */
+  private sizeWith(
+    constraints: BoxConstraints,
+    ctx: LayoutContext,
+    mode: "layout" | "measure",
+  ): Size {
     const width = constraints.hasBoundedWidth ? constraints.maxWidth : 0;
-
-    const h = this.header.calculateLayout(
-      BoxConstraints.loose(width, Infinity),
-      { x: this.x, y: this.y },
-      ctx,
-    );
-    const b = this.body.calculateLayout(
-      BoxConstraints.loose(width, Infinity),
-      { x: this.x, y: this.y + h.height + this.gap },
-      ctx,
-    );
-
-    this.width = width;
-    this.height = h.height + this.gap + b.height;
-    return { width: this.width, height: this.height };
+    const inner = BoxConstraints.loose(width, Infinity);
+    const h =
+      mode === "layout"
+        ? this.header.calculateLayout(inner, { x: 0, y: 0 }, ctx)
+        : this.header.measure(inner, ctx);
+    const b =
+      mode === "layout"
+        ? this.body.calculateLayout(inner, { x: 0, y: h.height + this.gap }, ctx)
+        : this.body.measure(inner, ctx);
+    return { width, height: h.height + this.gap + b.height };
   }
 
   fragment(maxHeight: number, width: number, ctx: LayoutContext): FragmentResult {
     // Reserve the header's height on every page; the body flows in what's left.
-    const headerHeight = this.header.calculateLayout(
-      BoxConstraints.loose(width, Infinity),
-      { x: 0, y: 0 },
-      ctx,
-    ).height;
+    const headerHeight = this.header.measure(BoxConstraints.loose(width, Infinity), ctx).height;
 
     if (!isFragmentable(this.body)) return { fitted: this, remainder: null };
 
     const split = this.body.fragment(Math.max(0, maxHeight - headerHeight - this.gap), width, ctx);
-    // Body fits whole → the whole thing fits on this page.
-    if (split.remainder === null) return { fitted: this, remainder: null };
+    // Body fits whole, no break inside → the whole thing fits on this page.
+    if (split.remainder === null && !split.forceBreak) return { fitted: this, remainder: null };
 
-    // Re-wrap each body piece with the SAME header → it reappears on the next page too.
+    // Re-wrap each body piece with the SAME header → it reappears on the next page too. A forced
+    // break inside the body is passed on, so the page ends there.
     return {
-      fitted: split.fitted ? new RepeatingHeaderElement(this.header, split.fitted, this.gap) : null,
-      remainder: new RepeatingHeaderElement(this.header, split.remainder, this.gap),
+      fitted: split.fitted
+        ? new RepeatingHeaderElement(this.header, split.fitted, this.gap).asPieceOf(this)
+        : null,
+      remainder: split.remainder
+        ? new RepeatingHeaderElement(this.header, split.remainder, this.gap).asPieceOf(this)
+        : null,
+      forceBreak: split.forceBreak,
     };
+  }
+
+  /** A break inside the body is a break in the flow the table sits in. */
+  override hasForcedBreak(): boolean {
+    return this.body.hasForcedBreak();
+  }
+
+  override layoutChildren(): readonly PDFElement[] {
+    return [this.header, this.body];
   }
 
   override getProps() {

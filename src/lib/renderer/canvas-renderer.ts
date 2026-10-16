@@ -1,3 +1,4 @@
+import type { RenderScope } from "../utils/renderer-registry.ts";
 import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 import { CanvasElement } from "../elements/canvas-element.ts";
 import { CanvasPainter } from "../canvas/painter.ts";
@@ -12,8 +13,15 @@ import type { IRNode } from "../ir/display-list.ts";
  * past its own edge would otherwise bleed into the layout beside it.
  */
 export class CanvasRenderer {
-  static async render(element: CanvasElement, objectManager: PDFObjectManager): Promise<IRNode[]> {
-    const { x, y, width, height, paint, alt } = element.getProps();
+  static async render(
+    element: CanvasElement,
+    objectManager: PDFObjectManager,
+    scope: RenderScope,
+  ): Promise<IRNode[]> {
+    const { x: ownX, y: ownY, width, height, paint, alt } = element.getProps();
+    // Its own position is relative to `scope.origin`; the IR wants page coordinates.
+    const x = scope.origin.x + (ownX ?? 0);
+    const y = scope.origin.y + (ownY ?? 0);
     // The layout bounds are kept as plain numbers, and the painter and the callback each get their
     // OWN size object. Sharing one meant a callback that wrote to `size.width` moved the clip away
     // from the box layout had reserved - the drawing would then bleed into what sits beside it.

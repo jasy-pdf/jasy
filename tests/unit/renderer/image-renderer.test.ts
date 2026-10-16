@@ -1,9 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
-import { ImageRenderer } from "../../../src/lib/renderer/image-renderer";
-import { ImageElement, BoxFit } from "../../../src/lib/elements/image-element";
-import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager";
-import { PdfBackend } from "../../../src/lib/renderer/pdf-backend";
-import * as imageHelper from "../../../src/lib/utils/image-helper";
+import { ImageRenderer } from "../../../src/lib/renderer/image-renderer.ts";
+import { ImageElement, BoxFit } from "../../../src/lib/elements/image-element.ts";
+import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager.ts";
+import { PdfBackend } from "../../../src/lib/renderer/pdf-backend.ts";
+import * as imageHelper from "../../../src/lib/utils/image-helper.ts";
+import { PAGE_SCOPE } from "../support/scope.ts";
 
 describe("ImageRenderer", () => {
   it("should render an image with the correct placement and size for 'cover' fit", async () => {
@@ -44,7 +45,7 @@ describe("ImageRenderer", () => {
     // The renderer now returns an IRNode[]; the backend serializes it and registers
     // the image XObject (which is what the registerImage assertions below check).
     const result = PdfBackend.serialize(
-      await ImageRenderer.render(mockImageElement, mockObjectManager),
+      await ImageRenderer.render(mockImageElement, mockObjectManager, PAGE_SCOPE),
       mockObjectManager,
     );
 
@@ -100,7 +101,7 @@ describe("ImageRenderer", () => {
     // The renderer now returns an IRNode[]; the backend serializes it and registers
     // the image XObject (which is what the registerImage assertions below check).
     const result = PdfBackend.serialize(
-      await ImageRenderer.render(mockImageElement, mockObjectManager),
+      await ImageRenderer.render(mockImageElement, mockObjectManager, PAGE_SCOPE),
       mockObjectManager,
     );
 
@@ -142,9 +143,9 @@ describe("ImageRenderer", () => {
     // Mock PDFObjectManager
     const mockObjectManager = {} as PDFObjectManager;
 
-    await expect(ImageRenderer.render(mockImageElement, mockObjectManager)).rejects.toThrow(
-      "File data cannot be `null`",
-    );
+    await expect(
+      ImageRenderer.render(mockImageElement, mockObjectManager, PAGE_SCOPE),
+    ).rejects.toThrow("File data cannot be `null`");
   });
 
   it("should render an image with the correct placement and size for 'fill' fit", async () => {
@@ -185,7 +186,7 @@ describe("ImageRenderer", () => {
     // The renderer now returns an IRNode[]; the backend serializes it and registers
     // the image XObject (which is what the registerImage assertions below check).
     const result = PdfBackend.serialize(
-      await ImageRenderer.render(mockImageElement, mockObjectManager),
+      await ImageRenderer.render(mockImageElement, mockObjectManager, PAGE_SCOPE),
       mockObjectManager,
     );
 
@@ -241,7 +242,7 @@ describe("ImageRenderer", () => {
     // The renderer now returns an IRNode[]; the backend serializes it and registers
     // the image XObject (which is what the registerImage assertions below check).
     const result = PdfBackend.serialize(
-      await ImageRenderer.render(mockImageElement, mockObjectManager),
+      await ImageRenderer.render(mockImageElement, mockObjectManager, PAGE_SCOPE),
       mockObjectManager,
     );
 
@@ -285,7 +286,7 @@ describe("ImageRenderer", () => {
       offsetX: 0,
       offsetY: 0,
     });
-    const [node] = await ImageRenderer.render(mockImageElement, mockObjectManager);
+    const [node] = await ImageRenderer.render(mockImageElement, mockObjectManager, PAGE_SCOPE);
     expect((node as { tag?: unknown }).tag).toEqual({ role: "Figure", key: 7 });
   });
 });

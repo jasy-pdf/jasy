@@ -1,9 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { TextElement } from "../../../src/lib/elements/text-element";
-import { TextSegment } from "../../../src/lib/elements/text-element";
-import { LayoutContext } from "../../../src/lib/elements/pdf-element";
-import { BoxConstraints } from "../../../src/lib/layout/box-constraints";
+import { TextElement } from "../../../src/lib/elements/text-element.ts";
+import { TextSegment } from "../../../src/lib/elements/text-element.ts";
+import { LayoutContext } from "../../../src/lib/elements/pdf-element.ts";
+import { BoxConstraints } from "../../../src/lib/layout/box-constraints.ts";
 import { testMetrics } from "../support/metrics.ts";
+import { wrapStringIntoLines } from "../../../src/lib/text/line-breaker.ts";
 
 // Deterministic metrics: each glyph is 10 wide, spaces are 0. With six 2-char words and
 // maxWidth 50 the greedy breaker yields three lines of two words each.
@@ -20,13 +21,32 @@ const para = (content: string, fontSize = 10) =>
 
 const contentOf = (el: unknown) => (el as TextElement).getProps().content as string;
 
+/** The lines a piece DRAWS at width 50: a piece of a split paragraph shows only its own lines. */
+const drawnOf = (el: unknown) => {
+  const p = (el as TextElement).getProps();
+  return wrapStringIntoLines(
+    p.content as string,
+    p.fontFamily,
+    p.fontSize,
+    p.fontStyle,
+    50,
+    metrics,
+    p.maxLines,
+    p.overflow,
+    0,
+    {
+      shownLines: p.shownLines,
+    },
+  ).join(" ");
+};
+
 // orphans/widows off: this suite is about WHERE the fragmenter cuts, not about protecting the cut.
 // The protection has its own tests in orphans-widows.test.ts.
 describe("TextElement.fragment - split at line boxes", () => {
   it("keeps the lines that fit and spills the rest", () => {
     // 3 lines, each 10pt tall. maxHeight 20 -> 2 lines fit.
     const { fitted, remainder } = para("aa bb cc dd ee ff").fragment(20, 50, ctx);
-    expect(contentOf(fitted)).toBe("aa bb cc dd");
+    expect(drawnOf(fitted)).toBe("aa bb cc dd");
     expect(contentOf(remainder)).toBe("ee ff");
   });
 

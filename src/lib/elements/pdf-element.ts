@@ -1,4 +1,5 @@
 import type { FontMetrics } from "../utils/font-metrics.ts";
+import { SizeCache } from "../layout/layout-cache.ts";
 import type { PDFPageConfig } from "./page-element.ts";
 import type { ResolvedTextStyle } from "../text/text-style.ts";
 import type { OverflowPolicy } from "../layout/fragmentation.ts";
@@ -12,15 +13,14 @@ import type { CrossAlign } from "../layout/alignment.ts";
  * height. The PDF byte writer is deliberately absent - layout must not touch it.
  */
 /**
- * A positioning frame - the CSS "containing block" that `Positioned` children resolve their
- * offsets against. A `relative` Box (later the page) creates one and threads it to its subtree;
- * `Positioned` descendants register a placement closure in `place`, which the frame drains once it
- * has finished sizing itself (so `right`/`bottom` can resolve against the final box).
+ * A positioning frame - the CSS "containing block" that `Positioned` children resolve their offsets
+ * against: the page's content box, or a `relative` Box. Threaded to the subtree so a `Positioned`
+ * can tell it has one. The frame's owner finds its `Positioned` descendants by walking the tree
+ * after sizing itself, and lays them out against its own box - layout itself registers nothing.
  */
 export interface PositioningFrame {
   origin: Offset;
   size: Size;
-  place: Array<(frame: { origin: Offset; size: Size }, ctx: LayoutContext) => void>;
 }
 
 /**
@@ -85,17 +85,102 @@ export abstract class PDFElement {
     return this;
   }
 
+  /**
+   * Marks this element as a piece of `original`, split across pages: it is the same element to a
+   * reader of the tagged PDF (one structure element) and to the Row or Column it sits in (its flex
+   * properties). Every fragmentation clone ends in this call, so a property added to the base is
+   * carried in ONE place. Returns this.
+   */
+  asPieceOf(original: PDFElement): this {
+    return this.adoptStructId(original).takeFlexItemFrom(original);
+  }
+
+  /** Takes the flex properties `original` set (CSS `align-self`, `order`, `flex-shrink`). Returns this. */
+  takeFlexItemFrom(original: PDFElement): this {
+    this.alignSelf = original.alignSelf ?? this.alignSelf;
+    this.order = original.order ?? this.order;
+    this.flexShrink = original.flexShrink ?? this.flexShrink;
+    return this;
+  }
+
   // Each subclass overrides this with its own concrete props type; `unknown` forces
   // callers holding only a base `PDFElement` to narrow before reading props.
   abstract getProps(): unknown;
 
   /**
    * Lays the element out: `constraints` bound its size (flows DOWN), `offset` is the
-   * absolute top-left position the parent assigns it, and the returned `Size` is the
+   * top-left position the parent assigns it, relative to the parent's own top-left (absolute
+   * coordinates exist only in the render pass), and the returned `Size` is the
    * space it actually took (flows UP). Layout works in a top-left origin; the Y-flip
    * happens once at the IR -> backend seam.
    */
   abstract calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size;
+
+  /**
+   * The size `calculateLayout` would return under these constraints - with NO side effects: no
+   * position, no stored size, nothing registered with a frame. A parent asks this to decide, and lays
+   * a child out once afterwards; asking with a full layout doubled the work at every nesting level.
+   * Do not override it - implement `computeSize` (as Flutter's `getDryLayout` / `computeDryLayout`).
+   * The same question twice is answered from the layout cache (`layout/layout-cache.ts`).
+   */
+  measure(constraints: BoxConstraints, ctx: LayoutContext): Size {
+    const cache = (this.sizeCache ??= new SizeCache());
+    const asked = this.sizeInputs(constraints);
+    const onPage = this.dependsOnPage();
+    const known = cache.get(asked, ctx, onPage);
+    if (known) return known;
+    const size = this.computeSize(constraints, ctx);
+    cache.set(asked, ctx, onPage, size);
+    return size;
+  }
+
+  /**
+   * The part of the constraints this element's size actually reads - what the layout cache keys on.
+   * All of it by default. An element whose size ignores a bound returns it opened up, so two questions
+   * that differ only there share one answer. It must be TRUE for `computeSize`: reading a bound that
+   * is dropped here makes the cache hand back a wrong size.
+   */
+  protected sizeInputs(constraints: BoxConstraints): BoxConstraints {
+    return constraints;
+  }
+
+  private sizeCache?: SizeCache;
+
+  /**
+   * Whether this element's size can depend on the page it lands on (`pageConfig`, `pageInfo`): a
+   * `PageBuilder`, a `Page`, and everything holding one. Only those key a cached size on the page, so
+   * every other size is reused across pages and across the pagination and render passes. Remembered:
+   * the tree does not change, and an answer that was `false` can never become `true`.
+   */
+  dependsOnPage(): boolean {
+    return (this.pageDependent ??= this.layoutChildren().some((child) => child.dependsOnPage()));
+  }
+
+  private pageDependent?: boolean;
+
+  /**
+   * How this element sizes itself for `measure`. It must come from the SAME sizing computation as
+   * `calculateLayout`, or a measured size and a laid-out one can differ.
+   */
+  protected abstract computeSize(constraints: BoxConstraints, ctx: LayoutContext): Size;
+
+  /** The elements this one lays out, for walks that must see the whole tree. Leaves have none. */
+  layoutChildren(): readonly PDFElement[] {
+    return [];
+  }
+
+  /**
+   * The element this one is transparent for, if any: a `ProxyElement` returns its child. A surrounding
+   * Row or Column looks through it for the flex item (`layout/flex-item.ts`).
+   */
+  proxied(): PDFElement | undefined {
+    return undefined;
+  }
+
+  /** Lays out its own `Positioned` descendants (a page, a `relative` Box); a walk for them stops here. */
+  isPositioningFrame(): boolean {
+    return false;
+  }
 
   /**
    * The relative-size fraction (0..1) this element asked for on the given axis, if any (`horizontal` =
@@ -184,9 +269,9 @@ export abstract class PDFElement {
   /**
    * Where this child sits among its siblings (CSS `order`), lowest first, source order deciding ties.
    * It moves the child in the LAYOUT only - the element tree, and therefore the reading order a tagged
-   * PDF exposes, is untouched. Default 0.
+   * PDF exposes, is untouched. Unset means 0; a stack reads it through `layout/flex-item.ts`.
    */
-  order = 0;
+  order?: number;
 
   /**
    * How willingly this child gives up main-axis space when the line overflows (CSS `flex-shrink`),
@@ -198,8 +283,9 @@ export abstract class PDFElement {
    * caution outlived its use: four of the gallery cases turned out to be overflowing their page
    * margin without anyone noticing, because nothing ever pulled them back. Shrinking is bounded from
    * below by `minIntrinsicMain`, so a child is never squeezed past what it can actually hold.
+   * Unset means 1; a stack reads it through `layout/flex-item.ts`.
    */
-  flexShrink = 1;
+  flexShrink?: number;
 
   /** Sets `flexShrink` and returns the element. */
   withFlexShrink(shrink: number | undefined): this {

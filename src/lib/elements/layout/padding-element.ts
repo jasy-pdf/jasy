@@ -59,7 +59,7 @@ export class PaddingElement extends SizedPDFElement implements Fragmentable {
   }
 
   private cloneWithChild(child: PDFElement): PaddingElement {
-    return new PaddingElement({ margin: this.margin, child });
+    return new PaddingElement({ margin: this.margin, child }).asPieceOf(this);
   }
 
   /**
@@ -74,11 +74,25 @@ export class PaddingElement extends SizedPDFElement implements Fragmentable {
   }
 
   calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
-    // Padding takes the width it is offered; its height shrink-wraps the child.
-    if (constraints.hasBoundedWidth) this.width = constraints.maxWidth;
+    const size = this.sizeWith(constraints, ctx, "layout");
     this.x = offset.x;
     this.y = offset.y;
+    this.width = size.width;
+    this.height = size.height;
+    Validator.validateSizedElement(this);
+    return size;
+  }
 
+  protected override computeSize(constraints: BoxConstraints, ctx: LayoutContext): Size {
+    return this.sizeWith(constraints, ctx, "measure");
+  }
+
+  /** The one sizing path: `layout` places the child (relative to this box), `measure` only sizes it. */
+  private sizeWith(
+    constraints: BoxConstraints,
+    ctx: LayoutContext,
+    mode: "layout" | "measure",
+  ): Size {
     // Percentages resolve against the width we were OFFERED, so every pass gets the same answer.
     const [marginTop, marginRight, marginBottom, marginLeft] = resolveEdges(
       this.margin,
@@ -87,27 +101,27 @@ export class PaddingElement extends SizedPDFElement implements Fragmentable {
 
     // The child is inset by the margins: shifted down/right, narrowed by the
     // horizontal margins, and left height-unbounded so it sizes to its own content.
-    const childOffset: Offset = {
-      x: this.x + marginLeft,
-      y: this.y + marginTop,
-    };
     const childWidth = constraints.hasBoundedWidth
       ? Math.max(0, constraints.maxWidth - marginLeft - marginRight)
       : Infinity;
     const childConstraints = BoxConstraints.loose(childWidth, Infinity);
+    const childSize =
+      mode === "layout"
+        ? this.child.calculateLayout(childConstraints, { x: marginLeft, y: marginTop }, ctx)
+        : this.child.measure(childConstraints, ctx);
 
-    const childSize = this.child.calculateLayout(childConstraints, childOffset, ctx);
-    this.height = childSize.height + marginTop + marginBottom;
-    // Unbounded width (e.g. a fixed child in a Row): shrink-wrap to the child + insets,
-    // mirroring how Container/Row shrink-wrap. Bounded width was set above (unchanged).
-    if (!constraints.hasBoundedWidth) {
-      this.width = childSize.width + marginLeft + marginRight;
-    }
+    // Padding takes the width it is offered; its height shrink-wraps the child. Unbounded width (a
+    // fixed child in a Row) shrink-wraps to the child + insets, as Container/Row do.
+    return {
+      width: constraints.hasBoundedWidth
+        ? constraints.maxWidth
+        : childSize.width + marginLeft + marginRight,
+      height: childSize.height + marginTop + marginBottom,
+    };
+  }
 
-    Validator.validateSizedElement(this);
-
-    // Top-left coordinates; the Y-flip now happens once at the IR -> backend seam.
-    return { width: this.width ?? 0, height: this.height };
+  override layoutChildren(): readonly PDFElement[] {
+    return [this.child];
   }
 
   override getProps() {
