@@ -6,10 +6,10 @@ import { IRNode } from "../ir/display-list.ts";
 /**
  * A `PageBreak` draws nothing - the pagination packer consumes it at the cut, so in a vertical flow it
  * never reaches this pass. Reaching it therefore means the break was ineffective: it sat somewhere that
- * does not paginate, like inside a horizontal `Row` (a row is one line, you cannot split it across
- * pages - CSS and react-pdf ignore a forced break there too). We degrade to drawing nothing, but warn
- * once so the mistake is not silent. This one choke-point catches every ineffective break; no element
- * needs a special case.
+ * does not paginate - inside a horizontal `Row` (one line; CSS and react-pdf ignore a forced break there
+ * too), or inside a `PageBuilder`, whose content is built for the page it lands on and placed whole. We
+ * degrade to drawing nothing, but warn so the mistake is not silent. This one choke-point catches every
+ * ineffective break; no element needs a special case.
  */
 export class PageBreakRenderer {
   static async render(
@@ -18,8 +18,9 @@ export class PageBreakRenderer {
     _scope: RenderScope,
   ): Promise<IRNode[]> {
     console.warn(
-      "PageBreak had no effect: it is not in a paginating flow (e.g. it is inside a Row, which is a " +
-        "single horizontal line). Put the break as a sibling in a Column to break after that content.",
+      "PageBreak had no effect: it is not in a paginating flow - it is inside a Row (a single " +
+        "horizontal line) or a PageBuilder (built for one page and placed whole). Put the break as a " +
+        "sibling in a Column to break after that content.",
     );
     return [];
   }
