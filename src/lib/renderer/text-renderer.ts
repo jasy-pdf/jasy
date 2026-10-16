@@ -11,15 +11,7 @@ import type {
   TTFParser,
   ColorGlyphLayer,
 } from "../utils/ttf-parser.ts";
-import {
-  IRNode,
-  TextRun,
-  PathCommand,
-  Gradient,
-  Line,
-  Link,
-  spokenText,
-} from "../ir/display-list.ts";
+import { IRNode, TextRun, PathCommand, Gradient, Line, Link } from "../ir/display-list.ts";
 import { isEmojiCodePoint } from "../text/emoji-codepoints.ts";
 import { emojiImageNode } from "./emoji-image.ts";
 import {
@@ -46,8 +38,21 @@ import { quadToCubic } from "../vector/path.ts";
 
 /** One link as a reader meets it: its annotation rects (one per line) and the runs it covers. */
 interface LinkGroup {
+  target: string;
   links: Link[];
   runs: TextRun[];
+  /** Its text as written, one piece per line (a justified line draws one run per word). */
+  pieces: { text: string; y: number }[];
+}
+
+/** What a link says when read aloud (its `/Contents`): its pieces, a space where a line ended. */
+function spokenText(pieces: readonly { text: string; y: number }[]): string {
+  let out = "";
+  pieces.forEach((piece, i) => {
+    if (i > 0 && piece.y !== pieces[i - 1]!.y) out += " ";
+    out += piece.text;
+  });
+  return out.replace(/\s+/g, " ").trim();
 }
 
 export class TextRenderer {
@@ -183,14 +188,22 @@ export class TextRenderer {
       const key = objectManager.struct.openElement(textElement.structId, pdfRole);
       for (const run of runs) run.tag = { role: pdfRole, key };
       // An inline link is a /Link element inside the paragraph: it holds its own text and its
-      // annotations, which describe themselves by that text (PDF/UA 7.18.5).
-      for (const group of linkGroups) {
-        const linkKey = objectManager.struct.addElement("Link", key);
+      // annotations, which describe themselves by that text (PDF/UA 7.18.5). One cut by a page break
+      // stays ONE element: the next piece of the paragraph continues the link its last one ended in.
+      const struct = objectManager.struct;
+      const carried = struct.takeCarriedLink(textElement.structId);
+      linkGroups.forEach((group, i) => {
+        const continues = i === 0 && group.runs[0] === runs[0] && carried?.target === group.target;
+        const linkKey = continues ? carried!.key : struct.addElement("Link", key);
         for (const run of group.runs) run.tag = { role: "Link", key: linkKey };
         const first = group.links[0]!;
-        const alt = spokenText(group.runs) || (first.href ?? first.dest ?? "");
+        const alt = spokenText(group.pieces) || (first.href ?? first.dest ?? "");
         for (const link of group.links) Object.assign(link, { structKey: linkKey, alt });
-      }
+        const last = group.runs[group.runs.length - 1];
+        if (i === linkGroups.length - 1 && last === runs[runs.length - 1]) {
+          struct.carryLink(textElement.structId, group.target, linkKey);
+        }
+      });
     }
 
     // Color fonts (COLR/CPAL): expand each run's emoji into filled vector layers (or fetched images
@@ -790,11 +803,12 @@ export class TextRenderer {
           const target =
             segment.href !== undefined ? `href:${segment.href}` : `dest:${segment.dest}`;
           if (openLink?.target !== target) {
-            openLink = { target, group: { links: [], runs: [] } };
+            openLink = { target, group: { target, links: [], runs: [], pieces: [] } };
             linkGroups.push(openLink.group);
           }
           openLink.group.links.push(link);
           openLink.group.runs.push(...runs.slice(firstRun));
+          openLink.group.pieces.push({ text: runText, y: runY });
         } else if (runText.trim() !== "") {
           openLink = undefined;
         }

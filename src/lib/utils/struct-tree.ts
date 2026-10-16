@@ -55,6 +55,8 @@ export class StructTree {
   private stack: number[] = []; // open containers; top is the current parent
   private pageObjByStructParents = new Map<number, number>();
   private annotParents = new Map<number, number>(); // an annotation's /StructParent -> its element key
+  // An inline link a page break cut: paragraph structId -> the link it ended in, for its next piece.
+  private carried = new Map<number, { target: string; key: number }>();
 
   /** Register a structure element for a logical element (keyed by its stable `structId`, so a paragraph or
    *  table split across pages resolves to the SAME element - MCIDs then accrue from every page). Its parent
@@ -83,6 +85,18 @@ export class StructTree {
     const key = this.counter++;
     this.elems.set(key, { key, role, alt: opts?.alt, parent, mc: [], annots: [] });
     return key;
+  }
+
+  /** A piece of paragraph `owner` ended inside link element `key`: its next piece may continue it. */
+  carryLink(owner: number, target: string, key: number): void {
+    this.carried.set(owner, { target, key });
+  }
+
+  /** The link the previous piece of `owner` ended in. Taken by the next piece, whether it continues it. */
+  takeCarriedLink(owner: number): { target: string; key: number } | undefined {
+    const carried = this.carried.get(owner);
+    this.carried.delete(owner);
+    return carried;
   }
 
   push(key: number): void {

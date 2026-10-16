@@ -333,16 +333,3 @@ export type IRNode =
   | FormFieldNode
   | TransformPush
   | TransformPop;
-
-/**
- * What a link says when read aloud (its PDF/UA `/Contents`): the text of the runs it covers, a space
- * where a line ended, and nothing between two runs of the same line - spans of one word stay one word.
- */
-export function spokenText(runs: readonly { text: string; y: number }[]): string {
-  let out = "";
-  runs.forEach((run, i) => {
-    if (i > 0 && run.y !== runs[i - 1]!.y) out += " ";
-    out += run.text;
-  });
-  return out.replace(/\s+/g, " ").trim();
-}

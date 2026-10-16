@@ -1,7 +1,18 @@
 import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 import { LinkElement } from "../elements/layout/link-element.ts";
 import { RendererRegistry, type RenderScope } from "../utils/renderer-registry.ts";
-import { IRNode, spokenText } from "../ir/display-list.ts";
+import { IRNode } from "../ir/display-list.ts";
+import type { PDFElement } from "../elements/pdf-element.ts";
+import { TextElement } from "../elements/text-element.ts";
+
+/** The text a link covers, as written - not as drawn, where a justified line is one run per word. */
+function textOf(element: PDFElement): string[] {
+  if (element instanceof TextElement) {
+    const { content } = element.getProps();
+    return [typeof content === "string" ? content : content.map((s) => s.content).join("")];
+  }
+  return element.layoutChildren().flatMap(textOf);
+}
 
 export class LinkRenderer {
   static async render(
@@ -33,8 +44,7 @@ export class LinkRenderer {
     } finally {
       struct.pop();
     }
-    const alt =
-      spokenText(childNodes.flatMap((n) => (n.type === "text" ? [n] : []))) || (href ?? dest ?? "");
+    const alt = textOf(child).join(" ").replace(/\s+/g, " ").trim() || (href ?? dest ?? "");
     return [...childNodes, { type: "link", x, y, width, height, href, dest, structKey, alt }];
   }
 }

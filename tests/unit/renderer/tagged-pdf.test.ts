@@ -218,6 +218,59 @@ describe("annotations in the structure tree (PDF/UA 7.18)", () => {
     expect(pdf).toContain("/Contents (Visit jasy.dev)");
   });
 
+  it("a justified link is read with its spaces - a stretched line draws one run per word", async () => {
+    const words = "the full documentation page of the project";
+    const inline = Document([
+      Page([
+        Box({ width: 120 }, [
+          Paragraph([span("See "), span(words, { href: "https://jasy.dev" }), span(" now.")], {
+            align: "justify",
+          }),
+        ]),
+      ]),
+    ]);
+    const element = Document([
+      Page([
+        Box({ width: 120 }, [
+          Link({ href: "https://jasy.dev" }, Paragraph(words, { align: "justify" })),
+        ]),
+      ]),
+    ]);
+    for (const doc of [inline, element]) {
+      const pdf = await renderPdf(doc, { accessible: true, compress: false });
+      expect(pdf).toContain(`/Contents (${words})`);
+    }
+  });
+
+  it("an inline link cut by a page break stays ONE /Link element", async () => {
+    const filler = Array.from({ length: 12 }, (_, i) => `Filler sentence ${i}.`).join(" ");
+    const linked = Array.from({ length: 30 }, (_, i) => `linked word ${i}`).join(" ");
+    const doc = Document([
+      Page({ size: mm(80, 45), margin: 8 }, [
+        Paragraph([span(filler + " "), span(linked, { href: "https://jasy.dev" }), span(" end.")]),
+      ]),
+    ]);
+    const pdf = await renderPdf(doc, { accessible: true, compress: false });
+    const pagesWithLinks = [...pdf.matchAll(/\/Annots \[([^\]]*)\]/g)].length;
+    expect(pagesWithLinks).toBeGreaterThan(1); // the link really crosses a page break
+    expect((pdf.match(/\/S \/Link\b/g) ?? []).length).toBe(1);
+    for (const link of annots(pdf, "Link")) expect(ownersOf(pdf, link)).toEqual(["Link"]);
+  });
+
+  it("two links in one paragraph are two elements", async () => {
+    const doc = Document([
+      Page([
+        Paragraph([
+          span("a", { href: "https://jasy.dev/a" }),
+          span(" and "),
+          span("b", { href: "https://jasy.dev/a" }),
+        ]),
+      ]),
+    ]);
+    const pdf = await renderPdf(doc, { accessible: true, compress: false });
+    expect((pdf.match(/\/S \/Link\b/g) ?? []).length).toBe(2);
+  });
+
   it("an untagged document keeps its annotations exactly as before", async () => {
     const doc = Document([Page([Link({ href: "https://jasy.dev" }, Text("jasy"))])]);
     const pdf = await renderPdf(doc, { compress: false });
