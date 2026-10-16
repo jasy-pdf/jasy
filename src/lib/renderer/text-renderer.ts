@@ -80,6 +80,7 @@ export class TextRenderer {
       letterSpacing,
       splitting: lineOptions.splitting,
       ligatures: lineOptions.ligatures,
+      shownLines: lineOptions.shownLines,
     };
     const lines = breakSegmentsIntoLines(
       content,
@@ -771,15 +772,21 @@ export class TextRenderer {
       letterSpacing,
       splitting: { breakWord, hyphenate },
       ligatures,
+      shownLines,
     };
     let top = yPosition;
-    // Materialised, because justification has to know which line is the LAST one of the paragraph.
-    const segmentLines = [
-      ...breakSegmentsIntoLines(content, defaults, maxWidth, objectManager, maxLines, overflow),
-    ];
-    segmentLines.forEach((line, index) => {
+    const segmentLines = breakSegmentsIntoLines(
+      content,
+      defaults,
+      maxWidth,
+      objectManager,
+      maxLines,
+      overflow,
+    );
+    segmentLines.forEach((line) => {
       const box = lineBoxForSegmentLine(line, defaults, objectManager, lineHeight);
-      pushLine(line, top + box.baseline, index === segmentLines.length - 1);
+      // As for a plain string: only a line that wrapped is stretched.
+      pushLine(line, top + box.baseline, line.end === "hard" || line.end === "end");
       top += box.height;
     });
 

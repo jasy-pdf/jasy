@@ -7,6 +7,7 @@ import {
   Paragraph,
   Anchor,
   Text,
+  span,
   renderToBytes,
 } from "../../../src/lib/index.ts";
 import { TextElement } from "../../../src/lib/elements/text-element.ts";
@@ -191,6 +192,65 @@ describe("a paragraph split across pages keeps how its lines end", () => {
     expect(pages.length).toBeGreaterThan(1);
     const drawn = pages.flatMap((p) => p.flatMap((n) => (n.type === "text" ? [n.text] : [])));
     // Every piece of a hyphenated word ends its own line: no "Rech- nung-" on one line.
+    expect(drawn.filter((t) => /- \S/.test(t))).toEqual([]);
+  });
+});
+
+describe("a span paragraph split across pages keeps how its lines end", () => {
+  it("hard line breaks inside spans survive the split", async () => {
+    const entries = Array.from({ length: 40 }, (_, i) => `Entry ${i + 1}`);
+    const pages = await render([
+      Text(
+        [
+          span(entries.slice(0, 20).join("\n") + "\n"),
+          span(entries.slice(20).join("\n"), { bold: true }),
+        ],
+        { size: 9 },
+      ),
+    ]);
+    expect(pages.length).toBeGreaterThan(1);
+    // (A span ending in `\n` leaves an empty run on the next line; it draws nothing - see todo.)
+    const drawn = pages.flatMap((p) =>
+      p.flatMap((n) => (n.type === "text" && n.text ? [n.text] : [])),
+    );
+    expect(drawn).toEqual(entries);
+  });
+
+  it("justified span text: the last line on a page is stretched, the paragraph's own last is not", async () => {
+    const om = new PDFObjectManager();
+    om.registerFont("Helvetica");
+    const end = (page: IRNode[]) => {
+      const runs = page.flatMap((n) => (n.type === "text" && n.text ? [n] : []));
+      const y = Math.max(...runs.map((r) => r.y));
+      const last = runs.filter((r) => r.y === y).sort((a, b) => b.x - a.x)[0]!;
+      return last.x + om.getStringWidth(last.text, "Helvetica", last.fontSize, last.fontStyle);
+    };
+    const sentence = (i: number) =>
+      `In justified text (${i}) a short word next to a considerably longer one shows the gaps. `;
+    const pages = await render([
+      Paragraph(
+        Array.from({ length: 40 }, (_, i) =>
+          span(sentence(i + 1), i % 2 ? { color: "#1450aa" } : {}),
+        ),
+        { size: 9, align: "justify" },
+      ),
+    ]);
+    expect(pages.length).toBeGreaterThan(1);
+    expect(end(pages[0]!)).toBeCloseTo(20 + 257.64, 1);
+    expect(end(pages[pages.length - 1]!)).toBeLessThan(20 + 257.64 - 5);
+  });
+
+  it("hyphenated span text splits where it is drawn: nothing past the page, no glued pieces", async () => {
+    const simple = (w: string) => (w.length > 8 ? [w.slice(0, 4), w.slice(4)] : [w]);
+    const words = Array.from({ length: 30 }, () => "Rechnungsnummernvergabe").join(" ");
+    const pages = await render([
+      Box({ width: 70 }, [Text([span(words)], { hyphenate: simple, size: 10 })]),
+    ]);
+    expect(pages.length).toBeGreaterThan(1);
+    const A6_HEIGHT = 419.53;
+    for (const page of pages)
+      for (const n of page) if (n.type === "text") expect(n.y).toBeLessThan(A6_HEIGHT - 20);
+    const drawn = pages.flatMap((p) => p.flatMap((n) => (n.type === "text" ? [n.text] : [])));
     expect(drawn.filter((t) => /- \S/.test(t))).toEqual([]);
   });
 });

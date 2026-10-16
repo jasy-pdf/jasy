@@ -1,9 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
+  breakSegmentsIntoLines,
   breakStringIntoLines,
   wrapStringIntoLines,
   type BrokenLine,
 } from "../../../src/lib/text/line-breaker.ts";
+import type { TextSegment } from "../../../src/lib/elements/text-element.ts";
 import { HYPHEN } from "../../../src/lib/text/word-splitting.ts";
 import { FontStyle } from "../../../src/lib/utils/pdf-object-manager.ts";
 import { testMetrics } from "../support/metrics.ts";
@@ -106,4 +108,50 @@ describe("how a line ends", () => {
       "end",
     ]);
   });
+});
+
+// The same for span text: a line starts at a span and an offset in that span's content.
+describe("span line starts", () => {
+  const spans: [string, TextSegment[], number, object][] = [
+    [
+      "words over spans",
+      [{ content: "alpha beta " }, { content: "gamma delta epsilon" }, { content: " zeta eta" }],
+      100,
+      {},
+    ],
+    [
+      "hard breaks in a span",
+      [{ content: "one two\nthree" }, { content: " four five\nsix" }],
+      300,
+      {},
+    ],
+    [
+      "hyphenation in a span",
+      [{ content: "aaaabbbbcccc " }, { content: "ddddeeee ff" }],
+      60,
+      { hyphenate: chunks(4) },
+    ],
+  ];
+  it.each(spans)(
+    "%s: every line is found in its span at its start",
+    (_name, content, width, splitting) => {
+      const lines = breakSegmentsIntoLines(
+        content,
+        { fontFamily: "Helvetica", fontSize: 10, fontStyle: FontStyle.Normal, splitting },
+        width,
+        metrics,
+      );
+      expect(lines.length).toBeGreaterThan(1);
+      for (const line of lines) {
+        // The line's first non-empty piece, as the source holds it (no added hyphen).
+        const first = line.segments.find((seg) => seg.content !== "")!;
+        const own =
+          line.end === "hyphen" && line.segments.length === 1
+            ? first.content.slice(0, -HYPHEN.length)
+            : first.content;
+        const source = content[line.start.segment]!.content;
+        expect(source.startsWith(own, line.start.offset)).toBe(true);
+      }
+    },
+  );
 });

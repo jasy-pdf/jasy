@@ -19,7 +19,6 @@ import {
   MAX_SPACE_SHRINK,
   breakStringIntoLines,
   breakSegmentsIntoLines,
-  segmentLinesToSegments,
   TextOverflow,
 } from "../text/line-breaker.ts";
 import {
@@ -474,15 +473,9 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     width: number,
     ctx: LayoutContext,
   ): FragmentResult {
-    const defaults = {
-      fontFamily: this.fontFamily,
-      fontSize: this.fontSize,
-      fontStyle: this.fontStyle,
-      letterSpacing: this.letterSpacing,
-      direction: this.direction,
-      wordSpacing: this.wordSpacing,
-      textIndent: this.textIndent,
-    };
+    // The SAME knobs measuring and drawing break with (`calculateTextHeight`, the renderer), or this
+    // would cut a paragraph at a line count it is never drawn with.
+    const defaults = this.segmentDefaults();
     const lines = breakSegmentsIntoLines(
       content,
       defaults,
@@ -505,9 +498,30 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     if (fittedLineCount <= 0) return { fitted: null, remainder: this };
     if (fittedLineCount >= lines.length) return { fitted: this, remainder: null };
 
+    // As for a plain string: a window onto the same spans, and the rest continues from where the
+    // next line starts in the source - inside its span, keeping that span's style.
+    const { segment, offset } = lines[fittedLineCount]!.start;
+    const rest = [
+      { ...content[segment]!, content: content[segment]!.content.slice(offset) },
+      ...content.slice(segment + 1),
+    ];
     return {
-      fitted: this.cloneWithContent(segmentLinesToSegments(lines.slice(0, fittedLineCount))),
-      remainder: this.cloneWithContent(segmentLinesToSegments(lines.slice(fittedLineCount)), 0),
+      fitted: this.cloneWithContent(content, this.textIndent, { shownLines: fittedLineCount }),
+      remainder: this.cloneWithContent(rest, 0, {
+        maxLines: this.maxLines === undefined ? undefined : this.maxLines - fittedLineCount,
+      }),
+    };
+  }
+
+  /** How span text is broken: the knobs `calculateTextHeight` and the renderer pass too. */
+  private segmentDefaults() {
+    return {
+      fontFamily: this.fontFamily,
+      fontSize: this.fontSize,
+      fontStyle: this.fontStyle,
+      letterSpacing: this.letterSpacing,
+      splitting: { breakWord: this.breakWord, hyphenate: this.hyphenate },
+      ligatures: this.ligatures,
     };
   }
 
