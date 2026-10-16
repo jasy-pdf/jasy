@@ -63,10 +63,11 @@ export function coverText(
 
   for (const char of text) {
     const cp = char.codePointAt(0)!;
-    // A space and a line break are handled by the breaker, never drawn as a glyph.
+    // A space, a line break and a soft hyphen are handled by the breaker, never drawn as a glyph.
     const drawable =
       cp === 0x20 ||
       cp === 0x0a ||
+      cp === 0xad ||
       metrics.hasGlyph(cp, fontFamily, fontStyle) ||
       // Colour emoji is drawn from a fallback font or an image, NOT from the text font - it is missing
       // there by design, and removing it would delete the very thing `Document({ emoji })` exists for.

@@ -426,6 +426,9 @@ enforces it (`skonto.ts` for "Skonto is not an allowance"), and everywhere else 
   (German patterns alone are 732 KB); the `hyphen` adapter is one line and is EXECUTED by a test. No
   `@jasy/hyphenation` package. We do not hyphenate until you name the language; react-pdf hyphenates
   German by English rules.
+- **A hyphen and a soft hyphen in the text ARE break opportunities, always** - as browsers do (UAX #14
+  for `-`: never before a digit; U+00AD as `hyphens: manual`: invisible and zero-width unless broken at,
+  then a real hyphen). Taken only when the whole word does not fit, so text that fits never moves.
 - **Box/layout props never inherit; text styles do** (`explicit > inherited > built-in`, via
   `LayoutContext.textStyle`). The CSS line.
 - **`lineHeight` unset = the font's natural line height**; a number = a multiplier of the font size.

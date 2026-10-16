@@ -1,8 +1,8 @@
 import type { FontStyle } from "../utils/pdf-object-manager.ts";
 import type { FontMetrics } from "../utils/font-metrics.ts";
 import type { TextSegment } from "../elements/text-element.ts";
-import { runAdvance } from "./advance.ts";
-import { splitLongWord, type WordSplitting } from "./word-splitting.ts";
+import { runAdvance, SOFT_HYPHEN, withoutSoftHyphens } from "./advance.ts";
+import { HYPHEN, splitLongWord, type WordSplitting } from "./word-splitting.ts";
 
 /**
  * How far a JUSTIFIED line's spaces may be squeezed to keep one more word on it.
@@ -160,14 +160,21 @@ export interface BrokenLine {
  */
 const NO_BREAKS: readonly number[] = [];
 
+/** Whether a word holds anything it may break after: a hyphen or a soft hyphen. */
+const mayBreak = (word: string): boolean => word.includes("-") || word.includes(SOFT_HYPHEN);
+
 /**
- * Where a word may break after a hyphen (U+002D), as offsets into it - UAX #14 for the hyphen: a break
- * AFTER it, never before it, never before a digit ("CODE-2", "2026-10-16", "-5" stay whole) and never
- * after a hyphen that starts the word.
+ * Where a word may break, as offsets into it - after a hyphen (U+002D) as UAX #14 has it: never before
+ * it, never before a digit ("CODE-2", "2026-10-16", "-5" stay whole), never after one that starts the
+ * word; and after a soft hyphen (U+00AD), the break its author marked.
  */
 export function hyphenBreaks(word: string): number[] {
   const out: number[] = [];
   for (let i = 1; i < word.length - 1; i++) {
+    if (word[i] === SOFT_HYPHEN) {
+      out.push(i + 1);
+      continue;
+    }
     if (word[i] !== "-") continue;
     const next = word[i + 1]!;
     if (next === "-" || (next >= "0" && next <= "9")) continue;
@@ -176,11 +183,27 @@ export function hyphenBreaks(word: string): number[] {
   return out;
 }
 
-/** A word cut at its hyphen break opportunities: the pieces no line can split. */
+/**
+ * What the line ending at break `k` draws of `word`: everything before it, and at a soft hyphen a REAL
+ * hyphen in its place - the only time a soft hyphen shows. The breaker draws this; measuring it measures
+ * what is drawn.
+ */
+function headAt(word: string, k: number): string {
+  return word[k - 1] === SOFT_HYPHEN ? word.slice(0, k - 1) + HYPHEN : word.slice(0, k);
+}
+
+/** How a line that ends at break `k` of `word` ends: a soft hyphen adds a hyphen the source lacks. */
+const endAt = (word: string, k: number): LineEnd =>
+  word[k - 1] === SOFT_HYPHEN ? "hyphen" : "soft";
+
+/** A word cut at its break opportunities: the pieces no line can split, as they are drawn. */
 export function hyphenPieces(word: string): string[] {
-  const breaks = word.includes("-") ? hyphenBreaks(word) : NO_BREAKS;
+  const breaks = mayBreak(word) ? hyphenBreaks(word) : NO_BREAKS;
   if (breaks.length === 0) return [word];
-  return [0, ...breaks].map((from, k) => word.slice(from, breaks[k] ?? word.length));
+  return [0, ...breaks].map((from, k) => {
+    const to = breaks[k];
+    return to === undefined ? word.slice(from) : headAt(word, to).slice(from);
+  });
 }
 
 export function breakStringIntoLines(
@@ -208,7 +231,9 @@ export function breakStringIntoLines(
   let gaps = 0; // spaces on the current line, which is what a justified line can squeeze
   let lineStart = 0; // source offset the current line begins at
   const lines: BrokenLine[] = [];
-  const close = (end: LineEnd) => lines.push({ text: currentLine.trim(), start: lineStart, end });
+  // Soft hyphens leave the line here: whatever was not broken at is invisible.
+  const close = (end: LineEnd) =>
+    lines.push({ text: withoutSoftHyphens(currentLine).trim(), start: lineStart, end });
 
   const font = { fontFamily, fontSize, fontStyle, ligatures };
   // A `\n` is a HARD break: wrap each paragraph on its own, then cut. An EMPTY paragraph still has to
@@ -241,20 +266,20 @@ export function breakStringIntoLines(
           : currentWidth + (spaceWidth + width) - (gaps + 1) * spaceWidth * shrink <= room;
       // A hyphen inside the word is a break opportunity (UAX #14, as browsers break). Only taken when the
       // whole word does not fit here, so every word that fits lays out exactly as before.
-      const breaks = word.includes("-") ? hyphenBreaks(word) : NO_BREAKS;
+      const breaks = mayBreak(word) ? hyphenBreaks(word) : NO_BREAKS;
       if (breaks.length > 0 && !fitsHere(wordWidth)) {
         // The longest head ending in a hyphen that still fits - measured as ONE run, so the kerning
         // inside it is what will be drawn.
         let head = 0;
         for (const k of breaks) {
-          if (!fitsHere(runAdvance(metrics, word.slice(0, k), font, letterSpacing))) break;
+          if (!fitsHere(runAdvance(metrics, headAt(word, k), font, letterSpacing))) break;
           head = k;
         }
         if (head > 0) {
-          const part = word.slice(0, head);
+          const part = headAt(word, head);
           if (currentLine === "") lineStart = at;
           currentLine = currentLine === "" ? part : `${currentLine} ${part}`;
-          close("soft");
+          close(endAt(word, head));
           currentLine = "";
           currentWidth = 0;
           gaps = 0;
@@ -272,8 +297,8 @@ export function breakStringIntoLines(
         }
         // Alone on a fresh line and still too wide: the first piece goes as a word on its own (split
         // or overflowing as before), and the rest starts the next line.
-        placeWord(word.slice(0, breaks[0]), at);
-        close("soft");
+        placeWord(headAt(word, breaks[0]!), at);
+        close(endAt(word, breaks[0]!));
         currentLine = "";
         currentWidth = 0;
         gaps = 0;
@@ -404,7 +429,14 @@ export function breakSegmentsIntoLines(
   // the line it lands on - a big span ending in `\n` made the next line as tall as itself. Only a blank
   // line keeps one: it is what gives that line its height.
   const close = (segs: TextSegment[], lineWidth: number, end: LineEnd) => {
-    const drawn = segs.filter((seg) => seg.content !== "");
+    // Soft hyphens leave the line here, as in the string path.
+    const drawn = segs
+      .map((seg) =>
+        seg.content.includes(SOFT_HYPHEN)
+          ? { ...seg, content: withoutSoftHyphens(seg.content) }
+          : seg,
+      )
+      .filter((seg) => seg.content !== "");
     lines.push({
       segments: drawn.length > 0 ? drawn : segs.slice(0, 1),
       width: lineWidth,
@@ -457,7 +489,7 @@ export function breakSegmentsIntoLines(
         // here - the same rule as the string path.
         const fitsHere = (w: number): boolean =>
           width === 0 ? w <= room : width + ((joined ? spaceWidth : 0) + w) <= room;
-        const breaks = word.includes("-") ? hyphenBreaks(word) : NO_BREAKS;
+        const breaks = mayBreak(word) ? hyphenBreaks(word) : NO_BREAKS;
         if (breaks.length > 0 && !fitsHere(wordWidth)) {
           const freshLine = (startAt: number) => {
             lineSegments = [{ ...segment, fontFamily: family, content: "" }];
@@ -467,11 +499,11 @@ export function breakSegmentsIntoLines(
           };
           let head = 0;
           for (const k of breaks) {
-            if (!fitsHere(runAdvance(metrics, word.slice(0, k), font, letterSpacing))) break;
+            if (!fitsHere(runAdvance(metrics, headAt(word, k), font, letterSpacing))) break;
             head = k;
           }
           if (head > 0) {
-            const part = word.slice(0, head);
+            const part = headAt(word, head);
             const joiner = width > 0 && joined ? spaceWidth : 0;
             if (width === 0) lineStart = at(wordAt);
             width += joiner + runAdvance(metrics, part, font, letterSpacing);
@@ -479,7 +511,7 @@ export function breakSegmentsIntoLines(
             if (lineSegments.length === 0)
               lineSegments.push({ ...segment, fontFamily: family, content: "" });
             lineSegments[lineSegments.length - 1]!.content = combined;
-            close(lineSegments, width, "soft");
+            close(lineSegments, width, endAt(word, head));
             freshLine(wordAt + head);
             placeWord(word.slice(head), wordAt + head, false);
             return;
@@ -490,8 +522,8 @@ export function breakSegmentsIntoLines(
             placeWord(word, wordAt, false);
             return;
           }
-          placeWord(word.slice(0, breaks[0]), wordAt, joined);
-          close(lineSegments, width, "soft");
+          placeWord(headAt(word, breaks[0]!), wordAt, joined);
+          close(lineSegments, width, endAt(word, breaks[0]!));
           freshLine(wordAt + breaks[0]!);
           placeWord(word.slice(breaks[0]), wordAt + breaks[0]!, false);
           return;
