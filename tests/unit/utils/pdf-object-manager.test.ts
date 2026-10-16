@@ -226,4 +226,13 @@ describe("fontEpoch moves only when a face is really added", () => {
     manager.registerCustomFont("Test", ttf, FontStyle.Bold); // a new style is a new face
     expect(manager.fontEpoch).toBeGreaterThan(epoch);
   });
+
+  it("a font that is refused leaves it alone", () => {
+    const manager = new PDFObjectManager();
+    const epoch = manager.fontEpoch;
+    const packedWoff2 = new Uint8Array(64);
+    packedWoff2.set([0x77, 0x4f, 0x46, 0x32]); // "wOF2"
+    expect(() => manager.registerCustomFont("Packed", packedWoff2)).toThrow();
+    expect(manager.fontEpoch).toBe(epoch);
+  });
 });

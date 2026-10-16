@@ -763,7 +763,6 @@ endstream`;
       this.customFonts.set(name, byStyle);
     }
     if (byStyle.has(style)) return;
-    this.fontEpoch++;
     // A WOFF is the same sfnt behind a small wrapper, so it is unpacked HERE - the one place every
     // font path meets (a file, raw bytes, a URL, a browser upload) - and TTFParser never learns a
     // second container format.
@@ -778,6 +777,7 @@ endstream`;
       );
     }
     byStyle.set(style, new TTFParser(isWoff(data) ? woffToSfnt(data) : data));
+    this.fontEpoch++; // only once the face is really there: a font that fails to parse adds nothing
     this.verticalsCache.delete(name); // this family now answers from the .ttf, not from an AFM
     this.decorationCache.delete(name);
     // Emission (the PDF font objects + page resource) is DEFERRED to first use via ensureEmitted(),
