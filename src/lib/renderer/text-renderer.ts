@@ -19,6 +19,7 @@ import {
   type LineOptions,
   MAX_SPACE_SHRINK,
   wrapStringIntoLines,
+  breakStringIntoLines,
   breakSegmentsIntoLines,
   SegmentLine,
   TextOverflow,
@@ -124,6 +125,7 @@ export class TextRenderer {
       hyphenate,
       ligatures,
       role,
+      shownLines,
     } = textElement.getProps();
 
     // Component -> display list. Wrapping and positioning stay here; the backend
@@ -154,6 +156,7 @@ export class TextRenderer {
       breakWord,
       hyphenate,
       ligatures,
+      shownLines,
     );
 
     // Accessible tagging: this whole text block is one structure element (a paragraph P, or a heading
@@ -391,6 +394,7 @@ export class TextRenderer {
     breakWord = false,
     hyphenate?: Hyphenator,
     ligatures = true,
+    shownLines?: number,
   ): { runs: TextRun[]; links: Link[]; decorations: Line[] } {
     const runs: TextRun[] = [];
     // /Link annotation rects for any `href` spans, collected as we place segments. Empty for the
@@ -602,7 +606,7 @@ export class TextRenderer {
 
     // --- Plain string: one run per wrapped line. ---
     if (typeof content === "string") {
-      const lines = wrapStringIntoLines(
+      const broken = breakStringIntoLines(
         content,
         fontFamily,
         fontSize,
@@ -620,8 +624,10 @@ export class TextRenderer {
           shrink: align === HorizontalAlignment.justify ? MAX_SPACE_SHRINK : 0,
           splitting: { breakWord, hyphenate },
           ligatures,
+          shownLines,
         },
       );
+      const lines = broken.map((line) => line.text);
       // yPosition is the top of the text box (top-left). The line box seats its own baseline; lines
       // then stack by that box's height. Same numbers as calculateTextHeight, by construction.
       const box = lineBoxForString(objectManager, fontFamily, fontStyle, fontSize, lineHeight);
@@ -634,8 +640,11 @@ export class TextRenderer {
         // Latin-only text in an `ltr` paragraph comes back as one unchanged piece.
         // Word-spacing is a per-gap advance just like the justification slack, so it rides the same
         // mechanism: `Tw` would reach only the single byte 32 and miss every embedded font.
+        // Only a line that WRAPPED is stretched: the end of a paragraph and the line before a `\n` keep
+        // their natural spacing (CSS). The last line of a piece continued on the next page wrapped.
+        const ends = broken[index]!.end;
         const extra =
-          wordSpacing + justifyExtra(line, lineWidth, index === lines.length - 1, indent);
+          wordSpacing + justifyExtra(line, lineWidth, ends === "hard" || ends === "end", indent);
         for (const part of visualRuns(line, direction)) {
           const piece = shapedPiece(part, fontFamily, fontStyle);
           const partWidth = emitPiece(

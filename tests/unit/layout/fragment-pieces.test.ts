@@ -15,6 +15,7 @@ import type { LayoutContext, PDFElement } from "../../../src/lib/elements/pdf-el
 import type { Fragmentable } from "../../../src/lib/layout/fragmentation.ts";
 import type { IRNode } from "../../../src/lib/ir/display-list.ts";
 import { testMetrics } from "../support/metrics.ts";
+import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager.ts";
 import { drawnNodes } from "../support/drawn.ts";
 
 // A piece of an element split across pages is the same element on the next page: it keeps every
@@ -123,5 +124,73 @@ describe("a wrapper dropped from a continued piece leaves its place in the flow"
     ]);
     expect(pages.length).toBeGreaterThan(1);
     for (const page of pages) expect(rects(page).map((r) => r.x)).toEqual([20]);
+  });
+});
+
+// A paragraph split across pages continues from where its next line starts in the SOURCE text, so
+// nothing about how a line ended is lost at the page break.
+describe("a paragraph split across pages keeps how its lines end", () => {
+  const om = new PDFObjectManager();
+  om.registerFont("Helvetica");
+  const RIGHT_EDGE = 20 + 257.64; // A6, 20pt margins
+  /** The right end of the last word drawn on a page, and that line's y. */
+  const lastLineEnd = (page: IRNode[]) => {
+    const runs = page.flatMap((n) => (n.type === "text" ? [n] : []));
+    const y = Math.max(...runs.map((r) => r.y));
+    const last = runs.filter((r) => r.y === y).sort((a, b) => b.x - a.x)[0]!;
+    return last.x + om.getStringWidth(last.text, "Helvetica", last.fontSize, last.fontStyle);
+  };
+
+  it("hard line breaks survive the split: one entry per line on every page", async () => {
+    const entries = Array.from({ length: 40 }, (_, i) => `Entry ${i + 1}`);
+    const pages = await render([Text(entries.join("\n"), { size: 9 })]);
+    expect(pages.length).toBeGreaterThan(1);
+    const drawn = pages.flatMap((p) => p.flatMap((n) => (n.type === "text" ? [n.text] : [])));
+    expect(drawn).toEqual(entries);
+  });
+
+  it("justified: the last line on a page is stretched, the paragraph's own last line is not", async () => {
+    const pages = await render([
+      Paragraph(
+        Array.from(
+          { length: 40 },
+          (_, i) =>
+            `In justified text (${i + 1}) a short word next to a considerably longer one shows the gaps.`,
+        ).join(" "),
+        { size: 9, align: "justify" },
+      ),
+    ]);
+    expect(pages.length).toBeGreaterThan(1);
+    expect(lastLineEnd(pages[0]!)).toBeCloseTo(RIGHT_EDGE, 1);
+    expect(lastLineEnd(pages[pages.length - 1]!)).toBeLessThan(RIGHT_EDGE - 5);
+  });
+
+  it("justified: the line before a hard break is not stretched", async () => {
+    const pages = await render([
+      Paragraph(
+        "Short line\nand a second paragraph long enough to wrap across the full width of the page, twice over.",
+        {
+          size: 9,
+          align: "justify",
+        },
+      ),
+    ]);
+    const runs = pages[0]!.flatMap((n) => (n.type === "text" ? [n.text] : []));
+    // Natural spacing draws the line as ONE run; a stretched line would be drawn word by word.
+    expect(runs).toContain("Short line");
+  });
+
+  it("a word hyphenated at the page break is not glued back together on the next line (todo 12)", async () => {
+    const simple = (w: string) => (w.length > 8 ? [w.slice(0, 4), w.slice(4)] : [w]);
+    const pages = await render([
+      ...Array.from({ length: 24 }, () => Text("filler line", { size: 12 })),
+      Box({ width: 70 }, [
+        Text("Rechnungsnummernvergabe und Leistungszeitraumbestimmung", { hyphenate: simple }),
+      ]),
+    ]);
+    expect(pages.length).toBeGreaterThan(1);
+    const drawn = pages.flatMap((p) => p.flatMap((n) => (n.type === "text" ? [n.text] : [])));
+    // Every piece of a hyphenated word ends its own line: no "Rech- nung-" on one line.
+    expect(drawn.filter((t) => /- \S/.test(t))).toEqual([]);
   });
 });

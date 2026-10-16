@@ -30,6 +30,9 @@ export interface LineOptions {
   splitting?: WordSplitting;
   /** Whether the run gets the font's ligatures. Changes which glyphs are drawn, hence the width. */
   ligatures?: boolean;
+  /** Only the first N lines belong to this element: a paragraph split across pages, continued on the
+   *  next one. Applied after `maxLines`, so every pass that breaks the text sees the same lines. */
+  shownLines?: number;
 }
 
 /** Default font for segments that don't override it. */
@@ -155,7 +158,14 @@ export function breakStringIntoLines(
   letterSpacing = 0,
   options: LineOptions = {},
 ): BrokenLine[] {
-  const { wordSpacing = 0, indent = 0, shrink = 0, splitting = {}, ligatures } = options;
+  const {
+    wordSpacing = 0,
+    indent = 0,
+    shrink = 0,
+    splitting = {},
+    ligatures,
+    shownLines,
+  } = options;
   let currentLine = "";
   let currentWidth = 0;
   let gaps = 0; // spaces on the current line, which is what a justified line can squeeze
@@ -251,27 +261,32 @@ export function breakStringIntoLines(
   if (currentLine) close("end");
 
   // Open-end by default; cap only when maxLines is set (the others get undefined → untouched).
-  if (maxLines == null || lines.length <= maxLines) return lines;
-  const kept = lines.slice(0, maxLines);
-  if (overflow === "ellipsis") {
-    const last = kept.length - 1;
-    kept[last] = {
-      ...kept[last]!,
-      text: ellipsize(
-        kept[last]!.text,
-        fontFamily,
-        fontSize,
-        fontStyle,
-        // The same room that line was broken against: the first one lost the indent to it.
-        last === 0 ? maxWidth - indent : maxWidth,
-        metrics,
-        letterSpacing,
-        wordSpacing,
-        ligatures,
-      ),
-    };
+  let kept = lines;
+  if (maxLines != null && lines.length > maxLines) {
+    // The text ends at the cap, as far as this element goes: its last line is not a wrapped one.
+    kept = lines.slice(0, maxLines);
+    kept[kept.length - 1] = { ...kept[kept.length - 1]!, end: "end" };
+    if (overflow === "ellipsis") {
+      const last = kept.length - 1;
+      kept[last] = {
+        ...kept[last]!,
+        text: ellipsize(
+          kept[last]!.text,
+          fontFamily,
+          fontSize,
+          fontStyle,
+          // The same room that line was broken against: the first one lost the indent to it.
+          last === 0 ? maxWidth - indent : maxWidth,
+          metrics,
+          letterSpacing,
+          wordSpacing,
+          ligatures,
+        ),
+      };
+    }
   }
-  return kept;
+  // A piece of a paragraph split across pages draws only its own lines.
+  return shownLines === undefined ? kept : kept.slice(0, shownLines);
 }
 
 /**

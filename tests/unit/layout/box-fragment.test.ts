@@ -1,12 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { PaddingElement } from "../../../src/lib/elements/layout/padding-element";
-import { RectangleElement } from "../../../src/lib/elements/rectangle-element";
-import { TextElement } from "../../../src/lib/elements/text-element";
-import { LineElement } from "../../../src/lib/elements/line-element";
-import { LayoutContext, PDFElement } from "../../../src/lib/elements/pdf-element";
-import { BoxConstraints, Offset, Size } from "../../../src/lib/layout/box-constraints";
-import { packChildren } from "../../../src/lib/layout/fragmentation";
+import { PaddingElement } from "../../../src/lib/elements/layout/padding-element.ts";
+import { RectangleElement } from "../../../src/lib/elements/rectangle-element.ts";
+import { TextElement } from "../../../src/lib/elements/text-element.ts";
+import { LineElement } from "../../../src/lib/elements/line-element.ts";
+import { LayoutContext, PDFElement } from "../../../src/lib/elements/pdf-element.ts";
+import { BoxConstraints, Offset, Size } from "../../../src/lib/layout/box-constraints.ts";
+import { packChildren } from "../../../src/lib/layout/fragmentation.ts";
 import { testMetrics } from "../support/metrics.ts";
+import { wrapStringIntoLines } from "../../../src/lib/text/line-breaker.ts";
 
 // Each glyph 10 wide, spaces 0: "aa bb cc dd ee ff" wraps to 3 lines of 10pt at width 50.
 const metrics = testMetrics({
@@ -26,10 +27,24 @@ const laidOutHeight = (el: unknown, width: number) =>
   (el as PaddingElement).calculateLayout(BoxConstraints.loose(width, Infinity), { x: 0, y: 0 }, ctx)
     .height;
 
-const innerText = (el: unknown): string => {
+/** The text a fragment's inner Text DRAWS: a piece of a split paragraph shows only its own lines. */
+const innerText = (el: unknown, width = 50): string => {
   const props = (el as { getProps(): any }).getProps();
-  const child = props.child ?? props.children[0];
-  return child.getProps().content as string;
+  const text = (props.child ?? props.children[0]).getProps();
+  return wrapStringIntoLines(
+    text.content,
+    text.fontFamily,
+    text.fontSize,
+    text.fontStyle,
+    width,
+    metrics,
+    text.maxLines,
+    text.overflow,
+    0,
+    {
+      shownLines: text.shownLines,
+    },
+  ).join(" ");
 };
 
 describe("PaddingElement.fragment (clone insets)", () => {
@@ -69,8 +84,8 @@ class FixedBox extends PDFElement {
   getProps(): unknown {
     return {};
   }
-  calculateLayout(_c: BoxConstraints, _o: Offset): Size {
-    return this.measure();
+  calculateLayout(c: BoxConstraints, _o: Offset, context: LayoutContext): Size {
+    return this.measure(c, context);
   }
   protected computeSize(): Size {
     return { width: 0, height: this.h };

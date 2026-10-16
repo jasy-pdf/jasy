@@ -17,7 +17,7 @@ import {
   type LineOptions,
   singleLineWidth,
   MAX_SPACE_SHRINK,
-  wrapStringIntoLines,
+  breakStringIntoLines,
   breakSegmentsIntoLines,
   segmentLinesToSegments,
   TextOverflow,
@@ -117,6 +117,9 @@ interface TextElementParams {
   hyphenate?: Hyphenator;
   /** Accessibility role for the tagged structure tree (heading level or paragraph; default `"p"`). */
   role?: TextRole;
+  /** Set by pagination, not by authors: this element is the first N lines of a paragraph that
+   *  continues on the next page. See `LineOptions.shownLines`. */
+  shownLines?: number;
 }
 
 /**
@@ -183,6 +186,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
   private widows?: number;
   private overflow: TextOverflow;
   private readonly role?: TextRole; // accessibility role (tagged PDF); undefined = paragraph
+  private readonly shownLines?: number; // a piece of a split paragraph: its first N lines
 
   constructor({
     fontSize,
@@ -209,9 +213,11 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     hyphenate,
     ligatures,
     role,
+    shownLines,
   }: TextElementParams) {
     super({ x: 0, y: 0 });
     this.role = role;
+    this.shownLines = shownLines;
 
     this.rawFontSize = fontSize;
     this.rawFontFamily = fontFamily;
@@ -370,6 +376,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       ligatures: this.ligatures,
       // Justified lines may be squeezed to keep a word; every other alignment gets no slack.
       shrink: this.textAlignment === HorizontalAlignment.justify ? MAX_SPACE_SHRINK : 0,
+      shownLines: this.shownLines,
     };
   }
 
@@ -416,7 +423,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     width: number,
     ctx: LayoutContext,
   ): FragmentResult {
-    const lines = wrapStringIntoLines(
+    const lines = breakStringIntoLines(
       content,
       this.fontFamily,
       this.fontSize,
@@ -444,10 +451,18 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     if (fittedLineCount <= 0) return { fitted: null, remainder: this };
     if (fittedLineCount >= lines.length) return { fitted: this, remainder: null };
 
+    // A piece is a window onto the SAME text, not the lines glued back together: the first page draws
+    // the first lines of the whole paragraph (broken exactly as here, same text, same width), and the
+    // next one continues from where its first line starts in the source. Hard breaks, a word split
+    // over the break and the justified last line on the page all survive that way.
     return {
-      fitted: this.cloneWithContent(lines.slice(0, fittedLineCount).join(" ")),
-      // A continuation is no longer the paragraph's FIRST line, so it carries no indent.
-      remainder: this.cloneWithContent(lines.slice(fittedLineCount).join(" "), 0),
+      fitted: this.cloneWithContent(content, this.textIndent, { shownLines: fittedLineCount }),
+      // A continuation is no longer the paragraph's FIRST line, so it carries no indent; whatever is
+      // left of a line cap goes with it.
+      // (The lines are capped at `maxLines` already, so at least one of the cap is left.)
+      remainder: this.cloneWithContent(content.slice(lines[fittedLineCount]!.start), 0, {
+        maxLines: this.maxLines === undefined ? undefined : this.maxLines - fittedLineCount,
+      }),
     };
   }
 
@@ -506,7 +521,11 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
 
   // A copy carrying the same style but different (already-wrapped) content. Re-wrapping at
   // the same width reproduces exactly those lines (greedy is deterministic).
-  private cloneWithContent(content: string | TextSegment[], indent = this.textIndent): TextElement {
+  private cloneWithContent(
+    content: string | TextSegment[],
+    indent = this.textIndent,
+    piece: { shownLines?: number; maxLines?: number } = {},
+  ): TextElement {
     return new TextElement({
       content,
       fontSize: this.fontSize,
@@ -514,7 +533,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       fontStyle: this.fontStyle,
       color: this.color,
       textAlignment: this.textAlignment,
-      maxLines: this.maxLines,
+      maxLines: piece.maxLines ?? this.maxLines,
       orphans: this.orphans,
       widows: this.widows,
       overflow: this.overflow,
@@ -532,6 +551,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       breakWord: this.breakWord,
       hyphenate: this.hyphenate,
       ligatures: this.ligatures,
+      shownLines: piece.shownLines,
     }).asPieceOf(this); // a wrapped remainder is the SAME logical paragraph (one P across pages)
   }
 
@@ -727,6 +747,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       ligatures: this.ligatures,
       hyphenate: this.hyphenate,
       role: this.role,
+      shownLines: this.shownLines,
     };
   }
 }
