@@ -119,6 +119,31 @@ describe("textIndent", () => {
   });
 });
 
+// The same for span text, which used to drop the indent: the span breaker and draw path never read it.
+describe("textIndent on span text", () => {
+  const spans = (...parts: string[]) => parts.map((content) => ({ content }));
+
+  it("starts the FIRST line in, and leaves the rest alone", async () => {
+    const runs = await drawn(text(spans("aa bb ", "cc dd"), { textIndent: 25 }), 100);
+    const first = runs.filter((r) => r.y === runs[0].y);
+    const later = runs.filter((r) => r.y !== runs[0].y);
+    expect(first[0].x).toBe(25);
+    expect(later[0].x).toBe(0);
+  });
+
+  it("takes the indent out of the FIRST line's room, and measures what it draws", async () => {
+    const indented = text(spans("aa bb ", "cc"), { textIndent: 30 });
+    const runs = await drawn(indented, 100);
+    const drawnLines = new Set(runs.map((r) => r.y)).size;
+    expect(drawnLines).toBe(2);
+    const plain = text(spans("aa bb ", "cc"));
+    const lineHeight = plain.measure(BoxConstraints.loose(100, 400), context(om())).height;
+    expect(indented.measure(BoxConstraints.loose(100, 400), context(om())).height).toBe(
+      2 * lineHeight,
+    );
+  });
+});
+
 describe("verticalAlign on a span", () => {
   const spans = (align: "super" | "sub" | "baseline") => [
     { content: "x" },

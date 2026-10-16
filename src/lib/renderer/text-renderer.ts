@@ -81,6 +81,7 @@ export class TextRenderer {
       splitting: lineOptions.splitting,
       ligatures: lineOptions.ligatures,
       shownLines: lineOptions.shownLines,
+      indent: lineOptions.indent,
     };
     const lines = breakSegmentsIntoLines(
       content,
@@ -687,12 +688,14 @@ export class TextRenderer {
     // the previous segment's kerning-free advance. Each line drops by its OWN leading
     // (tallest font on that line), so mixed-font lines space correctly and the drawn
     // height matches the measured height.
-    const pushLine = (line: SegmentLine, lineY: number, isLast: boolean): void => {
-      let x = initialX + alignmentOffset(line.width);
+    const pushLine = (line: SegmentLine, lineY: number, isLast: boolean, indent: number): void => {
+      // CSS `text-indent`, as for a plain string: the FIRST line starts in, with that much less room.
+      let x = initialX + indent + alignmentOffset(line.width, indent);
       const extra = justifyExtra(
         line.segments.map((seg) => seg.content).join(""),
         line.width,
         isLast,
+        indent,
       );
       // Across span boundaries, so a Hebrew span is ordered against its neighbours rather than inside
       // itself. Each run keeps the segment it came from, and with it that span's style.
@@ -773,6 +776,7 @@ export class TextRenderer {
       splitting: { breakWord, hyphenate },
       ligatures,
       shownLines,
+      indent: textIndent,
     };
     let top = yPosition;
     const segmentLines = breakSegmentsIntoLines(
@@ -783,10 +787,11 @@ export class TextRenderer {
       maxLines,
       overflow,
     );
-    segmentLines.forEach((line) => {
+    segmentLines.forEach((line, index) => {
       const box = lineBoxForSegmentLine(line, defaults, objectManager, lineHeight);
       // As for a plain string: only a line that wrapped is stretched.
-      pushLine(line, top + box.baseline, line.end === "hard" || line.end === "end");
+      const ends = line.end === "hard" || line.end === "end";
+      pushLine(line, top + box.baseline, ends, index === 0 ? textIndent : 0);
       top += box.height;
     });
 

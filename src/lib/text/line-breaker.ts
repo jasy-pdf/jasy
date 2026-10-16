@@ -47,6 +47,8 @@ export interface SegmentDefaults {
   ligatures?: boolean;
   /** See `LineOptions.shownLines`. */
   shownLines?: number;
+  /** See `LineOptions.indent`: the FIRST line has that much less room. */
+  indent?: number;
 }
 
 /** What happens to text beyond `maxLines`: `"clip"` drops it, `"ellipsis"` ends the last kept line
@@ -316,12 +318,23 @@ export function breakSegmentsIntoLines(
   overflow?: TextOverflow,
 ): SegmentLine[] {
   const lines: SegmentLine[] = [];
+  const indent = defaults.indent ?? 0;
   let width = 0;
   let lineSegments: TextSegment[] = [];
   let combined = "";
   let lineStart: SegmentPosition = { segment: 0, offset: 0 }; // where the current line begins
-  const close = (segs: TextSegment[], lineWidth: number, end: LineEnd) =>
-    lines.push({ segments: segs, width: lineWidth, start: lineStart, end });
+  // An empty piece (what a span leaves after its `\n`) has nothing to draw, and its font must not size
+  // the line it lands on - a big span ending in `\n` made the next line as tall as itself. Only a blank
+  // line keeps one: it is what gives that line its height.
+  const close = (segs: TextSegment[], lineWidth: number, end: LineEnd) => {
+    const drawn = segs.filter((seg) => seg.content !== "");
+    lines.push({
+      segments: drawn.length > 0 ? drawn : segs.slice(0, 1),
+      width: lineWidth,
+      start: lineStart,
+      end,
+    });
+  };
 
   segments.forEach((segment, segmentIndex) => {
     const family = segment.fontFamily || defaults.fontFamily;
@@ -360,12 +373,16 @@ export function breakSegmentsIntoLines(
         const wordAt = wordStart;
         wordStart += word.length + 1;
         const wordWidth = runAdvance(metrics, word, font, letterSpacing);
+        // As in the string path: the first line lost the indent to its room; the pieces of a split word
+        // land on the first line only when it is still empty.
+        const room = lines.length === 0 ? maxWidth - indent : maxWidth;
+        const splitRoom = lines.length === 0 && width === 0 ? room : maxWidth;
 
         // Same treatment as the string path: a word too wide for the box is split into pieces that fit.
         // Each finished piece closes the line it sits on, keeping this segment's style.
         const split = splitLongWord(
           word,
-          maxWidth,
+          splitRoom,
           font,
           metrics,
           letterSpacing,
@@ -411,7 +428,7 @@ export function breakSegmentsIntoLines(
 
         // Same guard as the string path: don't open a phantom empty line for an over-wide first word -
         // place it (overflowing) on the current empty line instead.
-        if (candidate > maxWidth && width > 0) {
+        if (candidate > room && width > 0) {
           if (word === "") return; // a space that does not fit hangs, as in the string path
           close(lineSegments, width, "soft");
           lineStart = at(wordAt);
@@ -445,8 +462,11 @@ export function breakSegmentsIntoLines(
     // The text ends at the cap, as far as this element goes: its last line is not a wrapped one.
     kept = lines.slice(0, maxLines);
     kept[kept.length - 1] = { ...kept[kept.length - 1]!, end: "end" };
-    if (overflow === "ellipsis")
-      ellipsizeSegmentLine(kept[kept.length - 1]!, defaults, maxWidth, metrics);
+    if (overflow === "ellipsis") {
+      // The same room that line was broken against: the first one lost the indent to it.
+      const room = kept.length === 1 ? maxWidth - indent : maxWidth;
+      ellipsizeSegmentLine(kept[kept.length - 1]!, defaults, room, metrics);
+    }
   }
   // A piece of a paragraph split across pages draws only its own lines.
   return defaults.shownLines === undefined ? kept : kept.slice(0, defaults.shownLines);

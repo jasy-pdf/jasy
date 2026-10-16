@@ -522,6 +522,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       letterSpacing: this.letterSpacing,
       splitting: { breakWord: this.breakWord, hyphenate: this.hyphenate },
       ligatures: this.ligatures,
+      indent: this.textIndent,
     };
   }
 

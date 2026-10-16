@@ -239,3 +239,27 @@ describe("a trailing space that does not fit", () => {
     });
   });
 });
+
+// A span ending in `\n` leaves an empty piece of itself at the start of the next line. It draws
+// nothing, and its font must not size that line: a big span ending in `\n` made the next line as tall
+// as itself (Chrome: the line is sized by what is on it).
+describe("an empty piece left by a span's `\\n`", () => {
+  const om = new PDFObjectManager();
+  om.registerFont("Helvetica");
+  const defaults = { fontFamily: "Helvetica", fontSize: 12, fontStyle: FontStyle.Normal };
+
+  it("is not part of the next line", () => {
+    const lines = breakSegmentsIntoLines(
+      [{ content: "BIG\n", fontSize: 30 }, { content: "small" }],
+      defaults,
+      300,
+      om,
+    );
+    expect(lines.map((l) => l.segments.map((s) => s.content))).toEqual([["BIG"], ["small"]]);
+  });
+
+  it("still gives a blank line its height", () => {
+    const lines = breakSegmentsIntoLines([{ content: "a\n\nb" }], defaults, 300, om);
+    expect(lines.map((l) => l.segments.map((s) => s.content))).toEqual([["a"], [""], ["b"]]);
+  });
+});

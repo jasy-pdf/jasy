@@ -40,13 +40,29 @@ describe("hyperlinks (/Link annotations)", () => {
   });
 
   it("emits one rect per line when a link span wraps across lines", async () => {
-    // A narrow box forces the long link text to wrap onto two lines -> two annotation rects.
+    // A narrow box forces the link text to wrap onto two lines -> two annotation rects, none empty.
+    const doc = Document([
+      Page([
+        Box({ width: 120 }, [
+          Text([span("go to "), span("the full documentation page", { href: "https://x.dev" })]),
+        ]),
+      ]),
+    ]);
+    const pdf = await renderPdf(doc, { compress: false });
+    const rects = [...pdf.matchAll(/\/Subtype \/Link \/Rect \[([\d.]+) [\d.]+ ([\d.]+)/g)];
+    expect(rects.length).toBe(2);
+    for (const [, x1, x2] of rects) expect(Number(x2)).toBeGreaterThan(Number(x1));
+  });
+
+  it("a long unbreakable link word on its own line is ONE rect, no empty one before it", async () => {
+    // The word does not fit after "go to ", so it starts the next line. The span's empty piece left on
+    // the first line used to become a zero-width annotation.
     const long = "https://github.com/jasy-pdf/jasy/blob/main/README.md";
     const doc = Document([
       Page([Box({ width: 120 }, [Text([span("go to "), span(long, { href: "https://x.dev" })])])]),
     ]);
     const pdf = await renderPdf(doc);
-    expect(count(pdf, "/Subtype /Link")).toBeGreaterThanOrEqual(2);
+    expect(count(pdf, "/Subtype /Link")).toBe(1);
   });
 
   it("escapes parentheses/backslashes in a URL", async () => {

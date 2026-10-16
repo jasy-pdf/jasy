@@ -296,21 +296,25 @@ export class FlexLayoutHelper {
     // gaps (the flexbox `width: 33%` + gap trap). Only finite when the line's main axis is bounded -
     // a fraction of an unbounded main axis has no meaning, so `%` children fall back to shrink-wrap.
     const percentBase = mainAvail !== Infinity ? Math.max(0, mainAvail - totalGap) : Infinity;
-    // The main cap to hand a child: `percentBase` for a percentage child (so its fraction resolves) and
-    // for a child that cannot lay itself out without a bound (a nested stack holding an `Expanded`/
-    // `Spacer`); unbounded for everyone else, who keep their natural size and never fill the line.
+    // The main cap to hand a child: `percentBase` for a percentage child (so its fraction resolves); for
+    // a child that cannot lay itself out without a bound (a nested stack holding an `Expanded`/`Spacer`)
+    // its share of what its siblings leave - handing it the WHOLE line made it as big as the line and
+    // squeezed every sibling; unbounded for everyone else, who keep their natural size.
     // Filled by the shrink pass below; read by `mainCapFor` in pass 2. Declared here so the closure
     // can see it - it is empty for every document that does not ask for shrinking.
     const shrunkCap = new Map<PDFElement, number>();
+    const sharedCap = new Map<PDFElement, number>();
     const mainCapFor = (child: PDFElement): number => {
-      const target = shrunkCap.get(child);
+      const target = shrunkCap.get(child) ?? sharedCap.get(child);
       if (target !== undefined) return target;
       if (percentBase === Infinity) return Infinity;
-      const needsBound =
-        child.relativeSizeFactor(axis.mainHorizontal) !== undefined ||
-        child.needsBoundedMain(axis.mainHorizontal);
-      return needsBound ? percentBase : Infinity;
+      return child.relativeSizeFactor(axis.mainHorizontal) !== undefined ? percentBase : Infinity;
     };
+    const needsShare = (child: PDFElement): boolean =>
+      percentBase !== Infinity &&
+      !flexibleOf(child) &&
+      child.relativeSizeFactor(axis.mainHorizontal) === undefined &&
+      child.needsBoundedMain(axis.mainHorizontal);
 
     // Pass 1: measure the fixed children (main extent + cross size) and total the flex.
     // A flex child's BASIS is reserved here too: it is main extent the leftover no longer contains,
@@ -322,18 +326,30 @@ export class FlexLayoutHelper {
     const fixedSize = new Map<PDFElement, Size>();
     // The constraints each measured size answers, so the last pass can reuse it instead of asking again.
     const measuredUnder = new Map<PDFElement, BoxConstraints>();
+    const measureFixed = (child: PDFElement) => {
+      const constraints = axis.measureConstraints(crossAvail, mainCapFor(child));
+      const size = child.measure(constraints, ctx);
+      fixedMain += axis.mainOf(size);
+      crossUsed = Math.max(crossUsed, axis.crossOf(size));
+      fixedSize.set(child, size);
+      measuredUnder.set(child, constraints);
+    };
+    const sharing = children.filter(needsShare);
     for (const child of children) {
       const flexible = flexibleOf(child);
       if (flexible) {
         totalFlex += flexible.getFlex();
         totalBasis += flexible.getBasis(percentBase);
-      } else {
-        const constraints = axis.measureConstraints(crossAvail, mainCapFor(child));
-        const size = child.measure(constraints, ctx);
-        fixedMain += axis.mainOf(size);
-        crossUsed = Math.max(crossUsed, axis.crossOf(size));
-        fixedSize.set(child, size);
-        measuredUnder.set(child, constraints);
+      } else if (!sharing.includes(child)) {
+        measureFixed(child);
+      }
+    }
+    // Then the stacks that need a bound share what is left, in equal parts.
+    if (sharing.length > 0) {
+      const share = Math.max(0, (percentBase - fixedMain - totalBasis) / sharing.length);
+      for (const child of sharing) {
+        sharedCap.set(child, share);
+        measureFixed(child);
       }
     }
 
