@@ -2,7 +2,7 @@ import type { FontStyle } from "../utils/pdf-object-manager.ts";
 import type { FontMetrics } from "../utils/font-metrics.ts";
 import type { TextSegment } from "../elements/text-element.ts";
 import { runAdvance } from "./advance.ts";
-import { splitLongWord, type WordSplitting } from "./word-splitting.ts";
+import { HYPHEN, splitLongWord, type WordSplitting } from "./word-splitting.ts";
 
 /**
  * How far a JUSTIFIED line's spaces may be squeezed to keep one more word on it.
@@ -110,24 +110,76 @@ export function wrapStringIntoLines(
   letterSpacing = 0,
   options: LineOptions = {},
 ): string[] {
+  return breakStringIntoLines(
+    text,
+    fontFamily,
+    fontSize,
+    fontStyle,
+    maxWidth,
+    metrics,
+    maxLines,
+    overflow,
+    letterSpacing,
+    options,
+  ).map((line) => line.text);
+}
+
+/** How a line ends - which is what justification and splitting a paragraph across pages need. */
+export type LineEnd =
+  | "soft" // broken at a space
+  | "hard" // a `\n`
+  | "split" // inside a word, nothing added (break-word)
+  | "hyphen" // inside a word, a hyphen added (hyphenation)
+  | "end"; // the end of the text
+
+/** A broken line, and where it came from: `start` is the offset in the source text it begins at. */
+export interface BrokenLine {
+  text: string;
+  start: number;
+  end: LineEnd;
+}
+
+/**
+ * `wrapStringIntoLines`, with each line's source offset and ending. The ONE breaking pass both share,
+ * so a line's position in the source can never disagree with the line itself.
+ */
+export function breakStringIntoLines(
+  text: string,
+  fontFamily: string,
+  fontSize: number,
+  fontStyle: FontStyle,
+  maxWidth: number,
+  metrics: FontMetrics,
+  maxLines?: number,
+  overflow?: TextOverflow,
+  letterSpacing = 0,
+  options: LineOptions = {},
+): BrokenLine[] {
   const { wordSpacing = 0, indent = 0, shrink = 0, splitting = {}, ligatures } = options;
   let currentLine = "";
   let currentWidth = 0;
   let gaps = 0; // spaces on the current line, which is what a justified line can squeeze
-  const lines: string[] = [];
+  let lineStart = 0; // source offset the current line begins at
+  const lines: BrokenLine[] = [];
+  const close = (end: LineEnd) => lines.push({ text: currentLine.trim(), start: lineStart, end });
 
   const font = { fontFamily, fontSize, fontStyle, ligatures };
   // A `\n` is a HARD break: wrap each paragraph on its own, then cut. An EMPTY paragraph still has to
   // produce a line, or a deliberate blank line between two blocks silently disappears.
+  let paragraphStart = 0;
   text.split("\n").forEach((paragraph, paragraphIndex) => {
     if (paragraphIndex > 0) {
-      lines.push(currentLine.trim());
+      close("hard");
       currentLine = "";
       currentWidth = 0;
       gaps = 0;
     }
+    lineStart = paragraphStart;
+    let wordStart = paragraphStart;
     const words = paragraph.split(" ");
     words.forEach((word) => {
+      const at = wordStart;
+      wordStart += word.length + 1;
       // Word and space advances come from the one shared primitive (`advance.ts`), the same one
       // `naturalWidth` uses - so a bounded and an unbounded layout of the same text agree bit for bit.
       const wordWidth = runAdvance(metrics, word, font, letterSpacing);
@@ -151,9 +203,18 @@ export function wrapStringIntoLines(
       const splitRoom = lines.length === 0 && currentLine === "" ? room : maxWidth;
       const split = splitLongWord(word, splitRoom, font, metrics, letterSpacing, splitting);
       if (split) {
-        if (currentLine !== "") lines.push(currentLine.trim());
-        for (const piece of split.slice(0, -1)) lines.push(piece);
-        currentLine = split[split.length - 1]!;
+        if (currentLine !== "") close("soft");
+        // Each piece starts where the source text of the previous one ended (an added hyphen is not
+        // in the source).
+        let pieceStart = at;
+        for (const piece of split.slice(0, -1)) {
+          currentLine = piece.text;
+          lineStart = pieceStart;
+          close(piece.hyphen ? "hyphen" : "split");
+          pieceStart += piece.text.length - (piece.hyphen ? HYPHEN.length : 0);
+        }
+        currentLine = split[split.length - 1]!.text;
+        lineStart = pieceStart;
         currentWidth = runAdvance(metrics, currentLine, font, letterSpacing);
         gaps = 0;
         return;
@@ -164,6 +225,7 @@ export function wrapStringIntoLines(
       if (currentLine === "") {
         currentLine = word;
         currentWidth = wordWidth;
+        lineStart = at;
         gaps = 0;
         // How much a JUSTIFIED line may be squeezed to keep one more word: the spaces already on the
         // line plus the one that would join it, each giving up at most `shrink` of its width. Zero for
@@ -172,9 +234,10 @@ export function wrapStringIntoLines(
         // a different order gives a different last bit, and a line that lands exactly on `maxWidth` is
         // then broken by that bit alone - which is how a footer sized to its own text wrapped.
       } else if (candidate - (gaps + 1) * spaceWidth * shrink > room) {
-        lines.push(currentLine.trim());
+        close("soft");
         currentLine = word;
         currentWidth = wordWidth;
+        lineStart = at;
         gaps = 0;
       } else {
         currentLine += " " + word;
@@ -182,27 +245,31 @@ export function wrapStringIntoLines(
         gaps += 1;
       }
     });
+    paragraphStart += paragraph.length + 1;
   });
 
-  if (currentLine) lines.push(currentLine.trim());
+  if (currentLine) close("end");
 
   // Open-end by default; cap only when maxLines is set (the others get undefined → untouched).
   if (maxLines == null || lines.length <= maxLines) return lines;
   const kept = lines.slice(0, maxLines);
   if (overflow === "ellipsis") {
     const last = kept.length - 1;
-    kept[last] = ellipsize(
-      kept[last],
-      fontFamily,
-      fontSize,
-      fontStyle,
-      // The same room that line was broken against: the first one lost the indent to it.
-      last === 0 ? maxWidth - indent : maxWidth,
-      metrics,
-      letterSpacing,
-      wordSpacing,
-      ligatures,
-    );
+    kept[last] = {
+      ...kept[last]!,
+      text: ellipsize(
+        kept[last]!.text,
+        fontFamily,
+        fontSize,
+        fontStyle,
+        // The same room that line was broken against: the first one lost the indent to it.
+        last === 0 ? maxWidth - indent : maxWidth,
+        metrics,
+        letterSpacing,
+        wordSpacing,
+        ligatures,
+      ),
+    };
   }
   return kept;
 }
@@ -278,7 +345,7 @@ export function breakSegmentsIntoLines(
             lineSegments = [{ ...segment, fontFamily: family, content: "" }];
             combined = "";
           }
-          for (const piece of split.slice(0, -1)) {
+          for (const { text: piece } of split.slice(0, -1)) {
             lineSegments[lineSegments.length - 1]!.content = piece;
             // The width a line REPORTS is what alignment and line-metrics work from: measure it.
             lines.push({
@@ -287,7 +354,7 @@ export function breakSegmentsIntoLines(
             });
             lineSegments = [{ ...segment, fontFamily: family, content: "" }];
           }
-          combined = split[split.length - 1]!;
+          combined = split[split.length - 1]!.text;
           width = runAdvance(metrics, combined, font, letterSpacing);
           lineSegments[lineSegments.length - 1]!.content = combined;
           return;
