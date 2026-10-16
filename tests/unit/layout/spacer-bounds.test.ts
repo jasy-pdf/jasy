@@ -7,6 +7,7 @@ import {
   Box,
   Text,
   Spacer,
+  Expanded,
   Canvas,
   DefaultTextStyle,
   renderPdf,
@@ -194,5 +195,48 @@ describe("a nested stack with a Spacer takes what its siblings leave", () => {
       ]),
     );
     expect(yOf(pdf, "tail")).toBeLessThan(70);
+  });
+});
+
+// The stack grows like an Expanded of flex 1 whose basis is its content, AFTER the line is settled: a
+// share handed out before the shrink pass left it less than its content - text past the box.
+describe("a nested stack with a Spacer grows only into what is left", () => {
+  const RIGHT = 10 + 200; // page margin + box width
+  const drawnIn = async (row: Parameters<typeof Box>[1][number]) => {
+    const nodes: IRNode[] = [];
+    const flip = PdfBackend.flipY.bind(PdfBackend);
+    PdfBackend.flipY = (n, h) => (nodes.push(...n), flip(n, h));
+    try {
+      await render(
+        Document([
+          Page({ size: { width: 220, height: 300 }, margin: 10 }, [Box({ width: 200 }, [row])]),
+        ]),
+      );
+    } finally {
+      PdfBackend.flipY = flip;
+    }
+    return Object.fromEntries(
+      nodes.flatMap((n) => (n.type === "text" ? [[n.text, n.x] as const] : [])),
+    ) as Record<string, number>;
+  };
+  const T = (s: string) => Text(s, { size: 10 });
+
+  it("next to a paragraph that shrinks, it keeps its content inside the box", async () => {
+    const x = await drawnIn(
+      Row([
+        T(
+          "This paragraph is longer than the line it sits on, so the shrink pass has to squeeze it.",
+        ),
+        Row([T("Total"), Spacer(), T("99.00")]),
+      ]),
+    );
+    expect(x["99.00"]! + 25.02).toBeLessThanOrEqual(RIGHT + 0.01); // "99.00" is 25.02 wide at 10pt
+    expect(x["Total"]!).toBeLessThan(x["99.00"]!);
+  });
+
+  it("next to an Expanded, both share the leftover", async () => {
+    const x = await drawnIn(Row([Row([T("L"), Spacer(), T("R")]), Expanded(T("EXP"))]));
+    expect(x["EXP"]!).toBeGreaterThan(10 + 50); // the Expanded got a share, it did not collapse to 0
+    expect(x["EXP"]! + 20.01).toBeLessThanOrEqual(RIGHT + 0.01);
   });
 });

@@ -131,3 +131,41 @@ describe("a soft hyphen", () => {
     }
   });
 });
+
+// Found in review: the edges of the hyphen rules.
+describe("hyphen breaks at their edges", () => {
+  const S = "­";
+  const contents = (parts: string[], width: number) =>
+    spanLines(parts, width).map((l) =>
+      l.segments
+        .map((s) => s.content)
+        .join("")
+        .trimEnd(),
+    );
+
+  it.each(["Lohn-,", "Lohn-)", "Ein-/Ausgang", "Vor-.", `Lohn${S},`, "(well-known)"])(
+    "never before closing punctuation, a slash or a quote: %s",
+    (word) => {
+      const pieces = hyphenPieces(word);
+      for (const p of pieces.slice(1)) expect(p[0]).not.toMatch(/[),./"']/);
+    },
+  );
+
+  it("a soft hyphen right after a hyphen adds no second one", () => {
+    expect(lines(`ab-${S}cdefgh`, 40).map((l) => l.text)).toEqual(["ab-", "cdefgh"]);
+  });
+
+  it("a line holding only a soft hyphen draws nothing (span text)", () => {
+    for (const line of spanLines([`${S}\nfoo`], 100)) {
+      for (const seg of line.segments) expect(seg.content).not.toContain(S);
+    }
+  });
+
+  it("a break at a span boundary right after a soft hyphen shows the hyphen", () => {
+    const broken = spanLines([`ab${S}`, "cdefgh"], 30);
+    expect(broken.map((l) => l.segments.map((s) => s.content).join(""))).toEqual(["ab-", "cdefgh"]);
+    expect(broken[0]!.end).toBe("hyphen");
+    expect(broken[0]!.width).toBe(30); // "ab-": the hyphen is counted in the width it reports
+    expect(contents([`ab${S} `, "cdefgh"], 30)).toEqual(["ab", "cdefgh"]); // broke at the space: no hyphen
+  });
+});

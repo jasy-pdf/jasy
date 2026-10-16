@@ -1,5 +1,6 @@
 import type { FontStyle, PDFObjectManager } from "../utils/pdf-object-manager.ts";
 import type { FormFieldNode } from "../ir/display-list.ts";
+import { coverText } from "../text/glyph-coverage.ts";
 import { NORMAL_STYLE, escName, num2, pdfColor } from "./pdf.ts";
 import {
   type FieldLine,
@@ -53,6 +54,8 @@ interface AppearanceFont {
   style: FontStyle;
   face: FaceFont;
   resources: string;
+  /** The text as this font can draw it: what it lacks is replaced or removed and reported, as in `Text`. */
+  cover(text: string): string;
 }
 
 /** A widget in the structure tree (accessible tagging) names its slot in the ParentTree. */
@@ -265,11 +268,18 @@ export class AcroFormCollector {
       return {
         family,
         style,
+        // Drawn SHAPED (ligatures, joining forms) - the shaping `getStringWidth` measures with.
         face: {
           res: `F${resource.fontIndex}`,
-          encode: (text) => `<${om.encodeCustomText(family, text, style, false)}>`,
+          encode: (text) => `<${om.encodeCustomText(family, text, style)}>`,
         },
         resources: `/Font << /F${resource.fontIndex} ${resource.resourceIndex} 0 R >>`,
+        // A glyph the font lacks would draw as .notdef, which PDF/A forbids.
+        cover: (text) => {
+          const { text: drawable, dropped } = coverText(text, family, style, om);
+          if (dropped.length > 0) om.reportMissingGlyph?.(dropped);
+          return drawable;
+        },
       };
     }
     return {
@@ -277,6 +287,7 @@ export class AcroFormCollector {
       style: NORMAL_STYLE,
       face: HELV,
       resources: `/Font << /Helv ${this.helv(om)} 0 R >>`,
+      cover: (text) => text,
     };
   }
 
@@ -293,7 +304,9 @@ export class AcroFormCollector {
     const { capHeight } = om.getFontDecoration(font.family, font.style);
     const size = this.drawSize(node.style, node.height, capHeight);
     // A password field shows the mask, never the characters - the value still lives in /V.
-    const value = f.password ? "•".repeat([...(f.value ?? "")].length) : (f.value ?? "");
+    const value = font.cover(
+      f.password ? "•".repeat([...(f.value ?? "")].length) : (f.value ?? ""),
+    );
     const innerWidth = Math.max(1, node.width - 2 * (2 + node.style.borderWidth));
 
     let lines: FieldLine[] = [];
@@ -341,7 +354,9 @@ export class AcroFormCollector {
 
     let face: string;
     if (f.combo) {
-      const current = chosen.length ? [this.line(om, font, shown(chosen[0]), size)] : [];
+      const current = chosen.length
+        ? [this.line(om, font, font.cover(shown(chosen[0])), size)]
+        : [];
       face = textFieldFace(
         node.width,
         node.height,
@@ -355,7 +370,7 @@ export class AcroFormCollector {
       );
     } else {
       const rows = f.options.map((o) => ({
-        ...this.line(om, font, o.label ?? o.value, size),
+        ...this.line(om, font, font.cover(o.label ?? o.value), size),
         selected: selected.has(o.value),
       }));
       face = listBoxFace(
@@ -458,13 +473,14 @@ export class AcroFormCollector {
     const { capHeight } = om.getFontDecoration(font.family, font.style);
     // `fontSize: 0` means auto-size, here as everywhere: resolve it before measuring or drawing.
     const size = this.drawSize(node.style, node.height, capHeight);
-    const width = om.getStringWidth(f.label, font.family, size, font.style);
+    const caption = font.cover(f.label);
+    const width = om.getStringWidth(caption, font.family, size, font.style);
     this.helv(om); // the /DA below names it
     const face = pushButtonFace(
       node.width,
       node.height,
       node.style,
-      f.label,
+      caption,
       width,
       capHeight,
       font.face,
@@ -537,8 +553,8 @@ export class AcroFormCollector {
     const f = node.field;
     if (f.kind !== "signature") throw new Error("buildSignatureWidget: not a signature");
     this.hasSignature = true;
-    const label = f.label ?? "";
     const font = this.faceFont(node, om);
+    const label = font.cover(f.label ?? "");
     const { capHeight } = om.getFontDecoration(font.family, font.style);
     const size = this.drawSize(node.style, node.height, capHeight);
     const labelWidth = label ? om.getStringWidth(label, font.family, size, font.style) : 0;

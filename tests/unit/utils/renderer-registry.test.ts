@@ -11,6 +11,7 @@ import {
   Row,
   Text,
   Divider,
+  Spacer,
   renderToBytes,
 } from "../../../src/lib/index.ts";
 
@@ -71,6 +72,17 @@ describe("one element instance per page", () => {
     const shared = Text("shared");
     const doc = Document([Page([Column([shared, Row([Text("x"), shared])])])]);
     await expect(renderToBytes(doc)).rejects.toThrow(/same TextElement element is used twice/);
+  });
+
+  it("an element that draws nothing may be reused: a Spacer has no place to land wrongly", async () => {
+    const gap = Spacer(20);
+    const flexGap = Spacer();
+    const doc = Document([
+      Page([
+        Column([Text("a"), gap, Text("b"), gap, Row([Text("c"), flexGap, Text("d"), flexGap])]),
+      ]),
+    ]);
+    await expect(renderToBytes(doc)).resolves.toBeInstanceOf(Uint8Array);
   });
 
   it("the same element on different pages is fine (a page lays it out on its own)", async () => {

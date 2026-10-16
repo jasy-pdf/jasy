@@ -88,18 +88,23 @@ export class RendererRegistry {
     RendererRegistry.drawnOnPage.set(objectManager, new WeakSet());
   }
 
-  /** Draws `element` with its renderer. Every draw goes through here, so it is where reuse is caught. */
-  static render(
+  /**
+   * Draws `element` with its renderer. Every draw goes through here, so it is where reuse is caught - for
+   * an element that DRAWS something: one that draws nothing (a Spacer) has no place to land wrongly, and
+   * reusing it stays harmless.
+   */
+  static async render(
     element: object,
     objectManager: PDFObjectManager,
     scope: RenderScope,
   ): Promise<IRNode[]> {
+    const nodes = await RendererRegistry.getRenderer(element)(element, objectManager, scope);
     const drawn = RendererRegistry.drawnOnPage.get(objectManager);
-    if (drawn) {
+    if (drawn && nodes.length > 0) {
       if (drawn.has(element)) throw new ElementReusedError(element.constructor.name);
       drawn.add(element);
     }
-    return RendererRegistry.getRenderer(element)(element, objectManager, scope);
+    return nodes;
   }
 
   static isRendererAsync(renderer: Function): boolean {

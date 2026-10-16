@@ -171,17 +171,22 @@ const mayBreak = (word: string): boolean => word.includes("-") || word.includes(
 export function hyphenBreaks(word: string): number[] {
   const out: number[] = [];
   for (let i = 1; i < word.length - 1; i++) {
+    const next = word[i + 1]!;
+    if (NO_BREAK_BEFORE.has(next)) continue;
     if (word[i] === SOFT_HYPHEN) {
       out.push(i + 1);
       continue;
     }
     if (word[i] !== "-") continue;
-    const next = word[i + 1]!;
     if (next === "-" || (next >= "0" && next <= "9")) continue;
     out.push(i + 1);
   }
   return out;
 }
+
+// UAX #14 never breaks before closing punctuation, a slash or a quote (LB13, LB19): "Lohn-, Gehalts-",
+// "(well-known)", "Ein-/Ausgang" stay together.
+const NO_BREAK_BEFORE = new Set(")]}!?,.:;/\"'\u00AB\u00BB\u2018\u2019\u201C\u201D");
 
 /**
  * What the line ending at break `k` draws of `word`: everything before it, and at a soft hyphen a REAL
@@ -189,12 +194,14 @@ export function hyphenBreaks(word: string): number[] {
  * what is drawn.
  */
 function headAt(word: string, k: number): string {
-  return word[k - 1] === SOFT_HYPHEN ? word.slice(0, k - 1) + HYPHEN : word.slice(0, k);
+  if (word[k - 1] !== SOFT_HYPHEN) return word.slice(0, k);
+  // A soft hyphen right after a real one adds nothing: "ab-" + "cd", not "ab--".
+  return word[k - 2] === "-" ? word.slice(0, k - 1) : word.slice(0, k - 1) + HYPHEN;
 }
 
 /** How a line that ends at break `k` of `word` ends: a soft hyphen adds a hyphen the source lacks. */
 const endAt = (word: string, k: number): LineEnd =>
-  word[k - 1] === SOFT_HYPHEN ? "hyphen" : "soft";
+  word[k - 1] === SOFT_HYPHEN && word[k - 2] !== "-" ? "hyphen" : "soft";
 
 /** A word cut at its break opportunities: the pieces no line can split, as they are drawn. */
 export function hyphenPieces(word: string): string[] {
@@ -429,19 +436,42 @@ export function breakSegmentsIntoLines(
   // the line it lands on - a big span ending in `\n` made the next line as tall as itself. Only a blank
   // line keeps one: it is what gives that line its height.
   const close = (segs: TextSegment[], lineWidth: number, end: LineEnd) => {
-    // Soft hyphens leave the line here, as in the string path.
-    const drawn = segs
-      .map((seg) =>
-        seg.content.includes(SOFT_HYPHEN)
-          ? { ...seg, content: withoutSoftHyphens(seg.content) }
-          : seg,
-      )
-      .filter((seg) => seg.content !== "");
+    let width = lineWidth;
+    let ends = end;
+    // A span boundary is a break too: a line that ends there right after a soft hyphen shows it as a real
+    // hyphen, exactly as a break inside a word does.
+    let lastIndex = segs.length - 1;
+    while (lastIndex >= 0 && segs[lastIndex]!.content === "") lastIndex--;
+    const last = segs[lastIndex];
+    if (
+      end === "soft" &&
+      last?.content.endsWith(SOFT_HYPHEN) &&
+      !withoutSoftHyphens(last.content).endsWith("-")
+    ) {
+      const font = {
+        fontFamily: last.fontFamily || defaults.fontFamily,
+        fontSize: last.fontSize || defaults.fontSize,
+        fontStyle: last.fontStyle || defaults.fontStyle,
+        ligatures: defaults.ligatures,
+      };
+      width += runAdvance(metrics, HYPHEN, font, last.letterSpacing ?? defaults.letterSpacing ?? 0);
+      segs = segs.map((seg, i) =>
+        i === lastIndex ? { ...seg, content: withoutSoftHyphens(seg.content) + HYPHEN } : seg,
+      );
+      ends = "hyphen";
+    }
+    // Soft hyphens leave the line here, as in the string path - a blank line's piece included.
+    const stripped = segs.map((seg) =>
+      seg.content.includes(SOFT_HYPHEN)
+        ? { ...seg, content: withoutSoftHyphens(seg.content) }
+        : seg,
+    );
+    const drawn = stripped.filter((seg) => seg.content !== "");
     lines.push({
-      segments: drawn.length > 0 ? drawn : segs.slice(0, 1),
-      width: lineWidth,
+      segments: drawn.length > 0 ? drawn : stripped.slice(0, 1),
+      width,
       start: lineStart,
-      end,
+      end: ends,
     });
   };
 
