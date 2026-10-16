@@ -14,6 +14,7 @@ interface StructElem {
   alt?: string;
   parent?: number; // parent element key; undefined = a direct child of the Document
   mc: { structParents: number; mcid: number }[]; // marked-content pieces (for leaves)
+  annots: { obj: number; structParents: number }[]; // annotations (a link, a form widget): /OBJR kids
 }
 
 // Escapes a PDF literal string ( ... ) - the language tag is safe ASCII, but /Alt can carry arbitrary text.
@@ -53,6 +54,7 @@ export class StructTree {
   private byStructId = new Map<number, number>(); // element structId -> element key (dedup across pages)
   private stack: number[] = []; // open containers; top is the current parent
   private pageObjByStructParents = new Map<number, number>();
+  private annotParents = new Map<number, number>(); // an annotation's /StructParent -> its element key
 
   /** Register a structure element for a logical element (keyed by its stable `structId`, so a paragraph or
    *  table split across pages resolves to the SAME element - MCIDs then accrue from every page). Its parent
@@ -68,6 +70,7 @@ export class StructTree {
       alt: opts?.alt,
       parent: this.stack[this.stack.length - 1],
       mc: [],
+      annots: [],
     });
     return key;
   }
@@ -87,6 +90,22 @@ export class StructTree {
   /** Tie a page's StructParents index to its now-known page object number (for /Pg references). */
   setPageObject(structParents: number, pageObjNum: number): void {
     this.pageObjByStructParents.set(structParents, pageObjNum);
+  }
+
+  /**
+   * PDF/UA 7.18: an annotation belongs to a structure element (a link to its `/Link`, a widget to its
+   * `/Form`). Returns the `/StructParent` the annotation dictionary carries - its own slot in the
+   * ParentTree, numbered alongside the pages'.
+   */
+  annotationParent(key: number): number {
+    const structParent = this.structParentsCounter++;
+    this.annotParents.set(structParent, key);
+    return structParent;
+  }
+
+  /** The annotation object, once written: an `/OBJR` kid of its element, on the page that lists it. */
+  linkAnnotation(key: number, obj: number, pageStructParents: number): void {
+    this.elems.get(key)?.annots.push({ obj, structParents: pageStructParents });
   }
 
   /** Link a page-local MCID to an element (called by the backend while serializing). */
@@ -115,6 +134,9 @@ export class StructTree {
       const kids = [
         ...childrenOf(e.key).map((c) => `${objNum.get(c.key)!} 0 R`),
         ...e.mc.map((m) => `<< /Type /MCR /Pg ${pg(m.structParents)} 0 R /MCID ${m.mcid} >>`),
+        ...e.annots.map(
+          (a) => `<< /Type /OBJR /Pg ${pg(a.structParents)} 0 R /Obj ${a.obj} 0 R >>`,
+        ),
       ].join(" ");
       const alt = e.alt ? ` /Alt ${om.pdfString(e.alt)}` : "";
       // PDF/UA 7.5: a header cell needs a Scope so a reader can associate data cells with it. Our headers
@@ -145,17 +167,18 @@ export class StructTree {
         byPage.set(m.structParents, list);
       }
     }
-    const nums = [...byPage.keys()]
-      .sort((a, b) => a - b)
-      .map((sp) => {
-        const refs = byPage
-          .get(sp)!
-          .slice()
-          .sort((a, b) => a.mcid - b.mcid)
-          .map((r) => `${objNum.get(r.key)!} 0 R`)
-          .join(" ");
-        return `${sp} [ ${refs} ]`;
-      });
+    // A page's entry is an array indexed by MCID; an annotation's is its element itself.
+    const entries = new Map<number, string>();
+    for (const [sp, list] of byPage) {
+      const refs = list
+        .slice()
+        .sort((a, b) => a.mcid - b.mcid)
+        .map((r) => `${objNum.get(r.key)!} 0 R`)
+        .join(" ");
+      entries.set(sp, `[ ${refs} ]`);
+    }
+    for (const [sp, key] of this.annotParents) entries.set(sp, `${objNum.get(key)!} 0 R`);
+    const nums = [...entries.keys()].sort((a, b) => a - b).map((sp) => `${sp} ${entries.get(sp)!}`);
     om.replaceObject(parentTreeNum, `<< /Nums [ ${nums.join(" ")} ] >>`);
 
     om.replaceObject(

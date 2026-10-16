@@ -14,11 +14,27 @@ export class LinkRenderer {
     const x = scope.origin.x + (ownX ?? 0);
     const y = scope.origin.y + (ownY ?? 0);
 
-    const renderer = RendererRegistry.getRenderer(child);
-    const childNodes = await renderer(child, objectManager, scope);
+    const renderChild = () => RendererRegistry.getRenderer(child)(child, objectManager, scope);
 
     // The child draws normally; a Link IR node carries the clickable rect + target (external href or
     // internal dest) for the page renderer to emit as a /Link annotation (no content-stream ops itself).
-    return [...childNodes, { type: "link", x, y, width, height, href, dest }];
+    if (!objectManager.struct.enabled) {
+      return [...(await renderChild()), { type: "link", x, y, width, height, href, dest }];
+    }
+
+    // Tagged: the link's content sits in a /Link element, which also takes the annotation, and the
+    // annotation describes itself by the text it covers (PDF/UA 7.18.5). A split link is ONE element.
+    const struct = objectManager.struct;
+    const structKey = struct.openElement(element.structId, "Link");
+    struct.push(structKey);
+    let childNodes: IRNode[];
+    try {
+      childNodes = await renderChild();
+    } finally {
+      struct.pop();
+    }
+    const text = childNodes.flatMap((n) => (n.type === "text" ? [n.text.trim()] : []));
+    const alt = text.filter(Boolean).join(" ") || (href ?? dest ?? "");
+    return [...childNodes, { type: "link", x, y, width, height, href, dest, structKey, alt }];
   }
 }

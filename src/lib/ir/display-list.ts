@@ -152,6 +152,9 @@ export interface Link {
   height: number;
   href?: string;
   dest?: string;
+  /** Accessible tagging only: the `/Link` structure element the annotation belongs to, and its text. */
+  structKey?: number;
+  alt?: string;
 }
 
 /**
@@ -192,6 +195,8 @@ export interface FormFieldNode {
   height: number;
   field: FormFieldSpec;
   style: FieldStyle;
+  /** Accessible tagging only: the `/Form` structure element the widget belongs to. */
+  structKey?: number;
 }
 
 /**

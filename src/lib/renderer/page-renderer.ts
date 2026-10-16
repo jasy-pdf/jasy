@@ -95,13 +95,24 @@ export class PageRenderer {
     const num = (n: number) => Number(n.toFixed(2));
     const annotRefs: string[] = [];
     for (const node of flipped) {
+      if (node.type !== "link" && node.type !== "formfield") continue;
+      // Tagged, every annotation names its structure element (PDF/UA 7.18).
+      const structKey = structCtx ? node.structKey : undefined;
+      const structParent =
+        structKey === undefined ? undefined : objectManager.struct.annotationParent(structKey);
+      const tag = (obj: number) => {
+        if (structKey !== undefined) {
+          objectManager.struct.linkAnnotation(structKey, obj, structCtx!.structParents);
+        }
+      };
       // A form field: build its Widget annotation + register it as an /AcroForm field (the logic lives in
       // forms/acroform.ts), then reference it here in the page /Annots - the same side channel as a link.
       if (node.type === "formfield") {
-        annotRefs.push(`${objectManager.acroform.addField(node, objectManager)} 0 R`);
+        const widget = objectManager.acroform.addField(node, objectManager, structParent);
+        tag(widget);
+        annotRefs.push(`${widget} 0 R`);
         continue;
       }
-      if (node.type !== "link") continue;
       const rect = `[${num(node.x)} ${num(node.y)} ${num(node.x + node.width)} ${num(node.y + node.height)}]`;
       // Either an external URL (/URI) or an internal named destination (/GoTo, resolved via /Names /Dests).
       // The Link IR guarantees exactly one is set; prefer `dest` when present.
@@ -109,9 +120,14 @@ export class PageRenderer {
         node.dest !== undefined
           ? `/A << /S /GoTo /D ${objectManager.pdfString(node.dest)} >>`
           : `/A << /S /URI /URI ${objectManager.pdfString(node.href ?? "")} >>`;
+      const tagged =
+        structParent === undefined
+          ? ""
+          : ` /StructParent ${structParent} /Contents ${objectManager.pdfString(node.alt ?? "")}`;
       const annot = objectManager.addObject(
-        `<< /Type /Annot /Subtype /Link /Rect ${rect} /Border [0 0 0] ${action} >>`,
+        `<< /Type /Annot /Subtype /Link /Rect ${rect} /Border [0 0 0] ${action}${tagged} >>`,
       );
+      tag(annot);
       annotRefs.push(`${annot} 0 R`);
     }
     const annotsCode = annotRefs.length > 0 ? ` /Annots [${annotRefs.join(" ")}]` : "";

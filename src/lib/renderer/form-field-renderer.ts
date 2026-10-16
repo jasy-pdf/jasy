@@ -26,13 +26,21 @@ type FormFieldElement =
 export class FormFieldRenderer {
   static async render(
     element: FormFieldElement,
-    _objectManager: PDFObjectManager,
+    objectManager: PDFObjectManager,
     scope: RenderScope,
   ): Promise<IRNode[]> {
     const { x: ownX, y: ownY, width, height, spec, style } = element.getProps();
     // Its own position is relative to `scope.origin`; the IR wants page coordinates.
     const x = scope.origin.x + (ownX ?? 0);
     const y = scope.origin.y + (ownY ?? 0);
-    return [{ type: "formfield", x, y, width, height, field: spec, style }];
+    // Tagged: the widget goes into a /Form element, named by its tooltip (/TU) or else its field name
+    // (PDF/UA 7.18.1, 7.18.4). A radio button is one answer of its group.
+    const name = spec.kind === "radio" ? `${spec.group}: ${spec.value}` : spec.name;
+    const structKey = objectManager.struct.enabled
+      ? objectManager.struct.openElement(element.structId, "Form", {
+          alt: spec.tooltip === undefined ? name : undefined,
+        })
+      : undefined;
+    return [{ type: "formfield", x, y, width, height, field: spec, style, structKey }];
   }
 }

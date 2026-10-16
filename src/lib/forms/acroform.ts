@@ -45,6 +45,13 @@ function boxChrome(node: FormFieldNode, extraMK = ""): string {
 
 /** The annotation flags (/F). Bit 2 = Hidden, bit 3 = Print. A widget prints by default; `hidden`
  *  removes it from screen AND print, `print: false` keeps it on screen only. */
+/** A widget in the structure tree (accessible tagging) names its slot in the ParentTree. */
+function withStructParent(dict: string, structParent: number | undefined): string {
+  return structParent === undefined
+    ? dict
+    : dict.replace(/^<< /, `<< /StructParent ${structParent} `);
+}
+
 function annotFlags(f: FormFieldSpec): number {
   if (f.hidden) return 2;
   return f.print === false ? 0 : 4;
@@ -372,8 +379,8 @@ export class AcroFormCollector {
 
   /** Emit the widget object for one form-field IR node, register it as a field, and return its object
    *  number so the PageRenderer can add it to that page's /Annots. */
-  addField(node: FormFieldNode, om: PDFObjectManager): number {
-    if (node.field.kind === "radio") return this.addRadio(node, om);
+  addField(node: FormFieldNode, om: PDFObjectManager, structParent?: number): number {
+    if (node.field.kind === "radio") return this.addRadio(node, om, structParent);
     this.claimName(node.field.name, node.field.kind);
     let dict: string;
     if (node.field.kind === "checkbox") {
@@ -394,7 +401,7 @@ export class AcroFormCollector {
       dict = buildTextWidget(node, "Helv", om, this.bake ? this.bakeText(node, om) : undefined);
       if (!this.bake) this.needAppearances = true;
     }
-    const objNum = om.addObject(dict);
+    const objNum = om.addObject(withStructParent(dict, structParent));
     this.fieldRefs.push(objNum);
     return objNum;
   }
@@ -443,7 +450,7 @@ export class AcroFormCollector {
   /** A radio button: one KID widget of its group's shared field. The group field is reserved on first
    *  sight (and added to /Fields); each button adds itself to that field's /Kids. Returns the kid widget
    *  number, which goes into the PAGE /Annots (the parent field does not). */
-  private addRadio(node: FormFieldNode, om: PDFObjectManager): number {
+  private addRadio(node: FormFieldNode, om: PDFObjectManager, structParent?: number): number {
     const f = node.field;
     if (f.kind !== "radio") throw new Error("addRadio: not a radio");
     let g = this.radioGroups.get(f.group);
@@ -474,7 +481,9 @@ export class AcroFormCollector {
       `/AS /${escName(as)}`,
       `/DA ${om.pdfString(`/ZaDb 0 Tf ${pdfColor(node.style.color)} rg`)}`,
     ];
-    const kidNum = om.addObject(`<< ${parts.join(" ")}${boxChrome(node)} >>`);
+    const kidNum = om.addObject(
+      withStructParent(`<< ${parts.join(" ")}${boxChrome(node)} >>`, structParent),
+    );
     g.kids.push(kidNum);
     return kidNum;
   }
