@@ -107,8 +107,10 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
     this.breakAfter = breakAfter ?? false;
   }
 
+  // A break before the FIRST child is a break before this stack (CSS propagates it): the whole stack
+  // moves to the next page, instead of leaving an empty piece - or an empty border - behind.
   override breaksBefore(): boolean {
-    return this.breakBefore;
+    return this.breakBefore || (this.children[0]?.breaksBefore() ?? false);
   }
 
   override breaksAfter(): boolean {

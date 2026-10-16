@@ -2,7 +2,17 @@ import { describe, it, expect } from "vitest";
 import {
   RendererRegistry,
   MissingRendererError,
+  ElementReusedError,
 } from "../../../src/lib/utils/renderer-registry.ts";
+import {
+  Document,
+  Page,
+  Column,
+  Row,
+  Text,
+  Divider,
+  renderToBytes,
+} from "../../../src/lib/index.ts";
 
 const exampleRenderer = () => "Rendered";
 const asyncRenderer = async () => "Rendered Async";
@@ -45,5 +55,34 @@ describe("RendererRegistry", () => {
     const renderer = RendererRegistry.getRenderer(new ExampleElement());
 
     expect(RendererRegistry.isRendererAsync(renderer)).toBe(false);
+  });
+});
+
+// An element holds ONE position. Drawn twice on a page, both copies landed where it was laid out last
+// and one went missing without a word - so it is refused, by name.
+describe("one element instance per page", () => {
+  it("throws when the same element is drawn twice on one page", async () => {
+    const divider = Divider();
+    const doc = Document([Page([Column([Text("one"), divider, Text("two"), divider])])]);
+    await expect(renderToBytes(doc)).rejects.toThrow(ElementReusedError);
+  });
+
+  it("names the element and says how to fix it", async () => {
+    const shared = Text("shared");
+    const doc = Document([Page([Column([shared, Row([Text("x"), shared])])])]);
+    await expect(renderToBytes(doc)).rejects.toThrow(/same TextElement element is used twice/);
+  });
+
+  it("the same element on different pages is fine (a page lays it out on its own)", async () => {
+    const shared = Text("shared");
+    await expect(renderToBytes(Document([Page([shared]), Page([shared])]))).resolves.toBeInstanceOf(
+      Uint8Array,
+    );
+  });
+
+  it("a header repeated on every page of a long body is fine", async () => {
+    const lines = Array.from({ length: 80 }, (_, i) => Text(`line ${i}`));
+    const doc = Document([Page({ header: Text("Header") }, [Column(lines)])]);
+    await expect(renderToBytes(doc)).resolves.toBeInstanceOf(Uint8Array);
   });
 });

@@ -76,8 +76,7 @@ export class RectangleRenderer {
     const childScope: RenderScope = { origin: { x, y }, frame: relative ? { x, y } : scope.frame };
     if (children)
       for (const child of children) {
-        const renderer = RendererRegistry.getRenderer(child);
-        nodes.push(...(await renderer(child, objectManager, childScope)));
+        nodes.push(...(await RendererRegistry.render(child, objectManager, childScope)));
       }
     if (clip) nodes.push({ type: "clip-pop" });
 

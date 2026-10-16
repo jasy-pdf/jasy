@@ -3,6 +3,7 @@ import {
   Document,
   Page,
   Column,
+  Box,
   Text,
   PageBreak,
   keepTogether,
@@ -88,5 +89,34 @@ describe("keepTogether", () => {
       ]),
     );
     expect(pageOf(pdf, "ITOP")).toBe(pageOf(pdf, "IBOT")); // inner stayed together
+  });
+
+  // "Fits on a fresh page" means the room a fresh page gives THIS spot: inside a padded, bordered Box
+  // that is the page body minus the box's insets, not the whole body.
+  it("a group too tall for a padded Box's inner room splits instead of overflowing", async () => {
+    const tall = Array.from({ length: 44 }, (_, i) => Text(`line ${i + 1}`, { size: 14 }));
+    const bytes = await renderToBytes(
+      Document([
+        Page({ margin: 40 }, [Box({ padding: 60, border: "black" }, [keepTogether(tall)])]),
+      ]),
+      { compress: false, kerning: false, onOverflow: "error" },
+    );
+    const pdf = new TextDecoder("latin1").decode(bytes);
+    expect(pageOf(pdf, "line 1")).toBe(1);
+    expect(pageOf(pdf, "line 44")).toBe(2);
+  });
+
+  it("inside a padded Box, a group that fits its inner room still moves whole", async () => {
+    const pdf = await render(
+      Document([
+        Page({ margin: 40 }, [
+          Box({ padding: 60, border: "black" }, [
+            Column([...lines(40), keepTogether([Text("KTOP"), ...lines(10), Text("KBOT")])]),
+          ]),
+        ]),
+      ]),
+    );
+    expect(pageOf(pdf, "KTOP")).toBe(2);
+    expect(pageOf(pdf, "KBOT")).toBe(2);
   });
 });

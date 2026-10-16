@@ -14,7 +14,7 @@ export class LinkRenderer {
     const x = scope.origin.x + (ownX ?? 0);
     const y = scope.origin.y + (ownY ?? 0);
 
-    const renderChild = () => RendererRegistry.getRenderer(child)(child, objectManager, scope);
+    const renderChild = () => RendererRegistry.render(child, objectManager, scope);
 
     // The child draws normally; a Link IR node carries the clickable rect + target (external href or
     // internal dest) for the page renderer to emit as a /Link annotation (no content-stream ops itself).

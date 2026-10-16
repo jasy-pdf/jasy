@@ -9,6 +9,7 @@ import { PdfBackend } from "./pdf-backend.ts";
 export class PageRenderer {
   static async render(page: PageElement, objectManager: PDFObjectManager): Promise<number> {
     const { children, config, header, footer } = page.getProps();
+    RendererRegistry.beginPage(objectManager); // an element may be drawn once per page
     // A page is the outermost box: its children's offsets are page coordinates. Its content box is the
     // frame a `Positioned` with no `relative` ancestor was placed against.
     const scope: RenderScope = {
@@ -33,8 +34,7 @@ export class PageRenderer {
     // fonts/images used below, so it must run before the resource section.
     const nodes: IRNode[] = [];
     for (const element of renderables) {
-      const renderer = RendererRegistry.getRenderer(element);
-      nodes.push(...(await renderer(element, objectManager, scope)));
+      nodes.push(...(await RendererRegistry.render(element, objectManager, scope)));
     }
     // Accessible tagging: one struct context per page (allocates its StructParents index), threaded into
     // serialize so each drawable node is wrapped in marked content. Undefined = tagging off (byte-identical).

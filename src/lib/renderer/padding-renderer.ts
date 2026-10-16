@@ -12,7 +12,6 @@ export class PaddingRenderer {
     const { x, y, child } = paddingElement.getProps();
 
     // Its child is placed relative to its own top-left, inset by the margins.
-    const renderer = RendererRegistry.getRenderer(child);
-    return renderer(child, objectManager, within(scope, { x, y }));
+    return RendererRegistry.render(child, objectManager, within(scope, { x, y }));
   }
 }

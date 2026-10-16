@@ -11,7 +11,6 @@ export class DeferredRenderer {
   ): Promise<IRNode[]> {
     const { composed } = element.getProps();
     if (!composed) return [];
-    const renderer = RendererRegistry.getRenderer(composed);
-    return renderer(composed, objectManager, scope);
+    return RendererRegistry.render(composed, objectManager, scope);
   }
 }

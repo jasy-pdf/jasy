@@ -125,4 +125,35 @@ describe("breakBefore / breakAfter", () => {
     expect(pageOf(pdf, "AAA")).toBe(1);
     expect(pageOf(pdf, "BBB")).toBe(2);
   });
+
+  // CSS propagates a break before the FIRST child to its parent (checked in Chrome): the whole stack moves.
+  it("a breakBefore on the first child of a nested Column below content breaks before the Column", async () => {
+    const pdf = await render(
+      Document([
+        Page({ margin: 40 }, [
+          Column([Text("AAA"), Column([Box({ breakBefore: true }, [Text("BBB")]), Text("CCC")])]),
+        ]),
+      ]),
+    );
+    expect(wordsPerStream(pdf, ["AAA", "BBB", "CCC"])).toEqual([["AAA"], ["BBB", "CCC"]]);
+  });
+
+  it("the same in a bordered Box: the whole Box moves, no empty border is left behind", async () => {
+    const pdf = await render(
+      Document([
+        Page({ margin: 40 }, [
+          Column([
+            Text("AAA"),
+            Box({ border: "#1450aa", padding: 6 }, [Box({ breakBefore: true }, [Text("BBB")])]),
+          ]),
+        ]),
+      ]),
+    );
+    expect(wordsPerStream(pdf, ["AAA", "BBB"])).toEqual([["AAA"], ["BBB"]]);
+    const streams = [...pdf.matchAll(/stream\n([\s\S]*?)\nendstream/g)].map((m) => m[1]!);
+    const borders = streams
+      .filter((s) => s.includes("(AAA)") || s.includes("(BBB)"))
+      .map((s) => / re\b[\s\S]*?\bS\b/.test(s));
+    expect(borders).toEqual([false, true]); // the border is drawn on page 2 only
+  });
 });

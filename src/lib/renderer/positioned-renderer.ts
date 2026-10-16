@@ -14,7 +14,6 @@ export class PositionedRenderer {
     scope: RenderScope,
   ): Promise<IRNode[]> {
     const { child } = positionedElement.getProps();
-    const renderer = RendererRegistry.getRenderer(child);
-    return renderer(child, objectManager, { ...scope, origin: scope.frame });
+    return RendererRegistry.render(child, objectManager, { ...scope, origin: scope.frame });
   }
 }
