@@ -1,5 +1,5 @@
 import { BoxConstraints } from "../../layout/box-constraints.ts";
-import { FragmentResult, isFragmentable } from "../../layout/fragmentation.ts";
+import { FragmentResult } from "../../layout/fragmentation.ts";
 import { LayoutContext, PDFElement } from "../pdf-element.ts";
 import { ProxyElement } from "./proxy-element.ts";
 
@@ -62,11 +62,10 @@ export class KeepTogetherElement extends ProxyElement {
     return this.splitChild(maxHeight, width, ctx);
   }
 
-  /** Delegate the actual split to the child, unwrapping - once we have decided to break the group, the
-   *  pieces just flow (any INNER keepTogether lives in the child subtree and still vetoes there). */
+  /** Split like any wrapper - once we have decided to break the group, the pieces flow bare but keep
+   *  the group's place in the flex line (any INNER keepTogether lives in the child and still vetoes). */
   private splitChild(maxHeight: number, width: number, ctx: LayoutContext): FragmentResult {
-    if (!isFragmentable(this.child)) return { fitted: null, remainder: this };
-    return this.child.fragment(maxHeight, width, ctx);
+    return super.fragment(maxHeight, width, ctx);
   }
 
   override getProps() {

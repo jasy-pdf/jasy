@@ -28,9 +28,9 @@ export abstract class ProxyElement extends PDFElement implements Fragmentable {
   }
 
   /**
-   * This wrapper around a piece of its split child. `continued` is true for every piece after the
-   * first: a wrapper that marks a single place (a jump target, an outline entry) returns the piece
-   * bare there, so the mark is not repeated on the next page.
+   * This wrapper around a piece of its split child. `continued` is true for every piece but the first
+   * one that holds something: a wrapper that marks a single place (a jump target, an outline entry)
+   * returns the piece bare there, so the mark is not repeated on the next page.
    */
   protected abstract rewrap(child: PDFElement, continued: boolean): PDFElement;
 
@@ -91,7 +91,8 @@ export abstract class ProxyElement extends PDFElement implements Fragmentable {
 
   fragment(maxHeight: number, width: number, ctx: LayoutContext): FragmentResult {
     if (!isFragmentable(this.child)) return { fitted: null, remainder: this };
-    const split = this.child.fragment(maxHeight, width, this.childContext(ctx));
+    const childCtx = this.childContext(ctx);
+    const split = this.child.fragment(maxHeight, width, childCtx);
     // The child handed itself back (it all fits, or none of it does): so does the wrapper, mark included.
     const wrap = (piece: PDFElement, continued: boolean): PDFElement => {
       if (piece === this.child) return this;
@@ -99,10 +100,15 @@ export abstract class ProxyElement extends PDFElement implements Fragmentable {
       // A wrapper dropped from a continued piece still leaves that piece in its place in the flow.
       return wrapped === piece ? piece.takeFlexItemFrom(this) : wrapped.asPieceOf(this);
     };
+    // A fitted piece with no height (what a leading `PageBreak` leaves) holds nothing to mark: the
+    // mark goes on with the remainder, where the content is.
+    const placed =
+      split.fitted !== null &&
+      (split.remainder === null ||
+        split.fitted.measure(BoxConstraints.loose(width, Infinity), childCtx).height > 0);
     return {
-      fitted: split.fitted && wrap(split.fitted, false),
-      // A remainder continues the wrapper only when a part of it was placed before.
-      remainder: split.remainder && wrap(split.remainder, split.fitted !== null),
+      fitted: split.fitted && wrap(split.fitted, !placed),
+      remainder: split.remainder && wrap(split.remainder, placed),
       forceBreak: split.forceBreak,
     };
   }

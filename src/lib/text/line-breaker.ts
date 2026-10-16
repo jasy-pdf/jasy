@@ -2,7 +2,7 @@ import type { FontStyle } from "../utils/pdf-object-manager.ts";
 import type { FontMetrics } from "../utils/font-metrics.ts";
 import type { TextSegment } from "../elements/text-element.ts";
 import { runAdvance } from "./advance.ts";
-import { HYPHEN, splitLongWord, type WordSplitting } from "./word-splitting.ts";
+import { splitLongWord, type WordSplitting } from "./word-splitting.ts";
 
 /**
  * How far a JUSTIFIED line's spaces may be squeezed to keep one more word on it.
@@ -224,14 +224,13 @@ export function breakStringIntoLines(
       const split = splitLongWord(word, splitRoom, font, metrics, letterSpacing, splitting);
       if (split) {
         if (currentLine !== "") close("soft");
-        // Each piece starts where the source text of the previous one ended (an added hyphen is not
-        // in the source).
+        // Each piece starts where the source text of the previous one ended.
         let pieceStart = at;
         for (const piece of split.slice(0, -1)) {
           currentLine = piece.text;
           lineStart = pieceStart;
           close(piece.hyphen ? "hyphen" : "split");
-          pieceStart += piece.text.length - (piece.hyphen ? HYPHEN.length : 0);
+          pieceStart += piece.source;
         }
         currentLine = split[split.length - 1]!.text;
         lineStart = pieceStart;
@@ -254,6 +253,9 @@ export function breakStringIntoLines(
         // a different order gives a different last bit, and a line that lands exactly on `maxWidth` is
         // then broken by that bit alone - which is how a footer sized to its own text wrapped.
       } else if (candidate - (gaps + 1) * spaceWidth * shrink > room) {
+        // A space that does not fit hangs past the edge, as in CSS. Closing the line on it would end
+        // the paragraph's last line "soft" (stretched when justified) or push a blank line before `\n`.
+        if (word === "") return;
         close("soft");
         currentLine = word;
         currentWidth = wordWidth;
@@ -379,8 +381,7 @@ export function breakSegmentsIntoLines(
             lineSegments = [{ ...segment, fontFamily: family, content: "" }];
             combined = "";
           }
-          // Each piece starts where the source text of the previous one ended (an added hyphen is not
-          // in the source).
+          // Each piece starts where the source text of the previous one ended.
           let pieceAt = wordAt;
           for (const piece of split.slice(0, -1)) {
             lineSegments[lineSegments.length - 1]!.content = piece.text;
@@ -392,7 +393,7 @@ export function breakSegmentsIntoLines(
               piece.hyphen ? "hyphen" : "split",
             );
             lineSegments = [{ ...segment, fontFamily: family, content: "" }];
-            pieceAt += piece.text.length - (piece.hyphen ? HYPHEN.length : 0);
+            pieceAt += piece.source;
           }
           lineStart = at(pieceAt);
           combined = split[split.length - 1]!.text;
@@ -411,6 +412,7 @@ export function breakSegmentsIntoLines(
         // Same guard as the string path: don't open a phantom empty line for an over-wide first word -
         // place it (overflowing) on the current empty line instead.
         if (candidate > maxWidth && width > 0) {
+          if (word === "") return; // a space that does not fit hangs, as in the string path
           close(lineSegments, width, "soft");
           lineStart = at(wordAt);
           width = wordWidth;

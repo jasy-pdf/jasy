@@ -90,6 +90,24 @@ describe("a split wrapper marks its place once, and links stay clickable", () =>
     expect(count(pages, "outline")).toEqual([1, ...pages.slice(1).map(() => 0)]);
   });
 
+  it("a chapter that starts with a PageBreak is marked where it starts, on the next page", async () => {
+    const pages = await render([
+      Text("intro"),
+      Bookmark(
+        { title: "Chapter" },
+        Anchor({ name: "chapter" }, Column({}, [PageBreak(), Text("Chapter start")])),
+      ),
+    ]);
+    expect(pages.map(textsOn)).toEqual([["intro"], ["Chapter start"]]);
+    expect(count(pages, "anchor")).toEqual([0, 1]);
+    expect(count(pages, "outline")).toEqual([0, 1]);
+  });
+
+  it("a wrapper around nothing but a PageBreak keeps its mark", async () => {
+    const pages = await render([Text("intro"), Anchor({ name: "end" }, Column({}, [PageBreak()]))]);
+    expect(count(pages, "anchor").reduce((a, b) => a + b, 0)).toBe(1);
+  });
+
   it("a Link split over two pages is clickable on every page", async () => {
     const pages = await render([Link({ href: "https://jasy.dev" }, section(30))]);
     expect(count(pages, "link").every((n) => n === 1)).toBe(true);

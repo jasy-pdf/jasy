@@ -222,11 +222,15 @@ export class FlexLayoutHelper {
         line,
         axis,
         mainAvail,
-        Infinity, // let each line report the cross extent it actually needs
+        // Across a Column a child gets the column's width, as a block does in CSS (a paragraph wraps
+        // inside it); across a Row it is as tall as its content. Either way the line is only as big as
+        // what is on it, so `stretch` fills the line and not the container.
+        axis.mainHorizontal ? Infinity : crossAvail,
         0,
         lineOptions,
         ctx,
         "measure",
+        true,
       ),
     );
 
@@ -277,6 +281,8 @@ export class FlexLayoutHelper {
     options: FlexOptions,
     ctx: LayoutContext,
     mode: FlexMode,
+    // The line's cross extent is its content, not `crossAvail`: one line of a wrapping container.
+    crossFromContent = false,
   ): { mainUsed: number; crossUsed: number } {
     const gap = options.gap ?? 0;
     const main = options.main ?? "start";
@@ -442,7 +448,7 @@ export class FlexLayoutHelper {
     }
 
     // The cross extent children align within: the bounded line size, else the tallest child.
-    const crossExtent = crossAvail !== Infinity ? crossAvail : crossUsed;
+    const crossExtent = crossAvail !== Infinity && !crossFromContent ? crossAvail : crossUsed;
 
     // `stretch` caps a child's cross to `crossExtent` (not `crossAvail`) so siblings end up
     // equal across the axis. Bounded lines have crossExtent == crossAvail (byte-identical);

@@ -110,6 +110,18 @@ describe("a split Box or Column keeps its width rules", () => {
     expect(pages.length).toBeGreaterThan(1);
     for (const page of pages) expect(rects(page).map((r) => r.x)).toEqual([20]);
   });
+
+  it("a keepTogether Box too tall for one page splits and keeps its alignSelf on every page", async () => {
+    const pages = await render([
+      Column({ align: "center" }, [
+        Box({ width: 150, border: "#1450aa", padding: 4, alignSelf: "start", keepTogether: true }, [
+          Paragraph(long(20), { size: 9 }),
+        ]),
+      ]),
+    ]);
+    expect(pages.length).toBeGreaterThan(1);
+    for (const page of pages) expect(rects(page).map((r) => r.x)).toEqual([20]);
+  });
 });
 
 describe("a wrapper dropped from a continued piece leaves its place in the flow", () => {
@@ -193,6 +205,18 @@ describe("a paragraph split across pages keeps how its lines end", () => {
     const drawn = pages.flatMap((p) => p.flatMap((n) => (n.type === "text" ? [n.text] : [])));
     // Every piece of a hyphenated word ends its own line: no "Rech- nung-" on one line.
     expect(drawn.filter((t) => /- \S/.test(t))).toEqual([]);
+  });
+
+  it("capitalize: the half of a word continued on the next page is not capitalised again", async () => {
+    const words = Array.from({ length: 30 }, () => "abcdefghijklmnopqrstuvw").join(" ");
+    const pages = await render([
+      Text("one line first, so the page break falls inside a word", { size: 12 }),
+      Box({ width: 60 }, [Text(words, { size: 12, breakWord: true, textTransform: "capitalize" })]),
+    ]);
+    expect(pages.length).toBeGreaterThan(1);
+    const drawn = pages.flatMap((p) => p.flatMap((n) => (n.type === "text" ? [n.text] : [])));
+    // Only a word's first piece starts with a capital.
+    expect(drawn.filter((t) => /^[A-Z]/.test(t) && !t.startsWith("Abc"))).toEqual([]);
   });
 });
 

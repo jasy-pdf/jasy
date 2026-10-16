@@ -561,7 +561,9 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       textIndent: indent,
       role: this.role,
       fontFallback: this.fontFallback,
-      textTransform: this.textTransform,
+      // The content is cut from `display()`, already recased: `capitalize` again would capitalise
+      // the half of a word continued on the next page.
+      textTransform: "none",
       breakWord: this.breakWord,
       hyphenate: this.hyphenate,
       ligatures: this.ligatures,

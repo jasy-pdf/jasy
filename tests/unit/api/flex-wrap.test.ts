@@ -1,5 +1,15 @@
 import { describe, it, expect } from "vitest";
 import { Box, Row } from "../../../src/lib/api/layout.ts";
+import {
+  Document,
+  Page,
+  Column,
+  Text,
+  Expanded,
+  Spacer,
+  renderToBytes,
+} from "../../../src/lib/index.ts";
+import { drawnNodes } from "../support/drawn.ts";
 import { BoxConstraints } from "../../../src/lib/layout/box-constraints.ts";
 import { LayoutContext } from "../../../src/lib/elements/pdf-element.ts";
 
@@ -162,5 +172,45 @@ describe("composing with the rest", () => {
       (c) => c.getProps().y,
     );
     expect(ys).toEqual([0, 0]);
+  });
+});
+
+// A line of a wrapping Column is sized by what is on it, but its children are sized within the column:
+// measured against an unbounded width, a paragraph never wrapped and an `Expanded` box shrank to its text.
+describe("a wrapping Column sizes its children within its own width", () => {
+  const render = async (children: Parameters<typeof Column>[1]) => {
+    const pages = await drawnNodes(() =>
+      renderToBytes(
+        Document([
+          Page({ size: "A6", margin: 20 }, [
+            Box({ height: 200 }, [Column({ wrap: true }, children)]),
+          ]),
+        ]),
+      ),
+    );
+    return pages[0]!;
+  };
+  const fills = (page: Awaited<ReturnType<typeof render>>) =>
+    page.flatMap((n) => (n.type === "rect" && n.fill ? [n.width] : []));
+  const WIDTH = 297.64 - 2 * 20;
+
+  it("an Expanded box is as wide as the column", async () => {
+    const page = await render([
+      Text("plain"),
+      Expanded(Box({ bg: "#f4b4b4", height: 20 }, [Text("in expanded")])),
+    ]);
+    expect(fills(page)).toEqual([WIDTH]);
+  });
+
+  it("a long paragraph wraps inside the column instead of running off the page", async () => {
+    const page = await render([
+      Box({ bg: "#b4d4f4", height: 20 }, [Text("in box")]),
+      Text("Lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor", {
+        size: 10,
+      }),
+      Spacer(),
+    ]);
+    expect(fills(page)).toEqual([WIDTH]);
+    expect(page.filter((n) => n.type === "text").length).toBeGreaterThan(2);
   });
 });
