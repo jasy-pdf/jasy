@@ -3,6 +3,7 @@ import {
   Document,
   Page,
   Column,
+  Row,
   Box,
   Text,
   Paragraph,
@@ -128,5 +129,83 @@ describe("wrappers that are not plain proxies", () => {
       Rotated({ angle: 5 }, Box({ breakBefore: true }, [Text("turned")])),
     ]);
     expect(pages.map(textsOn)).toEqual([["first"], ["turned"]]);
+  });
+});
+
+// To a surrounding Row or Column a marking wrapper is not there (CSS `display: contents`): the flex
+// properties of what it wraps count, and a value set on the wrapper itself wins.
+describe("flex properties through a wrapper", () => {
+  const link = (child: PDFElement) => Link({ href: "https://jasy.dev" }, child);
+  const boxes = async (content: PDFElement[]) =>
+    (await render(content))[0]!.flatMap((n) => (n.type === "rect" && n.fill ? [n] : []));
+
+  it("an Expanded inside a Link fills the rest of a Row", async () => {
+    const [fixed, grown] = await boxes([
+      Row({}, [
+        Box({ width: 60, height: 10, bg: "#eeeeee" }, []),
+        link(Expanded(Box({ height: 10, bg: "#dbe6f8" }, []))),
+      ]),
+    ]);
+    // A6 is 297.64pt wide, 20pt margins: 257.64 for the row, 60 of it fixed.
+    expect(fixed!.width).toBe(60);
+    expect(grown!.width).toBeCloseTo(257.64 - 60, 6);
+  });
+
+  it("an Expanded inside a Link fills the rest of a Column of fixed height", async () => {
+    const [grown] = await boxes([
+      Column({ height: 100 }, [Text("top"), link(Expanded(Box({ bg: "#dbe6f8" }, [])))]),
+    ]);
+    expect(grown!.height).toBeGreaterThan(80);
+  });
+
+  it("alignSelf on a box inside a Link places it", async () => {
+    const [start, end] = await boxes([
+      Row({ height: 60, align: "start" }, [
+        Box({ width: 20, height: 10, bg: "#eeeeee" }, []),
+        link(Box({ width: 20, height: 10, bg: "#dbe6f8", alignSelf: "end" }, [])),
+      ]),
+    ]);
+    expect(end!.y - start!.y).toBe(50);
+  });
+
+  it("order on a box inside a Link moves it", async () => {
+    const drawn = await boxes([
+      Row({}, [
+        Box({ width: 20, height: 10, bg: "#eeeeee" }, []),
+        link(Box({ width: 20, height: 10, bg: "#dbe6f8", order: -1 }, [])),
+      ]),
+    ]);
+    const blue = drawn.find((r) => r.x === Math.min(...drawn.map((d) => d.x)));
+    expect(
+      blue && blue.fill && "toPDFColorString" in blue.fill ? blue.fill.toPDFColorString() : "",
+    ).toBe("0.859 0.902 0.973");
+  });
+
+  it("flexShrink 0 inside a Link keeps the box at its size in an overflowing Row", async () => {
+    const drawn = await boxes([
+      Row({}, [
+        Box({ width: 200, height: 10, bg: "#eeeeee" }, []),
+        link(Box({ width: 200, height: 10, bg: "#dbe6f8", flexShrink: 0 }, [])),
+      ]),
+    ]);
+    expect(drawn.map((r) => r.width)).toEqual([257.64 - 200, 200]);
+  });
+
+  it("a value set on the wrapper itself wins over the one inside", async () => {
+    const outer = link(Box({ width: 20, height: 10, bg: "#dbe6f8", alignSelf: "end" }, []));
+    outer.withAlignSelf("center");
+    const [, centred] = await boxes([
+      Row({ height: 60, align: "start" }, [
+        Box({ width: 20, height: 10, bg: "#eeeeee" }, []),
+        outer,
+      ]),
+    ]);
+    expect(centred!.y - 20).toBe(25);
+  });
+
+  it("an Expanded may not hold another Expanded, wrapper or not", async () => {
+    await expect(
+      renderToBytes(Document([Page({}, [Row({}, [Expanded(link(Expanded(Text("x"))))])])])),
+    ).rejects.toThrow(/cannot hold another flexible element/);
   });
 });

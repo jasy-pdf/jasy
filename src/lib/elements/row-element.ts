@@ -1,3 +1,4 @@
+import { flexibleOf } from "../layout/flex-item.ts";
 import {
   BoxConstraints,
   Offset,
@@ -14,13 +15,7 @@ import {
   type FlexMode,
 } from "../utils/flex-layout.ts";
 import { stackMinIntrinsic, withDeclaredExtent } from "../layout/min-intrinsic.ts";
-import {
-  FlexiblePDFElement,
-  LayoutContext,
-  PDFElement,
-  SizedPDFElement,
-  WithChildren,
-} from "./pdf-element.ts";
+import { LayoutContext, PDFElement, SizedPDFElement, WithChildren } from "./pdf-element.ts";
 
 interface RowElementParams extends WithChildren {
   /** Space inserted between children, in points. */
@@ -128,7 +123,7 @@ export class RowElement extends SizedPDFElement {
       ? [this.requested.width, this.requested.widthFactor]
       : [this.requested.height, this.requested.heightFactor];
     if (requested.some((v) => v !== undefined)) return false;
-    const ownFlexChild = horizontal && this.children.some((c) => c instanceof FlexiblePDFElement);
+    const ownFlexChild = horizontal && this.children.some((c) => flexibleOf(c) !== undefined);
     return ownFlexChild || this.children.some((c) => c.needsBoundedMain(horizontal));
   }
 

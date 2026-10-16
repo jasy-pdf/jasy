@@ -51,6 +51,11 @@ export abstract class ProxyElement extends PDFElement implements Fragmentable {
     return [this.child];
   }
 
+  /** Transparent to a surrounding Row or Column too: it sees the child's flex properties. */
+  override proxied(): PDFElement {
+    return this.child;
+  }
+
   override relativeSizeFactor(horizontal: boolean): number | undefined {
     return this.child.relativeSizeFactor(horizontal);
   }

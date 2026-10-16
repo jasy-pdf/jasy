@@ -196,8 +196,13 @@ sizing (`relativeSizeFactor`, `needsBoundedMain`, `minIntrinsicMain`) and pagina
 a split only, a link stays clickable on every piece. `Expanded` and `RepeatingHeader` pass `forceBreak`
 and `hasForcedBreak` on; `Rotated` passes sizing and break-before/after but is never split. `PageBuilder`
 and `Deferred` build their child during layout and the signals carry no context, so they stay as they
-are. Flex item properties through a wrapper (`Expanded`, `alignSelf`, `order` of a wrapped child) are
-step 6c.
+are.
+
+Built (6c): to a surrounding Row or Column a `ProxyElement` is not there (CSS `display: contents`).
+`PDFElement.proxied()` names what an element is transparent for; `layout/flex-item.ts` reads a child's
+flex item through that chain - its `Expanded`, `alignSelf`, `order`, `flexShrink` - and a value set on
+the wrapper itself wins. `order`/`flexShrink` are unset (`undefined`) by default so "set" can be told
+from "default"; the defaults 0 and 1 live in `flex-item.ts`.
 
 ## 4. Floating point and byte stability
 

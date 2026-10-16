@@ -151,6 +151,14 @@ export abstract class PDFElement {
     return [];
   }
 
+  /**
+   * The element this one is transparent for, if any: a `ProxyElement` returns its child. A surrounding
+   * Row or Column looks through it for the flex item (`layout/flex-item.ts`).
+   */
+  proxied(): PDFElement | undefined {
+    return undefined;
+  }
+
   /** Lays out its own `Positioned` descendants (a page, a `relative` Box); a walk for them stops here. */
   isPositioningFrame(): boolean {
     return false;
@@ -243,9 +251,9 @@ export abstract class PDFElement {
   /**
    * Where this child sits among its siblings (CSS `order`), lowest first, source order deciding ties.
    * It moves the child in the LAYOUT only - the element tree, and therefore the reading order a tagged
-   * PDF exposes, is untouched. Default 0.
+   * PDF exposes, is untouched. Unset means 0; a stack reads it through `layout/flex-item.ts`.
    */
-  order = 0;
+  order?: number;
 
   /**
    * How willingly this child gives up main-axis space when the line overflows (CSS `flex-shrink`),
@@ -257,8 +265,9 @@ export abstract class PDFElement {
    * caution outlived its use: four of the gallery cases turned out to be overflowing their page
    * margin without anyone noticing, because nothing ever pulled them back. Shrinking is bounded from
    * below by `minIntrinsicMain`, so a child is never squeezed past what it can actually hold.
+   * Unset means 1; a stack reads it through `layout/flex-item.ts`.
    */
-  flexShrink = 1;
+  flexShrink?: number;
 
   /** Sets `flexShrink` and returns the element. */
   withFlexShrink(shrink: number | undefined): this {

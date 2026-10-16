@@ -1,3 +1,4 @@
+import { flexibleOf } from "../layout/flex-item.ts";
 import {
   FlexLayoutHelper,
   VERTICAL_AXIS,
@@ -21,7 +22,6 @@ import {
   packChildren,
 } from "../layout/fragmentation.ts";
 import {
-  FlexiblePDFElement,
   LayoutContext,
   PDFElement,
   SizedElement,
@@ -193,7 +193,7 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
       ? [this.requested.width, this.requested.widthFactor]
       : [this.requested.height, this.requested.heightFactor];
     if (requested.some((v) => v !== undefined)) return false;
-    const ownFlexChild = !horizontal && this.children.some((c) => c instanceof FlexiblePDFElement);
+    const ownFlexChild = !horizontal && this.children.some((c) => flexibleOf(c) !== undefined);
     return ownFlexChild || this.children.some((c) => c.needsBoundedMain(horizontal));
   }
 
