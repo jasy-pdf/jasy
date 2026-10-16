@@ -1,7 +1,7 @@
 import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 import { LinkElement } from "../elements/layout/link-element.ts";
 import { RendererRegistry, type RenderScope } from "../utils/renderer-registry.ts";
-import { IRNode } from "../ir/display-list.ts";
+import { IRNode, spokenText } from "../ir/display-list.ts";
 
 export class LinkRenderer {
   static async render(
@@ -33,8 +33,8 @@ export class LinkRenderer {
     } finally {
       struct.pop();
     }
-    const text = childNodes.flatMap((n) => (n.type === "text" ? [n.text.trim()] : []));
-    const alt = text.filter(Boolean).join(" ") || (href ?? dest ?? "");
+    const alt =
+      spokenText(childNodes.flatMap((n) => (n.type === "text" ? [n] : []))) || (href ?? dest ?? "");
     return [...childNodes, { type: "link", x, y, width, height, href, dest, structKey, alt }];
   }
 }

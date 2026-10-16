@@ -542,7 +542,8 @@ describe("baked field appearances draw in the embedded font they inherit", () =>
 // glyph, so an unshaped draw would be wider than the width that placed it (measured != drawn). And a
 // character the font lacks is removed and reported, as in `Text` - never drawn as .notdef (PDF/A).
 describe("an embedded-font field value: drawn as measured, never a .notdef", () => {
-  const free = new Uint8Array(readFileSync("claude-data/assets/FreeSans.ttf"));
+  // The committed fixture: its "ff" is a ligature, and it holds only the glyphs of "Waffel fjord VAV 0123".
+  const fixture = new Uint8Array(readFileSync("tests/fixtures/fonts/dejavu-subset.ttf"));
   const hexOf = (pdf: string) => {
     const ap = pdf.match(/\/FT \/Tx[^\n]*\/AP << \/N (\d+) 0 R/)![1]!;
     const stream = pdf.match(
@@ -554,26 +555,49 @@ describe("an embedded-font field value: drawn as measured, never a .notdef", () 
   it("draws the shaped glyphs - a ligature is one glyph", async () => {
     const pdf = new TextDecoder("latin1").decode(
       await renderToBytes(
-        Document({ font: "Free" }, [
-          Page([TextField({ name: "t", width: 200, height: 20, value: "office" })]),
+        Document({ font: "Fixture" }, [
+          Page([TextField({ name: "t", width: 200, height: 20, value: "Waffel" })]),
         ]),
-        { compress: false, fonts: { Free: free } },
+        { compress: false, fonts: { Fixture: fixture } },
       ),
     );
-    expect(hexOf(pdf).length / 4).toBeLessThan("office".length);
+    expect(hexOf(pdf).length / 4).toBeLessThan("Waffel".length);
   });
 
   it("removes and reports a character the font cannot draw", async () => {
     const missing: string[] = [];
     const pdf = new TextDecoder("latin1").decode(
       await renderToBytes(
-        Document({ font: "Free" }, [
-          Page([TextField({ name: "t", width: 200, height: 20, value: "ok 漢" })]),
+        Document({ font: "Fixture" }, [
+          Page([TextField({ name: "t", width: 200, height: 20, value: "VAV 漢" })]),
         ]),
-        { compress: false, fonts: { Free: free }, onMissingGlyphs: (c) => missing.push(...c) },
+        {
+          compress: false,
+          fonts: { Fixture: fixture },
+          onMissingGlyphs: (c) => missing.push(...c),
+        },
       ),
     );
     expect(missing).toEqual(["漢"]);
-    expect(hexOf(pdf)).not.toMatch(/^(?:[0-9A-F]{4})*0000/); // no .notdef glyph id
+    const glyphIds = hexOf(pdf).match(/.{4}/g)!;
+    expect(glyphIds).not.toContain("0000"); // no .notdef among the drawn glyphs
+  });
+
+  it("drops an emoji too - a field has no emoji source, only its own font", async () => {
+    const missing: string[] = [];
+    const pdf = new TextDecoder("latin1").decode(
+      await renderToBytes(
+        Document({ font: "Fixture", emoji: { url: "https://stub.test/", format: "png" } }, [
+          Page([TextField({ name: "t", width: 200, height: 20, value: "VAV \u{1F605}" })]),
+        ]),
+        {
+          compress: false,
+          fonts: { Fixture: fixture },
+          onMissingGlyphs: (c) => missing.push(...c),
+        },
+      ),
+    );
+    expect(missing).toEqual(["\u{1F605}"]);
+    expect(hexOf(pdf).match(/.{4}/g)!).not.toContain("0000");
   });
 });

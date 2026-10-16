@@ -164,6 +164,18 @@ describe("composing with the rest", () => {
     expect(kids[2].getProps().y).toBe(30); // and line two starts below line one
   });
 
+  it("a stack holding a Spacer joins a line with its content, not the whole line", () => {
+    // Measured at the full line it never shared a line with anything; its Spacer only grows into what
+    // is left once the line is laid out.
+    const stack = Row({}, [
+      Box({ width: 20, height: 10 }, []),
+      Spacer(),
+      Box({ width: 20, height: 10 }, []),
+    ]);
+    const row = Row({ width: 300, wrap: true }, [tile(100), stack]);
+    expect(places(row)[1]).toEqual([100, 0]); // beside the tile, on line one
+  });
+
   it("wrapping an unbounded axis is a no-op, not an error", () => {
     // There is no edge to wrap at; the children simply keep going, as they would without `wrap`.
     const row = Row({ wrap: true }, [tile(200), tile(200)]);

@@ -75,6 +75,16 @@ export class StructTree {
     return key;
   }
 
+  /**
+   * An element no layout element stands behind - an inline link inside a paragraph: a child of `parent`,
+   * new every time (nothing to deduplicate).
+   */
+  addElement(role: string, parent: number, opts?: { alt?: string }): number {
+    const key = this.counter++;
+    this.elems.set(key, { key, role, alt: opts?.alt, parent, mc: [], annots: [] });
+    return key;
+  }
+
   push(key: number): void {
     this.stack.push(key);
   }
@@ -129,11 +139,28 @@ export class StructTree {
     const childrenOf = (parent: number | undefined) =>
       [...this.elems.values()].filter((e) => e.parent === parent); // Map order = reading order
 
+    // Where in reading order a piece of content sits: its page, then its place in that page's stream.
+    type At = { structParents: number; mcid: number };
+    const before = (a: At, b: At) => a.structParents - b.structParents || a.mcid - b.mcid;
+    const firstOf = (e: StructElem): At | undefined =>
+      [...e.mc, ...childrenOf(e.key).flatMap((c) => firstOf(c) ?? [])].sort(before)[0];
+    const mcr = (m: At) => `<< /Type /MCR /Pg ${pg(m.structParents)} 0 R /MCID ${m.mcid} >>`;
+
     // One StructElem per registered element: /K = its child elements ++ its marked-content references.
+    // An element holding BOTH (a paragraph with an inline link) interleaves them in reading order.
     for (const e of this.elems.values()) {
+      const children = childrenOf(e.key);
+      const content =
+        children.length > 0 && e.mc.length > 0
+          ? [
+              ...children.map((c) => ({ at: firstOf(c), ref: `${objNum.get(c.key)!} 0 R` })),
+              ...e.mc.map((m) => ({ at: m as At | undefined, ref: mcr(m) })),
+            ]
+              .sort((a, b) => (a.at && b.at ? before(a.at, b.at) : 0))
+              .map((k) => k.ref)
+          : [...children.map((c) => `${objNum.get(c.key)!} 0 R`), ...e.mc.map(mcr)];
       const kids = [
-        ...childrenOf(e.key).map((c) => `${objNum.get(c.key)!} 0 R`),
-        ...e.mc.map((m) => `<< /Type /MCR /Pg ${pg(m.structParents)} 0 R /MCID ${m.mcid} >>`),
+        ...content,
         ...e.annots.map(
           (a) => `<< /Type /OBJR /Pg ${pg(a.structParents)} 0 R /Obj ${a.obj} 0 R >>`,
         ),

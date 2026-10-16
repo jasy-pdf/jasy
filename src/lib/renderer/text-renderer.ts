@@ -11,7 +11,15 @@ import type {
   TTFParser,
   ColorGlyphLayer,
 } from "../utils/ttf-parser.ts";
-import { IRNode, TextRun, PathCommand, Gradient, Line, Link } from "../ir/display-list.ts";
+import {
+  IRNode,
+  TextRun,
+  PathCommand,
+  Gradient,
+  Line,
+  Link,
+  spokenText,
+} from "../ir/display-list.ts";
 import { isEmojiCodePoint } from "../text/emoji-codepoints.ts";
 import { emojiImageNode } from "./emoji-image.ts";
 import {
@@ -35,6 +43,12 @@ import {
 } from "../text/text-decoration.ts";
 import type { Hyphenator } from "../text/word-splitting.ts";
 import { quadToCubic } from "../vector/path.ts";
+
+/** One link as a reader meets it: its annotation rects (one per line) and the runs it covers. */
+interface LinkGroup {
+  links: Link[];
+  runs: TextRun[];
+}
 
 export class TextRenderer {
   // Measuring only needs metrics, not the full object manager. (The render pass below
@@ -133,7 +147,7 @@ export class TextRenderer {
     // Component -> display list. Wrapping and positioning stay here; the backend
     // turns each run into BT/Tf/Td/Tj/ET. The wrapping algorithm is unchanged from
     // the original renderer - unifying it into the engine is Phase 3.
-    const { runs, links, decorations } = TextRenderer._buildRuns(
+    const { runs, links, decorations, linkGroups } = TextRenderer._buildRuns(
       content,
       fontSize,
       fontFamily,
@@ -168,6 +182,15 @@ export class TextRenderer {
       const pdfRole = role ? role.toUpperCase() : "P"; // "h1" -> "H1"; default paragraph
       const key = objectManager.struct.openElement(textElement.structId, pdfRole);
       for (const run of runs) run.tag = { role: pdfRole, key };
+      // An inline link is a /Link element inside the paragraph: it holds its own text and its
+      // annotations, which describe themselves by that text (PDF/UA 7.18.5).
+      for (const group of linkGroups) {
+        const linkKey = objectManager.struct.addElement("Link", key);
+        for (const run of group.runs) run.tag = { role: "Link", key: linkKey };
+        const first = group.links[0]!;
+        const alt = spokenText(group.runs) || (first.href ?? first.dest ?? "");
+        for (const link of group.links) Object.assign(link, { structKey: linkKey, alt });
+      }
     }
 
     // Color fonts (COLR/CPAL): expand each run's emoji into filled vector layers (or fetched images
@@ -397,11 +420,15 @@ export class TextRenderer {
     hyphenate?: Hyphenator,
     ligatures = true,
     shownLines?: number,
-  ): { runs: TextRun[]; links: Link[]; decorations: Line[] } {
+  ): { runs: TextRun[]; links: Link[]; decorations: Line[]; linkGroups: LinkGroup[] } {
     const runs: TextRun[] = [];
     // /Link annotation rects for any `href` spans, collected as we place segments. Empty for the
     // common (no-href) case, so plain text keeps producing exactly the runs it did before.
     const links: Link[] = [];
+    // The same links grouped as the reader meets them: consecutive runs of one target are ONE link,
+    // across a line break too, with the text they cover (for the structure tree).
+    const linkGroups: LinkGroup[] = [];
+    let openLink: { target: string; group: LinkGroup } | undefined;
     // Underline / strikethrough strokes, one per decorated run (so a wrapped paragraph gets one
     // per line, and a decorated span only spans its own glyphs).
     const decorations: Line[] = [];
@@ -680,7 +707,7 @@ export class TextRenderer {
           x += partWidth;
         }
       });
-      return { runs, links, decorations };
+      return { runs, links, decorations, linkGroups };
     }
 
     // --- Segments: break into lines (shared breaker), then emit one run per segment.
@@ -716,6 +743,7 @@ export class TextRenderer {
         // ride along, since both are placed from the same y.
         const shift = VERTICAL_TEXT_SHIFT[segment.verticalAlign ?? "baseline"] * size;
         const runY = lineY - shift;
+        const firstRun = runs.length;
         const drawn = emitPiece(
           piece,
           x,
@@ -749,7 +777,7 @@ export class TextRenderer {
         // one rect per line.
         if (segment.href !== undefined || segment.dest !== undefined) {
           const v = objectManager.getFontVerticals(family, style);
-          links.push({
+          const link: Link = {
             type: "link",
             x,
             y: runY - v.ascent * size,
@@ -757,7 +785,18 @@ export class TextRenderer {
             height: (v.ascent + v.descent) * size,
             href: segment.href,
             dest: segment.dest,
-          });
+          };
+          links.push(link);
+          const target =
+            segment.href !== undefined ? `href:${segment.href}` : `dest:${segment.dest}`;
+          if (openLink?.target !== target) {
+            openLink = { target, group: { links: [], runs: [] } };
+            linkGroups.push(openLink.group);
+          }
+          openLink.group.links.push(link);
+          openLink.group.runs.push(...runs.slice(firstRun));
+        } else if (runText.trim() !== "") {
+          openLink = undefined;
         }
         x += drawn;
       });
@@ -795,6 +834,6 @@ export class TextRenderer {
       top += box.height;
     });
 
-    return { runs, links, decorations };
+    return { runs, links, decorations, linkGroups };
   }
 }

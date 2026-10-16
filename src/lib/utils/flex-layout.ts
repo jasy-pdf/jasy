@@ -187,11 +187,9 @@ export class FlexLayoutHelper {
       if (cached !== undefined) return cached;
       // Measured UNCAPPED, the same way the single-line engine measures a plain child. Handing the
       // line width in as a cap would silently squash a child wider than the line - CSS lets such a
-      // child overflow, and so does our own non-wrapping path.
-      const needsBound = child.needsBoundedMain(axis.mainHorizontal);
-      const main = axis.mainOf(
-        child.measure(axis.measureConstraints(crossAvail, needsBound ? mainAvail : Infinity), ctx),
-      );
+      // child overflow, and so does our own non-wrapping path. A stack holding a Spacer counts with its
+      // content too: its Spacer only grows into what is left once the line is laid out.
+      const main = axis.mainOf(child.measure(axis.measureConstraints(crossAvail, Infinity), ctx));
       measured.set(child, main);
       return main;
     };

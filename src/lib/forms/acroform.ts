@@ -276,7 +276,7 @@ export class AcroFormCollector {
         resources: `/Font << /F${resource.fontIndex} ${resource.resourceIndex} 0 R >>`,
         // A glyph the font lacks would draw as .notdef, which PDF/A forbids.
         cover: (text) => {
-          const { text: drawable, dropped } = coverText(text, family, style, om);
+          const { text: drawable, dropped } = coverText(text, family, style, om, false);
           if (dropped.length > 0) om.reportMissingGlyph?.(dropped);
           return drawable;
         },

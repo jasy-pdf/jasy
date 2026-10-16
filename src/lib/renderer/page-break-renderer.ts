@@ -19,8 +19,8 @@ export class PageBreakRenderer {
   ): Promise<IRNode[]> {
     console.warn(
       "PageBreak had no effect: it is not in a paginating flow - it is inside a Row (a single " +
-        "horizontal line) or a PageBuilder (built for one page and placed whole). Put the break as a " +
-        "sibling in a Column to break after that content.",
+        "horizontal line) or a PageBuilder (built for one page and placed whole, Columns inside it " +
+        "included). Move the break out, into a Column that flows across pages.",
     );
     return [];
   }

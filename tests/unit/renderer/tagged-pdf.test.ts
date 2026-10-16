@@ -8,6 +8,8 @@ import {
   Table,
   Link,
   Anchor,
+  Paragraph,
+  span,
   TextField,
   mm,
   renderPdf,
@@ -162,6 +164,58 @@ describe("annotations in the structure tree (PDF/UA 7.18)", () => {
     expect(objectOf(pdf, widget!)).toMatch(/\/StructParent \d+/);
     expect(ownersOf(pdf, widget!)).toEqual(["Form"]);
     expect(pdf).toMatch(/\/S \/Form [^\n]*\/Alt \(email\)/);
+  });
+
+  it("an inline link (a span with href) is a /Link inside its paragraph, in reading order", async () => {
+    const doc = Document([
+      Page([
+        Paragraph([
+          span("Read the "),
+          span("terms", { href: "https://jasy.dev/terms" }),
+          span(" today."),
+        ]),
+      ]),
+    ]);
+    const pdf = await renderPdf(doc, { accessible: true, compress: false });
+    const [link] = annots(pdf, "Link");
+    expect(objectOf(pdf, link!)).toMatch(/\/StructParent \d+ \/Contents \(terms\)/);
+    expect(ownersOf(pdf, link!)).toEqual(["Link"]);
+    // The paragraph reads: text, the link, text - the link's element sits between its two MCRs.
+    const k = pdf.match(/<< \/Type \/StructElem \/S \/P [^\n]*?\/K \[ ([^\n]*) \] >>/)![1]!;
+    const kids = [...k.matchAll(/<< \/Type \/MCR [^>]*>>|\d+ 0 R/g)].map((m) =>
+      m[0].startsWith("<<") ? "mcr" : "elem",
+    );
+    expect(kids.filter((k, i) => i === 0 || k !== kids[i - 1])).toEqual(["mcr", "elem", "mcr"]);
+  });
+
+  it("an inline link wrapped over two lines is ONE /Link with both annotations", async () => {
+    const doc = Document([
+      Page([
+        Box({ width: 90 }, [
+          Paragraph([
+            span("See "),
+            span("the full documentation page", { href: "https://jasy.dev" }),
+          ]),
+        ]),
+      ]),
+    ]);
+    const pdf = await renderPdf(doc, { accessible: true, compress: false });
+    const links = annots(pdf, "Link");
+    expect(links.length).toBeGreaterThan(1); // one annotation per line
+    expect((pdf.match(/\/S \/Link\b/g) ?? []).length).toBe(1);
+    for (const link of links) {
+      expect(objectOf(pdf, link)).toContain("/Contents (the full documentation page)");
+    }
+  });
+
+  it("a link's text is read as written: spans of one word stay one word", async () => {
+    const doc = Document([
+      Page([
+        Link({ href: "https://jasy.dev" }, Text([span("Visit "), span("jasy"), span(".dev")])),
+      ]),
+    ]);
+    const pdf = await renderPdf(doc, { accessible: true, compress: false });
+    expect(pdf).toContain("/Contents (Visit jasy.dev)");
   });
 
   it("an untagged document keeps its annotations exactly as before", async () => {
