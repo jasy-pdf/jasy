@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
 import {
   Document,
   Page,
@@ -484,5 +485,55 @@ describe("form fields (AcroForm)", () => {
     );
     expect(plain).toContain("/FT /Btn /Ff 49152"); // Radio | NoToggleToOff
     expect(required).toContain("/FT /Btn /Ff 49154"); // ... | Required
+  });
+});
+
+// PDF/A and PDF/UA: every font that DRAWS must be embedded. A baked field appearance draws, so it uses
+// the embedded font the field inherits; its /DA keeps naming Helvetica, what a viewer redraws with once
+// someone types (a subset could not draw new characters).
+describe("baked field appearances draw in the embedded font they inherit", () => {
+  const font = new Uint8Array(readFileSync("tests/fixtures/fonts/dejavu-subset.ttf")); // "Waffel fjord VAV 0123"
+  /** The dictionary of indirect object `num`. */
+  const objectOf = (pdf: string, num: string) =>
+    pdf.match(new RegExp(`(?:^|\\n)${num} 0 obj\\s*([\\s\\S]*?)endobj`))?.[1] ?? "";
+  /** For every widget of field type `ft`: its /DA and the font resources of its normal appearance. */
+  const widgets = (pdf: string, ft: string) =>
+    [...pdf.matchAll(new RegExp(`<< /Type /Annot /Subtype /Widget /FT /${ft}[^\\n]*`, "g"))].map(
+      (m) => ({
+        da: m[0].match(/\/DA \(([^)]*)\)/)?.[1],
+        fonts: objectOf(pdf, m[0].match(/\/AP << \/N (\d+) 0 R/)![1]!).match(
+          /\/Font << ([^>]*)>>/,
+        )?.[1],
+      }),
+    );
+  const fields = () =>
+    Column([
+      Text("Waffel"),
+      TextField({ name: "t", width: 120, height: 20, value: "Waffel 0123" }),
+      Dropdown({ name: "d", width: 120, height: 20, value: "fjord" }, ["fjord", "VAV"]),
+      PushButton({ name: "p", label: "Waffel", width: 80, height: 20 }),
+      SignatureField({ name: "s", width: 120, height: 40, label: "VAV" }),
+    ]);
+
+  it("an embedded document font draws the value, the /DA stays Helvetica", async () => {
+    const pdf = new TextDecoder("latin1").decode(
+      await renderToBytes(Document({ font: "Body" }, [Page([fields()])]), {
+        compress: false,
+        fonts: { Body: font },
+      }),
+    );
+    const all = ["Tx", "Ch", "Btn", "Sig"].flatMap((ft) => widgets(pdf, ft));
+    expect(all).toHaveLength(4); // the test is not vacuous
+    for (const w of all) {
+      expect(w.fonts).toMatch(/^\/F\d+ \d+ 0 R $/);
+      if (w.da !== undefined) expect(w.da).toMatch(/^\/Helv /);
+    }
+  });
+
+  it("a document in standard fonts keeps Helvetica, exactly as before", async () => {
+    const pdf = await render(Document([Page([fields()])]));
+    const all = ["Tx", "Ch", "Btn", "Sig"].flatMap((ft) => widgets(pdf, ft));
+    expect(all).toHaveLength(4);
+    for (const w of all) expect(w.fonts).toMatch(/^\/Helv \d+ 0 R $/);
   });
 });

@@ -1,5 +1,6 @@
 import { PDFObjectManager, FontStyle } from "../utils/pdf-object-manager.ts";
 import {
+  HELV,
   checkboxOff,
   checkboxOn,
   fieldDrawSize,
@@ -168,7 +169,7 @@ export function bakeAppearance(
       ...measure(o.label),
       selected: chosen.has(o.value),
     }));
-    content = listBoxFace(look.width, look.height, look.style, rows, capHeight, size, "Helv");
+    content = listBoxFace(look.width, look.height, look.style, rows, capHeight, size, HELV);
   } else {
     // A choice stores an EXPORT value but shows its label - "DE" in /V, "Germany" on screen.
     const display =
@@ -192,7 +193,7 @@ export function bakeAppearance(
       lines,
       capHeight,
       size,
-      "Helv",
+      HELV,
       look.multiline,
       look.align,
     );

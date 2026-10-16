@@ -29,7 +29,9 @@ export class FormFieldRenderer {
     objectManager: PDFObjectManager,
     scope: RenderScope,
   ): Promise<IRNode[]> {
-    const { x: ownX, y: ownY, width, height, spec, style } = element.getProps();
+    const props = element.getProps();
+    const { x: ownX, y: ownY, width, height, spec, style } = props;
+    const font = "font" in props ? props.font : undefined;
     // Its own position is relative to `scope.origin`; the IR wants page coordinates.
     const x = scope.origin.x + (ownX ?? 0);
     const y = scope.origin.y + (ownY ?? 0);
@@ -41,6 +43,6 @@ export class FormFieldRenderer {
           alt: spec.tooltip === undefined ? name : undefined,
         })
       : undefined;
-    return [{ type: "formfield", x, y, width, height, field: spec, style, structKey }];
+    return [{ type: "formfield", x, y, width, height, field: spec, style, structKey, font }];
   }
 }

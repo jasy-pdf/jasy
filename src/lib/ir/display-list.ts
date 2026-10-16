@@ -197,6 +197,8 @@ export interface FormFieldNode {
   style: FieldStyle;
   /** Accessible tagging only: the `/Form` structure element the widget belongs to. */
   structKey?: number;
+  /** The font the field's text inherits; its baked appearance draws in it when it is embedded. */
+  font?: { family: string; style: FontStyle };
 }
 
 /**
