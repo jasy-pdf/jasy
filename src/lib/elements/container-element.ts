@@ -1,3 +1,4 @@
+import { widthRules } from "../layout/box-constraints.ts";
 import { flexibleOf } from "../layout/flex-item.ts";
 import {
   FlexLayoutHelper,
@@ -130,10 +131,13 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
   }
 
   fragment(maxHeight: number, width: number, ctx: LayoutContext): FragmentResult {
+    // Pack at the width the column is drawn at: its own rules (fixed, %, min/max) resolved against the
+    // region, the same sizing path as `measure`. A narrower column has taller children.
+    const ownWidth = this.measure(BoxConstraints.loose(width, Infinity), ctx).width;
     const { fitted, remainder, forceBreak } = packChildren(
       this.children,
       maxHeight,
-      width,
+      ownWidth,
       ctx,
       this.gap,
     );
@@ -159,10 +163,9 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
     return new ContainerElement({
       x: this.x,
       y: this.y,
-      // Carry the requested WIDTH (a %-width column keeps its width on every page); the height is
+      // Carry the WIDTH rules (a %-width or max-width column keeps them on every page); the height is
       // intentionally dropped so each fragment shrink-wraps to the content it actually holds.
-      width: this.requested.width,
-      widthFactor: this.requested.widthFactor,
+      ...widthRules(this.requested),
       children,
       gap: this.gap,
       main: this.main,
@@ -171,7 +174,7 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
       wrap: this.wrap,
       alignContent: this.alignContent,
       breakAfter,
-    });
+    }).asPieceOf(this);
   }
 
   override relativeSizeFactor(horizontal: boolean): number | undefined {

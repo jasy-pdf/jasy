@@ -93,8 +93,12 @@ export abstract class ProxyElement extends PDFElement implements Fragmentable {
     if (!isFragmentable(this.child)) return { fitted: null, remainder: this };
     const split = this.child.fragment(maxHeight, width, this.childContext(ctx));
     // The child handed itself back (it all fits, or none of it does): so does the wrapper, mark included.
-    const wrap = (piece: PDFElement, continued: boolean) =>
-      piece === this.child ? this : this.rewrap(piece, continued);
+    const wrap = (piece: PDFElement, continued: boolean): PDFElement => {
+      if (piece === this.child) return this;
+      const wrapped = this.rewrap(piece, continued);
+      // A wrapper dropped from a continued piece still leaves that piece in its place in the flow.
+      return wrapped === piece ? piece.takeFlexItemFrom(this) : wrapped.asPieceOf(this);
+    };
     return {
       fitted: split.fitted && wrap(split.fitted, false),
       // A remainder continues the wrapper only when a part of it was placed before.

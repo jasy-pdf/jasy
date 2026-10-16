@@ -67,9 +67,11 @@ export class RepeatingHeaderElement extends PDFElement implements Fragmentable {
     // Re-wrap each body piece with the SAME header → it reappears on the next page too. A forced
     // break inside the body is passed on, so the page ends there.
     return {
-      fitted: split.fitted ? new RepeatingHeaderElement(this.header, split.fitted, this.gap) : null,
+      fitted: split.fitted
+        ? new RepeatingHeaderElement(this.header, split.fitted, this.gap).asPieceOf(this)
+        : null,
       remainder: split.remainder
-        ? new RepeatingHeaderElement(this.header, split.remainder, this.gap)
+        ? new RepeatingHeaderElement(this.header, split.remainder, this.gap).asPieceOf(this)
         : null,
       forceBreak: split.forceBreak,
     };

@@ -527,7 +527,12 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       wordSpacing: this.wordSpacing,
       textIndent: indent,
       role: this.role,
-    }).adoptStructId(this); // a wrapped remainder is the SAME logical paragraph (one P across pages)
+      fontFallback: this.fontFallback,
+      textTransform: this.textTransform,
+      breakWord: this.breakWord,
+      hyphenate: this.hyphenate,
+      ligatures: this.ligatures,
+    }).asPieceOf(this); // a wrapped remainder is the SAME logical paragraph (one P across pages)
   }
 
   calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {

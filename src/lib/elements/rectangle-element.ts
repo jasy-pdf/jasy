@@ -1,3 +1,4 @@
+import { widthRules } from "../layout/box-constraints.ts";
 import type { Radii } from "../ir/display-list.ts";
 import type { GradientInput } from "../api/gradient.ts";
 import { Color } from "../common/color.ts";
@@ -133,11 +134,9 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
    * box is sized by what it actually holds on each page.
    */
   fragment(maxHeight: number, width: number, ctx: LayoutContext): FragmentResult {
-    // A percentage width resolves against the region width the page driver hands us, so a
-    // paginating %-box keeps its fraction on every page.
-    const boxWidth =
-      this.sizeMemory.width ??
-      (this.sizeMemory.widthFactor !== undefined ? width * this.sizeMemory.widthFactor : width);
+    // The box's own width rules (fixed, %, min/max) resolved against the region - the same sizing
+    // path as `measure`, so the content is packed at the width it will be drawn at.
+    const boxWidth = this.measure(BoxConstraints.loose(width, Infinity), ctx).width;
     const innerWidth = Math.max(0, boxWidth - 2 * this.borderWidth);
     // Border-box: the content is inset by the border on top and bottom, so a fragment
     // holding `c` of content is `c + 2*border` tall. (Derived, not a fudge factor.)
@@ -197,10 +196,9 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
     return new RectangleElement({
       x: 0,
       y: 0,
-      width: this.sizeMemory.width,
-      widthFactor: this.sizeMemory.widthFactor,
-      // A split box is sized by its per-page content (height passed in), so the height factor
-      // is intentionally dropped here - box-decoration-break, same as an explicit height.
+      ...widthRules(this.sizeMemory),
+      // A split box is sized by its per-page content (height passed in), so the height rules are
+      // intentionally dropped here - box-decoration-break, same as an explicit height.
       height,
       children,
       color: this.color,
@@ -211,7 +209,7 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
       relative: this.relative,
       overflow: this.overflow,
       breakAfter,
-    });
+    }).asPieceOf(this);
   }
 
   override relativeSizeFactor(horizontal: boolean): number | undefined {

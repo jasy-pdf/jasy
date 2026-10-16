@@ -85,6 +85,24 @@ export abstract class PDFElement {
     return this;
   }
 
+  /**
+   * Marks this element as a piece of `original`, split across pages: it is the same element to a
+   * reader of the tagged PDF (one structure element) and to the Row or Column it sits in (its flex
+   * properties). Every fragmentation clone ends in this call, so a property added to the base is
+   * carried in ONE place. Returns this.
+   */
+  asPieceOf(original: PDFElement): this {
+    return this.adoptStructId(original).takeFlexItemFrom(original);
+  }
+
+  /** Takes the flex properties `original` set (CSS `align-self`, `order`, `flex-shrink`). Returns this. */
+  takeFlexItemFrom(original: PDFElement): this {
+    this.alignSelf = original.alignSelf ?? this.alignSelf;
+    this.order = original.order ?? this.order;
+    this.flexShrink = original.flexShrink ?? this.flexShrink;
+    return this;
+  }
+
   // Each subclass overrides this with its own concrete props type; `unknown` forces
   // callers holding only a base `PDFElement` to narrow before reading props.
   abstract getProps(): unknown;

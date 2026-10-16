@@ -104,7 +104,7 @@ export class ExpandedElement extends FlexiblePDFElement implements Fragmentable 
       basis: this.basis,
       basisFactor: this.basisFactor,
       child,
-    });
+    }).asPieceOf(this);
   }
 
   override layoutChildren(): readonly PDFElement[] {

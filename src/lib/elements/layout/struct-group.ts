@@ -18,7 +18,7 @@ export class StructGroup extends ProxyElement {
   }
 
   protected override rewrap(child: PDFElement): PDFElement {
-    return new StructGroup({ role: this.role, child }).adoptStructId(this);
+    return new StructGroup({ role: this.role, child });
   }
 
   override getProps() {

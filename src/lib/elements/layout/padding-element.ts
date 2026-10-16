@@ -59,7 +59,7 @@ export class PaddingElement extends SizedPDFElement implements Fragmentable {
   }
 
   private cloneWithChild(child: PDFElement): PaddingElement {
-    return new PaddingElement({ margin: this.margin, child });
+    return new PaddingElement({ margin: this.margin, child }).asPieceOf(this);
   }
 
   /**
