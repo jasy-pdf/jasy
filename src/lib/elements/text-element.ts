@@ -19,6 +19,7 @@ import {
   MAX_SPACE_SHRINK,
   breakStringIntoLines,
   breakSegmentsIntoLines,
+  hyphenPieces,
   TextOverflow,
 } from "../text/line-breaker.ts";
 import {
@@ -706,8 +707,10 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
         fontStyle: style,
         ligatures: this.ligatures,
       };
-      // Split on the same boundaries the breaker uses - a hard break ends a line too.
-      const pieces = this.breakWord || this.hyphenate ? [...text] : text.split(/[ \n]/);
+      // Split on the same boundaries the breaker uses - a hard break ends a line too, and so may a
+      // hyphen inside a word.
+      const pieces =
+        this.breakWord || this.hyphenate ? [...text] : text.split(/[ \n]/).flatMap(hyphenPieces);
       return pieces.reduce(
         (max, piece) => Math.max(max, runAdvance(metrics, piece, font, letterSpacing)),
         0,

@@ -57,7 +57,7 @@ describe("hyperlinks (/Link annotations)", () => {
   it("a long unbreakable link word on its own line is ONE rect, no empty one before it", async () => {
     // The word does not fit after "go to ", so it starts the next line. The span's empty piece left on
     // the first line used to become a zero-width annotation.
-    const long = "https://github.com/jasy-pdf/jasy/blob/main/README.md";
+    const long = "https://github.com/jasypdf/jasy/blob/main/README.md"; // no hyphen: unbreakable
     const doc = Document([
       Page([Box({ width: 120 }, [Text([span("go to "), span(long, { href: "https://x.dev" })])])]),
     ]);
