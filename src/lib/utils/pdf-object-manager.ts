@@ -1206,9 +1206,8 @@ endstream`;
   }
 
   // Whether to kern. Document-level: measuring (via `runAdvance`, which reads this off the metrics)
-  // and drawing (the backend emits a `TJ`) both consult it, so they can never disagree. OFF while the
-  // embedded-font path (kern/GPOS) is unbuilt - a standard-14-only kerning would set the 14 system
-  // fonts finer than a user's own font, which is worse than none. Flip to on when GPOS lands.
+  // and drawing (the backend emits a `TJ`) both consult it, so they can never disagree. The default
+  // here is off; `renderPdf` turns it on unless the document says `kerning: false`.
   kerningEnabled = false;
 
   setKerning(enabled: boolean): void {

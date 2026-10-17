@@ -5,8 +5,8 @@ import { Document, Page, Text, renderToBytes } from "../../../src/lib/api";
 import { buildKernTtf, buildGposKernTtf } from "../utils/ttf-fixture";
 
 // Standard-14 kerning: measuring (runAdvance) and drawing (a TJ array) both read the SAME AFM pairs,
-// so a kerned run is exactly as wide as it is drawn. OFF by default (embedded fonts are not kerned
-// yet), so every existing document stays byte-identical.
+// so a kerned run is exactly as wide as it is drawn. On by default in `renderPdf`; the object manager
+// used here starts with it off, so each test says which it wants.
 
 const om = (kerning = false) => {
   const m = new PDFObjectManager();
