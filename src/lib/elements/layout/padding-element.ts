@@ -70,6 +70,11 @@ export class PaddingElement extends SizedPDFElement implements Fragmentable {
     };
   }
 
+  /** A wrapper: it needs a bound exactly when its child does, and passes the bound on. */
+  override needsBoundedMain(horizontal: boolean): boolean {
+    return this.child.needsBoundedMain(horizontal);
+  }
+
   override hasForcedBreak(): boolean {
     return this.child.hasForcedBreak();
   }
@@ -126,12 +131,18 @@ export class PaddingElement extends SizedPDFElement implements Fragmentable {
       this.percentBase(constraints.maxWidth, ctx),
     );
 
-    // The child is inset by the margins: shifted down/right, narrowed by the
-    // horizontal margins, and left height-unbounded so it sizes to its own content.
+    // The child is inset by the margins: shifted down/right, narrowed by the horizontal margins, and
+    // left height-unbounded so it sizes to its own content - unless it cannot lay itself out without a
+    // bound (a stack holding a Spacer): that one gets the height inside the margins, as it would without
+    // the padding.
     const childWidth = constraints.hasBoundedWidth
       ? Math.max(0, constraints.maxWidth - marginLeft - marginRight)
       : Infinity;
-    const childConstraints = BoxConstraints.loose(childWidth, Infinity);
+    const childHeight =
+      constraints.hasBoundedHeight && this.child.needsBoundedMain(false)
+        ? Math.max(0, constraints.maxHeight - marginTop - marginBottom)
+        : Infinity;
+    const childConstraints = BoxConstraints.loose(childWidth, childHeight);
     const childCtx = this.childContext(ctx);
     const childSize =
       mode === "layout"
