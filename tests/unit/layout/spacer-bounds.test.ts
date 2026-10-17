@@ -52,6 +52,19 @@ describe("Spacer / Expanded on an unbounded main axis (issue #10)", () => {
     expect(yOf(pdf, "tail")).toBeLessThan(70);
   });
 
+  it("gives a direct Spacer in a fixed-height Box only the leftover height", async () => {
+    const pdf = await render(
+      Document([
+        Page({ size: "A4", margin: 56 }, [
+          Box({ height: 200 }, [Text("top"), Spacer(), Text("tail")]),
+        ]),
+      ]),
+    );
+    const distance = yOf(pdf, "top") - yOf(pdf, "tail");
+    expect(distance).toBeGreaterThan(160); // tail is near the box bottom
+    expect(distance).toBeLessThan(200); // tail stays inside the box
+  });
+
   it("collapses the Spacer to zero where no bound exists anywhere, and still draws the sibling", async () => {
     // A shrink-wrapping Box in an unbounded region: nothing can tell the Spacer how much to take.
     // It must take nothing - and above all it must not swallow what comes after it.
