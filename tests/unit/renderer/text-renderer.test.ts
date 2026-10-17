@@ -8,82 +8,7 @@ import { Color } from "../../../src/lib/common/color.ts";
 import { testMetrics } from "../support/metrics.ts";
 import { PAGE_SCOPE } from "../support/scope.ts";
 
-describe("TextRenderer - calculateTextHeight", () => {
-  it("should calculate the correct text height for a simple string", () => {
-    const mockObjectManager = {
-      // Consistent font (getStringWidth is the sum of getCharWidth): every glyph, space included, 5 wide.
-      ...testMetrics({
-        getStringWidth: vi.fn((t: string) => t.length * 5),
-
-        getCharWidth: vi.fn().mockReturnValue(5),
-      }),
-      struct: { enabled: false },
-      shapeText: () => undefined,
-    } as unknown as PDFObjectManager;
-
-    // "Hello World" is 11 glyphs * 5 = 55 wide; width 100 leaves it on one line.
-    const textHeight = TextRenderer.calculateTextHeight(
-      "Hello World",
-      12,
-      "Helvetica",
-      FontStyle.Normal,
-      mockObjectManager,
-      100,
-    );
-
-    expect(textHeight).toBe(12); // No line breaks
-  });
-
-  it("should calculate the correct text height with wrapping", () => {
-    const mockObjectManager = {
-      ...testMetrics({
-        getStringWidth: vi.fn().mockReturnValue(10), // String width is used for each word = 60
-        getCharWidth: vi.fn().mockReturnValue(5), // Used for empty spaces = 25
-      }),
-      struct: { enabled: false },
-      shapeText: () => undefined,
-    } as unknown as PDFObjectManager;
-
-    const textHeight = TextRenderer.calculateTextHeight(
-      "Hello World, this is a test",
-      12,
-      "Helvetica",
-      FontStyle.Normal,
-      mockObjectManager,
-      70,
-    );
-
-    expect(textHeight).toBe(24); // Two lines
-  });
-
-  it("should calculate the correct text height for TextSegments", () => {
-    const mockObjectManager = {
-      ...testMetrics({
-        getStringWidth: vi.fn().mockReturnValue(10),
-
-        getCharWidth: vi.fn().mockReturnValue(5),
-      }),
-      struct: { enabled: false },
-      shapeText: () => undefined,
-    } as unknown as PDFObjectManager;
-
-    const segments = [
-      { content: "Hello", fontSize: 12 },
-      { content: "World", fontSize: 14 },
-    ];
-
-    const textHeight = TextRenderer.calculateTextHeight(
-      segments,
-      12,
-      "Helvetica",
-      FontStyle.Normal,
-      mockObjectManager,
-      100,
-    );
-
-    expect(textHeight).toBe(14); // Bigger font size is setting height (one line)
-  });
-
+describe("TextRenderer", () => {
   it("should render text with correct commands", async () => {
     const mockTextElement = {
       getProps: vi.fn().mockReturnValue({
@@ -91,11 +16,12 @@ describe("TextRenderer - calculateTextHeight", () => {
         y: 20,
         width: 100,
         fontSize: 12,
-        content: "Hello World",
+        spans: [{ content: "Hello World" }],
         fontFamily: "Helvetica",
         fontStyle: FontStyle.Normal,
         color: new Color(0, 0, 0), // Black
         textAlignment: "left",
+        breaking: { fontFamily: "Helvetica", fontSize: 12, fontStyle: FontStyle.Normal },
       }),
     } as unknown as TextElement;
 
@@ -132,7 +58,7 @@ describe("TextRenderer - calculateTextHeight", () => {
         y: 20,
         width: 100,
         fontSize: 12,
-        content: [
+        spans: [
           { content: "Hello", fontSize: 12 },
           { content: "World", fontSize: 14 },
         ],
@@ -140,6 +66,7 @@ describe("TextRenderer - calculateTextHeight", () => {
         fontStyle: FontStyle.Normal,
         color: new Color(0, 0, 0),
         textAlignment: "left",
+        breaking: { fontFamily: "Helvetica", fontSize: 12, fontStyle: FontStyle.Normal },
       }),
     } as unknown as TextElement;
 
@@ -176,11 +103,12 @@ describe("TextRenderer - calculateTextHeight", () => {
         y: 20,
         width: 200,
         fontSize: 12,
-        content: "Hello World",
+        spans: [{ content: "Hello World" }],
         fontFamily: "Helvetica",
         fontStyle: FontStyle.Normal,
         color: new Color(0, 0, 0),
         textAlignment: HorizontalAlignment.center,
+        breaking: { fontFamily: "Helvetica", fontSize: 12, fontStyle: FontStyle.Normal },
       }),
     } as unknown as TextElement;
 
@@ -220,11 +148,12 @@ describe("TextRenderer - calculateTextHeight", () => {
         y: 20,
         width: 200,
         fontSize: 12,
-        content: "Hello World",
+        spans: [{ content: "Hello World" }],
         fontFamily: "Helvetica",
         fontStyle: FontStyle.Normal,
         color: new Color(0, 0, 0),
         textAlignment: HorizontalAlignment.right,
+        breaking: { fontFamily: "Helvetica", fontSize: 12, fontStyle: FontStyle.Normal },
       }),
     } as unknown as TextElement;
 
@@ -261,11 +190,12 @@ describe("TextRenderer - calculateTextHeight", () => {
         y: 20,
         width: 200,
         fontSize: 12,
-        content: "",
+        spans: [{ content: "" }],
         fontFamily: "Helvetica",
         fontStyle: FontStyle.Normal,
         color: new Color(0, 0, 0),
         textAlignment: "left",
+        breaking: { fontFamily: "Helvetica", fontSize: 12, fontStyle: FontStyle.Normal },
       }),
     } as unknown as TextElement;
 
@@ -301,7 +231,7 @@ describe("TextRenderer - calculateTextHeight", () => {
         y: 20,
         width: 200,
         fontSize: 12,
-        content: [
+        spans: [
           {
             content: "Hello",
             fontSize: 12,
@@ -319,6 +249,7 @@ describe("TextRenderer - calculateTextHeight", () => {
         fontStyle: FontStyle.Normal,
         color: new Color(0, 0, 0),
         textAlignment: "left",
+        breaking: { fontFamily: "Helvetica", fontSize: 12, fontStyle: FontStyle.Normal },
       }),
     } as unknown as TextElement;
 
@@ -362,7 +293,7 @@ describe("TextRenderer - calculateTextHeight", () => {
         y: 20,
         width: 200,
         fontSize: 12,
-        content: [
+        spans: [
           {
             content: "Hello",
             fontSize: 12,
@@ -380,6 +311,7 @@ describe("TextRenderer - calculateTextHeight", () => {
         fontStyle: FontStyle.Normal,
         color: new Color(0, 0, 0),
         textAlignment: HorizontalAlignment.center,
+        breaking: { fontFamily: "Helvetica", fontSize: 12, fontStyle: FontStyle.Normal },
       }),
     } as unknown as TextElement;
 

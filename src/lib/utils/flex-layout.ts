@@ -11,8 +11,6 @@ const sameConstraints = (a: BoxConstraints, b: BoxConstraints) =>
   a.minHeight === b.minHeight &&
   a.maxHeight === b.maxHeight;
 
-/** Distribution of the children ALONG the stacking (main) axis when there is leftover
- *  space and no flex child to absorb it. */
 // Re-exported so every existing import keeps working; the definitions live in layout/alignment.ts.
 export type { MainAlign, CrossAlign } from "../layout/alignment.ts";
 import type { CrossAlign, MainAlign } from "../layout/alignment.ts";
@@ -102,15 +100,6 @@ function inLayoutOrder(children: PDFElement[], reverse: boolean): PDFElement[] {
 
 export class FlexLayoutHelper {
   /**
-   * Lays out a flex line along `axis`, IN SOURCE ORDER, and places every child.
-   * Fixed children take their natural main extent; flex (`ExpandedElement`) children
-   * split the leftover main space by their `flex`. `gap` is inserted between children.
-   * `main` distributes any leftover when there is no flex child; `cross` positions/sizes
-   * each child across the line. Returns the total main extent consumed and the cross
-   * extent occupied. Vertical with `gap 0`, `main start`, `cross stretch` reproduces the
-   * previous Column layout exactly.
-   */
-  /**
    * Lays out the children along `axis`, on one line or several.
    *
    * Without `wrap` this is the single-line engine and nothing about it changed - the call goes
@@ -169,14 +158,11 @@ export class FlexLayoutHelper {
     const gap = options.gap ?? 0;
     const ordered = inLayoutOrder(children, options.reverse ?? false);
 
-    // Which children share a line. A child is measured at its natural main extent; a flex child
-    // contributes its BASIS, which is 0 unless it asked for one - so it never forces a break by itself.
-    // A child's natural main extent. A PERCENTAGE child has no fixed answer: its size depends on how
-    // many gaps the line ends up with, which depends on who is on it. So it is asked again for every
-    // candidate membership below rather than measured once.
-    // A plain child's extent does not depend on the line, so it is laid out ONCE and remembered.
-    // Without this each membership probe re-lays every child already on the line - O(n^2) subtree
-    // layouts, which is expensive the moment those children hold a Table or a wrapping paragraph.
+    // Which children share a line. A child counts with its natural main extent; a flex child with its
+    // BASIS, which is 0 unless it asked for one - so it never forces a break by itself. A PERCENTAGE
+    // child's size depends on how many gaps the line ends up with, so it is asked again for every
+    // candidate membership. A plain child's extent does not, so it is measured ONCE and remembered -
+    // otherwise each membership probe re-lays every child already on the line (O(n^2) subtree layouts).
     const measured = new Map<PDFElement, number>();
     const naturalMain = (child: PDFElement, base: number): number => {
       const flexible = flexibleOf(child);
@@ -270,6 +256,15 @@ export class FlexLayoutHelper {
     return { mainUsed: mainAvail, crossUsed: Math.max(totalCross, cursor) };
   }
 
+  /**
+   * Lays out ONE flex line along `axis` and places every child. Fixed children take their natural main
+   * extent; flex children split the leftover by their `flex`; `gap` goes between children. `main`
+   * distributes leftover when nothing flexes; `cross` positions or stretches each child across the line.
+   * Returns the main extent consumed and the cross extent occupied.
+   *
+   * The steps run in this order, and the order is part of the result: `leftover` is taken after the
+   * shrink and before the share, and the main-axis spacing reads exactly that value.
+   */
   private static layoutLine(
     children: PDFElement[],
     axis: FlexAxis,
@@ -283,252 +278,328 @@ export class FlexLayoutHelper {
     crossFromContent = false,
   ): { mainUsed: number; crossUsed: number } {
     const gap = options.gap ?? 0;
-    const main = options.main ?? "start";
-    const cross = options.cross ?? "stretch";
-    children = inLayoutOrder(children, options.reverse ?? false);
-    const count = children.length;
-    const totalGap = Math.max(0, count - 1) * gap;
-
-    // The main extent a percentage child resolves against: the line's own extent minus the gaps
-    // between the items. So N children at (100/N)% + gaps fit exactly, instead of overflowing by the
-    // gaps (the flexbox `width: 33%` + gap trap). Only finite when the line's main axis is bounded -
-    // a fraction of an unbounded main axis has no meaning, so `%` children fall back to shrink-wrap.
-    const percentBase = mainAvail !== Infinity ? Math.max(0, mainAvail - totalGap) : Infinity;
-    // The main cap to hand a child: `percentBase` for a percentage child (so its fraction resolves); for
-    // a child that cannot lay itself out without a bound (a nested stack holding an `Expanded`/`Spacer`)
-    // its content, grown by its share of the leftover once the line is settled (`sharedCap`); unbounded
-    // for everyone else, who keep their natural size.
-    // Filled by the shrink pass below; read by `mainCapFor` in pass 2. Declared here so the closure
-    // can see it - it is empty for every document that does not ask for shrinking.
-    const shrunkCap = new Map<PDFElement, number>();
-    const sharedCap = new Map<PDFElement, number>();
-    const mainCapFor = (child: PDFElement): number => {
-      const target = shrunkCap.get(child) ?? sharedCap.get(child);
-      if (target !== undefined) return target;
-      if (percentBase === Infinity) return Infinity;
-      return child.relativeSizeFactor(axis.mainHorizontal) !== undefined ? percentBase : Infinity;
+    const ordered = inLayoutOrder(children, options.reverse ?? false);
+    const totalGap = Math.max(0, ordered.length - 1) * gap;
+    const line: FlexLine = {
+      children: ordered,
+      axis,
+      mainAvail,
+      crossAvail,
+      ctx,
+      totalGap,
+      // The main extent a percentage child resolves against: the line minus the gaps between its items,
+      // so N children at (100/N)% + gaps fit exactly (the flexbox `width: 33%` + gap trap). Only finite
+      // on a bounded main axis - a fraction of an unbounded one has no meaning, so `%` shrink-wraps.
+      percentBase: mainAvail !== Infinity ? Math.max(0, mainAvail - totalGap) : Infinity,
+      fixedMain: 0,
+      crossUsed: 0,
+      totalFlex: 0,
+      totalBasis: 0,
+      sizes: new Map(),
+      under: new Map(),
+      shrunkCap: new Map(),
+      sharedCap: new Map(),
     };
-    const needsShare = (child: PDFElement): boolean =>
-      percentBase !== Infinity &&
-      !flexibleOf(child) &&
-      child.relativeSizeFactor(axis.mainHorizontal) === undefined &&
-      child.needsBoundedMain(axis.mainHorizontal);
 
-    // Pass 1: measure the fixed children (main extent + cross size) and total the flex.
-    // A flex child's BASIS is reserved here too: it is main extent the leftover no longer contains,
-    // exactly like a fixed child's size. With the default basis of 0 this line adds nothing.
-    let fixedMain = 0;
-    let totalFlex = 0;
-    let totalBasis = 0;
-    let crossUsed = 0;
-    const fixedSize = new Map<PDFElement, Size>();
-    // The constraints each measured size answers, so the last pass can reuse it instead of asking again.
-    const measuredUnder = new Map<PDFElement, BoxConstraints>();
-    const measureFixed = (child: PDFElement) => {
-      const constraints = axis.measureConstraints(crossAvail, mainCapFor(child));
-      const size = child.measure(constraints, ctx);
-      fixedMain += axis.mainOf(size);
-      crossUsed = Math.max(crossUsed, axis.crossOf(size));
-      fixedSize.set(child, size);
-      measuredUnder.set(child, constraints);
-    };
-    for (const child of children) {
-      const flexible = flexibleOf(child);
-      if (flexible) {
-        totalFlex += flexible.getFlex();
-        totalBasis += flexible.getBasis(percentBase);
-      } else {
-        measureFixed(child);
-      }
-    }
-
-    // Shrinking: the line overflows and some children said they would give space back. CSS weights a
-    // shrinker's share by `shrink x its own size`, so a big item yields more than a small one - which is
-    // why this cannot reuse the grow maths above. Nobody shrinks by default, so a document that never
-    // asks for it never enters this block.
-    const shrinkers = children.filter((c) => flexShrinkOf(c) > 0 && !flexibleOf(c));
-    const overflow = fixedMain + totalBasis + totalGap - mainAvail;
-    if (shrinkers.length > 0 && Number.isFinite(mainAvail) && overflow > 0) {
-      // Every child is floored at what it can actually hold - its `min-content` extent, which is CSS's
-      // automatic `min-width` on a flex item. Without it a badly overflowing line would grind a
-      // paragraph down to one word per line: the box gets narrow, the text gets tall, and nothing is
-      // gained. Past that floor a child overflows again, which is what a browser does too.
-      const naturalOf = (c: PDFElement) => axis.mainOf(fixedSize.get(c)!);
-      const floorOf = new Map<PDFElement, number>(
-        shrinkers.map((c) => [
-          c,
-          // Never above its natural size: the shrink pass may only take space away, never hand it out.
-          // Never below zero either - when the GAPS alone outgrow the line a proportional share asks
-          // for more than a child has, and a negative constraint is nonsense even though
-          // `constrainWidth` would floor it further down anyway.
-          Math.min(naturalOf(c), Math.max(0, c.minIntrinsicMain(axis.mainHorizontal, ctx))),
-        ]),
-      );
-
-      // CSS resolves this iteratively (Flexbox 9.7): a child that lands on its floor is FROZEN there
-      // and the share it could not absorb is handed to the rest. A single pass would leave that share
-      // unspent, so one unsqueezable child would keep the whole line overflowing while its neighbours
-      // still had room to give.
-      const target = new Map<PDFElement, number>(shrinkers.map((c) => [c, naturalOf(c)]));
-      const frozen = new Set<PDFElement>();
-      let flexible = [...shrinkers];
-      // What the frozen ones took off the overflow; the rest is always shared out from scratch, never
-      // from what a previous round already assigned.
-      let absorbedByFrozen = 0;
-      while (flexible.length > 0) {
-        const toAbsorb = overflow - absorbedByFrozen;
-        if (toAbsorb <= 1e-9) break;
-        const weight = (c: PDFElement) => flexShrinkOf(c) * naturalOf(c);
-        const totalWeight = flexible.reduce((n, c) => n + weight(c), 0);
-        if (totalWeight <= 0) break;
-        const froze: PDFElement[] = [];
-        for (const child of flexible) {
-          const natural = naturalOf(child);
-          const floor = floorOf.get(child)!;
-          const wanted = natural - (weight(child) / totalWeight) * toAbsorb;
-          if (wanted < floor) {
-            target.set(child, floor);
-            froze.push(child);
-            absorbedByFrozen += natural - floor;
-          } else {
-            target.set(child, wanted);
-          }
-        }
-        if (froze.length === 0) break;
-        for (const c of froze) frozen.add(c);
-        flexible = flexible.filter((c) => !frozen.has(c));
-      }
-
-      for (const child of shrinkers) {
-        const natural = naturalOf(child);
-        const capped = target.get(child)!;
-        if (capped >= natural) continue;
-        shrunkCap.set(child, capped);
-        // Re-measure NOW, not in pass 2: a narrower child may wrap to more lines, and the line's
-        // cross extent is settled just below.
-        const constraints = axis.measureConstraints(crossAvail, capped);
-        const size = child.measure(constraints, ctx);
-        fixedMain += axis.mainOf(size) - natural;
-        crossUsed = Math.max(crossUsed, axis.crossOf(size));
-        fixedSize.set(child, size);
-        measuredUnder.set(child, constraints);
-      }
-    }
-
-    const leftover = mainAvail - fixedMain - totalBasis - totalGap;
+    measureLine(line);
+    shrinkLine(line);
+    const leftover = mainAvail - line.fixedMain - line.totalBasis - totalGap;
     // A flex child on an UNBOUNDED main axis has no leftover space to claim. It must collapse to zero,
     // never to `Infinity`: an infinite extent would become the offset of every following sibling and get
     // written into the content stream verbatim, silently corrupting the page from that point on.
     const remaining = Number.isFinite(leftover) ? Math.max(leftover, 0) : 0;
-
-    // A stack holding a Spacer grows like an `Expanded` of flex 1 whose basis is its content: measured
-    // above at that content (shrunk with its siblings if the line overflowed), it now shares what is
-    // left with the flex children. Handing it the whole line squeezed its siblings; handing it a share
-    // before the line was settled could leave it less than its own content.
-    const sharing = children.filter(needsShare);
-    const weight = totalFlex + sharing.length;
-    if (sharing.length > 0 && remaining > 0) {
-      for (const child of sharing) {
-        const content = axis.mainOf(fixedSize.get(child)!);
-        const grown = content + remaining / weight;
-        sharedCap.set(child, grown);
-        const constraints = axis.measureConstraints(crossAvail, grown);
-        const size = child.measure(constraints, ctx);
-        fixedMain += axis.mainOf(size) - content;
-        crossUsed = Math.max(crossUsed, axis.crossOf(size));
-        fixedSize.set(child, size);
-        measuredUnder.set(child, constraints);
-      }
-    }
-
-    // Main-axis distribution only kicks in with no flex child and bounded, positive space.
-    let leadingSpace = 0;
-    let betweenSpace = gap;
-    if (weight === 0 && mainAvail !== Infinity && leftover > 0) {
-      if (main === "center") leadingSpace = leftover / 2;
-      else if (main === "end") leadingSpace = leftover;
-      else if (main === "between" && count > 1) betweenSpace = gap + leftover / (count - 1);
-      else if (main === "around") {
-        const unit = leftover / count;
-        leadingSpace = unit / 2;
-        betweenSpace = gap + unit;
-      }
-    }
-
-    // Measure flex children too (at their main share) so a tall/wrapping flex cell counts
-    // toward the line's cross extent - they're placed in pass 2, but crossExtent needs them now.
-    if (totalFlex > 0) {
-      for (const child of children) {
-        const flexible = flexibleOf(child);
-        if (flexible) {
-          const mainExtent =
-            flexible.getBasis(percentBase) + (flexible.getFlex() / weight) * remaining;
-          const constraints = axis.flexConstraints(mainExtent, crossAvail);
-          const size = child.measure(constraints, ctx);
-          crossUsed = Math.max(crossUsed, axis.crossOf(size));
-          fixedSize.set(child, size);
-          measuredUnder.set(child, constraints);
-        }
-      }
-    }
-
+    const weight = shareLeftover(line, remaining);
+    const spacing = mainSpacing(
+      options.main ?? "start",
+      gap,
+      ordered.length,
+      mainAvail,
+      leftover,
+      weight,
+    );
+    measureFlex(line, weight, remaining);
     // The cross extent children align within: the bounded line size, else the tallest child.
-    const crossExtent = crossAvail !== Infinity && !crossFromContent ? crossAvail : crossUsed;
-
-    // `stretch` caps a child's cross to `crossExtent` (not `crossAvail`) so siblings end up
-    // equal across the axis. Bounded lines have crossExtent == crossAvail (byte-identical);
-    // only an unbounded line (a shrink-wrap Row) now equalises instead of staying natural.
-    // A child may override the container with its own `alignSelf` (CSS), so the decision is per child.
-    const alignFor = (child: PDFElement): CrossAlign => alignSelfOf(child) ?? cross;
-
-    // Pass 2: place each child at the running main position, offset across by its alignment. This is
-    // the ONE layout a child gets. Measuring, it only sizes - and reuses a size already measured under
-    // the same constraints, or the measuring itself would double at every level.
-    const place = (child: PDFElement, constraints: BoxConstraints, offset: Offset): Size => {
-      if (mode === "layout") return child.calculateLayout(constraints, offset, ctx);
-      const known = measuredUnder.get(child);
-      return known && sameConstraints(known, constraints)
-        ? fixedSize.get(child)!
-        : child.measure(constraints, ctx);
-    };
-    let mainPos = leadingSpace;
-    let placedCross = 0;
-    children.forEach((child, index) => {
-      const align = alignFor(child);
-      const stretch = align === "stretch";
-      let mainExtent: number;
-      const flexible = flexibleOf(child);
-      if (flexible) {
-        // `totalFlex` is 0 when every flex child asked for `flex: 0` (a pure `flexBasis` slot). The
-        // share is then 0/0 - a NaN that becomes the offset of every later sibling, which is the
-        // shape of the old Spacer bug. Such a child simply takes its basis.
-        const share = weight > 0 ? (flexible.getFlex() / weight) * remaining : 0;
-        mainExtent = flexible.getBasis(percentBase) + share;
-        // A flex child fills the MAIN axis, and its cross size is only known after layout - there is
-        // nothing to align against. So alignSelf is a no-op here, and that has to hold for the CROSS
-        // CONSTRAINT too: reading the per-child alignment would hand an `alignSelf: "start"` flex child
-        // an unbounded cross axis on a shrink-wrapping line, where the container's own rule gives it
-        // the line's extent. A no-op that changes the constraints is not a no-op.
-        const size = place(
-          child,
-          axis.flexConstraints(mainExtent, cross === "stretch" ? crossExtent : crossAvail),
-          axis.offsetAt(mainPos, crossOrigin),
-        );
-        placedCross = Math.max(placedCross, axis.crossOf(size));
-      } else {
-        const childCross = axis.crossOf(fixedSize.get(child)!);
-        const size = place(
-          child,
-          axis.measureConstraints(stretch ? crossExtent : crossAvail, mainCapFor(child)),
-          axis.offsetAt(mainPos, crossOrigin + crossOffset(align, crossExtent, childCross)),
-        );
-        mainExtent = axis.mainOf(size);
-        placedCross = Math.max(placedCross, axis.crossOf(size));
-      }
-      mainPos += mainExtent;
-      if (index < count - 1) mainPos += betweenSpace;
-    });
-
-    return { mainUsed: mainPos, crossUsed: placedCross };
+    const crossExtent = crossAvail !== Infinity && !crossFromContent ? crossAvail : line.crossUsed;
+    return placeLine(
+      line,
+      options.cross ?? "stretch",
+      crossExtent,
+      crossOrigin,
+      spacing,
+      weight,
+      remaining,
+      mode,
+    );
   }
+}
+
+/** One flex line while it is being settled: what the steps below have measured so far. */
+interface FlexLine {
+  readonly children: PDFElement[];
+  readonly axis: FlexAxis;
+  readonly mainAvail: number;
+  readonly crossAvail: number;
+  readonly ctx: LayoutContext;
+  readonly totalGap: number;
+  readonly percentBase: number;
+  /** Main extent of the fixed children, and the tallest cross extent measured. */
+  fixedMain: number;
+  crossUsed: number;
+  /** The flex children's `flex` and `basis`, summed. */
+  totalFlex: number;
+  totalBasis: number;
+  /** Each child's measured size and the constraints it answers, so placing can reuse it. */
+  readonly sizes: Map<PDFElement, Size>;
+  readonly under: Map<PDFElement, BoxConstraints>;
+  /** Main caps set by the shrink and by the share; a shrunk cap wins. */
+  readonly shrunkCap: Map<PDFElement, number>;
+  readonly sharedCap: Map<PDFElement, number>;
+}
+
+/**
+ * The main cap to hand a child: its shrunk or shared cap once the line is settled; `percentBase` for a
+ * percentage child, so its fraction resolves; unbounded for everyone else, who keep their natural size.
+ */
+function mainCapFor(line: FlexLine, child: PDFElement): number {
+  const target = line.shrunkCap.get(child) ?? line.sharedCap.get(child);
+  if (target !== undefined) return target;
+  if (line.percentBase === Infinity) return Infinity;
+  return child.relativeSizeFactor(line.axis.mainHorizontal) !== undefined
+    ? line.percentBase
+    : Infinity;
+}
+
+/** Measures `child` and remembers the size with the constraints it answers. */
+function measureInto(line: FlexLine, child: PDFElement, constraints: BoxConstraints): Size {
+  const size = child.measure(constraints, line.ctx);
+  line.sizes.set(child, size);
+  line.under.set(child, constraints);
+  return size;
+}
+
+/** Measures a fixed child again at a new main cap, moving the line's totals with it. */
+function remeasure(line: FlexLine, child: PDFElement, cap: number): void {
+  const before = line.axis.mainOf(line.sizes.get(child)!);
+  const size = measureInto(line, child, line.axis.measureConstraints(line.crossAvail, cap));
+  line.fixedMain += line.axis.mainOf(size) - before;
+  line.crossUsed = Math.max(line.crossUsed, line.axis.crossOf(size));
+}
+
+/**
+ * Step 1: measure the fixed children (main extent + cross size) and total the flex. A flex child's BASIS
+ * is reserved here too: it is main extent the leftover no longer contains, exactly like a fixed child's
+ * size. With the default basis of 0 it adds nothing.
+ */
+function measureLine(line: FlexLine): void {
+  const { axis } = line;
+  for (const child of line.children) {
+    const flexible = flexibleOf(child);
+    if (flexible) {
+      line.totalFlex += flexible.getFlex();
+      line.totalBasis += flexible.getBasis(line.percentBase);
+      continue;
+    }
+    const size = measureInto(
+      line,
+      child,
+      axis.measureConstraints(line.crossAvail, mainCapFor(line, child)),
+    );
+    line.fixedMain += axis.mainOf(size);
+    line.crossUsed = Math.max(line.crossUsed, axis.crossOf(size));
+  }
+}
+
+/**
+ * Step 2: the line overflows and some children said they would give space back. CSS weights a shrinker's
+ * share by `shrink x its own size`, so a big item yields more than a small one. A document that never
+ * overflows never gets past the first test.
+ */
+function shrinkLine(line: FlexLine): void {
+  const { axis } = line;
+  const overflow = line.fixedMain + line.totalBasis + line.totalGap - line.mainAvail;
+  if (!Number.isFinite(line.mainAvail) || !(overflow > 0)) return;
+  const shrinkers = line.children.filter((c) => flexShrinkOf(c) > 0 && !flexibleOf(c));
+  if (shrinkers.length === 0) return;
+
+  // Every child is floored at what it can actually hold - its `min-content` extent, which is CSS's
+  // automatic `min-width` on a flex item. Without it a badly overflowing line would grind a paragraph
+  // down to one word per line. Past that floor a child overflows again, as in a browser.
+  const naturalOf = (c: PDFElement) => axis.mainOf(line.sizes.get(c)!);
+  const floorOf = new Map<PDFElement, number>(
+    shrinkers.map((c) => [
+      c,
+      // Never above its natural size (the shrink only takes space away) and never below zero (when the
+      // GAPS alone outgrow the line, a proportional share asks for more than a child has).
+      Math.min(naturalOf(c), Math.max(0, c.minIntrinsicMain(axis.mainHorizontal, line.ctx))),
+    ]),
+  );
+
+  // CSS resolves this iteratively (Flexbox 9.7): a child that lands on its floor is FROZEN there and the
+  // share it could not absorb is handed to the rest. A single pass would leave that share unspent.
+  const target = new Map<PDFElement, number>(shrinkers.map((c) => [c, naturalOf(c)]));
+  const frozen = new Set<PDFElement>();
+  let flexible = [...shrinkers];
+  // What the frozen ones took off the overflow; the rest is always shared out from scratch.
+  let absorbedByFrozen = 0;
+  while (flexible.length > 0) {
+    const toAbsorb = overflow - absorbedByFrozen;
+    if (toAbsorb <= 1e-9) break;
+    const weight = (c: PDFElement) => flexShrinkOf(c) * naturalOf(c);
+    const totalWeight = flexible.reduce((n, c) => n + weight(c), 0);
+    if (totalWeight <= 0) break;
+    const froze: PDFElement[] = [];
+    for (const child of flexible) {
+      const natural = naturalOf(child);
+      const floor = floorOf.get(child)!;
+      const wanted = natural - (weight(child) / totalWeight) * toAbsorb;
+      if (wanted < floor) {
+        target.set(child, floor);
+        froze.push(child);
+        absorbedByFrozen += natural - floor;
+      } else {
+        target.set(child, wanted);
+      }
+    }
+    if (froze.length === 0) break;
+    for (const c of froze) frozen.add(c);
+    flexible = flexible.filter((c) => !frozen.has(c));
+  }
+
+  for (const child of shrinkers) {
+    const capped = target.get(child)!;
+    if (capped >= naturalOf(child)) continue;
+    line.shrunkCap.set(child, capped);
+    // Re-measured NOW: a narrower child may wrap to more lines, and the line's cross extent is
+    // settled before anything is placed.
+    remeasure(line, child, capped);
+  }
+}
+
+/**
+ * Step 3: a stack holding a Spacer grows like an `Expanded` of flex 1 whose basis is its content - it
+ * shares what is left with the flex children. Handing it the whole line squeezed its siblings; handing
+ * it a share before the line was settled could leave it less than its own content. Returns the total
+ * weight the leftover is shared by.
+ */
+function shareLeftover(line: FlexLine, remaining: number): number {
+  const { axis } = line;
+  const sharing = line.children.filter(
+    (child) =>
+      line.percentBase !== Infinity &&
+      !flexibleOf(child) &&
+      child.relativeSizeFactor(axis.mainHorizontal) === undefined &&
+      child.needsBoundedMain(axis.mainHorizontal),
+  );
+  const weight = line.totalFlex + sharing.length;
+  if (remaining > 0) {
+    for (const child of sharing) {
+      const grown = axis.mainOf(line.sizes.get(child)!) + remaining / weight;
+      line.sharedCap.set(child, grown);
+      remeasure(line, child, grown);
+    }
+  }
+  return weight;
+}
+
+/** Step 4: the main-axis distribution - only with nothing to flex and bounded, positive space. */
+function mainSpacing(
+  main: MainAlign,
+  gap: number,
+  count: number,
+  mainAvail: number,
+  leftover: number,
+  weight: number,
+): { leading: number; between: number } {
+  if (weight !== 0 || mainAvail === Infinity || !(leftover > 0))
+    return { leading: 0, between: gap };
+  if (main === "center") return { leading: leftover / 2, between: gap };
+  if (main === "end") return { leading: leftover, between: gap };
+  if (main === "between" && count > 1) return { leading: 0, between: gap + leftover / (count - 1) };
+  if (main === "around") {
+    const unit = leftover / count;
+    return { leading: unit / 2, between: gap + unit };
+  }
+  return { leading: 0, between: gap };
+}
+
+/**
+ * Step 5: measure the flex children at their share, so a tall or wrapping flex cell counts toward the
+ * line's cross extent before anything is placed.
+ */
+function measureFlex(line: FlexLine, weight: number, remaining: number): void {
+  if (!(line.totalFlex > 0)) return;
+  for (const child of line.children) {
+    const flexible = flexibleOf(child);
+    if (!flexible) continue;
+    const mainExtent =
+      flexible.getBasis(line.percentBase) + (flexible.getFlex() / weight) * remaining;
+    const size = measureInto(line, child, line.axis.flexConstraints(mainExtent, line.crossAvail));
+    line.crossUsed = Math.max(line.crossUsed, line.axis.crossOf(size));
+  }
+}
+
+/**
+ * Step 6: place each child at the running main position, offset across by its alignment. This is the
+ * ONE layout a child gets. Measuring, it only sizes - and reuses a size already measured under the same
+ * constraints, or the measuring itself would double at every level.
+ *
+ * `stretch` caps a child's cross to `crossExtent`, not `crossAvail`, so siblings end up equal across the
+ * axis. A child may override the container with its own `alignSelf` (CSS).
+ */
+function placeLine(
+  line: FlexLine,
+  cross: CrossAlign,
+  crossExtent: number,
+  crossOrigin: number,
+  spacing: { leading: number; between: number },
+  weight: number,
+  remaining: number,
+  mode: FlexMode,
+): { mainUsed: number; crossUsed: number } {
+  const { axis, ctx } = line;
+  const place = (child: PDFElement, constraints: BoxConstraints, offset: Offset): Size => {
+    if (mode === "layout") return child.calculateLayout(constraints, offset, ctx);
+    const known = line.under.get(child);
+    return known && sameConstraints(known, constraints)
+      ? line.sizes.get(child)!
+      : child.measure(constraints, ctx);
+  };
+  const last = line.children.length - 1;
+  let mainPos = spacing.leading;
+  let placedCross = 0;
+  line.children.forEach((child, index) => {
+    let mainExtent: number;
+    const flexible = flexibleOf(child);
+    if (flexible) {
+      // `totalFlex` is 0 when every flex child asked for `flex: 0` (a pure `flexBasis` slot). The share
+      // is then 0/0 - a NaN that becomes the offset of every later sibling. Such a child takes its basis.
+      const share = weight > 0 ? (flexible.getFlex() / weight) * remaining : 0;
+      mainExtent = flexible.getBasis(line.percentBase) + share;
+      // A flex child fills the MAIN axis and its cross size is only known after layout, so `alignSelf`
+      // is a no-op here - and that has to hold for the CROSS CONSTRAINT too, or an `alignSelf: "start"`
+      // flex child would get an unbounded cross axis on a shrink-wrapping line.
+      const size = place(
+        child,
+        axis.flexConstraints(mainExtent, cross === "stretch" ? crossExtent : line.crossAvail),
+        axis.offsetAt(mainPos, crossOrigin),
+      );
+      placedCross = Math.max(placedCross, axis.crossOf(size));
+    } else {
+      const align = alignSelfOf(child) ?? cross;
+      const childCross = axis.crossOf(line.sizes.get(child)!);
+      const size = place(
+        child,
+        axis.measureConstraints(
+          align === "stretch" ? crossExtent : line.crossAvail,
+          mainCapFor(line, child),
+        ),
+        axis.offsetAt(mainPos, crossOrigin + crossOffset(align, crossExtent, childCross)),
+      );
+      mainExtent = axis.mainOf(size);
+      placedCross = Math.max(placedCross, axis.crossOf(size));
+    }
+    mainPos += mainExtent;
+    if (index < last) mainPos += spacing.between;
+  });
+  return { mainUsed: mainPos, crossUsed: placedCross };
 }

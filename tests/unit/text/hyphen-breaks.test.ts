@@ -2,9 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   breakSegmentsIntoLines,
   breakStringIntoLines,
-  hyphenBreaks,
-  hyphenPieces,
 } from "../../../src/lib/text/line-breaker.ts";
+import { hyphenBreaks, hyphenPieces } from "../../../src/lib/text/hyphen-breaks.ts";
 import { TextElement } from "../../../src/lib/elements/text-element.ts";
 import type { LayoutContext } from "../../../src/lib/elements/pdf-element.ts";
 import { FontStyle, PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager.ts";
@@ -167,5 +166,10 @@ describe("hyphen breaks at their edges", () => {
     expect(broken[0]!.end).toBe("hyphen");
     expect(broken[0]!.width).toBe(30); // "ab-": the hyphen is counted in the width it reports
     expect(contents([`ab${S} `, "cdefgh"], 30)).toEqual(["ab", "cdefgh"]); // broke at the space: no hyphen
+  });
+
+  it("a soft hyphen before a space is no break of its own: the line breaks at the space, no hyphen", () => {
+    expect(contents([`ab${S} cdefgh`], 30)).toEqual(["ab", "cdefgh"]);
+    expect(lines(`ab${S} cdefgh`, 30).map((l) => l.text)).toEqual(["ab", "cdefgh"]);
   });
 });

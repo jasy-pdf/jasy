@@ -78,13 +78,15 @@ export function reportOverflow(
 }
 
 /**
- * True if packing `children` will hit a forced cut: a child that IS a break, contains one deeper in its
- * subtree, or asks to break before/after itself. A flow container reports this from `hasForcedBreak` so
- * its parent fragments it (runs `packChildren`) instead of placing it whole and swallowing the cut.
+ * True if packing `children` will hit a forced cut INSIDE them: a child that IS a break, contains one
+ * deeper in its subtree, or asks to break before/after itself. A flow container reports this from
+ * `hasForcedBreak` so its parent fragments it (runs `packChildren`) instead of placing it whole and
+ * swallowing the cut. A break before the FIRST child is not inside: the stack takes it as its own
+ * (`breaksBefore`), so it moves whole - which is what a `keepTogether` around it relies on.
  */
 export function childrenForceBreak(children: PDFElement[]): boolean {
   return children.some(
-    (child) => child.hasForcedBreak() || child.breaksBefore() || child.breaksAfter(),
+    (child, i) => child.hasForcedBreak() || (i > 0 && child.breaksBefore()) || child.breaksAfter(),
   );
 }
 

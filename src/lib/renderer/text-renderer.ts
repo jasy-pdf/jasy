@@ -3,7 +3,6 @@ import { Color } from "../common/color.ts";
 import { HorizontalAlignment } from "../elements/pdf-element.ts";
 import { VERTICAL_TEXT_SHIFT, TextElement, TextSegment } from "../elements/text-element.ts";
 import { FontStyle, PDFObjectManager } from "../utils/pdf-object-manager.ts";
-import type { FontMetrics } from "../utils/font-metrics.ts";
 import type {
   GlyphPathCommand,
   Paint,
@@ -15,25 +14,21 @@ import { IRNode, TextRun, PathCommand, Gradient, Line, Link } from "../ir/displa
 import { isEmojiCodePoint } from "../text/emoji-codepoints.ts";
 import { emojiImageNode } from "./emoji-image.ts";
 import {
-  singleLineWidth,
-  type LineOptions,
   MAX_SPACE_SHRINK,
-  wrapStringIntoLines,
-  breakStringIntoLines,
   breakSegmentsIntoLines,
+  type SegmentDefaults,
   SegmentLine,
   TextOverflow,
 } from "../text/line-breaker.ts";
-import { lineBoxForSegmentLine, lineBoxForString } from "../text/line-metrics.ts";
+import { lineBoxForSegmentLine } from "../text/line-metrics.ts";
 import { runAdvance, type RunFont } from "../text/advance.ts";
-import { visualRuns, visualRunsOf, type Direction } from "../text/bidi.ts";
+import { visualRunsOf, type Direction } from "../text/bidi.ts";
 import {
   DecorationStroke,
   skipInkSegments,
   strikethroughStroke,
   underlineStroke,
 } from "../text/text-decoration.ts";
-import type { Hyphenator } from "../text/word-splitting.ts";
 import { quadToCubic } from "../vector/path.ts";
 
 /** One link as a reader meets it: its annotation rects (one per line) and the runs it covers. */
@@ -41,7 +36,7 @@ interface LinkGroup {
   target: string;
   links: Link[];
   runs: TextRun[];
-  /** Its text as written, one piece per line (a justified line draws one run per word). */
+  /** Its text as read, one piece per line (a justified line draws one run per word). */
   pieces: { text: string; y: number }[];
 }
 
@@ -56,67 +51,6 @@ function spokenText(pieces: readonly { text: string; y: number }[]): string {
 }
 
 export class TextRenderer {
-  // Measuring only needs metrics, not the full object manager. (The render pass below
-  // still receives the manager because it also registers fonts/images.)
-  public static calculateTextHeight(
-    content: string | TextSegment[],
-    fontSize: number,
-    fontFamily: string,
-    fontStyle: FontStyle,
-    objectManager: FontMetrics,
-    maxWidth: number,
-    maxLines?: number,
-    overflow?: TextOverflow,
-    lineHeight?: number,
-    letterSpacing = 0,
-    lineOptions: LineOptions = {},
-  ): number {
-    // Plain string: every wrapped line gets the same box.
-    if (typeof content === "string") {
-      const lines = wrapStringIntoLines(
-        content,
-        fontFamily,
-        fontSize,
-        fontStyle,
-        maxWidth,
-        objectManager,
-        maxLines,
-        overflow,
-        letterSpacing,
-        lineOptions,
-      );
-      const box = lineBoxForString(objectManager, fontFamily, fontStyle, fontSize, lineHeight);
-      return lines.length * box.height;
-    }
-
-    // Segments: each line's box comes from the fonts actually on it. `splitting` has to travel with
-    // them for the same reason `letterSpacing` does: it changes where a line ENDS, so leaving it out
-    // measures a paragraph at one line count and draws it at another.
-    const defaults = {
-      fontFamily,
-      fontSize,
-      fontStyle,
-      letterSpacing,
-      splitting: lineOptions.splitting,
-      ligatures: lineOptions.ligatures,
-      shownLines: lineOptions.shownLines,
-      indent: lineOptions.indent,
-    };
-    const lines = breakSegmentsIntoLines(
-      content,
-      defaults,
-      maxWidth,
-      objectManager,
-      maxLines,
-      overflow,
-    );
-    return lines.reduce(
-      (total, line) =>
-        total + lineBoxForSegmentLine(line, defaults, objectManager, lineHeight).height,
-      0,
-    );
-  }
-
   static async render(
     textElement: TextElement,
     objectManager: PDFObjectManager,
@@ -128,7 +62,7 @@ export class TextRenderer {
       width,
       fontSize,
       color,
-      content,
+      spans,
       fontFamily,
       fontStyle,
       textAlignment,
@@ -142,18 +76,16 @@ export class TextRenderer {
       direction,
       wordSpacing,
       textIndent,
-      breakWord,
-      hyphenate,
       ligatures,
       role,
-      shownLines,
+      breaking,
     } = textElement.getProps();
 
-    // Component -> display list. Wrapping and positioning stay here; the backend
-    // turns each run into BT/Tf/Td/Tj/ET. The wrapping algorithm is unchanged from
-    // the original renderer - unifying it into the engine is Phase 3.
+    // Component -> display list: the lines come from the one breaker, positioning stays here; the
+    // backend turns each run into BT/Tf/Td/Tj/ET.
     const { runs, links, decorations, linkGroups } = TextRenderer._buildRuns(
-      content,
+      spans,
+      breaking,
       fontSize,
       fontFamily,
       fontStyle,
@@ -174,10 +106,7 @@ export class TextRenderer {
       direction,
       wordSpacing,
       textIndent,
-      breakWord,
-      hyphenate,
       ligatures,
-      shownLines,
     );
 
     // Accessible tagging: this whole text block is one structure element (a paragraph P, or a heading
@@ -409,7 +338,9 @@ export class TextRenderer {
   // the previous hand-written operators exactly (verified by pixel-identical render);
   // only the output form changed from PDF strings to `TextRun`s.
   private static _buildRuns(
-    content: string | TextSegment[],
+    content: TextSegment[],
+    // How the text is broken - the element's own settings, the ones it was measured with.
+    breaking: SegmentDefaults,
     fontSize: number,
     fontFamily: string,
     fontStyle: FontStyle,
@@ -429,10 +360,7 @@ export class TextRenderer {
     direction: Direction = "ltr",
     wordSpacing = 0,
     textIndent = 0,
-    breakWord = false,
-    hyphenate?: Hyphenator,
     ligatures = true,
-    shownLines?: number,
   ): { runs: TextRun[]; links: Link[]; decorations: Line[]; linkGroups: LinkGroup[] } {
     const runs: TextRun[] = [];
     // /Link annotation rects for any `href` spans, collected as we place segments. Empty for the
@@ -483,12 +411,10 @@ export class TextRenderer {
       // Negative slack is real now: the breaker keeps a word when the line can be SQUEEZED to hold
       // it, so justification has to deliver that squeeze. The floor is the same limit the breaker
       // used, which is what stops a line it never promised from being crushed.
-      const spaceWidth = runAdvance(
-        objectManager,
-        " ",
-        { fontFamily, fontSize, fontStyle },
-        letterSpacing,
-      );
+      // A space as the breaker counts it: word-spacing included.
+      const spaceWidth =
+        runAdvance(objectManager, " ", { fontFamily, fontSize, fontStyle }, letterSpacing) +
+        wordSpacing;
       const extra = Math.max(slack / gaps, -spaceWidth * MAX_SPACE_SHRINK);
       // The last line is never STRETCHED - the rule print and CSS follow. It may still be SQUEEZED:
       // the breaker was allowed to pack it that way, and drawing it loose would push it out of its box.
@@ -496,15 +422,18 @@ export class TextRenderer {
     };
 
     /**
-     * Push one drawn piece and return the advance it took. When the line is justified the pen jumps an
-     * extra `extra` at every space, which means one run per word - the only way that works for an
-     * embedded font, whose spaces `Tw` cannot reach.
+     * Push one drawn piece and return the advance it took. When the spaces get more room (word-spacing,
+     * justification) the pen jumps an extra `extra` at every space, which means one run per word - the
+     * only way that works for an embedded font, whose spaces `Tw` cannot reach.
      *
-     * A SHAPED piece is never split: its glyph list is in drawn order with ligatures merged, so no
-     * slice of it is correct. Such a piece keeps its natural spacing.
+     * A SHAPED piece is split there too, each word shaped on its own (`shape`): no slice of its glyph
+     * list is correct, but neither a ligature nor Arabic joining crosses a space - and a word plus a
+     * space is what the breaker measured.
      */
     const emitPiece = (
       piece: { text: string; glyphs?: number[] },
+      shape: (word: string) => { text: string; glyphs?: number[] },
+      rtl: boolean,
       x: number,
       extra: number,
       style: Omit<TextRun, "type" | "x" | "text" | "glyphs">,
@@ -514,16 +443,19 @@ export class TextRenderer {
       const push = (at: number, text: string, glyphs?: number[]): void => {
         runs.push({ type: "text", x: at, text, ...(glyphs ? { glyphs } : {}), ...style });
       };
-      if (extra === 0 || piece.glyphs || !piece.text.includes(" ")) {
+      if (extra === 0 || !piece.text.includes(" ")) {
         push(x, piece.text, piece.glyphs);
         return runAdvance(objectManager, piece.text, runFont, spacing);
       }
       const spaceWidth = runAdvance(objectManager, " ", runFont, spacing);
+      // A shaped piece holds its LOGICAL text: drawn right to left, its words come in reverse.
       const words = piece.text.split(" ");
+      if (piece.glyphs && rtl) words.reverse();
       let pen = x;
       words.forEach((word, i) => {
         if (word !== "") {
-          push(pen, word);
+          const drawn = piece.glyphs ? shape(word) : { text: word };
+          push(pen, drawn.text, drawn.glyphs);
           pen += runAdvance(objectManager, word, runFont, spacing);
         }
         if (i < words.length - 1) pen += spaceWidth + extra;
@@ -642,101 +574,19 @@ export class TextRenderer {
       return { text: part.logical, glyphs: ordered.map((g) => g.glyph) };
     };
 
-    // The advance the viewer will use: plain glyph widths (a `Tj` never kerns) plus one
-    // `letterSpacing` per code point (the `Tc` operator), from the one shared `advance.ts` primitive.
-    const font = { fontFamily, fontSize, fontStyle, ligatures };
-
-    // --- Plain string: one run per wrapped line. ---
-    if (typeof content === "string") {
-      const broken = breakStringIntoLines(
-        content,
-        fontFamily,
-        fontSize,
-        fontStyle,
-        maxWidth,
-        objectManager,
-        maxLines,
-        overflow,
-        letterSpacing,
-        // The SAME knobs the measure pass used (`TextElement.lineOptions`), or a line would be
-        // measured one width and drawn another.
-        {
-          wordSpacing,
-          indent: textIndent,
-          shrink: align === HorizontalAlignment.justify ? MAX_SPACE_SHRINK : 0,
-          splitting: { breakWord, hyphenate },
-          ligatures,
-          shownLines,
-        },
-      );
-      const lines = broken.map((line) => line.text);
-      // yPosition is the top of the text box (top-left). The line box seats its own baseline; lines
-      // then stack by that box's height. Same numbers as calculateTextHeight, by construction.
-      const box = lineBoxForString(objectManager, fontFamily, fontStyle, fontSize, lineHeight);
-      lines.forEach((line, index) => {
-        const lineWidth = singleLineWidth(line, font, objectManager, letterSpacing, wordSpacing);
-        // CSS `text-indent`: the FIRST line starts in, and had that much less room to fill.
-        const indent = index === 0 ? textIndent : 0;
-        let x = initialX + indent + alignmentOffset(lineWidth, indent);
-        const baseline = yPosition + box.baseline + box.height * index;
-        // Latin-only text in an `ltr` paragraph comes back as one unchanged piece.
-        // Word-spacing is a per-gap advance just like the justification slack, so it rides the same
-        // mechanism: `Tw` would reach only the single byte 32 and miss every embedded font.
-        // Only a line that WRAPPED is stretched: the end of a paragraph and the line before a `\n` keep
-        // their natural spacing (CSS). The last line of a piece continued on the next page wrapped.
-        const ends = broken[index]!.end;
-        const extra =
-          wordSpacing + justifyExtra(line, lineWidth, ends === "hard" || ends === "end", indent);
-        for (const part of visualRuns(line, direction)) {
-          const piece = shapedPiece(part, fontFamily, fontStyle);
-          const partWidth = emitPiece(
-            piece,
-            x,
-            extra,
-            {
-              y: baseline,
-              fontFamily,
-              fontStyle,
-              fontSize,
-              color,
-              ...(letterSpacing ? { letterSpacing } : {}),
-            },
-            font,
-            letterSpacing,
-          );
-          decorate(
-            piece.text,
-            x,
-            partWidth,
-            baseline,
-            fontFamily,
-            fontStyle,
-            fontSize,
-            color,
-            underline,
-            strikethrough,
-            letterSpacing,
-          );
-          x += partWidth;
-        }
-      });
-      return { runs, links, decorations, linkGroups };
-    }
-
-    // --- Segments: break into lines (shared breaker), then emit one run per segment.
+    // Break into lines (the one breaker), then emit one run per segment.
     // Segment 0 starts at the aligned line origin; each following segment is offset by
     // the previous segment's kerning-free advance. Each line drops by its OWN leading
     // (tallest font on that line), so mixed-font lines space correctly and the drawn
     // height matches the measured height.
     const pushLine = (line: SegmentLine, lineY: number, isLast: boolean, indent: number): void => {
-      // CSS `text-indent`, as for a plain string: the FIRST line starts in, with that much less room.
+      // CSS `text-indent`: the FIRST line starts in, with that much less room.
       let x = initialX + indent + alignmentOffset(line.width, indent);
-      const extra = justifyExtra(
-        line.segments.map((seg) => seg.content).join(""),
-        line.width,
-        isLast,
-        indent,
-      );
+      // Word-spacing is a per-gap advance just like the justification slack, so it rides the same
+      // mechanism: `Tw` would reach only the single byte 32 and miss every embedded font.
+      const extra =
+        wordSpacing +
+        justifyExtra(line.segments.map((seg) => seg.content).join(""), line.width, isLast, indent);
       // Across span boundaries, so a Hebrew span is ordered against its neighbours rather than inside
       // itself. Each run keeps the segment it came from, and with it that span's style.
       const ordered = visualRunsOf(
@@ -744,6 +594,8 @@ export class TextRenderer {
         direction,
       );
       ordered.forEach((part) => {
+        // A blank line keeps its height (its box is sized from the piece), but there is nothing to draw.
+        if (part.text === "") return;
         const segment = part.source;
         const family = segment.fontFamily || fontFamily;
         const size = segment.fontSize || fontSize;
@@ -759,6 +611,8 @@ export class TextRenderer {
         const firstRun = runs.length;
         const drawn = emitPiece(
           piece,
+          (word) => shapedPiece({ text: word, logical: word, rtl: part.rtl }, family, style),
+          part.rtl,
           x,
           extra,
           {
@@ -769,7 +623,8 @@ export class TextRenderer {
             color: runColor,
             ...(segLetterSpacing ? { letterSpacing: segLetterSpacing } : {}),
           },
-          { fontFamily: family, fontSize: size, fontStyle: style },
+          // `ligatures` is part of the font: the advances must be the glyphs that are drawn.
+          { fontFamily: family, fontSize: size, fontStyle: style, ligatures },
           segLetterSpacing,
         );
         decorate(
@@ -818,19 +673,9 @@ export class TextRenderer {
 
     // yPosition is the top of the text box (top-left). Each line seats its own baseline inside its
     // own box (tallest ascent / deepest descent ON THAT LINE), then the next line starts below it.
-    // The seam flips the whole thing to PDF space. `letterSpacing` MUST be in the defaults so a span
-    // that does not override it wraps and aligns with the element's spacing - the same defaults the
-    // measure path (calculateTextHeight) uses, or segmented spaced text mis-wraps (measured != drawn).
-    const defaults = {
-      fontFamily,
-      fontSize,
-      fontStyle,
-      letterSpacing,
-      splitting: { breakWord, hyphenate },
-      ligatures,
-      shownLines,
-      indent: textIndent,
-    };
+    // The seam flips the whole thing to PDF space. The lines are broken with the element's own
+    // settings - the ones `textHeight` measured with - so measured equals drawn by construction.
+    const defaults = breaking;
     let top = yPosition;
     const segmentLines = breakSegmentsIntoLines(
       content,
@@ -842,7 +687,8 @@ export class TextRenderer {
     );
     segmentLines.forEach((line, index) => {
       const box = lineBoxForSegmentLine(line, defaults, objectManager, lineHeight);
-      // As for a plain string: only a line that wrapped is stretched.
+      // Only a line that WRAPPED is stretched: the end of a paragraph and the line before a `\n` keep
+      // their natural spacing (CSS). The last line of a piece continued on the next page wrapped.
       const ends = line.end === "hard" || line.end === "end";
       pushLine(line, top + box.baseline, ends, index === 0 ? textIndent : 0);
       top += box.height;

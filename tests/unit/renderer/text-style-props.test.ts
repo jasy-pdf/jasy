@@ -90,6 +90,17 @@ describe("wordSpacing", () => {
     const runs = await drawn(text("aa bb"));
     expect(runs.map((r) => r.text)).toEqual(["aa bb"]);
   });
+
+  it("reaches span text too, across a span boundary", async () => {
+    const runs = await drawn(text([{ content: "aa " }, { content: "bb" }], { wordSpacing: 6 }));
+    expect(runs.map((r) => r.text)).toEqual(["aa", "bb"]);
+    expect(runs.map((r) => r.x)).toEqual([0, 36]);
+  });
+
+  it("is counted when span text is broken", async () => {
+    const runs = await drawn(text([{ content: "aa bb cc" }], { wordSpacing: 40 }), 120);
+    expect(new Set(runs.map((r) => r.y)).size).toBe(2);
+  });
 });
 
 describe("textIndent", () => {
@@ -210,8 +221,12 @@ describe("the three findings a review caught", () => {
     // The content is resolved by the LAYOUT pass, which is what the renderer then reads.
     const manager = om();
     el.calculateLayout(BoxConstraints.tight(400, 400), { x: 0, y: 0 }, context(manager));
-    const props = el.getProps() as { content: { content: string }[] };
-    expect(props.content.map((c) => c.content).join("")).toBe("Hello World");
+    expect(
+      el
+        .getProps()
+        .spans.map((s) => s.content)
+        .join(""),
+    ).toBe("Hello World");
   });
 
   it("drops the indent on a CONTINUATION, which is no longer a first line", () => {
@@ -253,8 +268,12 @@ describe("capitalize and punctuation", () => {
     const el = text([{ content: "(hel" }, { content: "lo)" }], { textTransform: "capitalize" });
     const manager = om();
     el.calculateLayout(BoxConstraints.tight(400, 400), { x: 0, y: 0 }, context(manager));
-    const props = el.getProps() as { content: { content: string }[] };
-    expect(props.content.map((c) => c.content).join("")).toBe("(Hello)");
+    expect(
+      el
+        .getProps()
+        .spans.map((s) => s.content)
+        .join(""),
+    ).toBe("(Hello)");
   });
 });
 
@@ -343,5 +362,14 @@ describe("a span brings its own font stack", () => {
       ["ab", "Latin"],
       ["漢字", "CJK"],
     ]);
+  });
+});
+
+describe("a blank line", () => {
+  it("keeps its height but draws no empty run", async () => {
+    const runs = await drawn(text("a\n\nb"));
+    expect(runs.map((r) => r.text)).toEqual(["a", "b"]);
+    // Two line boxes of 10 apart: the blank line still takes its room.
+    expect(runs[1]!.y - runs[0]!.y).toBe(20);
   });
 });

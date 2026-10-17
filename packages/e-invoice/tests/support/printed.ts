@@ -11,7 +11,8 @@ import { bundledFonts } from "../../src/fonts.ts";
  * page at all.
  *
  * The tree is read AFTER a layout pass, with the fonts the invoice ships: a content-sized table
- * column ("auto", "minmax()") builds its cells only then, and the text is what the layout resolved.
+ * column ("auto", "minmax()") builds its cells only then, and a Text's `spans` are what is drawn -
+ * a character no font can draw is already gone from them.
  */
 export async function printedText(root: PDFDocumentElement): Promise<string[]> {
   await renderToBytes(root, { fonts: bundledFonts(), standardFonts: false });
@@ -22,20 +23,9 @@ export async function printedText(root: PDFDocumentElement): Promise<string[]> {
     if (!node || typeof node !== "object" || seen.has(node)) return;
     seen.add(node);
 
-    const props = (node as { getProps?: () => { content?: unknown } }).getProps?.();
-    const content = props?.content;
-    if (typeof content === "string") out.push(content);
-    // A Text built from segments carries them instead of a plain string.
-    else if (Array.isArray(content)) {
-      for (const seg of content) {
-        if (
-          seg &&
-          typeof seg === "object" &&
-          typeof (seg as { text?: unknown }).text === "string"
-        ) {
-          out.push((seg as { text: string }).text);
-        }
-      }
+    const props = (node as { getProps?: () => { spans?: unknown } }).getProps?.();
+    if (Array.isArray(props?.spans)) {
+      out.push(props.spans.map((span: { content: string }) => span.content).join(""));
     }
 
     for (const value of Object.values(node)) {

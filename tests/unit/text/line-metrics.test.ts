@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { lineBoxFor } from "../../../src/lib/text/line-metrics";
-import { PDFObjectManager, FontStyle } from "../../../src/lib/utils/pdf-object-manager";
+import { lineBoxFor, textHeight } from "../../../src/lib/text/line-metrics.ts";
+import { PDFObjectManager, FontStyle } from "../../../src/lib/utils/pdf-object-manager.ts";
+import { testMetrics } from "../support/metrics.ts";
 
 // ISSUE-5: the baseline used to be a hard-coded 683/1000 - Times-Roman's `Ascender`, applied to
 // every face - and the line box was assumed to be 1 em tall while a font's content is
@@ -98,5 +99,34 @@ describe("lineBoxFor", () => {
     ]);
     expect(baseline).toBeCloseTo(7); // the tallest ascent seats the baseline
     expect(height).toBeCloseTo(13); // 7 up + 6 down: the deep descender still fits
+  });
+});
+
+describe("textHeight", () => {
+  // Every glyph, space included, is 5 wide; the unit line box is exactly one font size tall.
+  const metrics = testMetrics({
+    getStringWidth: (t) => [...t].length * 5,
+    getCharWidth: () => 5,
+  });
+  const defaults = { fontFamily: "Helvetica", fontSize: 12, fontStyle: FontStyle.Normal };
+
+  it("is one line box for a text that fits", () => {
+    // "Hello World" is 55 wide.
+    expect(textHeight([{ content: "Hello World" }], defaults, 100, metrics)).toBe(12);
+  });
+
+  it("adds a line box per wrapped line", () => {
+    // "Hello World," is 60 and "this is a test" 70: two lines in a 70pt box.
+    expect(textHeight([{ content: "Hello World, this is a test" }], defaults, 70, metrics)).toBe(
+      24,
+    );
+  });
+
+  it("sizes a line by the biggest font on it", () => {
+    const spans = [
+      { content: "Hello", fontSize: 12 },
+      { content: "World", fontSize: 14 },
+    ];
+    expect(textHeight(spans, defaults, 100, metrics)).toBe(14);
   });
 });

@@ -2,14 +2,20 @@
  * The vertical half of text layout: how tall a line box is, and where its baseline sits.
  *
  * One canonical answer, like `line-breaker.ts` is the one canonical answer for the horizontal
- * half. Measuring (`calculateTextHeight`), fragmenting (`TextElement.fragment`) and drawing
+ * half. Measuring (`textHeight`), fragmenting (`TextElement.fragment`) and drawing
  * (`TextRenderer._buildRuns`) all call in here, so they can never disagree about a line's height
  * again - the divergence that produced ISSUE-5.
  */
 
 import type { FontStyle } from "../utils/pdf-object-manager.ts";
 import type { FontMetrics } from "../utils/font-metrics.ts";
-import type { SegmentDefaults, SegmentLine } from "./line-breaker.ts";
+import type { TextSegment } from "../elements/text-element.ts";
+import {
+  breakSegmentsIntoLines,
+  type SegmentDefaults,
+  type SegmentLine,
+  type TextOverflow,
+} from "./line-breaker.ts";
 
 /** A font's vertical metrics, as fractions of the em (so they scale by multiplying with fontSize). */
 export interface FontVerticals {
@@ -65,7 +71,7 @@ export function lineBoxFor(parts: LinePart[], lineHeight?: number): LineBox {
   return { height, baseline: (height - content) / 2 + ascent };
 }
 
-/** The line box of a single-font line (the plain-string path). */
+/** The line box of a single-font line - what an empty line takes in the paragraph's own font. */
 export function lineBoxForString(
   metrics: FontMetrics,
   fontFamily: string,
@@ -106,4 +112,20 @@ export function lineBoxForSegmentLine(
     );
   }
   return lineBoxFor(parts, lineHeight);
+}
+
+/** How tall a text is at `maxWidth`: its lines, from the one breaker, each in its own line box. */
+export function textHeight(
+  spans: TextSegment[],
+  defaults: SegmentDefaults,
+  maxWidth: number,
+  metrics: FontMetrics,
+  maxLines?: number,
+  overflow?: TextOverflow,
+  lineHeight?: number,
+): number {
+  return breakSegmentsIntoLines(spans, defaults, maxWidth, metrics, maxLines, overflow).reduce(
+    (total, line) => total + lineBoxForSegmentLine(line, defaults, metrics, lineHeight).height,
+    0,
+  );
 }

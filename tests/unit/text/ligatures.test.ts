@@ -2,6 +2,15 @@ import { describe, it, expect } from "vitest";
 import { PDFObjectManager, FontStyle } from "../../../src/lib/utils/pdf-object-manager.ts";
 import { runAdvance } from "../../../src/lib/text/advance.ts";
 import { buildLigatureTtf } from "../utils/ttf-fixture.ts";
+import {
+  breakSegmentsIntoLines,
+  breakStringIntoLines,
+} from "../../../src/lib/text/line-breaker.ts";
+import { TextElement } from "../../../src/lib/elements/text-element.ts";
+import { BoxConstraints } from "../../../src/lib/layout/box-constraints.ts";
+import { TextRenderer } from "../../../src/lib/renderer/text-renderer.ts";
+import type { TextRun } from "../../../src/lib/ir/display-list.ts";
+import { PAGE_SCOPE } from "../support/scope.ts";
 
 // Latin ligatures are ON, like kerning: the font's designer drew them, every other renderer applies
 // them, and nobody should need the word to get text set properly. `ligatures: false` opts out - on a
@@ -47,6 +56,26 @@ describe("on by default", () => {
   });
 });
 
+describe("with word spacing", () => {
+  it("still spaces a run whose words were merged into ligatures", async () => {
+    // "AB" is one glyph of 6; a space is 2.5. With 6pt of word-spacing the second word starts at
+    // 6 + 2.5 + 6 = 14.5 - as the breaker measured it - and keeps its ligature.
+    const m = om();
+    const el = new TextElement({ content: "AB AB", ...FONT, wordSpacing: 6 });
+    el.calculateLayout(
+      BoxConstraints.tight(200, 100),
+      { x: 0, y: 0 },
+      { metrics: m, pageConfig: {} },
+    );
+    const runs = (await TextRenderer.render(el, m, PAGE_SCOPE)).filter(
+      (n): n is TextRun => n.type === "text",
+    );
+    expect(runs.map((r) => r.text)).toEqual(["AB", "AB"]);
+    expect(runs.map((r) => r.x)).toEqual([0, 14.5]);
+    expect(runs.map((r) => r.glyphs)).toEqual([[4], [4]]);
+  });
+});
+
 describe("switched off", () => {
   const off = { ...FONT, ligatures: false };
 
@@ -60,6 +89,58 @@ describe("switched off", () => {
 
   it("measures what it draws either way - the two settings must not agree by accident", () => {
     expect(runAdvance(om(), "AB ", FONT, 0)).not.toBeCloseTo(runAdvance(om(), "AB ", off, 0), 5);
+  });
+
+  it("places the next span after what this one DRAWS, letters apart", async () => {
+    // "AB " apart is 5 + 7 + 2.5 = 14.5; merged it would be 8.5, and the second span would overlap.
+    const m = om();
+    const el = new TextElement({ content: [{ content: "AB " }, { content: "AB" }], ...off });
+    el.calculateLayout(
+      BoxConstraints.tight(200, 100),
+      { x: 0, y: 0 },
+      { metrics: m, pageConfig: {} },
+    );
+    const runs = (await TextRenderer.render(el, m, PAGE_SCOPE)).filter(
+      (n): n is TextRun => n.type === "text",
+    );
+    expect(runs.map((r) => r.x)).toEqual([0, 14.5]);
+  });
+
+  it("sizes an unbounded text (a Text in a Row) at the width it draws, so it stays one line", () => {
+    // Apart, "ABAB" is 24 and a space 2.5: 50.5. Merged it would be 26.5, and the line would wrap.
+    const el = new TextElement({ content: "ABAB ABAB", ...off });
+    const size = el.calculateLayout(
+      BoxConstraints.loose(Infinity, 400),
+      { x: 0, y: 0 },
+      {
+        metrics: om(),
+        pageConfig: {},
+      },
+    );
+    expect(size.width).toBeCloseTo(50.5, 5);
+  });
+
+  it("an ellipsis is measured with it too - span text keeps no more than fits", () => {
+    // Apart, A is 5 and B 7: "ABA" (17) is all that fits 20. Merged, "ABABAB" (18) would.
+    const text = "ABABABAB ABAB";
+    const asString = breakStringIntoLines(
+      text,
+      "Lig",
+      10,
+      FontStyle.Normal,
+      20,
+      om(),
+      1,
+      "ellipsis",
+      0,
+      {
+        ligatures: false,
+      },
+    ).map((l) => l.text);
+    const asSpan = breakSegmentsIntoLines([{ content: text }], { ...off }, 20, om(), 1, "ellipsis");
+    expect(asString).toEqual(["ABA..."]);
+    expect(asSpan.map((l) => l.segments.map((s) => s.content).join(""))).toEqual(["ABA..."]);
+    expect(asSpan[0]!.width).toBeCloseTo(runAdvance(om(), "ABA...", off, 0), 5);
   });
 });
 

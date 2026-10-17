@@ -118,13 +118,3 @@ export function visualRunsOf<T>(
   flush();
   return runs;
 }
-
-/** The same for one plain string. An empty string still yields one run, or a blank line would vanish. */
-export const visualRuns = (text: string, base: Direction = "ltr"): VisualRun[] => {
-  if (text === "") return [{ text, logical: text, rtl: false }];
-  return visualRunsOf([{ text, source: null }], base).map(({ text: t, logical, rtl }) => ({
-    text: t,
-    logical,
-    rtl,
-  }));
-};

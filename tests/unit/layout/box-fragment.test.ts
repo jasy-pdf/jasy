@@ -32,7 +32,7 @@ const innerText = (el: unknown, width = 50): string => {
   const props = (el as { getProps(): any }).getProps();
   const text = (props.child ?? props.children[0]).getProps();
   return wrapStringIntoLines(
-    text.content,
+    text.spans.map((s) => s.content).join(""),
     text.fontFamily,
     text.fontSize,
     text.fontStyle,

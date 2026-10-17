@@ -5,11 +5,15 @@ import { IRNode } from "../ir/display-list.ts";
 import type { PDFElement } from "../elements/pdf-element.ts";
 import { TextElement } from "../elements/text-element.ts";
 
-/** The text a link covers, as written - not as drawn, where a justified line is one run per word. */
+/** The text a link covers, as read - not run by run, where a justified line is one run per word. */
 function textOf(element: PDFElement): string[] {
   if (element instanceof TextElement) {
-    const { content } = element.getProps();
-    return [typeof content === "string" ? content : content.map((s) => s.content).join("")];
+    return [
+      element
+        .getProps()
+        .spans.map((s) => s.content)
+        .join(""),
+    ];
   }
   return element.layoutChildren().flatMap(textOf);
 }
