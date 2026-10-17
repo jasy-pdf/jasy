@@ -685,6 +685,7 @@ function ellipsizeSegmentLine(
         fontFamily: seg.fontFamily || defaults.fontFamily,
         fontSize: seg.fontSize || defaults.fontSize,
         fontStyle: seg.fontStyle || defaults.fontStyle,
+        ligatures: defaults.ligatures,
       },
       lsOf(seg),
     );
@@ -699,6 +700,8 @@ function ellipsizeSegmentLine(
     maxWidth - prefix,
     metrics,
     lsOf(last),
+    0,
+    defaults.ligatures,
   );
   line.width = prefix + widthOf(last);
 }
