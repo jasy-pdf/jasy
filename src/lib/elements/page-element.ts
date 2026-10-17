@@ -149,6 +149,7 @@ export class PageElement extends PDFElement {
       pageConfig: this.config,
       textStyle: ctx.textStyle,
       onOverflow: ctx.onOverflow,
+      diagnostics: ctx.diagnostics,
       pageInfo: ctx.pageInfo, // the render pass supplies it; absent during pagination
     };
 

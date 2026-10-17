@@ -1,7 +1,7 @@
 // The floor under `flexShrink`: a squeezed child stops at its `min-content` extent - CSS's automatic
 // `min-width` on a flex item - instead of being ground down to one word per line.
 import { describe, it, expect } from "vitest";
-import { Box, Row, Expanded } from "../../../src/lib/api/layout.ts";
+import { Box, Row, Expanded, Spacer } from "../../../src/lib/api/layout.ts";
 import { Text } from "../../../src/lib/api/text.ts";
 import { BoxConstraints } from "../../../src/lib/layout/box-constraints.ts";
 import { testMetrics } from "../support/metrics.ts";
@@ -70,14 +70,44 @@ describe("min-content is the floor under shrinking", () => {
     expect(b.getProps().width).toBe(150);
   });
 
+  it("a pure basis slot (flex 0) still counts across the line - a centred sibling is centred in it", () => {
+    const tall = Expanded({ flex: 0, flexBasis: 100 }, Box({ height: 50 }, []));
+    const small = Box({ width: 40, height: 10 }, []);
+    layout(Row({ gap: 0, align: "center" }, [tall, small]), 400);
+    expect(small.getProps().y).toBe(20);
+  });
+
   it("a flex child asking for a basis but no growth keeps its basis, not NaN", () => {
     // `flex: 0` with a basis makes `totalFlex` zero, and the share used to be 0/0. A NaN there becomes
     // the offset of every later sibling - the shape of the Spacer bug (#10).
-    const e = Expanded({ flex: 0, flexBasis: 300 }, Box({ height: 20 }, []));
+    const e = Expanded({ flex: 0, flexBasis: 300, flexShrink: 0 }, Box({ height: 20 }, []));
     const f = Box({ width: 300, height: 20 }, []);
     layout(Row({ gap: 0 }, [e, f]), 400);
     expect(Number.isFinite(e.getProps().width)).toBe(true);
     expect(e.getProps().width).toBe(300);
+  });
+
+  it("an overflowing line shrinks a flex basis too, weighted by it - as Chrome does", () => {
+    // Chrome, `flex: 0 1 300px` beside a 300px item in a 400px row: 200 / 200.
+    const e = Expanded({ flex: 0, flexBasis: 300 }, Box({ height: 20 }, []));
+    const f = Box({ width: 300, height: 20 }, []);
+    layout(Row({ gap: 0 }, [e, f]), 400);
+    expect([e.getProps().width, f.getProps().width]).toEqual([200, 200]);
+  });
+
+  it("a flex basis shrinks no further than its content can hold", () => {
+    const word = "Verpflichtungserklaerung";
+    const floor = Text(word, { size: 12 }).minIntrinsicMain(true, ctx());
+    const e = Expanded({ flexBasis: 300 }, Text(word, { size: 12 }));
+    layout(Row({ gap: 0 }, [e, Box({ width: 300 }, [])]), 100);
+    expect(e.getProps().width).toBeCloseTo(floor, 5);
+  });
+
+  it("a Spacer has no basis, so it has nothing to give", () => {
+    const s = Spacer();
+    const f = Box({ width: 300, height: 20 }, []);
+    layout(Row({ gap: 0 }, [s, f]), 200);
+    expect(s.getProps().width).toBe(0);
   });
 
   it("lets an explicit minWidth REPLACE the automatic floor, downwards too", () => {

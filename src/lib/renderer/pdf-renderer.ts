@@ -110,6 +110,7 @@ export class PDFRenderer {
       pageConfig: objectManager.getPDFConfig(),
       textStyle: mergeTextStyle(DEFAULT_TEXT_STYLE, document.getDefaultTextStyle()),
       onOverflow: objectManager.getOverflowPolicy(),
+      diagnostics: objectManager.diagnostics,
     };
     // Pre-layout: resolve every image's intrinsic pixel size (async), so the synchronous layout can
     // give a width-only image a proportional height. init() is idempotent, so the renderer reuses it.

@@ -232,7 +232,7 @@ export const Padding = defineComponent({
 export const Expanded = defineComponent({
   name: "JasyExpanded",
   inheritAttrs: false,
-  props: { flex: Number },
+  props: { flex: Number, flexBasis: [Number, String], flexShrink: Number },
   setup: fwd("expanded"),
 });
 export const Spacer = defineComponent({

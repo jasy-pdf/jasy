@@ -364,6 +364,12 @@ export interface ExpandedOptions {
    * rest`, so `flexBasis: 120` with `flex: 0` is simply a fixed 120pt slot. Default 0.
    */
   flexBasis?: SizeInput;
+  /**
+   * How willingly this child gives up its `flexBasis` when the line overflows (CSS `flex-shrink`). Default
+   * 1, as for every flex item: an overflowing line pulls a `flexBasis: 120` slot back down to what its
+   * content can hold. `0` keeps the basis and lets the line overflow. A basis of 0 has nothing to give.
+   */
+  flexShrink?: number;
 }
 
 /**
@@ -382,5 +388,5 @@ export function Expanded(a: ExpandedOptions | PDFElement, b?: PDFElement): Expan
     basis: basis?.points,
     basisFactor: basis?.factor,
     child,
-  });
+  }).withFlexShrink(opts.flexShrink) as ExpandedElement;
 }

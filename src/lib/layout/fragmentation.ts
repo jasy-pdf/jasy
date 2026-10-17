@@ -1,5 +1,6 @@
 import { LayoutContext, PDFElement } from "../elements/pdf-element.ts";
 import { BoxConstraints } from "./box-constraints.ts";
+import { diagnose, pageOf } from "../common/diagnostics.ts";
 
 /**
  * The result of splitting an element against a fragmentation region (a page, later a
@@ -65,16 +66,24 @@ export function reportOverflow(
   child: PDFElement,
   childHeight: number,
   maxHeight: number,
-  policy: OverflowPolicy,
+  ctx: LayoutContext,
 ): void {
-  if (policy === "ignore") return;
+  const policy = ctx.onOverflow ?? "ignore";
   const name = child.constructor.name.replace(/Element$/, "");
   const detail =
     `${name} is ${Math.round(childHeight)}pt tall but the page region is only ` +
     `${Math.round(maxHeight)}pt and it cannot be broken - reduce its size, give it a bounded ` +
     `height, or let it split across pages.`;
   if (policy === "error") throw new Error(`Layout overflow: ${detail}`);
-  console.warn(`Layout overflow (clipped): ${detail}`);
+  diagnose(ctx.diagnostics, {
+    code: "overflow-clipped",
+    severity: "warning",
+    message: `Layout overflow (clipped): ${detail}`,
+    about: child,
+    page: pageOf(ctx),
+    // `ignore` means "no console" - an `onDiagnostic` handler still hears of it.
+    fallback: policy === "ignore" ? "silent" : "warn",
+  });
 }
 
 /**
@@ -177,7 +186,7 @@ export function packChildren(
         // Taller than a whole fresh page and unsplittable: force it on (it overflows and is clipped)
         // so the next region still advances - and surface it per the overflow policy. Below other
         // content it simply waits for the next page.
-        reportOverflow(child, childHeight, maxHeight, ctx.onOverflow ?? "ignore");
+        reportOverflow(child, childHeight, maxHeight, ctx);
         fitted.push(child);
       } else {
         remainder.push(child);

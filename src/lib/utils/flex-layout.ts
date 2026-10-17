@@ -1,5 +1,5 @@
 import { alignSelfOf, flexibleOf, flexShrinkOf, orderOf } from "../layout/flex-item.ts";
-import { PDFElement, LayoutContext } from "../elements/pdf-element.ts";
+import { PDFElement, LayoutContext, type FlexiblePDFElement } from "../elements/pdf-element.ts";
 import { BoxConstraints, Offset, Size } from "../layout/box-constraints.ts";
 
 /** `layout` places every child (one `calculateLayout` each); `measure` only sizes, with no side effects. */
@@ -311,6 +311,7 @@ export class FlexLayoutHelper {
       under: new Map(),
       shrunkCap: new Map(),
       sharedCap: new Map(),
+      shrunkBasis: new Map(),
     };
 
     measureLine(line);
@@ -366,6 +367,13 @@ interface FlexLine {
   /** Main caps set by the shrink and by the share; a shrunk cap wins. */
   readonly shrunkCap: Map<PDFElement, number>;
   readonly sharedCap: Map<PDFElement, number>;
+  /** A flex child's basis after the shrink, when it gave some back. */
+  readonly shrunkBasis: Map<PDFElement, number>;
+}
+
+/** A flex child's basis on this line: what it asked for, or less once the line has shrunk it. */
+function basisOf(line: FlexLine, child: PDFElement, flexible: FlexiblePDFElement): number {
+  return line.shrunkBasis.get(child) ?? flexible.getBasis(line.percentBase);
 }
 
 /**
@@ -423,20 +431,28 @@ function measureLine(line: FlexLine): void {
 
 /**
  * Step 2: the line overflows and some children said they would give space back. CSS weights a shrinker's
- * share by `shrink x its own size`, so a big item yields more than a small one. A document that never
- * overflows never gets past the first test.
+ * share by `shrink x its own size`, so a big item yields more than a small one - for a flex child that
+ * size is its basis, so a Spacer (basis 0) gives nothing. A document that never overflows never gets past
+ * the first test.
  */
 function shrinkLine(line: FlexLine): void {
   const { axis } = line;
   const overflow = line.fixedMain + line.totalBasis + line.totalGap - line.mainAvail;
   if (!Number.isFinite(line.mainAvail) || !(overflow > 0)) return;
-  const shrinkers = line.children.filter((c) => flexShrinkOf(c) > 0 && !flexibleOf(c));
+  const shrinkers = line.children.filter((c) => {
+    if (!(flexShrinkOf(c) > 0)) return false;
+    const flexible = flexibleOf(c);
+    return !flexible || flexible.getBasis(line.percentBase) > 0;
+  });
   if (shrinkers.length === 0) return;
 
   // Every child is floored at what it can actually hold - its `min-content` extent, which is CSS's
   // automatic `min-width` on a flex item. Without it a badly overflowing line would grind a paragraph
   // down to one word per line. Past that floor a child overflows again, as in a browser.
-  const naturalOf = (c: PDFElement) => axis.mainOf(line.sizes.get(c)!);
+  const naturalOf = (c: PDFElement) => {
+    const flexible = flexibleOf(c);
+    return flexible ? flexible.getBasis(line.percentBase) : axis.mainOf(line.sizes.get(c)!);
+  };
   const floorOf = new Map<PDFElement, number>(
     shrinkers.map((c) => [
       c,
@@ -480,6 +496,12 @@ function shrinkLine(line: FlexLine): void {
   for (const child of shrinkers) {
     const capped = target.get(child)!;
     if (capped >= naturalOf(child)) continue;
+    if (flexibleOf(child)) {
+      // A flex child is measured later, at its basis plus its share; it starts from less.
+      line.totalBasis -= naturalOf(child) - capped;
+      line.shrunkBasis.set(child, capped);
+      continue;
+    }
     line.shrunkCap.set(child, capped);
     // Re-measured NOW: a narrower child may wrap to more lines, and the line's cross extent is
     // settled before anything is placed.
@@ -539,12 +561,12 @@ function mainSpacing(
  * line's cross extent before anything is placed.
  */
 function measureFlex(line: FlexLine, weight: number, remaining: number): void {
-  if (!(line.totalFlex > 0)) return;
   for (const child of line.children) {
     const flexible = flexibleOf(child);
     if (!flexible) continue;
-    const mainExtent =
-      flexible.getBasis(line.percentBase) + (flexible.getFlex() / weight) * remaining;
+    // A pure `flexBasis` slot (`flex: 0`) has no share but still has a size across the line.
+    const share = weight > 0 ? (flexible.getFlex() / weight) * remaining : 0;
+    const mainExtent = basisOf(line, child, flexible) + share;
     const size = measureInto(line, child, line.axis.flexConstraints(mainExtent, line.crossAvail));
     line.crossUsed = Math.max(line.crossUsed, line.axis.crossOf(size));
   }
@@ -586,7 +608,7 @@ function placeLine(
       // `totalFlex` is 0 when every flex child asked for `flex: 0` (a pure `flexBasis` slot). The share
       // is then 0/0 - a NaN that becomes the offset of every later sibling. Such a child takes its basis.
       const share = weight > 0 ? (flexible.getFlex() / weight) * remaining : 0;
-      mainExtent = flexible.getBasis(line.percentBase) + share;
+      mainExtent = basisOf(line, child, flexible) + share;
       // A flex child fills the MAIN axis and its cross size is only known after layout, so `alignSelf`
       // is a no-op here - and that has to hold for the CROSS CONSTRAINT too, or an `alignSelf: "start"`
       // flex child would get an unbounded cross axis on a shrink-wrapping line.

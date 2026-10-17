@@ -15,6 +15,7 @@ import {
   type FlexMode,
 } from "../utils/flex-layout.ts";
 import { stackMinIntrinsic, withDeclaredExtent } from "../layout/min-intrinsic.ts";
+import { diagnose, pageOf } from "../common/diagnostics.ts";
 import { LayoutContext, PDFElement, SizedPDFElement, WithChildren } from "./pdf-element.ts";
 
 interface RowElementParams extends WithChildren {
@@ -147,6 +148,7 @@ export class RowElement extends SizedPDFElement {
   calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
     this.x = offset.x;
     this.y = offset.y;
+    this.reportIgnoredBreak(ctx);
     const size = this.sizeWith(constraints, ctx, "layout");
     this.width = size.width;
     this.height = size.height;
@@ -155,6 +157,42 @@ export class RowElement extends SizedPDFElement {
 
   protected override computeSize(constraints: BoxConstraints, ctx: LayoutContext): Size {
     return this.sizeWith(constraints, ctx, "measure");
+  }
+
+  /** The first element inside this row that asks for a page break by flag, once found (or `null`). */
+  private declaredBreak?: PDFElement | null;
+
+  /**
+   * A row is one line: nothing inside it starts a new page. A `breakBefore` / `breakAfter` in a cell
+   * (a table row is a Row too) is therefore ignored - say so. A `PageBreak` reports itself.
+   */
+  private reportIgnoredBreak(ctx: LayoutContext): void {
+    if (this.declaredBreak === undefined) {
+      const find = (el: PDFElement, depth: number): PDFElement | null => {
+        if (el.breaksBefore() || el.breaksAfter()) return el;
+        if (depth > 64) return null;
+        for (const child of el.layoutChildren()) {
+          const hit = find(child, depth + 1);
+          if (hit) return hit;
+        }
+        return null;
+      };
+      this.declaredBreak = null;
+      for (const child of this.layoutChildren()) {
+        this.declaredBreak = find(child, 0);
+        if (this.declaredBreak) break;
+      }
+    }
+    if (!this.declaredBreak) return;
+    diagnose(ctx.diagnostics, {
+      code: "break-ignored",
+      severity: "warning",
+      message:
+        "breakBefore / breakAfter inside a Row (or a table row) has no effect: a row is one line and " +
+        "never starts a new page. Put the break on the Row itself, or on a child of a Column.",
+      about: this.declaredBreak,
+      page: pageOf(ctx),
+    });
   }
 
   /** The one sizing path: `layout` places the children (relative to this box), `measure` only sizes them. */

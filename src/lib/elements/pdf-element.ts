@@ -3,6 +3,7 @@ import { SizeCache } from "../layout/layout-cache.ts";
 import type { PDFPageConfig } from "./page-element.ts";
 import type { ResolvedTextStyle } from "../text/text-style.ts";
 import type { OverflowPolicy } from "../layout/fragmentation.ts";
+import type { Diagnostics } from "../common/diagnostics.ts";
 import type { BoxConstraints, Offset, Size } from "../layout/box-constraints.ts";
 import type { CrossAlign } from "../layout/alignment.ts";
 
@@ -59,6 +60,12 @@ export interface LayoutContext {
   /** What to do when an element overflows a page region and cannot break (set from the render option;
    *  absent = clip silently). Evaluated in `packChildren` where the forced placement happens. */
   onOverflow?: OverflowPolicy;
+  /** The render's diagnostics channel. Never part of a size, so never part of the layout-cache key;
+   *  absent when an element is laid out on its own, which then warns as before. */
+  diagnostics?: Diagnostics;
+  /** The physical page (1-based) pagination is filling - only so a diagnostic can name it; the render
+   *  pass knows it as `pageInfo`. Never part of a size. */
+  paginatingPage?: number;
   /** The height a FRESH page gives this region: the page body (between header and footer, set by the
    *  page driver) minus what encloses the region on every page - a border, padding, a repeated table
    *  header (`insetContext`). A `keepTogether` group reads it to decide the degrade rule: veto splitting

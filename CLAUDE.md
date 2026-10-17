@@ -449,8 +449,11 @@ enforces it (`skonto.ts` for "Skonto is not an allowance"), and everywhere else 
   test with a counter-test so it cannot pass vacuously.
 - **The engine owns accessibility; components declare a role.** `structId` survives fragmentation so a
   split paragraph stays ONE element.
-- **An ineffective `PageBreak` is ignored, with ONE `console.warn`** (react-pdf ignores `<View break>`
-  in a row too). `keepTogether` vetoes a split, defers whole, and DEGRADES if taller than a page.
+- **An ineffective `PageBreak` is ignored, with ONE warning** (react-pdf ignores `<View break>`
+  in a row too). Every such finding goes through ONE channel, `onDiagnostic` (`common/diagnostics.ts`:
+  stable `code`, element by factory name, first text, page); without a handler, what warned before still
+  goes to `console.warn`. Unknown props stay ignored - they do nothing. `keepTogether` vetoes a
+  split, defers whole, and DEGRADES if taller than a page.
 - **Colour emoji: pure-TS vectors, no CDN by default**; an IMAGE fallback source is opt-in. Single code
   points only (~95%); flags/ZWJ/skin tones deferred.
 - **SVG and Canvas: the edge of the subset is a NAMED error, never a silent skip.** Supporting

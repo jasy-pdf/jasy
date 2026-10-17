@@ -13,15 +13,20 @@ import { IRNode } from "../ir/display-list.ts";
  */
 export class PageBreakRenderer {
   static async render(
-    _element: PageBreakElement,
-    _objectManager: PDFObjectManager,
+    element: PageBreakElement,
+    objectManager: PDFObjectManager,
     _scope: RenderScope,
   ): Promise<IRNode[]> {
-    console.warn(
-      "PageBreak had no effect: it is not in a paginating flow - it is inside a Row (a single " +
+    objectManager.diagnostics.report({
+      code: "page-break-ignored",
+      severity: "warning",
+      message:
+        "PageBreak had no effect: it is not in a paginating flow - it is inside a Row (a single " +
         "horizontal line) or a PageBuilder (built for one page and placed whole, Columns inside it " +
         "included). Move the break out, into a Column that flows across pages.",
-    );
+      about: element,
+      page: element.page,
+    });
     return [];
   }
 }

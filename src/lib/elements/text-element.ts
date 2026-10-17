@@ -28,6 +28,7 @@ import { HorizontalAlignment, LayoutContext, SizedPDFElement } from "./pdf-eleme
 import { normalizeContent } from "../text/whitespace.ts";
 import { coverText } from "../text/glyph-coverage.ts";
 import type { Hyphenator } from "../text/word-splitting.ts";
+import { pageOf } from "../common/diagnostics.ts";
 export interface TextSegment {
   content: string;
   fontStyle?: FontStyle;
@@ -176,6 +177,10 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
   private hyphenate?: Hyphenator;
 
   private content: string | TextSegment[];
+  /** What `covered` had to remove, reported where the text is laid out on its page (see
+   *  `calculateLayout`). A split paragraph's first piece carries its parent's, as `lostBefore`. */
+  private lostGlyphs: number[] = [];
+  private lostBefore: number[] = [];
   private maxLines?: number;
   private orphans?: number;
   private widows?: number;
@@ -327,17 +332,21 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
    * back unchanged, so an ordinary document is byte-identical.
    */
   private covered(content: TextSegment[], metrics: FontMetrics): TextSegment[] {
-    const report = (dropped: number[]) => metrics.reportMissingGlyph?.(dropped);
-    return content.map((seg) => {
+    // Collected over every span: the element is reported once, with everything it lost, on the page it
+    // is laid out on - not here, which may be measuring it for an earlier page.
+    const lost: number[] = [];
+    const covered = content.map((seg) => {
       const { text, dropped } = coverText(
         seg.content,
         seg.fontFamily ?? this.fontFamily,
         seg.fontStyle ?? this.fontStyle,
         metrics,
       );
-      if (dropped.length > 0) report(dropped);
+      lost.push(...dropped);
       return text === seg.content ? seg : { ...seg, content: text };
     });
+    this.lostGlyphs = [...new Set(lost)];
+    return covered;
   }
 
   /** The content as spans, with `text-transform` applied, and nothing else. */
@@ -433,8 +442,11 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       { ...content[segment]!, content: content[segment]!.content.slice(offset) },
       ...content.slice(segment + 1),
     ];
+    const fitted = this.cloneWithContent(content, this.textIndent, { shownLines: fittedLineCount });
+    // The piece is cut from already-covered text, so it would find nothing missing itself.
+    fitted.lostBefore = [...this.lostBefore, ...this.lostGlyphs];
     return {
-      fitted: this.cloneWithContent(content, this.textIndent, { shownLines: fittedLineCount }),
+      fitted,
       remainder: this.cloneWithContent(rest, 0, {
         maxLines: this.maxLines === undefined ? undefined : this.maxLines - fittedLineCount,
       }),
@@ -508,6 +520,8 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     this.x = offset.x;
     this.y = offset.y;
     this.resolved = this.display(ctx.metrics);
+    const lost = [...new Set([...this.lostBefore, ...this.lostGlyphs])];
+    if (lost.length > 0) ctx.metrics.reportMissingGlyph?.(lost, this, pageOf(ctx));
     this.width = size.width;
     this.height = size.height;
     // Top-left coordinates (y = top of the text box). The baseline offset and the
