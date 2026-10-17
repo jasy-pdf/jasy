@@ -36,21 +36,17 @@ export interface LineOptions {
   shownLines?: number;
 }
 
-/** Default font for segments that don't override it. */
-export interface SegmentDefaults {
+/** What a span that does not set its own draws with: the paragraph's font and spacing. */
+export interface RunDefaults {
   fontFamily: string;
   fontSize: number;
   fontStyle: FontStyle;
   /** Extra space after every glyph, in points; a segment may override it. Default 0. */
   letterSpacing?: number;
-  /** Same knobs as the string path - see `LineOptions.splitting`. */
-  splitting?: WordSplitting;
-  ligatures?: boolean;
-  /** See `LineOptions.shownLines`. */
-  shownLines?: number;
-  /** See `LineOptions.indent`: the FIRST line has that much less room. */
-  indent?: number;
 }
+
+/** Everything the breaker reads besides the spans: what they inherit, and how lines end. */
+export type SegmentDefaults = RunDefaults & LineOptions;
 
 /** What happens to text beyond `maxLines`: `"clip"` drops it, `"ellipsis"` ends the last kept line
  *  with an ellipsis. Mirrors Flutter's `TextOverflow`. */
@@ -178,189 +174,19 @@ export function breakStringIntoLines(
   letterSpacing = 0,
   options: LineOptions = {},
 ): BrokenLine[] {
-  const {
-    wordSpacing = 0,
-    indent = 0,
-    shrink = 0,
-    splitting = {},
-    ligatures,
-    shownLines,
-  } = options;
-  let currentLine = "";
-  let currentWidth = 0;
-  let gaps = 0; // spaces on the current line, which is what a justified line can squeeze
-  let lineStart = 0; // source offset the current line begins at
-  // Whether the line holds a word yet - an empty one too: a space is text as written, so a leading one
-  // and both of a double space count.
-  let open = false;
-  const lines: BrokenLine[] = [];
-  // Soft hyphens leave the line here: whatever was not broken at is invisible. So do the spaces it ends
-  // in - they hang.
-  const close = (end: LineEnd) => {
-    const text = withoutSoftHyphens(currentLine).replace(TRAILING_SPACES, "");
-    lines.push({ text, start: lineStart, end });
-    currentLine = "";
-    currentWidth = 0;
-    gaps = 0;
-    open = false;
-  };
-
-  const font = { fontFamily, fontSize, fontStyle, ligatures };
-  // A `\n` is a HARD break: wrap each paragraph on its own, then cut. An EMPTY paragraph still has to
-  // produce a line, or a deliberate blank line between two blocks silently disappears.
-  let paragraphStart = 0;
-  text.split("\n").forEach((paragraph, paragraphIndex) => {
-    if (paragraphIndex > 0) {
-      close("hard");
-    }
-    lineStart = paragraphStart;
-    let wordStart = paragraphStart;
-    const words = paragraph.split(" ");
-    // One word, placed at source offset `at`: on the current line, on a fresh one, or - if it does not
-    // fit where it is - broken after a hyphen it holds, before anything blunter is tried.
-    const placeWord = (word: string, at: number): void => {
-      // Word and space advances come from the one shared primitive (`advance.ts`), the same one
-      // `naturalWidth` uses - so a bounded and an unbounded layout of the same text agree bit for bit.
-      const wordWidth = runAdvance(metrics, word, font, letterSpacing);
-      const spaceWidth = runAdvance(metrics, " ", font, letterSpacing) + wordSpacing;
-      // The FIRST line has the indent taken out of its room; every later one gets the full box.
-      const room = lines.length === 0 ? maxWidth - indent : maxWidth;
-
-      // Whether `width` more fits on the current line - the same test, squeeze included, as below.
-      const fitsHere = (width: number): boolean =>
-        !open
-          ? width <= room
-          : currentWidth + (spaceWidth + width) - (gaps + 1) * spaceWidth * shrink <= room;
-      // A hyphen inside the word is a break opportunity (UAX #14, as browsers break). Only taken when the
-      // whole word does not fit here, so every word that fits lays out exactly as before.
-      const breaks = mayBreak(word) ? hyphenBreaks(word) : NO_BREAKS;
-      if (breaks.length > 0 && !fitsHere(wordWidth)) {
-        // The longest head ending in a hyphen that still fits - measured as ONE run, so the kerning
-        // inside it is what will be drawn.
-        let head = 0;
-        for (const k of breaks) {
-          if (!fitsHere(runAdvance(metrics, headAt(word, k), font, letterSpacing))) break;
-          head = k;
-        }
-        if (head > 0) {
-          const part = headAt(word, head);
-          if (!open) lineStart = at;
-          currentLine = open ? `${currentLine} ${part}` : part;
-          close(endAt(word, head));
-          placeWord(word.slice(head), at + head);
-          return;
-        }
-        if (open) {
-          // Not even the first piece fits after what is on the line: start a fresh one and try again.
-          close("soft");
-          placeWord(word, at);
-          return;
-        }
-        // Alone on a fresh line and still too wide: the first piece goes as a word on its own (split
-        // or overflowing as before), and the rest starts the next line.
-        placeWord(headAt(word, breaks[0]!), at);
-        close(endAt(word, breaks[0]!));
-        placeWord(word.slice(breaks[0]), at + breaks[0]!);
-        return;
-      }
-
-      // Break before a word that won't fit - counting the SPACE that would join it, which the old test
-      // forgot. It went unnoticed on the first line, where the very first word added a space too many
-      // and cancelled the error out; after a break `currentWidth` is the bare word, so every following
-      // test was short by one space and the line could overrun its box by that much.
-      //
-      // A single word wider than maxWidth still sits on its (empty) line and overflows, rather than
-      // pushing a phantom empty line before it (which would over-count the height by a line).
-      // A word too wide for the box, split into pieces that fit (hyphenation first, break-word as the
-      // floor). Every piece but the last closes a line; the last carries on as an ordinary word. Off by
-      // default, so a document that asks for neither reaches the untouched path below.
-      // The pieces land on lines that are NOT the first one whenever the current line is closed below,
-      // so they get the full box - `room` only loses the indent while we are genuinely still filling
-      // the indented first line.
-      const splitRoom = lines.length === 0 && !open ? room : maxWidth;
-      const split = splitLongWord(word, splitRoom, font, metrics, letterSpacing, splitting);
-      if (split) {
-        if (open) close("soft");
-        // Each piece starts where the source text of the previous one ended.
-        let pieceStart = at;
-        for (const piece of split.slice(0, -1)) {
-          currentLine = piece.text;
-          lineStart = pieceStart;
-          close(piece.hyphen ? "hyphen" : "split");
-          pieceStart += piece.source;
-        }
-        currentLine = split[split.length - 1]!.text;
-        lineStart = pieceStart;
-        currentWidth = runAdvance(metrics, currentLine, font, letterSpacing);
-        open = true;
-        return;
-      }
-
-      const candidate = currentWidth + (spaceWidth + wordWidth);
-
-      if (!open) {
-        currentLine = word;
-        currentWidth = wordWidth;
-        lineStart = at;
-        open = true;
-        // How much a JUSTIFIED line may be squeezed to keep one more word: the spaces already on the
-        // line plus the one that would join it, each giving up at most `shrink` of its width. Zero for
-        // every other alignment, where a squeezed line would simply overflow instead.
-        // ONE expression, used for the test AND for the running total. Adding the same three numbers in
-        // a different order gives a different last bit, and a line that lands exactly on `maxWidth` is
-        // then broken by that bit alone - which is how a footer sized to its own text wrapped.
-      } else if (candidate - (gaps + 1) * spaceWidth * shrink > room) {
-        // A space that does not fit hangs past the edge, as in CSS. Closing the line on it would end
-        // the paragraph's last line "soft" (stretched when justified) or push a blank line before `\n`.
-        if (word === "") return;
-        close("soft");
-        currentLine = word;
-        currentWidth = wordWidth;
-        lineStart = at;
-        open = true;
-      } else {
-        currentLine += " " + word;
-        currentWidth = candidate;
-        gaps += 1;
-      }
-    };
-    words.forEach((word) => {
-      const at = wordStart;
-      wordStart += word.length + 1;
-      placeWord(word, at);
-    });
-    paragraphStart += paragraph.length + 1;
-  });
-
-  if (currentLine) close("end");
-
-  // Open-end by default; cap only when maxLines is set (the others get undefined → untouched).
-  let kept = lines;
-  if (maxLines != null && lines.length > maxLines) {
-    // The text ends at the cap, as far as this element goes: its last line is not a wrapped one.
-    kept = lines.slice(0, maxLines);
-    kept[kept.length - 1] = { ...kept[kept.length - 1]!, end: "end" };
-    if (overflow === "ellipsis") {
-      const last = kept.length - 1;
-      kept[last] = {
-        ...kept[last]!,
-        text: ellipsize(
-          kept[last]!.text,
-          fontFamily,
-          fontSize,
-          fontStyle,
-          // The same room that line was broken against: the first one lost the indent to it.
-          last === 0 ? maxWidth - indent : maxWidth,
-          metrics,
-          letterSpacing,
-          wordSpacing,
-          ligatures,
-        ),
-      };
-    }
-  }
-  // A piece of a paragraph split across pages draws only its own lines.
-  return shownLines === undefined ? kept : kept.slice(0, shownLines);
+  // A string is one span: same breaker, same lines.
+  return breakSegmentsIntoLines(
+    [{ content: text }],
+    { fontFamily, fontSize, fontStyle, letterSpacing, ...options },
+    maxWidth,
+    metrics,
+    maxLines,
+    overflow,
+  ).map((line) => ({
+    text: line.segments.map((segment) => segment.content).join(""),
+    start: line.start.offset,
+    end: line.end,
+  }));
 }
 
 /**
@@ -378,8 +204,9 @@ export function breakSegmentsIntoLines(
   overflow?: TextOverflow,
 ): SegmentLine[] {
   const lines: SegmentLine[] = [];
-  const indent = defaults.indent ?? 0;
+  const { indent = 0, wordSpacing = 0, shrink = 0 } = defaults;
   let width = 0;
+  let gaps = 0; // spaces on the line, which is what a justified line can squeeze
   let lineSegments: TextSegment[] = [];
   let combined = "";
   let lineStart: SegmentPosition = { segment: 0, offset: 0 }; // where the current line begins
@@ -447,7 +274,7 @@ export function breakSegmentsIntoLines(
       fontStyle: style,
       ligatures: defaults.ligatures,
     };
-    const spaceWidth = runAdvance(metrics, " ", font, letterSpacing);
+    const spaceWidth = runAdvance(metrics, " ", font, letterSpacing) + wordSpacing;
     const at = (offset: number): SegmentPosition => ({ segment: segmentIndex, offset });
 
     // A `\n` inside a span is a HARD break, exactly as in the string path: close the line where it
@@ -457,6 +284,7 @@ export function breakSegmentsIntoLines(
       if (paragraphIndex > 0) {
         close(lineSegments, ink, "hard");
         width = 0;
+        gaps = 0;
         open = false;
         ink = 0;
         lineSegments = [];
@@ -473,21 +301,28 @@ export function breakSegmentsIntoLines(
 
       // One word, placed at source offset `wordAt`; `joined`: a space joins it to the word before.
       const placeWord = (word: string, wordAt: number, joined: boolean): void => {
+        // Only a word that follows something on this line is joined to it by the space.
+        const joins = open && joined;
         const wordWidth = runAdvance(metrics, word, font, letterSpacing);
         // As in the string path: the first line lost the indent to its room; the pieces of a split word
         // land on the first line only when it is still empty.
         const room = lines.length === 0 ? maxWidth - indent : maxWidth;
 
+        // How much a JUSTIFIED line may be squeezed to keep one more word: the spaces already on the
+        // line plus the one that would join it, each giving up at most `shrink` of its width. Zero for
+        // every other alignment, where a squeezed line would simply overflow instead.
+        const squeeze = (gaps + (joins ? 1 : 0)) * spaceWidth * shrink;
         // A hyphen inside the word is a break opportunity, taken only when the whole word does not fit
-        // here - the same rule as the string path.
+        // here - the same test, squeeze included, as below.
         const fitsHere = (w: number): boolean =>
-          !open ? w <= room : width + ((joined ? spaceWidth : 0) + w) <= room;
+          !open ? w <= room : width + ((joins ? spaceWidth : 0) + w) - squeeze <= room;
         const breaks = mayBreak(word) ? hyphenBreaks(word) : NO_BREAKS;
         if (breaks.length > 0 && !fitsHere(wordWidth)) {
           const freshLine = (startAt: number) => {
             lineSegments = [{ ...segment, fontFamily: family, content: "" }];
             combined = "";
             width = 0;
+            gaps = 0;
             open = false;
             ink = 0;
             lineStart = at(startAt);
@@ -499,11 +334,11 @@ export function breakSegmentsIntoLines(
           }
           if (head > 0) {
             const part = headAt(word, head);
-            const joiner = open && joined ? spaceWidth : 0;
+            const joiner = joins ? spaceWidth : 0;
             if (!open) lineStart = at(wordAt);
             width += joiner + runAdvance(metrics, part, font, letterSpacing);
             ink = width;
-            combined += joiner > 0 ? " " + part : part;
+            combined += joins ? " " + part : part;
             if (lineSegments.length === 0)
               lineSegments.push({ ...segment, fontFamily: family, content: "" });
             lineSegments[lineSegments.length - 1]!.content = combined;
@@ -563,6 +398,7 @@ export function breakSegmentsIntoLines(
           lineStart = at(pieceAt);
           combined = split[split.length - 1]!.text;
           width = runAdvance(metrics, combined, font, letterSpacing);
+          gaps = 0;
           open = true;
           ink = width;
           lineSegments[lineSegments.length - 1]!.content = combined;
@@ -570,26 +406,31 @@ export function breakSegmentsIntoLines(
         }
         // A space joins this word to what precedes it only INSIDE a segment; segments butt together
         // with nothing between them, which is what `span("a") + span("b")` draws.
-        const joiner = joined ? spaceWidth : 0;
+        const joiner = joins ? spaceWidth : 0;
         // ONE expression for the test and for the running total, grouped exactly as `singleLineWidth`
         // groups it - see the note there. A width built any other way can be a bit off the one the box
         // was sized with, and the text wraps inside a box made to hold it.
         const candidate = width + (joiner + wordWidth);
 
-        // Same guard as the string path: don't open a phantom empty line for an over-wide first word -
-        // place it (overflowing) on the current empty line instead.
-        if (candidate > room && open) {
-          if (word === "") return; // a space that does not fit hangs, as in the string path
+        // Break before a word that won't fit - counting the space that would join it. A word wider than
+        // the whole box still sits on its (empty) line and overflows, rather than pushing a phantom
+        // empty line before it.
+        if (candidate - squeeze > room && open) {
+          // A space that does not fit hangs past the edge, as in CSS. Closing the line on it would end
+          // the paragraph's last line "soft" (stretched when justified) or push a blank line before `\n`.
+          if (word === "") return;
           close(lineSegments, ink, "soft", !joined);
           lineStart = at(wordAt);
           width = wordWidth;
+          gaps = 0;
           ink = wordWidth;
           lineSegments = [];
           combined = word;
           lineSegments.push({ ...segment, content: combined });
         } else {
-          combined += joined ? " " + word : word;
+          combined += joins ? " " + word : word;
           width = candidate;
+          if (joins) gaps += 1;
           open = true;
           if (word !== "") ink = width;
           if (lineSegments.length === 0) {
@@ -623,7 +464,7 @@ export function breakSegmentsIntoLines(
     if (overflow === "ellipsis") {
       // The same room that line was broken against: the first one lost the indent to it.
       const room = kept.length === 1 ? maxWidth - indent : maxWidth;
-      ellipsizeSegmentLine(kept[kept.length - 1]!, defaults, room, metrics);
+      ellipsizeLine(kept[kept.length - 1]!, defaults, room, metrics);
     }
   }
   // A piece of a paragraph split across pages draws only its own lines.
@@ -666,9 +507,9 @@ function ellipsize(
   return ELLIPSIS;
 }
 
-/** Ellipsizes the LAST segment of a truncated segment line in place (within the width left by the
- *  segments before it) and recomputes the line width. */
-function ellipsizeSegmentLine(
+/** Ellipsizes the LAST segment of a truncated line in place (within the width left by the segments
+ *  before it) and recomputes the line width. */
+function ellipsizeLine(
   line: SegmentLine,
   defaults: SegmentDefaults,
   maxWidth: number,
@@ -700,7 +541,7 @@ function ellipsizeSegmentLine(
     maxWidth - prefix,
     metrics,
     lsOf(last),
-    0,
+    defaults.wordSpacing,
     defaults.ligatures,
   );
   line.width = prefix + widthOf(last);
