@@ -46,14 +46,14 @@ export function resolvePageContentBox(config: PDFPageConfig): {
   width: number;
   height: number;
 } {
+  // The margins are the TURNED page's: `left` is the left edge of a landscape page, as `origin` says.
   const margin = config.margin!;
-  const [pageW, pageH] = config.customSize ?? pageFormats[config.pageSize!];
-  let width = pageW - margin.left - margin.right;
-  let height = pageH - margin.top - margin.bottom;
-  if (config.orientation === Orientation.landscape) {
-    [width, height] = [height, width];
-  }
-  return { origin: { x: margin.left, y: margin.top }, width, height };
+  const page = resolvePageSize(config);
+  return {
+    origin: { x: margin.left, y: margin.top },
+    width: page.width - margin.left - margin.right,
+    height: page.height - margin.top - margin.bottom,
+  };
 }
 
 /** The body region of a page once the (optional) header/footer bands are subtracted. */
