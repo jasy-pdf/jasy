@@ -368,16 +368,10 @@ export class PdfDocument {
         try {
           s.bytes = await security.decrypt(s.bytes, { num, gen: entry.gen });
         } catch {
-          // Only AES can fail here (RC4 has no padding). An AES ciphertext is an IV plus whole blocks, so
-          // a string of any other length provably is NOT one: its producer left it in the clear - PDFKit
-          // does so with name-tree keys - and it is read as it stands (and enciphered when written back).
-          if (s.bytes.length < 32 || s.bytes.length % 16 !== 0) continue;
-          // The password already validated against /U, so the key is right and this string has the shape
-          // of ciphertext but is not one. Say so instead of surfacing an AES error.
-          throw new PdfEncryptedError(
-            `object ${num} contains a string that is not encrypted, so this file does not follow its own ` +
-              "/Encrypt declaration and cannot be read safely",
-          );
+          // Only AES can fail here (RC4 has no padding). The password already validated against /U, so
+          // the key is right: a string that does not decipher was left in the clear by its producer -
+          // PDFKit does so with name-tree keys, of any length - and is read as it stands (and enciphered
+          // when written back).
         }
       }
     }

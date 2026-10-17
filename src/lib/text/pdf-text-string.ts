@@ -79,6 +79,15 @@ function utf16be(text: string): Uint8Array {
   return out;
 }
 
+/** Name-tree order: keys sorted by their ENCODED bytes, which is what a reader searching the tree compares -
+ *  not JS string order, which disagrees as soon as one key is PDFDocEncoding and another UTF-16. */
+export function comparePdfText(a: string, b: string): number {
+  const x = encodePdfText(a);
+  const y = encodePdfText(b);
+  for (let i = 0; i < Math.min(x.length, y.length); i++) if (x[i] !== y[i]) return x[i]! - y[i]!;
+  return x.length - y.length;
+}
+
 /** A text string's meaning: UTF-16BE or UTF-8 by their byte-order mark, otherwise PDFDocEncoding. */
 export function decodePdfText(bytes: Uint8Array): string {
   if (bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) {

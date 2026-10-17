@@ -175,7 +175,7 @@ describe("crypt filters - each part of an encrypted file follows its own", () =>
   // rewritten: what Acrobat writes for "encrypt only file attachments", and the opposite.
   const build = async (
     filters: string,
-    cipher: { strings: boolean; file: boolean },
+    cipher: { strings: boolean; file: boolean; clearKey?: boolean },
     name = "invoice.xml",
   ) => {
     const handler = await createSecurityHandler({ userPassword: "geheim" });
@@ -186,7 +186,7 @@ describe("crypt filters - each part of an encrypted file follows its own", () =>
     const file = cipher.file ? await handler.encrypt(data) : data;
     const objects: Uint8Array[] = [
       new TextEncoder().encode(
-        `<< /Type /Catalog /Pages 2 0 R /Names << /EmbeddedFiles << /Names [${await str(name)} 4 0 R] >> >> >>`,
+        `<< /Type /Catalog /Pages 2 0 R /Names << /EmbeddedFiles << /Names [${cipher.clearKey ? `(${name})` : await str(name)} 4 0 R] >> >> >>`,
       ),
       new TextEncoder().encode("<< /Type /Pages /Kids [3 0 R] /Count 1 >>"),
       new TextEncoder().encode("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] >>"),
@@ -258,6 +258,19 @@ describe("crypt filters - each part of an encrypted file follows its own", () =>
     );
     const read = readAttachments(await PdfDocument.open(bytes, { password: "geheim" }));
     expect(read[0]!.name).toBe(name);
+  });
+
+  it("a key left in the clear in an enciphered file is read as it is, at any length", async () => {
+    // PDFKit writes the name-tree key in the clear; 32 bytes is two AES blocks, the shape of ciphertext.
+    const name = "an-attachment-name-of-32-bytes.x";
+    const bytes = await build(
+      "/StmF /StdCF /StrF /StdCF",
+      { strings: true, file: true, clearKey: true },
+      name,
+    );
+    const [read] = readAttachments(await PdfDocument.open(bytes, { password: "geheim" }));
+    expect([read!.key, read!.name]).toEqual([name, name]);
+    expect(read!.text()).toBe(XML);
   });
 
   it("an attached file left in the clear (/EFF /Identity) is read as it is, not deciphered", async () => {

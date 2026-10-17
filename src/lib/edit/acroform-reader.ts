@@ -1,5 +1,5 @@
 import { PdfEncryptedError, type PdfDocument } from "./document.ts";
-import { get, isDict, isRef, nameOf, numberOf, textOf, type PdfObject } from "./objects.ts";
+import { get, isDict, isRef, nameOf, numberOf, textStringOf, type PdfObject } from "./objects.ts";
 
 /**
  * Reads an existing document's `/AcroForm` into a flat list of fields.
@@ -78,10 +78,10 @@ function readOptions(doc: PdfDocument, raw: PdfObject | undefined) {
   return raw.map((entry) => {
     const e = doc.resolve(entry);
     if (Array.isArray(e)) {
-      const value = textOf(doc.resolve(e[0])) ?? "";
-      return { value, label: textOf(doc.resolve(e[1])) ?? value };
+      const value = textStringOf(doc.resolve(e[0])) ?? "";
+      return { value, label: textStringOf(doc.resolve(e[1])) ?? value };
     }
-    const value = textOf(e) ?? "";
+    const value = textStringOf(e) ?? "";
     return { value, label: value };
   });
 }
@@ -90,10 +90,10 @@ function readOptions(doc: PdfDocument, raw: PdfObject | undefined) {
 function readValue(doc: PdfDocument, raw: PdfObject | undefined) {
   const v = doc.resolve(raw);
   if (Array.isArray(v)) {
-    const values = v.map((x) => textOf(doc.resolve(x)) ?? nameOf(doc.resolve(x)) ?? "");
+    const values = v.map((x) => textStringOf(doc.resolve(x)) ?? nameOf(doc.resolve(x)) ?? "");
     return { value: values[0], values };
   }
-  const single = textOf(v) ?? nameOf(v);
+  const single = textStringOf(v) ?? nameOf(v);
   return { value: single, values: undefined };
 }
 
@@ -167,7 +167,7 @@ function walk(
   const node = doc.resolve(ref);
   if (node === undefined || !isDict(node)) return;
 
-  const name = joinName(parentName, textOf(doc.lookup(node, "T")));
+  const name = joinName(parentName, textStringOf(doc.lookup(node, "T")));
   const type = nameOf(doc.lookup(node, "FT")) ?? parent.type;
   const flags = numberOf(doc.lookup(node, "Ff")) ?? parent.flags;
   const maxLen = numberOf(doc.lookup(node, "MaxLen")) ?? parent.maxLen;

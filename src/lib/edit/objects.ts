@@ -10,7 +10,6 @@
  */
 
 import { decodePdfText } from "../text/pdf-text-string.ts";
-import { latin1FromBytes } from "../utils/bytes.ts";
 
 export interface PdfName {
   kind: "name";
@@ -103,27 +102,8 @@ export const numberOf = (o: PdfObject | undefined): number | undefined =>
   typeof o === "number" ? o : undefined;
 
 /**
- * A PDF text string as JS text. Two encodings live side by side in the wild: UTF-16BE, marked by a
- * `FE FF` byte-order mark (what pdf-lib writes for every field name), and otherwise PDFDocEncoding,
- * which agrees with Latin-1 for everything a field name realistically holds.
- */
-export function textOf(o: PdfObject | undefined): string | undefined {
-  if (o === undefined || !isString(o)) return undefined;
-  const b = o.bytes;
-  if (b.length >= 2 && b[0] === 0xfe && b[1] === 0xff) {
-    let s = "";
-    for (let i = 2; i + 1 < b.length; i += 2) s += String.fromCharCode((b[i] << 8) | b[i + 1]);
-    return s;
-  }
-  // latin1FromBytes, NOT TextDecoder("latin1"): the latter is a WHATWG alias for windows-1252, which
-  // remaps 0x80-0x9F (byte 0x95 becomes a bullet). Mapping each byte to the same code point keeps the
-  // value round-trippable, which is what a reader that may write the string back needs.
-  return latin1FromBytes(b);
-}
-
-/**
- * A PDF text string as a reader means it - for showing, not for writing back (that is `textOf`, which
- * keeps every byte round-trippable): UTF-16BE or UTF-8 by their BOM, otherwise PDFDocEncoding in full.
+ * A PDF text string as JS text: UTF-16BE or UTF-8 by their BOM, otherwise PDFDocEncoding - the same table
+ * the writer encodes with (`text/pdf-text-string.ts`), so a value read and written back keeps its meaning.
  */
 export function textStringOf(o: PdfObject | undefined): string | undefined {
   return o !== undefined && isString(o) ? decodePdfText(o.bytes) : undefined;

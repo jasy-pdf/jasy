@@ -3,8 +3,15 @@ import { readFileSync } from "node:fs";
 import { fillForm, FillError } from "../../../src/lib/edit/fill.ts";
 import { PdfDocument } from "../../../src/lib/edit/document.ts";
 import { readAcroForm } from "../../../src/lib/edit/acroform-reader.ts";
-import { get, textOf } from "../../../src/lib/edit/objects.ts";
-import { Column, Document, Page, TextField, renderToBytes } from "../../../src/lib/api/index.ts";
+import { get, textStringOf } from "../../../src/lib/edit/objects.ts";
+import {
+  Column,
+  Document,
+  Dropdown,
+  Page,
+  TextField,
+  renderToBytes,
+} from "../../../src/lib/api/index.ts";
 
 // Filling an EXISTING form, against the same five producers the reader is tested with. Writing into a
 // foreign file is where assumptions get punished: every one of these tests exists because something
@@ -110,6 +117,32 @@ describe("fillForm - across producers", () => {
       const { bytes } = await fillForm(fixture(name), { full_name: hard });
       expect(readBack(bytes).field("full_name")?.value).toBe(hard);
     }
+  });
+
+  it("finds and fills a field jasy named outside Latin-1 - the reader speaks the writer's encoding", async () => {
+    // The writer encodes "–" and "€" in PDFDocEncoding (0x85, 0xA0); read as Latin-1 they came back as
+    // control characters and the field could not be found by its name.
+    const bytes = await renderToBytes(
+      Document([
+        Page([
+          Column([
+            TextField({ name: "Preis – €" }),
+            Dropdown({ name: "Größe", value: "Klein – S" }, ["Klein – S", "Groß – L"]),
+          ]),
+        ]),
+      ]),
+    );
+    const before = readBack(bytes);
+    expect(before.field("Preis – €")).toBeDefined();
+    expect(before.field("Größe")?.value).toBe("Klein – S");
+    expect(before.field("Größe")?.options?.map((o) => o.value)).toEqual(["Klein – S", "Groß – L"]);
+
+    const { bytes: filled } = await fillForm(bytes, {
+      "Preis – €": "5 € – netto",
+      Größe: "Groß – L",
+    });
+    expect(readBack(filled).field("Preis – €")?.value).toBe("5 € – netto");
+    expect(readBack(filled).field("Größe")?.value).toBe("Groß – L");
   });
 
   it("leaves fields it was not asked about completely alone", async () => {
@@ -453,7 +486,7 @@ describe("fillForm - awkward shapes a producer is allowed to write", () => {
     const { bytes } = await fillForm(inheritedFieldPdf(), { "group.child": "abc" });
     const doc = PdfDocument.load(bytes);
     const widget = doc.getObject(5);
-    expect(textOf(get(widget, "constructor"))).toBe("keep me");
+    expect(textStringOf(get(widget, "constructor"))).toBe("keep me");
   });
 
   it("preserves an object's generation instead of writing 0", async () => {
