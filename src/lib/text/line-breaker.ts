@@ -1,7 +1,7 @@
 import type { FontStyle } from "../utils/pdf-object-manager.ts";
 import type { FontMetrics } from "../utils/font-metrics.ts";
 import type { TextSegment } from "../elements/text-element.ts";
-import { runAdvance, SOFT_HYPHEN, withoutSoftHyphens } from "./advance.ts";
+import { runAdvance, type RunFont, SOFT_HYPHEN, withoutSoftHyphens } from "./advance.ts";
 import { HYPHEN, splitLongWord, type WordSplitting } from "./word-splitting.ts";
 import { headAt, hyphenBreaks, mayBreak, NO_BREAKS } from "./hyphen-breaks.ts";
 
@@ -75,23 +75,15 @@ export interface SegmentPosition {
 }
 
 /**
- * Break a plain string into lines that each fit within `maxWidth`, splitting on
- * spaces (greedy: a word stays on the current line unless it would overflow).
- *
- * Single source of truth for plain-string wrapping: both height measurement and
- * rendering call this, so they can never disagree. Depends only on `FontMetrics`,
- * not the PDF byte writer - the future fragmentation pass can reuse it.
- */
-/**
- * The width of `text` set as ONE line, accumulated in EXACTLY the order `wrapStringIntoLines` builds a
- * line: the first word, then `+ (space + word)` each time. The order matters because floating-point
+ * The width of `text` set as ONE line, accumulated in EXACTLY the order the breaker builds a line: the
+ * first word, then `+ (space + word)` each time. The order matters because floating-point
  * addition is not associative - a box sized by a differently-grouped sum can be one bit too small for
  * the very line the breaker then measures, and the text wraps inside a box made to fit it. That is not
  * hypothetical: it is what split a footer sized to its own content.
  */
 export function singleLineWidth(
   text: string,
-  font: { fontFamily: string; fontSize: number; fontStyle: FontStyle },
+  font: RunFont,
   metrics: FontMetrics,
   letterSpacing = 0,
   wordSpacing = 0,
@@ -210,7 +202,9 @@ export function breakSegmentsIntoLines(
   let lineSegments: TextSegment[] = [];
   let combined = "";
   let lineStart: SegmentPosition = { segment: 0, offset: 0 }; // where the current line begins
-  let open = false; // as in the string path: whether the line holds a word yet, an empty one too
+  // Whether the line holds a word yet - an empty one too: a space is text as written, so a leading one
+  // and both of a double space count.
+  let open = false;
   let ink = 0; // the line's width up to its last drawn glyph - the spaces after it hang
   // An empty piece (what a span leaves after its `\n`) has nothing to draw, and its font must not size
   // the line it lands on - a big span ending in `\n` made the next line as tall as itself. Only a blank
@@ -248,7 +242,7 @@ export function breakSegmentsIntoLines(
         segs = segs.map((seg, j) => (j === i ? { ...seg, content: kept } : seg));
       if (kept !== "") break;
     }
-    // Soft hyphens leave the line here, as in the string path - a blank line's piece included.
+    // Soft hyphens leave the line here - a blank line's piece included.
     const stripped = segs.map((seg) =>
       seg.content.includes(SOFT_HYPHEN)
         ? { ...seg, content: withoutSoftHyphens(seg.content) }
@@ -277,8 +271,9 @@ export function breakSegmentsIntoLines(
     const spaceWidth = runAdvance(metrics, " ", font, letterSpacing) + wordSpacing;
     const at = (offset: number): SegmentPosition => ({ segment: segmentIndex, offset });
 
-    // A `\n` inside a span is a HARD break, exactly as in the string path: close the line where it
-    // sits, whatever else was already on it, and start the next one with this segment's style.
+    // A `\n` is a HARD break: close the line where it sits, whatever else was already on it, and start
+    // the next one with this segment's style. An EMPTY paragraph still makes a line, or a deliberate
+    // blank line between two blocks silently disappears.
     let paragraphStart = 0;
     segment.content.split("\n").forEach((paragraph, paragraphIndex) => {
       if (paragraphIndex > 0) {
@@ -304,8 +299,8 @@ export function breakSegmentsIntoLines(
         // Only a word that follows something on this line is joined to it by the space.
         const joins = open && joined;
         const wordWidth = runAdvance(metrics, word, font, letterSpacing);
-        // As in the string path: the first line lost the indent to its room; the pieces of a split word
-        // land on the first line only when it is still empty.
+        // CSS `text-indent`: the FIRST line has the indent taken out of its room; the pieces of a split
+        // word land on the first line only when it is still empty.
         const room = lines.length === 0 ? maxWidth - indent : maxWidth;
 
         // How much a JUSTIFIED line may be squeezed to keep one more word: the spaces already on the
@@ -361,8 +356,9 @@ export function breakSegmentsIntoLines(
         }
         const splitRoom = lines.length === 0 && !open ? room : maxWidth;
 
-        // Same treatment as the string path: a word too wide for the box is split into pieces that fit.
-        // Each finished piece closes the line it sits on, keeping this segment's style.
+        // A word too wide for the box is split into pieces that fit (hyphenation first, break-word as
+        // the floor). Each finished piece closes the line it sits on, keeping this segment's style. Off
+        // by default, so a document that asks for neither never gets here.
         const split = splitLongWord(
           word,
           splitRoom,
@@ -372,10 +368,8 @@ export function breakSegmentsIntoLines(
           defaults.splitting ?? {},
         );
         if (split) {
-          // Close whatever is already on the line FIRST. The pieces were measured against the full box,
-          // not against what is left of this line - appending the first one put a line 80 wide into a
-          // 50 box, and reported 50, which is exactly why it went unnoticed. The string path has always
-          // pushed its current line before splitting; this is the same move.
+          // Close whatever is already on the line FIRST: the pieces were measured against the full box,
+          // not against what is left of this line.
           if (open) {
             close(lineSegments, ink, "soft", !joined);
             lineSegments = [{ ...segment, fontFamily: family, content: "" }];
@@ -448,9 +442,8 @@ export function breakSegmentsIntoLines(
     });
   });
 
-  // Only if something actually landed on it. The string path ends with `if (currentLine)`, so a text
-  // ending in `\n` is ONE line there - the two must not disagree about the same text. An empty
-  // paragraph in the MIDDLE still becomes a line; that one is pushed at the break, not here.
+  // Only if something actually landed on it: a text ending in `\n` is ONE line. An empty paragraph in
+  // the MIDDLE still becomes a line; that one is pushed at the break, not here.
   if (lineSegments.some((seg) => seg.content !== "")) {
     close(lineSegments, ink, "end");
   }
@@ -518,9 +511,9 @@ function ellipsizeLine(
   const segs = line.segments;
   if (segs.length === 0) return;
   const lsOf = (seg: TextSegment): number => seg.letterSpacing ?? defaults.letterSpacing ?? 0;
+  // Summed word by word, as the breaker sums a line - one owner for a line's width.
   const widthOf = (seg: TextSegment): number =>
-    runAdvance(
-      metrics,
+    singleLineWidth(
       seg.content,
       {
         fontFamily: seg.fontFamily || defaults.fontFamily,
@@ -528,7 +521,9 @@ function ellipsizeLine(
         fontStyle: seg.fontStyle || defaults.fontStyle,
         ligatures: defaults.ligatures,
       },
+      metrics,
       lsOf(seg),
+      defaults.wordSpacing,
     );
   let prefix = 0;
   for (let i = 0; i < segs.length - 1; i++) prefix += widthOf(segs[i]);

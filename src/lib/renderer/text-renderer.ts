@@ -15,18 +15,15 @@ import { IRNode, TextRun, PathCommand, Gradient, Line, Link } from "../ir/displa
 import { isEmojiCodePoint } from "../text/emoji-codepoints.ts";
 import { emojiImageNode } from "./emoji-image.ts";
 import {
-  singleLineWidth,
   type LineOptions,
   MAX_SPACE_SHRINK,
-  wrapStringIntoLines,
-  breakStringIntoLines,
   breakSegmentsIntoLines,
   SegmentLine,
   TextOverflow,
 } from "../text/line-breaker.ts";
-import { lineBoxForSegmentLine, lineBoxForString } from "../text/line-metrics.ts";
+import { lineBoxForSegmentLine } from "../text/line-metrics.ts";
 import { runAdvance, type RunFont } from "../text/advance.ts";
-import { visualRuns, visualRunsOf, type Direction } from "../text/bidi.ts";
+import { visualRunsOf, type Direction } from "../text/bidi.ts";
 import {
   DecorationStroke,
   skipInkSegments,
@@ -59,7 +56,7 @@ export class TextRenderer {
   // Measuring only needs metrics, not the full object manager. (The render pass below
   // still receives the manager because it also registers fonts/images.)
   public static calculateTextHeight(
-    content: string | TextSegment[],
+    content: TextSegment[],
     fontSize: number,
     fontFamily: string,
     fontStyle: FontStyle,
@@ -71,27 +68,7 @@ export class TextRenderer {
     letterSpacing = 0,
     lineOptions: LineOptions = {},
   ): number {
-    // Plain string: every wrapped line gets the same box.
-    if (typeof content === "string") {
-      const lines = wrapStringIntoLines(
-        content,
-        fontFamily,
-        fontSize,
-        fontStyle,
-        maxWidth,
-        objectManager,
-        maxLines,
-        overflow,
-        letterSpacing,
-        lineOptions,
-      );
-      const box = lineBoxForString(objectManager, fontFamily, fontStyle, fontSize, lineHeight);
-      return lines.length * box.height;
-    }
-
-    // Segments: each line's box comes from the fonts actually on it. `splitting` has to travel with
-    // them for the same reason `letterSpacing` does: it changes where a line ENDS, so leaving it out
-    // measures a paragraph at one line count and draws it at another.
+    // Each line's box comes from the fonts actually on it.
     const defaults = { fontFamily, fontSize, fontStyle, letterSpacing, ...lineOptions };
     const lines = breakSegmentsIntoLines(
       content,
@@ -119,7 +96,7 @@ export class TextRenderer {
       width,
       fontSize,
       color,
-      content,
+      spans,
       fontFamily,
       fontStyle,
       textAlignment,
@@ -140,11 +117,10 @@ export class TextRenderer {
       shownLines,
     } = textElement.getProps();
 
-    // Component -> display list. Wrapping and positioning stay here; the backend
-    // turns each run into BT/Tf/Td/Tj/ET. The wrapping algorithm is unchanged from
-    // the original renderer - unifying it into the engine is Phase 3.
+    // Component -> display list: the lines come from the one breaker, positioning stays here; the
+    // backend turns each run into BT/Tf/Td/Tj/ET.
     const { runs, links, decorations, linkGroups } = TextRenderer._buildRuns(
-      content,
+      spans,
       fontSize,
       fontFamily,
       fontStyle,
@@ -400,7 +376,7 @@ export class TextRenderer {
   // the previous hand-written operators exactly (verified by pixel-identical render);
   // only the output form changed from PDF strings to `TextRun`s.
   private static _buildRuns(
-    content: string | TextSegment[],
+    content: TextSegment[],
     fontSize: number,
     fontFamily: string,
     fontStyle: FontStyle,
@@ -633,96 +609,16 @@ export class TextRenderer {
       return { text: part.logical, glyphs: ordered.map((g) => g.glyph) };
     };
 
-    // The advance the viewer will use: plain glyph widths (a `Tj` never kerns) plus one
-    // `letterSpacing` per code point (the `Tc` operator), from the one shared `advance.ts` primitive.
-    const font = { fontFamily, fontSize, fontStyle, ligatures };
-
-    // --- Plain string: one run per wrapped line. ---
-    if (typeof content === "string") {
-      const broken = breakStringIntoLines(
-        content,
-        fontFamily,
-        fontSize,
-        fontStyle,
-        maxWidth,
-        objectManager,
-        maxLines,
-        overflow,
-        letterSpacing,
-        // The SAME knobs the measure pass used (`TextElement.lineOptions`), or a line would be
-        // measured one width and drawn another.
-        {
-          wordSpacing,
-          indent: textIndent,
-          shrink: align === HorizontalAlignment.justify ? MAX_SPACE_SHRINK : 0,
-          splitting: { breakWord, hyphenate },
-          ligatures,
-          shownLines,
-        },
-      );
-      const lines = broken.map((line) => line.text);
-      // yPosition is the top of the text box (top-left). The line box seats its own baseline; lines
-      // then stack by that box's height. Same numbers as calculateTextHeight, by construction.
-      const box = lineBoxForString(objectManager, fontFamily, fontStyle, fontSize, lineHeight);
-      lines.forEach((line, index) => {
-        const lineWidth = singleLineWidth(line, font, objectManager, letterSpacing, wordSpacing);
-        // CSS `text-indent`: the FIRST line starts in, and had that much less room to fill.
-        const indent = index === 0 ? textIndent : 0;
-        let x = initialX + indent + alignmentOffset(lineWidth, indent);
-        const baseline = yPosition + box.baseline + box.height * index;
-        // Latin-only text in an `ltr` paragraph comes back as one unchanged piece.
-        // Word-spacing is a per-gap advance just like the justification slack, so it rides the same
-        // mechanism: `Tw` would reach only the single byte 32 and miss every embedded font.
-        // Only a line that WRAPPED is stretched: the end of a paragraph and the line before a `\n` keep
-        // their natural spacing (CSS). The last line of a piece continued on the next page wrapped.
-        const ends = broken[index]!.end;
-        const extra =
-          wordSpacing + justifyExtra(line, lineWidth, ends === "hard" || ends === "end", indent);
-        for (const part of visualRuns(line, direction)) {
-          const piece = shapedPiece(part, fontFamily, fontStyle);
-          const partWidth = emitPiece(
-            piece,
-            x,
-            extra,
-            {
-              y: baseline,
-              fontFamily,
-              fontStyle,
-              fontSize,
-              color,
-              ...(letterSpacing ? { letterSpacing } : {}),
-            },
-            font,
-            letterSpacing,
-          );
-          decorate(
-            piece.text,
-            x,
-            partWidth,
-            baseline,
-            fontFamily,
-            fontStyle,
-            fontSize,
-            color,
-            underline,
-            strikethrough,
-            letterSpacing,
-          );
-          x += partWidth;
-        }
-      });
-      return { runs, links, decorations, linkGroups };
-    }
-
-    // --- Segments: break into lines (shared breaker), then emit one run per segment.
+    // Break into lines (the one breaker), then emit one run per segment.
     // Segment 0 starts at the aligned line origin; each following segment is offset by
     // the previous segment's kerning-free advance. Each line drops by its OWN leading
     // (tallest font on that line), so mixed-font lines space correctly and the drawn
     // height matches the measured height.
     const pushLine = (line: SegmentLine, lineY: number, isLast: boolean, indent: number): void => {
-      // CSS `text-indent`, as for a plain string: the FIRST line starts in, with that much less room.
+      // CSS `text-indent`: the FIRST line starts in, with that much less room.
       let x = initialX + indent + alignmentOffset(line.width, indent);
-      // Word-spacing rides the justification slack, as for a plain string.
+      // Word-spacing is a per-gap advance just like the justification slack, so it rides the same
+      // mechanism: `Tw` would reach only the single byte 32 and miss every embedded font.
       const extra =
         wordSpacing +
         justifyExtra(line.segments.map((seg) => seg.content).join(""), line.width, isLast, indent);
@@ -833,7 +729,8 @@ export class TextRenderer {
     );
     segmentLines.forEach((line, index) => {
       const box = lineBoxForSegmentLine(line, defaults, objectManager, lineHeight);
-      // As for a plain string: only a line that wrapped is stretched.
+      // Only a line that WRAPPED is stretched: the end of a paragraph and the line before a `\n` keep
+      // their natural spacing (CSS). The last line of a piece continued on the next page wrapped.
       const ends = line.end === "hard" || line.end === "end";
       pushLine(line, top + box.baseline, ends, index === 0 ? textIndent : 0);
       top += box.height;

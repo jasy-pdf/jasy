@@ -23,7 +23,7 @@ describe("TextRenderer - calculateTextHeight", () => {
 
     // "Hello World" is 11 glyphs * 5 = 55 wide; width 100 leaves it on one line.
     const textHeight = TextRenderer.calculateTextHeight(
-      "Hello World",
+      [{ content: "Hello World" }],
       12,
       "Helvetica",
       FontStyle.Normal,
@@ -45,7 +45,7 @@ describe("TextRenderer - calculateTextHeight", () => {
     } as unknown as PDFObjectManager;
 
     const textHeight = TextRenderer.calculateTextHeight(
-      "Hello World, this is a test",
+      [{ content: "Hello World, this is a test" }],
       12,
       "Helvetica",
       FontStyle.Normal,
@@ -91,7 +91,7 @@ describe("TextRenderer - calculateTextHeight", () => {
         y: 20,
         width: 100,
         fontSize: 12,
-        content: "Hello World",
+        spans: [{ content: "Hello World" }],
         fontFamily: "Helvetica",
         fontStyle: FontStyle.Normal,
         color: new Color(0, 0, 0), // Black
@@ -132,7 +132,7 @@ describe("TextRenderer - calculateTextHeight", () => {
         y: 20,
         width: 100,
         fontSize: 12,
-        content: [
+        spans: [
           { content: "Hello", fontSize: 12 },
           { content: "World", fontSize: 14 },
         ],
@@ -176,7 +176,7 @@ describe("TextRenderer - calculateTextHeight", () => {
         y: 20,
         width: 200,
         fontSize: 12,
-        content: "Hello World",
+        spans: [{ content: "Hello World" }],
         fontFamily: "Helvetica",
         fontStyle: FontStyle.Normal,
         color: new Color(0, 0, 0),
@@ -220,7 +220,7 @@ describe("TextRenderer - calculateTextHeight", () => {
         y: 20,
         width: 200,
         fontSize: 12,
-        content: "Hello World",
+        spans: [{ content: "Hello World" }],
         fontFamily: "Helvetica",
         fontStyle: FontStyle.Normal,
         color: new Color(0, 0, 0),
@@ -261,7 +261,7 @@ describe("TextRenderer - calculateTextHeight", () => {
         y: 20,
         width: 200,
         fontSize: 12,
-        content: "",
+        spans: [{ content: "" }],
         fontFamily: "Helvetica",
         fontStyle: FontStyle.Normal,
         color: new Color(0, 0, 0),
@@ -301,7 +301,7 @@ describe("TextRenderer - calculateTextHeight", () => {
         y: 20,
         width: 200,
         fontSize: 12,
-        content: [
+        spans: [
           {
             content: "Hello",
             fontSize: 12,
@@ -362,7 +362,7 @@ describe("TextRenderer - calculateTextHeight", () => {
         y: 20,
         width: 200,
         fontSize: 12,
-        content: [
+        spans: [
           {
             content: "Hello",
             fontSize: 12,

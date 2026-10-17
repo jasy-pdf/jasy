@@ -221,8 +221,12 @@ describe("the three findings a review caught", () => {
     // The content is resolved by the LAYOUT pass, which is what the renderer then reads.
     const manager = om();
     el.calculateLayout(BoxConstraints.tight(400, 400), { x: 0, y: 0 }, context(manager));
-    const props = el.getProps() as { content: { content: string }[] };
-    expect(props.content.map((c) => c.content).join("")).toBe("Hello World");
+    expect(
+      el
+        .getProps()
+        .spans.map((s) => s.content)
+        .join(""),
+    ).toBe("Hello World");
   });
 
   it("drops the indent on a CONTINUATION, which is no longer a first line", () => {
@@ -264,8 +268,12 @@ describe("capitalize and punctuation", () => {
     const el = text([{ content: "(hel" }, { content: "lo)" }], { textTransform: "capitalize" });
     const manager = om();
     el.calculateLayout(BoxConstraints.tight(400, 400), { x: 0, y: 0 }, context(manager));
-    const props = el.getProps() as { content: { content: string }[] };
-    expect(props.content.map((c) => c.content).join("")).toBe("(Hello)");
+    expect(
+      el
+        .getProps()
+        .spans.map((s) => s.content)
+        .join(""),
+    ).toBe("(Hello)");
   });
 });
 

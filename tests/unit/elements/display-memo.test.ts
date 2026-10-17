@@ -18,11 +18,21 @@ describe("the display memo", () => {
     const ctx = { metrics: m, pageConfig: { width: 595, height: 842, margin: 0 } } as never;
     const el = new TextElement({ content: "ok ✓", fontSize: 10 });
     el.calculateLayout(BoxConstraints.loose(400, Infinity), { x: 0, y: 0 }, ctx);
-    expect(el.getProps().content).toBe("ok "); // dropped, nothing can draw it
+    expect(
+      el
+        .getProps()
+        .spans.map((s) => s.content)
+        .join(""),
+    ).toBe("ok "); // dropped, nothing can draw it
 
     knows = true;
     epoch = 1; // what registerFont does
     el.calculateLayout(BoxConstraints.loose(400, Infinity), { x: 0, y: 0 }, ctx);
-    expect(el.getProps().content).toBe("ok ✓");
+    expect(
+      el
+        .getProps()
+        .spans.map((s) => s.content)
+        .join(""),
+    ).toBe("ok ✓");
   });
 });

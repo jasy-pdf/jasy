@@ -65,7 +65,7 @@ export function lineBoxFor(parts: LinePart[], lineHeight?: number): LineBox {
   return { height, baseline: (height - content) / 2 + ascent };
 }
 
-/** The line box of a single-font line (the plain-string path). */
+/** The line box of a single-font line - what an empty line takes in the paragraph's own font. */
 export function lineBoxForString(
   metrics: FontMetrics,
   fontFamily: string,

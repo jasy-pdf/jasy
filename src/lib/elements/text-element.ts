@@ -15,9 +15,9 @@ import { runAdvance } from "../text/advance.ts";
 import { Fragmentable, FragmentResult } from "../layout/fragmentation.ts";
 import {
   type LineOptions,
+  type SegmentDefaults,
   singleLineWidth,
   MAX_SPACE_SHRINK,
-  breakStringIntoLines,
   breakSegmentsIntoLines,
   TextOverflow,
 } from "../text/line-breaker.ts";
@@ -28,7 +28,7 @@ import {
   DEFAULT_WIDOWS,
   type OrphanWidowRule,
 } from "../text/orphans-widows.ts";
-import { lineBoxForSegmentLine, lineBoxForString } from "../text/line-metrics.ts";
+import { lineBoxForSegmentLine } from "../text/line-metrics.ts";
 import { HorizontalAlignment, LayoutContext, SizedPDFElement } from "./pdf-element.ts";
 import { normalizeContent } from "../text/whitespace.ts";
 import { coverText } from "../text/glyph-coverage.ts";
@@ -172,7 +172,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
   private fontFallback!: string[];
   // What the layout pass resolved the content to (transform applied, split by font). The render pass
   // has no metrics of its own, so it MUST read the same thing layout measured, not recompute it.
-  private resolved?: string | TextSegment[];
+  private resolved?: TextSegment[];
   private textTransform!: TextTransform;
   private wordSpacing!: number;
   private textIndent!: number;
@@ -266,7 +266,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     style: FontStyle;
     transform: TextTransform;
     fallback: readonly string[];
-    value: string | TextSegment[];
+    value: TextSegment[];
   };
 
   /** Justified lines may be squeezed to keep a word; every other alignment gets no slack. Read by the
@@ -276,7 +276,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
    * paragraph can never be measured in one casing and drawn in another (`ABC` and `abc` are not the
    * same width in most fonts).
    */
-  private display(metrics?: FontMetrics): string | TextSegment[] {
+  private display(metrics?: FontMetrics): TextSegment[] {
     const memo = this.displayed;
     if (
       metrics &&
@@ -293,10 +293,9 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     const cased = this.recased();
     // A SPAN may bring its own stack, so the element's being empty is not enough to skip the pass.
     const anyStack =
-      this.fontFallback.length > 0 ||
-      (typeof cased !== "string" && cased.some((seg) => (seg.fontFallback?.length ?? 0) > 0));
+      this.fontFallback.length > 0 || cased.some((seg) => (seg.fontFallback?.length ?? 0) > 0);
     if (!metrics) return cased;
-    const remember = (value: string | TextSegment[]) => {
+    const remember = (value: TextSegment[]) => {
       this.displayed = {
         metrics,
         epoch: metrics.fontEpoch ?? 0,
@@ -309,11 +308,9 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       return value;
     };
     if (!anyStack) return remember(this.covered(cased, metrics));
-    // Font fallback turns the content into spans - one per family - which every later pass already
-    // knows how to handle. Nothing new downstream.
-    const pieces = typeof cased === "string" ? [{ content: cased } as TextSegment] : cased;
+    // Font fallback splits a span into more spans - one per family. Nothing new downstream.
     const out: TextSegment[] = [];
-    for (const seg of pieces) {
+    for (const seg of cased) {
       const runs = splitByFont(
         seg.content,
         seg.fontFamily ?? this.fontFamily,
@@ -325,7 +322,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       else
         for (const run of runs) out.push({ ...seg, content: run.text, fontFamily: run.fontFamily });
     }
-    return remember(this.covered(out, metrics)) as TextSegment[];
+    return remember(this.covered(out, metrics));
   }
 
   /**
@@ -334,13 +331,8 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
    * make the measured line and the drawn one disagree. A font that draws everything gets its input
    * back unchanged, so an ordinary document is byte-identical.
    */
-  private covered(content: string | TextSegment[], metrics: FontMetrics): string | TextSegment[] {
+  private covered(content: TextSegment[], metrics: FontMetrics): TextSegment[] {
     const report = (dropped: number[]) => metrics.reportMissingGlyph?.(dropped);
-    if (typeof content === "string") {
-      const { text, dropped } = coverText(content, this.fontFamily, this.fontStyle, metrics);
-      if (dropped.length > 0) report(dropped);
-      return text;
-    }
     return content.map((seg) => {
       const { text, dropped } = coverText(
         seg.content,
@@ -353,15 +345,14 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     });
   }
 
-  /** The content with `text-transform` applied, and nothing else. */
-  private recased(): string | TextSegment[] {
-    if (this.textTransform === "none") return this.content;
-    if (typeof this.content === "string") {
-      return applyTextTransform(this.content, this.textTransform).text;
-    }
+  /** The content as spans, with `text-transform` applied, and nothing else. */
+  private recased(): TextSegment[] {
+    // A string is one span: from here on, measuring, breaking and drawing know only spans.
+    const spans = typeof this.content === "string" ? [{ content: this.content }] : this.content;
+    if (this.textTransform === "none") return spans;
     // The capitalisation state runs THROUGH the spans: `span("hel") + span("lo")` is one word.
     let atWordStart = true;
-    return this.content.map((seg) => {
+    return spans.map((seg) => {
       const done = applyTextTransform(seg.content, this.textTransform, atWordStart);
       atWordStart = done.atWordStart;
       return { ...seg, content: done.text };
@@ -405,77 +396,14 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
    * Splits the paragraph at line boxes (Slice 1). The lines that fit in `maxHeight` stay;
    * the rest become a remainder `TextElement` re-wrapped on the next page. If not even one
    * line fits, nothing is forced here - the caller (the container) decides whether to move
-   * the whole element on for progress. Handles both plain strings and styled segments.
+   * the whole element on for progress.
    */
   fragment(maxHeight: number, width: number, ctx: LayoutContext): FragmentResult {
     this.resolveStyle(ctx);
     const content = this.display(ctx.metrics);
-    return typeof content === "string"
-      ? this.fragmentString(content, maxHeight, width, ctx)
-      : this.fragmentSegments(content, maxHeight, width, ctx);
-  }
-
-  // Plain string: every wrapped line gets the same box (the same one calculateTextHeight uses),
-  // so `floor(maxHeight / lineBox)` lines fit.
-  private fragmentString(
-    content: string,
-    maxHeight: number,
-    width: number,
-    ctx: LayoutContext,
-  ): FragmentResult {
-    const lines = breakStringIntoLines(
-      content,
-      this.fontFamily,
-      this.fontSize,
-      this.fontStyle,
-      width,
-      ctx.metrics,
-      this.maxLines,
-      this.overflow,
-      this.letterSpacing,
-      this.lineOptions(),
-    );
-
-    const box = lineBoxForString(
-      ctx.metrics,
-      this.fontFamily,
-      this.fontStyle,
-      this.fontSize,
-      this.lineHeight,
-    );
-    const fittedLineCount = adjustForOrphansWidows(
-      Math.floor(maxHeight / box.height),
-      lines.length,
-      this.breakRule(),
-    );
-    if (fittedLineCount <= 0) return { fitted: null, remainder: this };
-    if (fittedLineCount >= lines.length) return { fitted: this, remainder: null };
-
-    // A piece is a window onto the SAME text, not the lines glued back together: the first page draws
-    // the first lines of the whole paragraph (broken exactly as here, same text, same width), and the
-    // next one continues from where its first line starts in the source. Hard breaks, a word split
-    // over the break and the justified last line on the page all survive that way.
-    return {
-      fitted: this.cloneWithContent(content, this.textIndent, { shownLines: fittedLineCount }),
-      // A continuation is no longer the paragraph's FIRST line, so it carries no indent; whatever is
-      // left of a line cap goes with it.
-      // (The lines are capped at `maxLines` already, so at least one of the cap is left.)
-      remainder: this.cloneWithContent(content.slice(lines[fittedLineCount]!.start), 0, {
-        maxLines: this.maxLines === undefined ? undefined : this.maxLines - fittedLineCount,
-      }),
-    };
-  }
-
-  // Styled segments: each line's height comes from the fonts on it, so pack lines by cumulative
-  // box height. Rebuild the fitted/remainder halves back into TextSegment[].
-  private fragmentSegments(
-    content: TextSegment[],
-    maxHeight: number,
-    width: number,
-    ctx: LayoutContext,
-  ): FragmentResult {
     // The SAME knobs measuring and drawing break with (`calculateTextHeight`, the renderer), or this
-    // would cut a paragraph at a line count it is never drawn with.
+    // would cut a paragraph at a line count it is never drawn with. Each line's height comes from
+    // the fonts on it, so lines are packed by their cumulative height.
     const defaults = this.segmentDefaults();
     const lines = breakSegmentsIntoLines(
       content,
@@ -499,8 +427,12 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     if (fittedLineCount <= 0) return { fitted: null, remainder: this };
     if (fittedLineCount >= lines.length) return { fitted: this, remainder: null };
 
-    // As for a plain string: a window onto the same spans, and the rest continues from where the
-    // next line starts in the source - inside its span, keeping that span's style.
+    // A piece is a window onto the SAME text, not the lines glued back together: the first page draws
+    // the first lines of the whole paragraph (broken exactly as here, same text, same width), and the
+    // next one continues from where its first line starts in the source - inside its span, keeping
+    // that span's style. Hard breaks, a word split over the break and the justified last line on the
+    // page all survive that way. A continuation is no longer the paragraph's FIRST line, so it
+    // carries no indent; whatever is left of a line cap goes with it.
     const { segment, offset } = lines[fittedLineCount]!.start;
     const rest = [
       { ...content[segment]!, content: content[segment]!.content.slice(offset) },
@@ -514,18 +446,14 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     };
   }
 
-  /** How span text is broken: the knobs `calculateTextHeight` and the renderer pass too. */
-  private segmentDefaults() {
+  /** How the text is broken: the knobs `calculateTextHeight` and the renderer pass too. */
+  private segmentDefaults(): SegmentDefaults {
     return {
       fontFamily: this.fontFamily,
       fontSize: this.fontSize,
       fontStyle: this.fontStyle,
       letterSpacing: this.letterSpacing,
-      splitting: { breakWord: this.breakWord, hyphenate: this.hyphenate },
-      ligatures: this.ligatures,
-      indent: this.textIndent,
-      wordSpacing: this.wordSpacing,
-      shrink: this.textAlignment === HorizontalAlignment.justify ? MAX_SPACE_SHRINK : 0,
+      ...this.lineOptions(),
     };
   }
 
@@ -540,7 +468,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
   // A copy carrying the same style but different (already-wrapped) content. Re-wrapping at
   // the same width reproduces exactly those lines (greedy is deterministic).
   private cloneWithContent(
-    content: string | TextSegment[],
+    content: TextSegment[],
     indent = this.textIndent,
     piece: { shownLines?: number; maxLines?: number } = {},
   ): TextElement {
@@ -613,11 +541,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     return { width, height: this.measuredHeight(ctx.metrics, width, content) };
   }
 
-  private measuredHeight(
-    metrics: FontMetrics,
-    width: number,
-    content: string | TextSegment[],
-  ): number {
+  private measuredHeight(metrics: FontMetrics, width: number, content: TextSegment[]): number {
     return TextRenderer.calculateTextHeight(
       content,
       this.fontSize,
@@ -659,14 +583,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       );
     // The FIRST line starts `textIndent` in, so an unbounded box has to be that much wider.
     const indent = Math.max(0, this.textIndent);
-    const content = this.display(metrics);
-    if (typeof content === "string") {
-      return (
-        indent +
-        oneLine(content, this.fontFamily, this.fontSize, this.fontStyle, this.letterSpacing)
-      );
-    }
-    return content.reduce(
+    return this.display(metrics).reduce(
       (sum, seg) =>
         sum +
         oneLine(
@@ -719,9 +636,6 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       );
     };
     const content = this.display(metrics);
-    if (typeof content === "string") {
-      return widest(content, this.fontFamily, this.fontSize, this.fontStyle, this.letterSpacing);
-    }
     // Segments join without a space, so a word may straddle two of them; taking the widest piece per
     // segment can therefore UNDER-estimate. That errs towards squeezing a little too far, which lands
     // back on the old overflow behaviour rather than on something new.
@@ -751,7 +665,9 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       fontFamily: this.fontFamily,
       fontStyle: this.fontStyle,
       color: this.color,
-      content: this.resolved ?? this.content,
+      content: this.content,
+      /** The content as it is measured and drawn: spans, recased, split by font, drawable glyphs only. */
+      spans: this.resolved ?? this.display(),
       textAlignment: this.textAlignment,
       maxLines: this.maxLines,
       orphans: this.orphans,

@@ -19,13 +19,17 @@ const ctx = { metrics } as LayoutContext;
 const para = (content: string, fontSize = 10) =>
   new TextElement({ fontSize, content, orphans: 1, widows: 1 });
 
-const contentOf = (el: unknown) => (el as TextElement).getProps().content as string;
+const contentOf = (el: unknown) =>
+  (el as TextElement)
+    .getProps()
+    .spans.map((s) => s.content)
+    .join("");
 
 /** The lines a piece DRAWS at width 50: a piece of a split paragraph shows only its own lines. */
 const drawnOf = (el: unknown) => {
   const p = (el as TextElement).getProps();
   return wrapStringIntoLines(
-    p.content as string,
+    p.spans.map((s) => s.content).join(""),
     p.fontFamily,
     p.fontSize,
     p.fontStyle,

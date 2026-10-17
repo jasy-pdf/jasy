@@ -1,5 +1,18 @@
 import { describe, it, expect } from "vitest";
-import { visualRuns, visualRunsOf, needsBidi } from "../../../src/lib/text/bidi.ts";
+import {
+  visualRunsOf,
+  needsBidi,
+  type Direction,
+  type VisualRun,
+} from "../../../src/lib/text/bidi.ts";
+
+/** One plain string's runs - a paragraph is spans, so this is a single one. */
+const visualRuns = (text: string, base: Direction = "ltr"): VisualRun[] =>
+  visualRunsOf([{ text, source: null }], base).map(({ text: t, logical, rtl }) => ({
+    text: t,
+    logical,
+    rtl,
+  }));
 
 // UAX #9 decides the ORDER characters appear in, not their shapes. These tests read as what a reader
 // would SEE, left to right - which is exactly what `visualRuns` returns.
