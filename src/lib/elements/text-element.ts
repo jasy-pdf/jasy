@@ -492,7 +492,10 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     piece: { shownLines?: number; maxLines?: number } = {},
   ): TextElement {
     return new TextElement({
-      content,
+      // Cut from `display()`, already recased - a span's own transform too.
+      content: content.map((seg) =>
+        (seg.textTransform ?? "none") === "none" ? seg : { ...seg, textTransform: "none" },
+      ),
       fontSize: this.fontSize,
       fontFamily: this.fontFamily,
       fontStyle: this.fontStyle,
@@ -512,8 +515,8 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       textIndent: indent,
       role: this.role,
       fontFallback: this.fontFallback,
-      // The content is cut from `display()`, already recased: `capitalize` again would capitalise
-      // the half of a word continued on the next page.
+      // Already recased: `capitalize` again would capitalise the half of a word continued on the next
+      // page.
       textTransform: "none",
       breakWord: this.breakWord,
       hyphenate: this.hyphenate,

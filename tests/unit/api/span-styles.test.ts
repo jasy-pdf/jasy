@@ -32,6 +32,26 @@ describe("textTransform on a span", () => {
   });
 });
 
+describe("textTransform on a span, across a page break", () => {
+  it("a word split over the break is not capitalised again where it continues", async () => {
+    // Courier 10pt is 6pt a character: 48pt holds 8. "abcdefghijkl" is one word, split by breakWord
+    // after 8 characters; a page holds one line, so the continuation "ijkl" starts the next page.
+    const page = Page({ size: { width: 88, height: 52 }, margin: 20 }, [
+      Box({ width: 48 }, [
+        Text([span("abcdefghijkl", { textTransform: "capitalize" })], {
+          font: "Courier",
+          size: 10,
+          breakWord: true,
+          orphans: 1,
+          widows: 1,
+        }),
+      ]),
+    ]);
+    const runs = await drawnTextRuns(() => renderToBytes(Document([page])));
+    expect(runs.map((r) => r.text)).toEqual(["Abcdefgh", "ijkl"]);
+  });
+});
+
 describe("skipInk on a span", () => {
   // A standard-14 font has no outlines to step around, so asking for skipInk with one is a named
   // error - which makes it visible whether the span's own setting reached the drawing.
