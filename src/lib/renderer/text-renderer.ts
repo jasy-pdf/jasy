@@ -629,6 +629,8 @@ export class TextRenderer {
         direction,
       );
       ordered.forEach((part) => {
+        // A blank line keeps its height (its box is sized from the piece), but there is nothing to draw.
+        if (part.text === "") return;
         const segment = part.source;
         const family = segment.fontFamily || fontFamily;
         const size = segment.fontSize || fontSize;

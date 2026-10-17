@@ -364,3 +364,12 @@ describe("a span brings its own font stack", () => {
     ]);
   });
 });
+
+describe("a blank line", () => {
+  it("keeps its height but draws no empty run", async () => {
+    const runs = await drawn(text("a\n\nb"));
+    expect(runs.map((r) => r.text)).toEqual(["a", "b"]);
+    // Two line boxes of 10 apart: the blank line still takes its room.
+    expect(runs[1]!.y - runs[0]!.y).toBe(20);
+  });
+});
