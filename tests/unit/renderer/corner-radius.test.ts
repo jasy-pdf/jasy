@@ -56,6 +56,19 @@ describe("per corner", () => {
     expect(ops).toContain("240.000 701.890 240.000 701.890 240.000 701.890 c");
   });
 
+  it("a lone corner larger than half the short side keeps its size, as in CSS", async () => {
+    // 200x100 box, topLeft 70: no corner shares an edge with it, so nothing overlaps and CSS draws 70.
+    // It used to be capped at min(w, h)/2 = 50 first.
+    const ops = pathOps(await draw({ topLeft: 70 }));
+    expect(ops).toContain("110.000 801.890 l");
+    expect(ops).toMatch(/ 40.000 731.890 c$/m); // the curve ends 70pt down the left edge
+  });
+
+  it("equal corners still end at half the short side (overlap scaling)", async () => {
+    const ops = pathOps(await draw(70));
+    expect(ops).toContain("90.000 801.890 l"); // 50 = 100 / 2
+  });
+
   it("does not let an empty edge scale the other corners away", () => {
     // The bug this test exists for: the per-edge overlap check divided by the sum of two radii, and
     // an edge with both corners at 0 produced a ratio of 0 - scaling every OTHER corner to nothing.

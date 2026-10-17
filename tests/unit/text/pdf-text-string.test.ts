@@ -1,10 +1,19 @@
 import { describe, it, expect } from "vitest";
 import {
+  comparePdfText,
   decodePdfText,
   encodePdfText,
   isPlainPdfText,
 } from "../../../src/lib/text/pdf-text-string.ts";
-import { Document, Page, Text, Bookmark, Link, renderToBytes } from "../../../src/lib/api/index.ts";
+import {
+  Anchor,
+  Document,
+  Page,
+  Text,
+  Bookmark,
+  Link,
+  renderToBytes,
+} from "../../../src/lib/api/index.ts";
 import { PdfDocument } from "../../../src/lib/edit/document.ts";
 import { get, isDict, isString } from "../../../src/lib/edit/objects.ts";
 
@@ -64,6 +73,21 @@ describe("what the writer emits", () => {
       { compress: false },
     );
     expect(new TextDecoder("latin1").decode(bytes)).toContain("/Title (Rechnung für Müller)");
+  });
+
+  it("named destinations are sorted by their encoded bytes, as a name tree must be", async () => {
+    // JS order puts "ü" (U+00FC) before "–" (U+2013); encoded, "–" is 0x85 and "ü" 0xFC, and "→" is UTF-16
+    // behind FE FF. A reader that searches the tree compares the bytes.
+    const names = ["→ pfeil", "ü", "– strich", "z"];
+    expect([...names].sort()).not.toEqual([...names].sort(comparePdfText));
+    const bytes = await renderToBytes(
+      Document([Page(names.map((name) => Anchor({ name }, Text(name))))]),
+      { compress: false },
+    );
+    const doc = await PdfDocument.open(bytes);
+    const dests = get(doc.lookup(doc.catalog, "Names"), "Dests");
+    const keys = (get(doc.resolve(dests), "Names") as unknown[]).filter(isString);
+    expect(keys.map((k) => decodePdfText(k.bytes))).toEqual(["z", "– strich", "ü", "→ pfeil"]);
   });
 
   it("a link to a non-ASCII address is percent-encoded, as a browser writes it", async () => {

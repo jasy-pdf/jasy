@@ -12,6 +12,7 @@ import { AnchorElement } from "../elements/layout/anchor-element.ts";
 import { RotatedElement } from "../elements/layout/rotated-element.ts";
 import { RotatedBoxElement } from "../elements/layout/rotated-box-element.ts";
 import { PDFElement } from "../elements/pdf-element.ts";
+import { flexibleOf } from "../layout/flex-item.ts";
 import { MainAlign, CrossAlign } from "../utils/flex-layout.ts";
 import { ColorInput, toColor } from "./color.ts";
 import { isGradientInput, type GradientInput } from "./gradient.ts";
@@ -201,9 +202,13 @@ export function Box(a: BoxOptions | PDFElement[], b?: PDFElement[]): PDFElement 
           new PaddingElement({
             margin: toEdges(opts.padding),
             child: children.length === 1 ? children[0] : Column(children),
+            ofBox: true,
           }),
         ]
-      : children;
+      : // A Spacer/Expanded - also one inside a transparent wrapper such as a Link - needs a flex parent.
+        children.length > 1 && children.some((child) => flexibleOf(child) !== undefined)
+        ? [Column(children)]
+        : children;
 
   // A side is set if it (or the uniform `border`) is given. If ANY differs from a plain
   // uniform border, we hand the engine per-side colors (which draws individual lines).

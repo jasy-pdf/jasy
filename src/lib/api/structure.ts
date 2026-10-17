@@ -110,8 +110,6 @@ export function Page(a: PageOptions | PDFElement[], b?: PDFElement[]): PageEleme
   });
 }
 
-/** Document options: PDF metadata plus the inheritable text defaults (font, size, color, lineHeight,
- *  align, bold/italic) every `Text` inherits unless it sets its own - Flutter's `DefaultTextStyle`. */
 /** Where color emoji come from when a code point isn't in the current text font, so `Text("Hi 😅")`
  *  works in one string. Either a **font** (native vector, offline - recommended; register it in
  *  `fonts`) as a string name or `{ font }`, or an **image/CDN source** `{ url, format }` (react-pdf
@@ -119,6 +117,8 @@ export function Page(a: PageOptions | PDFElement[], b?: PDFElement[]): PageEleme
  *  (vector, no network); the image source exists for parity + as an escape hatch. */
 export type EmojiSource = string | { font: string } | { url: string; format?: "png" };
 
+/** Document options: PDF metadata plus the inheritable text defaults (font, size, color, lineHeight,
+ *  align, bold/italic) every `Text` inherits unless it sets its own - Flutter's `DefaultTextStyle`. */
 export interface DocumentOptions extends TextDefaults {
   /** PDF metadata. */
   meta?: { title?: string; author?: string };

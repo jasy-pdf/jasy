@@ -1,4 +1,5 @@
 import type { PDFObjectManager } from "./pdf-object-manager.ts";
+import { comparePdfText } from "../text/pdf-text-string.ts";
 
 const num = (n: number) => (Number.isFinite(n) ? Number(n.toFixed(2)) : 0);
 
@@ -27,12 +28,12 @@ export class DestRegistry {
   }
 
   /** The `/Dests << /Names [ ... ] >>` fragment for the catalog `/Names` dictionary (merged with any
-   *  `/EmbeddedFiles`). Returns "" when empty. Names are sorted lexically - a name tree requires it.
+   *  `/EmbeddedFiles`). Returns "" when empty. Names are sorted by their encoded bytes - a name tree requires it.
    *  Takes the object manager only so the names go through its string choke-point and get encrypted
    *  with everything else. */
   finalize(om: PDFObjectManager): string {
     if (this.dests.size === 0) return "";
-    const entries = [...this.dests.keys()].sort().map((name) => {
+    const entries = [...this.dests.keys()].sort(comparePdfText).map((name) => {
       const d = this.dests.get(name)!;
       return `${om.pdfString(name)} [${d.pageObjNum} 0 R /XYZ null ${num(d.top)} null]`;
     });
