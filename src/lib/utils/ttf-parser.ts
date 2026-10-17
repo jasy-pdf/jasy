@@ -129,6 +129,13 @@ function detScale(m: Affine): number {
   return Math.sqrt(Math.abs(m[0] * m[3] - m[1] * m[2]));
 }
 
+/** Thrown when font bytes are a format jasy cannot embed - said by name, never embedded broken. */
+export class FontFormatError extends Error {
+  constructor(message: string) {
+    super(`@jasy/pdf: ${message}`);
+  }
+}
+
 export class TTFParser {
   unitsPerEm = 1000;
   // FontDescriptor metrics, in PDF glyph space (1000 units / em).
@@ -170,6 +177,21 @@ export class TTFParser {
   private gsubTable?: GsubTable | null;
 
   constructor(private data: Uint8Array) {
+    // Every font path meets here (bytes, a file, a URL, an unwrapped WOFF/WOFF2). A CFF font has the
+    // same tables up front and measured fine, then went into the PDF as a TrueType program it is not.
+    const tag = String.fromCharCode(...data.subarray(0, 4));
+    if (tag === "OTTO") {
+      throw new FontFormatError(
+        "this is an OpenType font with PostScript (CFF) outlines, which jasy does not embed yet - " +
+          "use its TrueType-flavoured version (.ttf, or a .woff/.woff2 made from one)",
+      );
+    }
+    if (tag === "ttcf") {
+      throw new FontFormatError(
+        "this is a TrueType Collection (.ttc), which jasy does not read yet - extract the one face " +
+          "you need into a .ttf",
+      );
+    }
     this.readTableDirectory();
     const head = this.table("head").offset;
     this.unitsPerEm = u16(this.data, head + 18);

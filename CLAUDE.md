@@ -472,7 +472,8 @@ enforces it (`skonto.ts` for "Skonto is not an allowance"), and everywhere else 
 
 1. **`z-index`** within a positioning frame (Stage 3 of absolute positioning).
 2. **`slice` border mode** at a page break (a split box left open) and true multi-column.
-3. **OTF/CFF fonts** are not parsed (TTF, TrueType-flavoured OTF, WOFF1, WOFF2 are). Colour-emoji
+3. **OTF/CFF fonts** are not parsed (TTF, TrueType-flavoured OTF, WOFF1, WOFF2 are); a CFF font or a
+   `.ttc` is refused by name in `TTFParser` (`FontFormatError`), on every path. Colour-emoji
    deferrals: COLR v1 rotate/skew, variable paints, sweep gradients, CFF/sbix/CBDT bitmap fonts (so no
    Apple Color Emoji).
 4. **A transform does not carry its side channels** - `Link`/`Anchor`/`Outline` are page `/Annots` and
