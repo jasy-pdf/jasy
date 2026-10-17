@@ -202,9 +202,9 @@ function actionDict(a: ButtonAction, om: PDFObjectManager): string {
     case "submit":
       // /Flags 4 = ExportFormat: post the field values as HTML form data rather than FDF, which is what
       // an ordinary web endpoint expects.
-      return `/A << /S /SubmitForm /F << /FS /URL /F ${om.pdfString(a.url)} >> /Flags 4 >>`;
+      return `/A << /S /SubmitForm /F << /FS /URL /F ${om.pdfUri(a.url)} >> /Flags 4 >>`;
     case "url":
-      return `/A << /S /URI /URI ${om.pdfString(a.url)} >>`;
+      return `/A << /S /URI /URI ${om.pdfUri(a.url)} >>`;
   }
 }
 

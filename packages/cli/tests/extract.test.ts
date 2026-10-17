@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { renderZugferd } from "@jasy/e-invoice";
+import { Document, Page, Text, renderToBytes } from "@jasy/pdf";
 import { extractEmbeddedXml } from "../src/core/extract";
 
 const invoice = {
@@ -44,15 +45,17 @@ describe("extractEmbeddedXml", () => {
 
   // some tools embed their own source (e.g. a gobl.json from Invopop) ALONGSIDE the invoice XML -
   // and list it first. We must still pick the e-invoice XML, not the first embedded file.
-  it("picks the invoice XML when several files are embedded (gobl.json listed first)", () => {
-    const pdf = Buffer.from(
-      "%PDF-1.7\n" +
-        "1 0 obj\n<< /Type /Filespec /F (gobl.json) /UF (gobl.json) /EF << /F 2 0 R /UF 2 0 R >> >>\nendobj\n" +
-        '2 0 obj\n<< /Type /EmbeddedFile >>\nstream\n{"gobl":true}\nendstream\nendobj\n' +
-        "3 0 obj\n<< /Type /Filespec /F (xrechnung.xml) /UF (xrechnung.xml) /EF << /F 4 0 R /UF 4 0 R >> >>\nendobj\n" +
-        "4 0 obj\n<< /Type /EmbeddedFile /Subtype /text#2Fxml >>\nstream\n<rsm:CrossIndustryInvoice>OK</rsm:CrossIndustryInvoice>\nendstream\nendobj\n",
-      "latin1",
-    );
+  it("picks the invoice XML when several files are embedded (gobl.json listed first)", async () => {
+    const pdf = await renderToBytes(Document([Page([Text("x")])]), {
+      attachments: [
+        { name: "gobl.json", data: new TextEncoder().encode('{"gobl":true}') },
+        {
+          name: "xrechnung.xml",
+          data: new TextEncoder().encode("<rsm:CrossIndustryInvoice>OK</rsm:CrossIndustryInvoice>"),
+          mimeType: "text/xml",
+        },
+      ],
+    });
     const xml = extractEmbeddedXml(pdf);
     expect(xml).toContain("CrossIndustryInvoice");
     expect(xml).not.toContain("gobl");

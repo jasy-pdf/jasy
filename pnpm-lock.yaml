@@ -63,6 +63,9 @@ importers:
       '@jasy/e-invoice':
         specifier: workspace:^
         version: link:../e-invoice
+      '@jasy/pdf':
+        specifier: workspace:^
+        version: link:../..
       saxon-js:
         specifier: ^2.6.0
         version: 2.7.0

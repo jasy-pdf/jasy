@@ -9,6 +9,7 @@
  * the distinction and mangle names.
  */
 
+import { decodePdfText } from "../text/pdf-text-string.ts";
 import { latin1FromBytes } from "../utils/bytes.ts";
 
 export interface PdfName {
@@ -118,6 +119,14 @@ export function textOf(o: PdfObject | undefined): string | undefined {
   // remaps 0x80-0x9F (byte 0x95 becomes a bullet). Mapping each byte to the same code point keeps the
   // value round-trippable, which is what a reader that may write the string back needs.
   return latin1FromBytes(b);
+}
+
+/**
+ * A PDF text string as a reader means it - for showing, not for writing back (that is `textOf`, which
+ * keeps every byte round-trippable): UTF-16BE or UTF-8 by their BOM, otherwise PDFDocEncoding in full.
+ */
+export function textStringOf(o: PdfObject | undefined): string | undefined {
+  return o !== undefined && isString(o) ? decodePdfText(o.bytes) : undefined;
 }
 
 /**

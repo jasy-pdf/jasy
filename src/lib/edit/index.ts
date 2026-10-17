@@ -5,12 +5,16 @@
  * that only generates should not carry it - the same reason jimp is kept out of the text path. Importing
  * `@jasy/pdf` alone pulls in none of this.
  *
- * The scope is deliberately narrow: AcroForm fields, and nothing else. This is not a PDF editor. What we
+ * The scope is deliberately narrow: AcroForm fields and attachments, nothing else. This is not a PDF editor. What we
  * do not understand, we leave untouched, and what we cannot do safely we refuse by name.
  */
 
 export { readAcroForm } from "./acroform-reader.ts";
 export type { ReadField, ReadForm, ReadWidget } from "./acroform-reader.ts";
+
+export { readAttachments, AttachmentError } from "./attachments.ts";
+export type { Attachment, AttachmentLocation } from "./attachments.ts";
+export { PdfFilterError } from "./filters.ts";
 
 export { fillForm, FillError } from "./fill.ts";
 export { flattenForm, FlattenError } from "./flatten.ts";

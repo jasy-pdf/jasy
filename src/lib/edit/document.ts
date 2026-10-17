@@ -19,6 +19,13 @@ import {
 } from "./objects.ts";
 import { StandardAes256, type SecurityHandler } from "../crypto/security-handler.ts";
 import { StandardLegacy } from "../crypto/legacy-handler.ts";
+import {
+  ascii85Decode,
+  asciiHexDecode,
+  lzwDecode,
+  PdfFilterError,
+  runLengthDecode,
+} from "./filters.ts";
 
 /**
  * A loaded PDF: the cross-reference index plus object lookup.
@@ -55,9 +62,20 @@ export interface OpenOptions extends LoadOptions {
 /** Thrown when a file cannot be opened because of its encryption - always saying which of the reasons it
  *  is: no password, wrong password, or a revision we do not implement. */
 export class PdfEncryptedError extends Error {
-  constructor(message: string) {
+  /** `needsPassword`: the password is missing or wrong - as opposed to a file we cannot decrypt at all. */
+  constructor(
+    message: string,
+    readonly needsPassword = false,
+  ) {
     super(`@jasy/pdf: ${message}`);
   }
+}
+
+/** Which parts of an encrypted file are enciphered: streams (`/StmF`), strings (`/StrF`), attached files (`/EFF`). */
+interface Enciphered {
+  streams: boolean;
+  strings: boolean;
+  files: boolean;
 }
 
 /** The raw bytes of a `/Encrypt` entry that must be a string (`/U`, `/UE`). */
@@ -71,6 +89,10 @@ export class PdfDocument {
   private readonly objStmCache = new Map<number, Map<number, PdfObject>>();
   /** Set once an encrypted file has been opened with its password. */
   private security?: SecurityHandler;
+  /** Which of streams, strings and attached files this file enciphers (all of them, but for `/Identity`). */
+  private enciphered?: Enciphered;
+  /** Attached files encrypted on their own (`/EFF`) and opened without the password: their streams. */
+  private readonly lockedFiles = new Set<number>();
   /** Decrypted stream payloads, keyed by the stream's data offset (unique per stream). */
   private readonly plainStreams = new Map<number, Uint8Array>();
   /** True when the cross-reference index was unusable and had to be rebuilt by scanning. Surfaced so
@@ -112,9 +134,34 @@ export class PdfDocument {
   static async open(bytes: Uint8Array, opts: OpenOptions = {}): Promise<PdfDocument> {
     const doc = PdfDocument.load(bytes, opts);
     if (!doc.isEncrypted) return doc;
-    doc.security = await doc.securityHandlerFor(opts.password);
+    doc.enciphered = doc.encipheredParts();
+    try {
+      doc.security = await doc.securityHandlerFor(opts.password);
+    } catch (e) {
+      // Only the attached files are encrypted (Acrobat's "encrypt only file attachments"): the document
+      // opens as it is, and an attachment asks for the password when it is read.
+      const filesOnly = !doc.enciphered.streams && !doc.enciphered.strings;
+      if (!(filesOnly && e instanceof PdfEncryptedError && e.needsPassword)) throw e;
+    }
     await doc.decryptEverything();
     return doc;
+  }
+
+  /** Which parts the `/Encrypt` dictionary enciphers. Before V4 there are no crypt filters: everything. */
+  private encipheredParts(): Enciphered {
+    const enc = this.resolve(this.trailer.map.get("Encrypt"));
+    if ((numberOf(this.lookup(enc, "V")) ?? 0) < 4)
+      return { streams: true, strings: true, files: true };
+    const real = (name: string | undefined) =>
+      name !== undefined &&
+      name !== "Identity" &&
+      nameOf(this.lookup(this.lookup(this.lookup(enc, "CF"), name), "CFM")) !== "None";
+    const stmf = nameOf(this.lookup(enc, "StmF")) ?? "Identity";
+    return {
+      streams: real(stmf),
+      strings: real(nameOf(this.lookup(enc, "StrF")) ?? "Identity"),
+      files: real(nameOf(this.lookup(enc, "EFF")) ?? stmf),
+    };
   }
 
   /**
@@ -140,8 +187,8 @@ export class PdfDocument {
     const pw = password ?? "";
     const rejected = (): never => {
       throw password === undefined
-        ? new PdfEncryptedError("this PDF is encrypted; pass its password to open it")
-        : new PdfEncryptedError("wrong password for this PDF");
+        ? new PdfEncryptedError("this PDF is encrypted; pass its password to open it", true)
+        : new PdfEncryptedError("wrong password for this PDF", true);
     };
     // `recoverFileKey` / `StandardLegacy.open` say "wrong password" by name; anything else that comes out
     // of them is structural (a malformed /U, /UE, /O) and must not be reported as a bad password.
@@ -174,12 +221,7 @@ export class PdfDocument {
       const o = stringBytes(this.lookup(enc, "O"));
       const u = stringBytes(this.lookup(enc, "U"));
       if (o === undefined || u === undefined) incomplete("incomplete");
-      const cipher = this.streamCipher(enc, v);
-      if (cipher.kind === "identity") {
-        throw new PdfEncryptedError(
-          "this PDF declares encryption but selects the Identity crypt filter, which jasy does not model",
-        );
-      }
+      const cipher = this.legacyCipher(enc, v);
       const ids = this.trailer.map.get("ID");
       const firstId = Array.isArray(ids) ? stringBytes(this.resolve(ids[0])) : undefined;
       try {
@@ -207,29 +249,46 @@ export class PdfDocument {
   }
 
   /**
-   * Which cipher and key length actually apply to the streams.
+   * Which cipher and key length a legacy (V2-V4) file uses.
    *
-   * For V4 the answer is NOT the top-level `/Length`: the document names a crypt filter in `/StmF` and
-   * that filter carries its own `/CFM` and `/Length` (in BYTES, where the top-level one is in bits).
-   * `/Identity` means the streams are not enciphered at all - decrypting them anyway would destroy them.
+   * For V4 the answer is NOT the top-level `/Length`: the document names crypt filters - `/StmF` for
+   * streams, `/StrF` for strings, `/EFF` for attached files - and each carries its own `/CFM` and
+   * `/Length` (in BYTES, where the top-level one is in bits). `/Identity` means "not enciphered". One
+   * handler serves them all, so the filters that DO encipher must agree; two different ciphers in one
+   * file are refused by name.
    */
-  private streamCipher(
+  private legacyCipher(
     enc: PdfObject | undefined,
     v: number,
-  ): { kind: "rc4" | "aes" | "identity"; keyBits: number } {
+  ): { kind: "rc4" | "aes"; keyBits: number } {
     const topBits = numberOf(this.lookup(enc, "Length")) ?? 40;
     if (v < 4) return { kind: "rc4", keyBits: topBits };
-
     const stmf = nameOf(this.lookup(enc, "StmF")) ?? "Identity";
-    if (stmf === "Identity") return { kind: "identity", keyBits: topBits };
-    const cf = this.lookup(this.lookup(enc, "CF"), stmf);
-    const cfm = nameOf(this.lookup(cf, "CFM"));
-    if (cfm === "None" || cfm === undefined) return { kind: "identity", keyBits: topBits };
-    const cfBytes = numberOf(this.lookup(cf, "Length"));
-    return {
-      kind: cfm === "AESV2" ? "aes" : "rc4",
-      keyBits: cfBytes !== undefined ? cfBytes * 8 : topBits,
-    };
+    const used = [
+      stmf,
+      nameOf(this.lookup(enc, "StrF")) ?? "Identity",
+      nameOf(this.lookup(enc, "EFF")) ?? stmf,
+    ]
+      .filter((name) => name !== "Identity")
+      .map((name) => {
+        const cf = this.lookup(this.lookup(enc, "CF"), name);
+        const cfm = nameOf(this.lookup(cf, "CFM"));
+        const cfBytes = numberOf(this.lookup(cf, "Length"));
+        return cfm === undefined || cfm === "None"
+          ? undefined
+          : {
+              kind: cfm === "AESV2" ? ("aes" as const) : ("rc4" as const),
+              keyBits: cfBytes !== undefined ? cfBytes * 8 : topBits,
+            };
+      })
+      .filter((c) => c !== undefined);
+    const first = used[0] ?? { kind: "rc4" as const, keyBits: topBits };
+    if (used.some((c) => c.kind !== first.kind || c.keyBits !== first.keyBits)) {
+      throw new PdfEncryptedError(
+        "this PDF enciphers its streams, strings and attached files with different crypt filters, which jasy does not model",
+      );
+    }
+    return first;
   }
 
   /**
@@ -242,7 +301,7 @@ export class PdfDocument {
    */
   private async decryptEverything(): Promise<void> {
     const security = this.security;
-    if (!security) return;
+    const enciphered = this.enciphered ?? { streams: true, strings: true, files: true };
     const encryptNum = isRef(this.trailer.map.get("Encrypt"))
       ? (this.trailer.map.get("Encrypt") as { num: number }).num
       : undefined;
@@ -261,6 +320,8 @@ export class PdfDocument {
       const type = nameOf(get(obj, "Type"));
       if (type === "XRef") continue; // never encrypted - it holds the index itself
       if (type === "Metadata" && metadataInClear) continue;
+      if (type === "EmbeddedFile") continue; // attached files follow /EFF, below
+      if (!security || !enciphered.streams || this.identityCrypt(obj)) continue;
       // Keyed by the stream's DATA OFFSET, not its object number: `streamData` receives the stream
       // object and has no number in hand.
       this.plainStreams.set(
@@ -276,7 +337,27 @@ export class PdfDocument {
     this.cache.clear();
     this.objStmCache.clear();
 
+    // Attached files follow their own crypt filter (/EFF). They are found by what points at them - an
+    // /EF entry - because a file stream need not say /Type /EmbeddedFile.
+    for (const num of this.embeddedFileStreams()) {
+      const entry = this.xref.get(num);
+      const obj = this.getObject(num);
+      if (entry?.kind !== "offset" || obj === undefined || !isStream(obj)) continue;
+      this.plainStreams.delete(obj.start); // a file stream without /Type was taken for a plain stream
+      if (!enciphered.files || this.identityCrypt(obj)) continue;
+      if (!security) {
+        this.lockedFiles.add(obj.start);
+        continue;
+      }
+      this.plainStreams.set(
+        obj.start,
+        await security.decrypt(this.rawStream(obj), { num, gen: entry.gen }),
+      );
+    }
+    this.cache.clear();
+
     // Then the strings, in objects that sit directly in the file.
+    if (!security || !enciphered.strings) return;
     for (const [num, entry] of this.xref) {
       if (entry.kind !== "offset" || num === encryptNum) continue;
       const obj = this.getObject(num);
@@ -285,8 +366,12 @@ export class PdfDocument {
         try {
           s.bytes = await security.decrypt(s.bytes, { num, gen: entry.gen });
         } catch {
-          // The password already validated against /U, so the key is right and this string simply is
-          // not ciphertext - a producer left it in the clear. Say so instead of surfacing an AES error.
+          // Only AES can fail here (RC4 has no padding). An AES ciphertext is an IV plus whole blocks, so
+          // a string of any other length provably is NOT one: its producer left it in the clear - PDFKit
+          // does so with name-tree keys - and it is read as it stands (and enciphered when written back).
+          if (s.bytes.length < 32 || s.bytes.length % 16 !== 0) continue;
+          // The password already validated against /U, so the key is right and this string has the shape
+          // of ciphertext but is not one. Say so instead of surfacing an AES error.
           throw new PdfEncryptedError(
             `object ${num} contains a string that is not encrypted, so this file does not follow its own ` +
               "/Encrypt declaration and cannot be read safely",
@@ -294,6 +379,31 @@ export class PdfDocument {
         }
       }
     }
+  }
+
+  /** A stream that names the `/Identity` crypt filter in its own `/Filter` is not enciphered. */
+  private identityCrypt(stream: PdfStream): boolean {
+    const filter = this.resolve(get(stream, "Filter"));
+    const filters = Array.isArray(filter) ? filter : [filter];
+    const i = filters.findIndex((f) => nameOf(this.resolve(f)) === "Crypt");
+    if (i < 0) return false;
+    const parms = this.resolve(get(stream, "DecodeParms"));
+    const own = Array.isArray(parms) ? this.resolve(parms[i]) : parms;
+    return (nameOf(this.lookup(own, "Name")) ?? "Identity") === "Identity";
+  }
+
+  /** The object numbers of every attached file's stream: whatever an /EF dictionary points at. */
+  private embeddedFileStreams(): Set<number> {
+    const out = new Set<number>();
+    for (const num of this.xref.keys()) {
+      const obj = this.getObject(num);
+      if (obj !== undefined && isStream(obj) && nameOf(get(obj, "Type")) === "EmbeddedFile")
+        out.add(num);
+      const ef = isDict(obj) ? this.resolve(get(obj, "EF")) : undefined;
+      if (ef !== undefined && isDict(ef))
+        for (const ref of ef.map.values()) if (isRef(ref)) out.add(ref.num);
+    }
+    return out;
   }
 
   // -------------------------------------------------------------------------------------------
@@ -563,7 +673,12 @@ export class PdfDocument {
   /** True once the password has been accepted and the contents decrypted, so what is read is plaintext.
    *  Always true for a document that was never encrypted. */
   get isReadable(): boolean {
-    return !this.isEncrypted || this.security !== undefined;
+    return !this.isEncrypted || this.security !== undefined || !this.encryptsDocument;
+  }
+
+  /** Whether streams or strings are enciphered - not the case when only attached files are. */
+  private get encryptsDocument(): boolean {
+    return this.enciphered === undefined || this.enciphered.streams || this.enciphered.strings;
   }
 
   /**
@@ -586,7 +701,11 @@ export class PdfDocument {
    * a string happening to be present in whatever we rewrite, which is a guarantee by accident.
    */
   get canReEncrypt(): boolean {
-    return !this.isEncrypted || (this.security?.canEncrypt ?? false);
+    if (!this.isEncrypted) return true;
+    // A part left as /Identity must stay in the clear when written back - one handler cannot do both.
+    const e = this.enciphered;
+    if (e && !(e.streams && e.strings && e.files)) return false;
+    return this.security?.canEncrypt ?? false;
   }
 
   /** The generation of an object as the file records it. Members of an object stream are always 0. */
@@ -616,8 +735,20 @@ export class PdfDocument {
     return this.bytes.subarray(stream.start, end < 0 ? this.bytes.length : end);
   }
 
-  /** A stream's DECODED bytes: deciphered if the document is encrypted, then run through its filters. */
-  streamData(stream: PdfStream): Uint8Array {
+  /**
+   * A stream's DECODED bytes: deciphered if the document is encrypted, then run through its filters.
+   *
+   * `strict` is for data handed to a caller as it is (an attachment): every filter must decode, or this
+   * throws a `PdfFilterError` - never bytes still encoded or half decoded. The default suits the
+   * structural reads, where a filter that fails is skipped and the rest is read as it stands.
+   */
+  streamData(stream: PdfStream, strict = false): Uint8Array {
+    if (this.lockedFiles.has(stream.start)) {
+      throw new PdfEncryptedError(
+        "this attached file is encrypted on its own; open the PDF with its password to read it",
+        true,
+      );
+    }
     // A decrypted payload replaces the bytes from the file; filters then run on the plaintext, which is
     // the order the format prescribes - encryption wraps the already-filtered data.
     const raw = this.plainStreams.get(stream.start) ?? this.rawStream(stream);
@@ -631,34 +762,81 @@ export class PdfDocument {
 
     let data = raw;
     filters.forEach((filter, i) => {
-      if (filter === "FlateDecode") {
-        try {
-          // Per pass, because /Filter is a list and [/FlateDecode /FlateDecode] is a legal nested bomb.
-          data = inflateBounded(data, this.maxStreamSize);
-        } catch (e) {
-          // A stream that blew the ceiling is an attack, not a stream we failed to decode - swallowing
-          // it here would hand back silent garbage.
-          if (e instanceof PdfStreamTooLargeError) throw e;
-          return; // not our data to repair; hand back what we have
+      try {
+        data = this.decodeFilter(filter, data, this.resolve(parms[i]), strict);
+      } catch (e) {
+        // A stream that blew the ceiling is an attack, not a stream we failed to decode - swallowing
+        // it here would hand back silent garbage.
+        if (e instanceof PdfStreamTooLargeError) throw e;
+        if (strict) {
+          throw e instanceof PdfFilterError
+            ? e
+            : new PdfFilterError(`${filter}: ${String((e as Error)?.message ?? e)}`);
         }
-        data = this.undoPredictor(data, this.resolve(parms[i]));
+        // not our data to repair; the rest is read as it stands
       }
-      // Other filters (LZW, DCT, …) are left encoded on purpose: this reader only needs the structural
-      // streams - the index, object streams and appearances - and every one of those is Flate.
     });
     return data;
+  }
+
+  /**
+   * One filter. Each pass is bounded on what it produces, because /Filter is a list and
+   * [/FlateDecode /FlateDecode] is a legal nested bomb. The image codecs (DCT, JPX, CCITT, JBIG2) decode
+   * to pixels, not to a file: strict refuses them by name, the default leaves them encoded.
+   */
+  private decodeFilter(
+    filter: string,
+    data: Uint8Array,
+    parms: PdfObject | undefined,
+    strict: boolean,
+  ): Uint8Array {
+    switch (filter) {
+      case "FlateDecode":
+      case "Fl":
+        return this.undoPredictor(inflateBounded(data, this.maxStreamSize), parms, strict);
+      case "LZWDecode":
+      case "LZW":
+        return this.undoPredictor(
+          lzwDecode(data, this.maxStreamSize, numberOf(get(parms, "EarlyChange")) ?? 1),
+          parms,
+          strict,
+        );
+      case "ASCIIHexDecode":
+      case "AHx":
+        return asciiHexDecode(data);
+      case "ASCII85Decode":
+      case "A85":
+        return ascii85Decode(data);
+      case "RunLengthDecode":
+      case "RL":
+        return runLengthDecode(data, this.maxStreamSize);
+      case "Crypt":
+        return data; // deciphering happens once, on open
+      default:
+        if (strict) {
+          throw new PdfFilterError(
+            `/${filter} decodes to image pixels, not to a file - jasy returns no data it cannot decode`,
+          );
+        }
+        return data;
+    }
   }
 
   /**
    * Undo a PNG predictor (`/Predictor` 10-15), which xref streams almost always use - the IRS form in
    * our fixtures does. Each row is prefixed with its filter type and is decoded against the row above.
    */
-  private undoPredictor(data: Uint8Array, parms: PdfObject | undefined): Uint8Array {
+  private undoPredictor(
+    data: Uint8Array,
+    parms: PdfObject | undefined,
+    strict = false,
+  ): Uint8Array {
     const predictor = numberOf(get(parms, "Predictor")) ?? 1;
-    if (predictor < 10) return data; // 1 = none; 2 (TIFF) does not occur in the streams we read
     const colors = numberOf(get(parms, "Colors")) ?? 1;
     const bpc = numberOf(get(parms, "BitsPerComponent")) ?? 8;
     const columns = numberOf(get(parms, "Columns")) ?? 1;
+    if (predictor === 2) return this.undoTiffPredictor(data, colors, bpc, columns, strict);
+    if (predictor < 10) return data; // 1 = none
     const bpp = Math.max(1, Math.ceil((colors * bpc) / 8));
     const rowLen = Math.ceil((colors * bpc * columns) / 8);
 
@@ -700,6 +878,27 @@ export class PdfDocument {
         }
       }
       prev = row;
+    }
+    return out;
+  }
+
+  /** TIFF predictor 2: each component is the difference from the one to its left, per row. */
+  private undoTiffPredictor(
+    data: Uint8Array,
+    colors: number,
+    bpc: number,
+    columns: number,
+    strict: boolean,
+  ): Uint8Array {
+    if (bpc !== 8) {
+      if (strict) throw new PdfFilterError(`TIFF predictor with ${bpc} bits per component`);
+      return data;
+    }
+    const out = Uint8Array.from(data);
+    const rowLen = colors * columns;
+    for (let row = 0; row + rowLen <= out.length; row += rowLen) {
+      for (let i = colors; i < rowLen; i++)
+        out[row + i] = (out[row + i] + out[row + i - colors]) & 0xff;
     }
     return out;
   }

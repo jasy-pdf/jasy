@@ -33,6 +33,7 @@
     "@jano-editor/ui": "1.0.0-alpha.8",
     "@jasy/decy": "^0.1.0",
     "@jasy/e-invoice": "workspace:^",
+    "@jasy/pdf": "workspace:^",
     "saxon-js": "^2.6.0"
   },
   "devDependencies": {
