@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { PDFObjectManager, FontStyle } from "../../../src/lib/utils/pdf-object-manager";
 import { runAdvance } from "../../../src/lib/text/advance";
 import { Document, Page, Text, renderToBytes } from "../../../src/lib/api";
-import { buildKernTtf, buildGposKernTtf } from "../utils/ttf-fixture";
+import { buildKernTtf, buildGposKernTtf, buildGposExtensionKernTtf } from "../utils/ttf-fixture";
 
 // Standard-14 kerning: measuring (runAdvance) and drawing (a TJ array) both read the SAME AFM pairs,
 // so a kerned run is exactly as wide as it is drawn. On by default in `renderPdf`; the object manager
@@ -106,6 +106,10 @@ describe("embedded fonts: kern table and GPOS", () => {
   it("reads kerning from GPOS Type 2 on a font with NO kern table", () => {
     // Only the GPOS PairPos parser (feature scan -> lookup -> coverage -> value record) can find this.
     expect(kern(custom(buildGposKernTtf(-150)), "AB")).toEqual([-150]);
+  });
+
+  it("reads GPOS kerning behind an Extension lookup (type 9), as large fonts write it", () => {
+    expect(kern(custom(buildGposExtensionKernTtf(-150)), "AB")).toEqual([-150]);
   });
 
   it("returns 0 for a pair the font does not kern, and next to a space", () => {
