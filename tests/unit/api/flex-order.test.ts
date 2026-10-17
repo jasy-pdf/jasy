@@ -46,19 +46,25 @@ describe("order", () => {
 });
 
 describe("reverse", () => {
-  it("lays a Row out backwards", () => {
+  it("lays a Row out backwards, packed from the right - CSS row-reverse", () => {
+    // 400 wide, three 40pt tiles, gap 10: the first child sits at the right edge.
     const row = Row({ gap: 10, reverse: true }, [tile(), tile(), tile()]);
+    expect(xs(row)).toEqual([360, 310, 260]);
+  });
+
+  it("`start` is the reversed axis' start; `end` packs at the left again", () => {
+    const row = Row({ gap: 10, reverse: true, justify: "end" }, [tile(), tile(), tile()]);
     expect(xs(row)).toEqual([100, 50, 0]);
   });
 
   it("lays a Column out bottom to top", () => {
     const col = Column({ gap: 10, reverse: true }, [tile(), tile(), tile()]);
-    expect(ys(col)).toEqual([60, 30, 0]);
+    expect(ys(col)).toEqual([380, 350, 320]);
   });
 
   it("composes with order - order first, then the reversal", () => {
     // order puts the third child first; reversing then sends it to the far end.
     const row = Row({ gap: 10, reverse: true }, [tile(), tile(), tile({ order: -1 })]);
-    expect(xs(row)).toEqual([50, 0, 100]);
+    expect(xs(row)).toEqual([310, 260, 360]);
   });
 });
