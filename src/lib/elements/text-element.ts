@@ -576,7 +576,8 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     ): number =>
       singleLineWidth(
         text,
-        { fontFamily: family, fontSize: size, fontStyle: style },
+        // `ligatures` is part of the font: it decides which glyphs are drawn, hence the width.
+        { fontFamily: family, fontSize: size, fontStyle: style, ligatures: this.ligatures },
         metrics,
         letterSpacing,
         this.wordSpacing,

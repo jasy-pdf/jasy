@@ -6,6 +6,8 @@ import {
   breakSegmentsIntoLines,
   breakStringIntoLines,
 } from "../../../src/lib/text/line-breaker.ts";
+import { TextElement } from "../../../src/lib/elements/text-element.ts";
+import { BoxConstraints } from "../../../src/lib/layout/box-constraints.ts";
 
 // Latin ligatures are ON, like kerning: the font's designer drew them, every other renderer applies
 // them, and nobody should need the word to get text set properly. `ligatures: false` opts out - on a
@@ -64,6 +66,20 @@ describe("switched off", () => {
 
   it("measures what it draws either way - the two settings must not agree by accident", () => {
     expect(runAdvance(om(), "AB ", FONT, 0)).not.toBeCloseTo(runAdvance(om(), "AB ", off, 0), 5);
+  });
+
+  it("sizes an unbounded text (a Text in a Row) at the width it draws, so it stays one line", () => {
+    // Apart, "ABAB" is 24 and a space 2.5: 50.5. Merged it would be 26.5, and the line would wrap.
+    const el = new TextElement({ content: "ABAB ABAB", ...off });
+    const size = el.calculateLayout(
+      BoxConstraints.loose(Infinity, 400),
+      { x: 0, y: 0 },
+      {
+        metrics: om(),
+        pageConfig: {},
+      },
+    );
+    expect(size.width).toBeCloseTo(50.5, 5);
   });
 
   it("an ellipsis is measured with it too - span text keeps no more than fits", () => {
