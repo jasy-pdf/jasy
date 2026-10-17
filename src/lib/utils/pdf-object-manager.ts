@@ -338,7 +338,7 @@ export class PDFObjectManager implements FontMetrics {
    */
   private readonly missingGlyphs = new Set<number>();
 
-  reportMissingGlyph(codePoints: number[], about?: object): void {
+  reportMissingGlyph(codePoints: number[], about?: object, page?: number): void {
     for (const cp of codePoints) this.missingGlyphs.add(cp);
     const chars = codePoints.map((cp) => String.fromCodePoint(cp)).join("");
     this.diagnostics.report({
@@ -346,6 +346,7 @@ export class PDFObjectManager implements FontMetrics {
       severity: "warning",
       message: `No font can draw ${JSON.stringify(chars)}; removed (PDF/A forbids .notdef).`,
       about,
+      page,
       fallback: "silent",
     });
   }

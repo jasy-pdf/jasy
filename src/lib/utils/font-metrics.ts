@@ -61,7 +61,7 @@ export interface FontMetrics {
   /** Told when a code point had to be removed because no font could draw it - `about` is the element
    *  it was removed from. Optional: a metrics object used only for measuring (a test double) has
    *  nothing to report to. */
-  reportMissingGlyph?(codePoints: number[], about?: object): void;
+  reportMissingGlyph?(codePoints: number[], about?: object, page?: number): void;
 
   /** How many glyphs the run will DRAW, when a ligature made that differ from its code-point count.
    *  Absent or `undefined` means "the same", which is every Latin run. */

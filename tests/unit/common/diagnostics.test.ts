@@ -132,8 +132,16 @@ describe("onDiagnostic - each finding, once", () => {
       Document([Page([Text([span("snow \u2603 "), span("plane \u2708")])])]),
     );
     expect(seen).toHaveLength(1);
+    expect(seen[0]!.page).toBe(1);
     expect(seen[0]!.message).toContain("\u2603");
     expect(seen[0]!.message).toContain("\u2708");
+  });
+
+  it("a missing glyph on page 2 says page 2", async () => {
+    const seen = await collect(
+      Document([Page([Column([Text("one"), PageBreak(), Text("snow \u2603")])])]),
+    );
+    expect(seen).toEqual([expect.objectContaining({ code: "missing-glyphs", page: 2 })]);
   });
 
   it("a clean document says nothing", async () => {
