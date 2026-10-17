@@ -3,6 +3,8 @@ import { Box, Column, Expanded, Row } from "../../../src/lib/api/layout.ts";
 import type { CrossAlign } from "../../../src/lib/layout/alignment.ts";
 import { BoxConstraints } from "../../../src/lib/layout/box-constraints.ts";
 import { LayoutContext } from "../../../src/lib/elements/pdf-element.ts";
+import { Text } from "../../../src/lib/api/text.ts";
+import { testMetrics } from "../support/metrics.ts";
 
 // `alignSelf` - a child overriding its container's `align` (CSS align-self). The container decides for
 // everyone; a child may disagree for itself.
@@ -91,28 +93,52 @@ describe("nothing asked for changes nothing", () => {
   });
 });
 
-describe("a flex child is untouched by it", () => {
-  it("gives an Expanded the container's cross constraint, whatever it asks for itself", () => {
-    // Not reachable through the factories today - Expanded / Spacer have no `alignSelf` prop - but
-    // `withAlignSelf` is public on the base element, so the path exists. The claim in the code is that
-    // alignSelf is a NO-OP on a flex child; a no-op that changes the cross constraint is not one.
-    //
-    // The cross axis is left UNBOUNDED, which is the only place the line extent (the tallest child) and
-    // the offered extent (Infinity) differ - so a regression here is visible rather than theoretical.
-    const build = (self?: CrossAlign) => {
-      const filler = Expanded({ flex: 1 }, Box({ borderWidth: 0 }, []));
-      if (self) filler.withAlignSelf(self);
-      return Row({ align: "stretch", width: 400 }, [
-        Box({ borderWidth: 0, width: 40, height: 60 }, []),
-        filler,
-      ]);
+describe("an Expanded's child is the flex item, so it aligns like any other", () => {
+  // `Expanded(child)` is `flex: 1` on the child: it fills the main axis, and across the line its own
+  // `alignSelf` (or the container's `align`) places it.
+  const inner = (opts: Record<string, unknown> = {}) =>
+    Box({ borderWidth: 0, height: 20, ...opts }, []);
+  const yOf = (row: ReturnType<typeof Row>, box: ReturnType<typeof Box>, h: number) => {
+    row.calculateLayout(new BoxConstraints(0, 400, 0, h), { x: 0, y: 0 }, ctx);
+    return box.getProps().y as number;
+  };
+
+  it("alignSelf moves it across a bounded line, and it still fills the main axis", () => {
+    const centred = inner({ alignSelf: "center" });
+    expect(yOf(Row({ height: 200 }, [tile(), Expanded(centred)]), centred, 200)).toBe(90);
+    expect(centred.getProps().width).toBe(360); // 400 - the 40 wide tile
+    const plain = inner();
+    expect(yOf(Row({ height: 200 }, [tile(), Expanded(plain)]), plain, 200)).toBe(0);
+  });
+
+  it("on a line that shrink-wraps across, it aligns within the tallest sibling", () => {
+    // Cross axis unbounded: the line is as tall as its tallest child (60), and `end` puts a 20 tall
+    // child at 40 - against the line, not against the unbounded offer.
+    const tall = Box({ borderWidth: 0, width: 40, height: 60 }, []);
+    const ended = inner({ alignSelf: "end" });
+    expect(yOf(Row([tall, Expanded(ended)]), ended, Infinity)).toBe(40);
+  });
+
+  it("the container's align reaches it too", () => {
+    const box = inner();
+    expect(yOf(Row({ height: 200, align: "end" }, [tile(), Expanded(box)]), box, 200)).toBe(180);
+  });
+
+  it("a text in it still wraps when it is not stretched", () => {
+    // Why `alignSelf` used to be switched off on a flex child: measured across an UNBOUNDED axis, a text
+    // in a Column never wraps. It is measured against the column's width instead.
+    const metricsCtx = {
+      metrics: testMetrics(),
+      pageConfig: { width: 595, height: 842, margin: 0 },
     };
-    const heightOf = (row: ReturnType<typeof Row>) => {
-      row.calculateLayout(new BoxConstraints(0, 400, 0, Infinity), { x: 0, y: 0 }, ctx);
-      const kids = (row as unknown as { children: { getProps(): { height?: number } }[] }).children;
-      return kids[1].getProps().height;
-    };
-    expect(heightOf(build("start"))).toBe(heightOf(build()));
-    expect(heightOf(build("end"))).toBe(heightOf(build()));
+    const text = Text("a sentence that cannot fit on one line of a narrow column", { size: 12 });
+    const box = Box({ borderWidth: 0, alignSelf: "start" }, [text]);
+    Column({ height: 300 }, [Expanded(box)]).calculateLayout(
+      BoxConstraints.loose(100, 300),
+      { x: 0, y: 0 },
+      metricsCtx as never,
+    );
+    expect(box.getProps().width as number).toBeLessThanOrEqual(100);
+    expect(text.getProps().height as number).toBeGreaterThan(2 * 12);
   });
 });

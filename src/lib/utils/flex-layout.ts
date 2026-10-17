@@ -337,7 +337,7 @@ export class FlexLayoutHelper {
       weight,
     );
     shareFlex(line, weight, remaining);
-    measureFlex(line);
+    measureFlex(line, options.cross ?? "stretch");
     // The cross extent children align within: the bounded line size, else the tallest child.
     const crossExtent = crossAvail !== Infinity && !crossFromContent ? crossAvail : line.crossUsed;
     return placeLine(line, options.cross ?? "stretch", crossExtent, crossOrigin, spacing, mode);
@@ -634,12 +634,28 @@ function shareFlex(line: FlexLine, weight: number, remaining: number): void {
  * Step 6: measure the flex children at their extent, so a tall or wrapping flex cell counts toward the
  * line's cross extent before anything is placed.
  */
-function measureFlex(line: FlexLine): void {
+function measureFlex(line: FlexLine, cross: CrossAlign): void {
   for (const [child, mainExtent] of line.flexExtent) {
     // A pure `flexBasis` slot (`flex: 0`) has no share but still has a size across the line.
-    const size = measureInto(line, child, line.axis.flexConstraints(mainExtent, line.crossAvail));
+    const crossMax =
+      (alignSelfOf(child) ?? cross) === "stretch"
+        ? line.crossAvail
+        : ownCross(line, child, mainExtent);
+    const size = measureInto(line, child, line.axis.flexConstraints(mainExtent, crossMax));
     line.crossUsed = Math.max(line.crossUsed, line.axis.crossOf(size));
   }
+}
+
+/**
+ * Across the line, a flex child that is not stretched takes what its content needs and is aligned like
+ * any other item. Its content is measured against the line's cross bound - an unbounded one would stop a
+ * text in a Column from wrapping.
+ */
+function ownCross(line: FlexLine, child: PDFElement, mainExtent: number): number {
+  const content = flexibleOf(child)!.layoutChildren()[0];
+  if (!content) return 0;
+  const constraints = line.axis.flexConstraints(mainExtent, line.crossAvail);
+  return line.axis.crossOf(content.measure(constraints, line.ctx));
 }
 
 /**
@@ -674,13 +690,12 @@ function placeLine(
     const flexible = flexibleOf(child);
     if (flexible) {
       mainExtent = line.flexExtent.get(child)!;
-      // A flex child fills the MAIN axis and its cross size is only known after layout, so `alignSelf`
-      // is a no-op here - and that has to hold for the CROSS CONSTRAINT too, or an `alignSelf: "start"`
-      // flex child would get an unbounded cross axis on a shrink-wrapping line.
+      const align = alignSelfOf(child) ?? cross;
+      const own = align === "stretch" ? crossExtent : ownCross(line, child, mainExtent);
       const size = place(
         child,
-        axis.flexConstraints(mainExtent, cross === "stretch" ? crossExtent : line.crossAvail),
-        axis.offsetAt(mainPos, crossOrigin),
+        axis.flexConstraints(mainExtent, own),
+        axis.offsetAt(mainPos, crossOrigin + crossOffset(align, crossExtent, own)),
       );
       placedCross = Math.max(placedCross, axis.crossOf(size));
     } else {
