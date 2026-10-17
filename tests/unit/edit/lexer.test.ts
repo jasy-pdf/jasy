@@ -8,7 +8,7 @@ import {
   isStream,
   isString,
   nameOf,
-  textOf,
+  textStringOf,
   type PdfObject,
 } from "../../../src/lib/edit/objects.ts";
 
@@ -56,18 +56,18 @@ describe("lexer - strings", () => {
   it("translates a raw end-of-line inside a literal to a single LF (PDF 7.3.4.2)", () => {
     // An unescaped CR, LF or CRLF in a literal string all mean ONE line feed. Passing CR through
     // verbatim would silently change the value of any field written across two lines.
-    expect(textOf(parse("(a\rb)"))).toBe("a\nb");
-    expect(textOf(parse("(a\r\nb)"))).toBe("a\nb");
-    expect(textOf(parse("(a\nb)"))).toBe("a\nb");
+    expect(textStringOf(parse("(a\rb)"))).toBe("a\nb");
+    expect(textStringOf(parse("(a\r\nb)"))).toBe("a\nb");
+    expect(textStringOf(parse("(a\nb)"))).toBe("a\nb");
   });
 
   it("handles escapes, octal codes, nesting and the line continuation", () => {
-    expect(textOf(parse("(a(b)c)"))).toBe("a(b)c"); // balanced inner parens need no escape
-    expect(textOf(parse("(a\\(b\\)c)"))).toBe("a(b)c"); // ... and escaped ones work too
-    expect(textOf(parse("(back\\\\slash)"))).toBe("back\\slash");
-    expect(textOf(parse("(\\101\\102)"))).toBe("AB"); // octal
-    expect(textOf(parse("(tab\\tend)"))).toBe("tab\tend");
-    expect(textOf(parse("(one\\\ntwo)"))).toBe("onetwo"); // a backslash-newline joins the lines
+    expect(textStringOf(parse("(a(b)c)"))).toBe("a(b)c"); // balanced inner parens need no escape
+    expect(textStringOf(parse("(a\\(b\\)c)"))).toBe("a(b)c"); // ... and escaped ones work too
+    expect(textStringOf(parse("(back\\\\slash)"))).toBe("back\\slash");
+    expect(textStringOf(parse("(\\101\\102)"))).toBe("AB"); // octal
+    expect(textStringOf(parse("(tab\\tend)"))).toBe("tab\tend");
+    expect(textStringOf(parse("(one\\\ntwo)"))).toBe("onetwo"); // a backslash-newline joins the lines
   });
 
   it("stops at a backslash with nothing after it instead of inventing a byte", () => {
@@ -77,13 +77,12 @@ describe("lexer - strings", () => {
     expect(isString(s) && Array.from(s.bytes)).toEqual([0x61, 0x62, 0x63]);
   });
 
-  it("keeps a byte in 0x80-0x9F as itself rather than remapping it", () => {
-    // TextDecoder("latin1") is a WHATWG alias for windows-1252, which turns byte 0x95 into a bullet
-    // (U+2022). A reader that may write the string back has to keep the byte it read.
+  it("keeps a byte in 0x80-0x9F as itself, and reads it as PDFDocEncoding", () => {
+    // The lexer hands back the byte it read; its MEANING is PDFDocEncoding, where 0x95 is "Ł" - not
+    // windows-1252's bullet (what TextDecoder("latin1") would give) and not Latin-1's control U+0095.
     const s = parse(new Uint8Array([0x28, 0x41, 0x95, 0x29])); // ( A 0x95 )
-    expect(textOf(s)).toHaveLength(2);
-    expect(textOf(s)?.charCodeAt(0)).toBe(0x41);
-    expect(textOf(s)?.charCodeAt(1)).toBe(0x95); // NOT 0x2022, which windows-1252 would give
+    expect(isString(s) && Array.from(s.bytes)).toEqual([0x41, 0x95]);
+    expect(textStringOf(s)).toBe("AŁ");
   });
 
   it("reads hex strings, including odd digits and embedded whitespace", () => {
@@ -99,13 +98,13 @@ describe("lexer - strings", () => {
   it("decodes UTF-16BE text - umlauts, symbols AND emoji (surrogate pairs)", () => {
     // This is how pdf-lib writes every field name, and how any producer writes non-Latin text.
     for (const s of ["full_name", "Jörg Müller", "1.234,56 € — ok", "Hallo 😀 Grüße", "日本語"]) {
-      expect(textOf(parse(utf16beHex(s)))).toBe(s);
+      expect(textStringOf(parse(utf16beHex(s)))).toBe(s);
     }
   });
 
   it("reads a latin literal as text but leaves the bytes untouched", () => {
     const o = parse("(Jörg)"); // bytes here are latin1/PDFDoc, not UTF-8
-    expect(textOf(o)).toBe("Jörg");
+    expect(textStringOf(o)).toBe("Jörg");
     expect(isString(o) && o.hex).toBe(false);
   });
 });
@@ -144,7 +143,7 @@ describe("lexer - dictionaries, arrays and streams", () => {
     );
     expect(isDict(o)).toBe(true);
     expect(nameOf(get(o, "Subtype"))).toBe("Widget");
-    expect(textOf(get(o, "T"))).toBe("full_name");
+    expect(textStringOf(get(o, "T"))).toBe("full_name");
     const rect = get(o, "Rect");
     expect(Array.isArray(rect) && rect).toEqual([56, 733.39, 539.28, 757.39]);
     // A nested dict holding a reference - the appearance lives in another object.
@@ -212,7 +211,7 @@ describe("lexer - against real files from five different producers", () => {
     // pdf-lib writes them as UTF-16BE hex, the others as literals: the reader must not care.
     for (const name of ["jasy-form", "pdflib-form-classic", "pdfkit-form", "reactpdf-form"]) {
       const names = topLevelObjects(fixture(name))
-        .map((o) => textOf(get(o, "T")))
+        .map((o) => textStringOf(get(o, "T")))
         .filter((t): t is string => t !== undefined);
       expect(names).toContain("full_name");
       expect(names).toContain("notes");

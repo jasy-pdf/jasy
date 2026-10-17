@@ -6,6 +6,7 @@ import { flattenInto } from "./flatten.ts";
 import type { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 import { getArrayBuffer } from "../utils/utf8-to-windows1252-encoder.ts";
 import { get, isDict, isRef, type PdfDict, type PdfObject, type PdfRef } from "./objects.ts";
+import { encodePdfText } from "../text/pdf-text-string.ts";
 
 /**
  * Filling the form of an EXISTING PDF.
@@ -72,22 +73,11 @@ const FF_PUSHBUTTON = 1 << 16;
 const FF_RADIO = 1 << 15;
 
 /**
- * A text value in PDF form. Plain ASCII becomes a `(literal)`; anything else becomes a UTF-16BE `<hex>`
- * string behind a byte-order mark - the encoding every producer uses for unicode, and the only one that
- * carries an umlaut or an emoji unambiguously. Writing UTF-8 into a literal (the obvious mistake) reads
- * back as mojibake, because a literal is PDFDocEncoded.
+ * A text value in PDF form. Plain ASCII becomes a `(literal)`; anything else becomes `<hex>` of the ONE
+ * text-string encoding the writer uses (`encodePdfText`: PDFDocEncoding, else UTF-16BE with its BOM).
+ * Writing UTF-8 into a literal (the obvious mistake) reads back as mojibake.
  */
-const plainBytes = (s: string): Uint8Array => {
-  if (/^[\x20-\x7e]*$/.test(s)) return Uint8Array.from(s, (c) => c.charCodeAt(0));
-  const out = new Uint8Array(2 + s.length * 2);
-  out[0] = 0xfe;
-  out[1] = 0xff;
-  for (let i = 0; i < s.length; i++) {
-    out[2 + i * 2] = s.charCodeAt(i) >> 8;
-    out[3 + i * 2] = s.charCodeAt(i) & 0xff;
-  }
-  return out;
-};
+const isAscii = (s: string): boolean => /^[\x20-\x7e]*$/.test(s);
 
 const hex = (b: Uint8Array): string =>
   `<${Array.from(b, (x) => x.toString(16).padStart(2, "0").toUpperCase()).join("")}>`;
@@ -97,14 +87,10 @@ const hex = (b: Uint8Array): string =>
 const pdfText = (s: string, enciphered?: Map<string, string>): string => {
   const ready = enciphered?.get(s);
   if (ready !== undefined) return ready;
-  const ascii = /^[\x20-\x7e]*$/.test(s);
-  if (ascii) {
+  if (isAscii(s)) {
     return `(${s.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)")})`;
   }
-  let out = "FEFF";
-  for (let i = 0; i < s.length; i++)
-    out += s.charCodeAt(i).toString(16).padStart(4, "0").toUpperCase();
-  return `<${out}>`;
+  return hex(encodePdfText(s));
 };
 
 const escName = (s: string): string =>
@@ -402,7 +388,7 @@ export async function fillForm(
     for (const v of Object.values(values)) {
       for (const text of typeof v === "string" ? [v] : Array.isArray(v) ? v : []) {
         if (enciphered.has(text)) continue;
-        const cipher = await doc.encryptForWrite(plainBytes(text));
+        const cipher = await doc.encryptForWrite(encodePdfText(text));
         if (cipher) enciphered.set(text, hex(cipher));
       }
     }
