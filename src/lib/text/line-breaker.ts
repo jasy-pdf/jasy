@@ -388,16 +388,17 @@ export function breakSegmentsIntoLines(
   // An empty piece (what a span leaves after its `\n`) has nothing to draw, and its font must not size
   // the line it lands on - a big span ending in `\n` made the next line as tall as itself. Only a blank
   // line keeps one: it is what gives that line its height.
-  const close = (segs: TextSegment[], lineWidth: number, end: LineEnd) => {
+  const close = (segs: TextSegment[], lineWidth: number, end: LineEnd, glued = false) => {
     let width = lineWidth;
     let ends = end;
     // A span boundary is a break too: a line that ends there right after a soft hyphen shows it as a real
-    // hyphen, exactly as a break inside a word does.
+    // hyphen, exactly as a break inside a word does. Only when `glued` - the next piece follows with no
+    // space between; a line that breaks at a space ends there, and the soft hyphen stays invisible.
     let lastIndex = segs.length - 1;
     while (lastIndex >= 0 && segs[lastIndex]!.content === "") lastIndex--;
     const last = segs[lastIndex];
     if (
-      end === "soft" &&
+      glued &&
       last?.content.endsWith(SOFT_HYPHEN) &&
       !withoutSoftHyphens(last.content).endsWith("-")
     ) {
@@ -512,7 +513,7 @@ export function breakSegmentsIntoLines(
             return;
           }
           if (open) {
-            close(lineSegments, ink, "soft");
+            close(lineSegments, ink, "soft", !joined);
             freshLine(wordAt);
             placeWord(word, wordAt, false);
             return;
@@ -541,7 +542,7 @@ export function breakSegmentsIntoLines(
           // 50 box, and reported 50, which is exactly why it went unnoticed. The string path has always
           // pushed its current line before splitting; this is the same move.
           if (open) {
-            close(lineSegments, ink, "soft");
+            close(lineSegments, ink, "soft", !joined);
             lineSegments = [{ ...segment, fontFamily: family, content: "" }];
             combined = "";
           }
@@ -579,7 +580,7 @@ export function breakSegmentsIntoLines(
         // place it (overflowing) on the current empty line instead.
         if (candidate > room && open) {
           if (word === "") return; // a space that does not fit hangs, as in the string path
-          close(lineSegments, ink, "soft");
+          close(lineSegments, ink, "soft", !joined);
           lineStart = at(wordAt);
           width = wordWidth;
           ink = wordWidth;
