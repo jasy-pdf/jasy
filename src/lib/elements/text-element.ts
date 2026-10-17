@@ -327,7 +327,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
    * back unchanged, so an ordinary document is byte-identical.
    */
   private covered(content: TextSegment[], metrics: FontMetrics): TextSegment[] {
-    const report = (dropped: number[]) => metrics.reportMissingGlyph?.(dropped);
+    const report = (dropped: number[]) => metrics.reportMissingGlyph?.(dropped, this);
     return content.map((seg) => {
       const { text, dropped } = coverText(
         seg.content,

@@ -11,6 +11,7 @@ export * from "./layout.ts";
 export * from "./content.ts";
 export * from "./page-builder.ts";
 export * from "./structure.ts";
+export type { Diagnostic, DiagnosticCode, DiagnosticHandler } from "../common/diagnostics.ts";
 export * from "./table.ts";
 export * from "./forms.ts";
 export * from "./descriptor.ts";

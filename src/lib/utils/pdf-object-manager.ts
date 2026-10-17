@@ -46,6 +46,7 @@ import { AcroFormCollector } from "../forms/acroform.ts";
 import { ColorMode, Orientation } from "../renderer/pdf-config.ts";
 import type { PDFConfig } from "../renderer/pdf-document-class.ts";
 import type { FontMetrics } from "./font-metrics.ts";
+import { Diagnostics } from "../common/diagnostics.ts";
 
 interface FontIndexes {
   fontIndex: number;
@@ -337,9 +338,20 @@ export class PDFObjectManager implements FontMetrics {
    */
   private readonly missingGlyphs = new Set<number>();
 
-  reportMissingGlyph(codePoints: number[]): void {
+  reportMissingGlyph(codePoints: number[], about?: object): void {
     for (const cp of codePoints) this.missingGlyphs.add(cp);
+    const chars = codePoints.map((cp) => String.fromCodePoint(cp)).join("");
+    this.diagnostics.report({
+      code: "missing-glyphs",
+      severity: "warning",
+      message: `No font can draw ${JSON.stringify(chars)}; removed (PDF/A forbids .notdef).`,
+      about,
+      fallback: "silent",
+    });
   }
+
+  /** The render's diagnostics channel (`onDiagnostic`); see `common/diagnostics.ts`. */
+  readonly diagnostics = new Diagnostics();
 
   /** The dropped code points, in the order first seen. Empty for a document that hit none. */
   getMissingGlyphs(): number[] {

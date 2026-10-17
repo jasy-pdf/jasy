@@ -2,6 +2,7 @@ import { BoxConstraints } from "../../layout/box-constraints.ts";
 import { FragmentResult } from "../../layout/fragmentation.ts";
 import { LayoutContext, PDFElement } from "../pdf-element.ts";
 import { ProxyElement } from "./proxy-element.ts";
+import { diagnose, pageOf } from "../../common/diagnostics.ts";
 
 /**
  * A layout-transparent wrapper (a `ProxyElement`) that tries to keep its content on ONE page (CSS
@@ -22,8 +23,6 @@ import { ProxyElement } from "./proxy-element.ts";
  * swallowing either intent.
  */
 export class KeepTogetherElement extends ProxyElement {
-  private warnedBreakConflict = false;
-
   constructor({ child }: { child: PDFElement }) {
     super(child);
   }
@@ -37,13 +36,15 @@ export class KeepTogetherElement extends ProxyElement {
     // Contradiction: a forced break inside the group beats keeping it together. Split at the break by
     // delegating to the child (which honours it), and say so once - never keep such a group whole.
     if (this.child.hasForcedBreak()) {
-      if (!this.warnedBreakConflict) {
-        this.warnedBreakConflict = true;
-        console.warn(
+      diagnose(ctx.diagnostics, {
+        code: "keep-together-split",
+        severity: "warning",
+        message:
           "keepTogether contains a forced page break (PageBreak / breakBefore / breakAfter). The break " +
-            "wins and the group is split. Remove the break, or the keepTogether, to resolve this.",
-        );
-      }
+          "wins and the group is split. Remove the break, or the keepTogether, to resolve this.",
+        about: this,
+        page: pageOf(ctx),
+      });
       return this.splitChild(maxHeight, width, ctx);
     }
 

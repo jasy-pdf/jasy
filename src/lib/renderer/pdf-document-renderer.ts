@@ -49,7 +49,7 @@ export class PDFDocumentRenderer {
     // `Page` element produces one run of sheets, so the run's length is that section's total.
     const section: { number: number; total: number }[] = [];
     for (const page of document.getProps().children) {
-      const sheets = PDFDocumentRenderer.paginateLogicalPage(page, ctx);
+      const sheets = PDFDocumentRenderer.paginateLogicalPage(page, ctx, physicalPages.length + 1);
       sheets.forEach((_, i) => section.push({ number: i + 1, total: sheets.length }));
       physicalPages.push(...sheets);
     }
@@ -99,7 +99,11 @@ export class PDFDocumentRenderer {
    * (a Container). Anything else stays a single page on the unchanged path, so non-overflowing
    * documents keep producing byte-identical output.
    */
-  private static paginateLogicalPage(page: PageElement, ctx: LayoutContext): PhysicalPage[] {
+  private static paginateLogicalPage(
+    page: PageElement,
+    ctx: LayoutContext,
+    firstPage: number,
+  ): PhysicalPage[] {
     const { children, header, footer } = page.getProps();
     // Resolved here, not read back from an earlier layout pass that happened to merge it.
     const config = page.resolveConfig(ctx.pageConfig);
@@ -118,6 +122,7 @@ export class PDFDocumentRenderer {
       pageConfig: config,
       textStyle: ctx.textStyle,
       onOverflow: ctx.onOverflow,
+      diagnostics: ctx.diagnostics,
       frame: pageFrame(config),
     };
     const { bodyWidth: width, bodyHeight: height } = layoutPageBands(
@@ -142,6 +147,7 @@ export class PDFDocumentRenderer {
 
       // pageCtx, not the document ctx: a descendant that reads `pageConfig` while being measured (a
       // `PageBuilder` sizing its provisional build) must see THIS page's geometry, not the document default.
+      pageCtx.paginatingPage = firstPage + pages.length;
       const { fitted, remainder, forceBreak } = region.fragment(height, width, pageCtx);
 
       // Everything fits on one page: keep the ORIGINAL page so output is unchanged. Measuring inside
@@ -163,7 +169,7 @@ export class PDFDocumentRenderer {
         // Measure the region's true height for the message (rare path, so the extra pass is free);
         // pass B lays it out again, so this mutation does not leak.
         const needed = region.measure(BoxConstraints.loose(width, Infinity), pageCtx).height;
-        reportOverflow(region, needed, height, pageCtx.onOverflow ?? "ignore");
+        reportOverflow(region, needed, height, pageCtx);
         pages.push({ kind: "fragment", config, content: region, header, footer });
         break;
       }

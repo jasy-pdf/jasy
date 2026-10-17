@@ -4,6 +4,7 @@ import { PageElement, PDFPageConfig } from "../elements/page-element.ts";
 import { PDFElement } from "../elements/pdf-element.ts";
 import { DefaultTextStyleElement } from "../elements/layout/default-text-style-element.ts";
 import type { OverflowPolicy } from "../layout/fragmentation.ts";
+import type { DiagnosticHandler } from "../common/diagnostics.ts";
 import { PageSize, pageFormats } from "../constants/page-sizes.ts";
 import { resolveEdges } from "../layout/insets.ts";
 import { Orientation } from "../renderer/pdf-config.ts";
@@ -315,6 +316,13 @@ export interface RenderOptions {
    * able to SAY which character went missing, where a server log would never be read.
    */
   onMissingGlyphs?: (characters: string[]) => void;
+  /**
+   * Everything the engine has to say about this document, one call per finding: a page break that had
+   * no effect, a group that could not be kept together, clipped overflow, removed characters, ... -
+   * each with a stable `code`, the kind of element and its first text. Without it, what warned before
+   * still goes to `console.warn`. `onOverflow: "error"` still throws.
+   */
+  onDiagnostic?: DiagnosticHandler;
   /** Encrypt the PDF with a password (AES-256, the newest standard). NOT compatible with PDF/A
    *  (ZUGFeRD invoices) - encrypting one throws, since PDF/A forbids encryption. */
   encrypt?: EncryptOptions;
@@ -366,6 +374,7 @@ export async function renderPdf(doc: PDFDocumentElement, options?: RenderOptions
       manager = om;
       om.setCompress(options?.compress !== false); // FlateDecode streams by default
       om.setOverflowPolicy(options?.onOverflow ?? "error");
+      om.diagnostics.setHandler(options?.onDiagnostic);
       om.setKerning(options?.kerning !== false); // on by default (experimental); `kerning:false` opts out
       om.acroform.setBakeAppearances(options?.fieldAppearances !== false); // baked unless opted out
 
