@@ -1,7 +1,7 @@
 // `Expanded(child)` makes the CHILD the flex item (CSS `flex: 1` on the child itself): its own width or
 // height gives way to its share, which never drops below what its content needs nor rises above its max.
 import { describe, it, expect } from "vitest";
-import { Box, Column, Row, Expanded } from "../../../src/lib/api/layout.ts";
+import { Box, Column, Row, Expanded, Rotated } from "../../../src/lib/api/layout.ts";
 import { Text } from "../../../src/lib/api/text.ts";
 import { BoxConstraints } from "../../../src/lib/layout/box-constraints.ts";
 import { testMetrics } from "../support/metrics.ts";
@@ -20,6 +20,12 @@ describe("the child of an Expanded fills its share", () => {
   it("its own width gives way to its share", () => {
     const inner = Box({ width: 40 }, [Text("B", { size: 12 })]);
     layout(Row([Box({ width: 200 }, []), Expanded(inner)]), 500);
+    expect(widthOf(inner)).toBe(300);
+  });
+
+  it("a Rotated around it is paint-only: the Expanded inside still flexes", () => {
+    const inner = Box([]);
+    layout(Row([Box({ width: 200 }, []), Rotated({ angle: 5 }, Expanded(inner))]), 500);
     expect(widthOf(inner)).toBe(300);
   });
 

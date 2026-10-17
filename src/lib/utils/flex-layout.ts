@@ -652,10 +652,14 @@ function measureFlex(line: FlexLine, cross: CrossAlign): void {
  * text in a Column from wrapping.
  */
 function ownCross(line: FlexLine, child: PDFElement, mainExtent: number): number {
-  const content = flexibleOf(child)!.layoutChildren()[0];
+  const flexible = flexibleOf(child)!;
+  const content = flexible.layoutChildren()[0];
   if (!content) return 0;
+  // In the context it is laid out in: a wrapper on the way to the `Expanded` may hand one down.
+  let ctx = line.ctx;
+  for (let el = child; el !== flexible; el = el.proxied()!) ctx = el.proxiedContext(ctx);
   const constraints = line.axis.flexConstraints(mainExtent, line.crossAvail);
-  return line.axis.crossOf(content.measure(constraints, line.ctx));
+  return line.axis.crossOf(content.measure(constraints, ctx));
 }
 
 /**

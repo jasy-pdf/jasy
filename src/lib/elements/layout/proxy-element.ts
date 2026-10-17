@@ -52,6 +52,10 @@ export abstract class ProxyElement extends PDFElement implements Fragmentable {
   }
 
   /** Transparent to a surrounding Row or Column too: it sees the child's flex properties. */
+  override proxiedContext(ctx: LayoutContext): LayoutContext {
+    return this.childContext(ctx);
+  }
+
   override proxied(): PDFElement {
     return this.child;
   }

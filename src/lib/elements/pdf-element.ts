@@ -194,6 +194,12 @@ export abstract class PDFElement {
     return undefined;
   }
 
+  /** The context the element `proxied()` names is laid out in: this one's, unless it hands something
+   *  down (a `DefaultTextStyle`). */
+  proxiedContext(ctx: LayoutContext): LayoutContext {
+    return ctx;
+  }
+
   /** A `Box` with percentage padding: a surrounding Row tells it its own width (`boxPaddingBase`). */
   hasPercentPadding(): boolean {
     return false;

@@ -2,7 +2,8 @@ import { describe, it, expect } from "vitest";
 import { Box, Column, Expanded, Row } from "../../../src/lib/api/layout.ts";
 import type { CrossAlign } from "../../../src/lib/layout/alignment.ts";
 import { BoxConstraints } from "../../../src/lib/layout/box-constraints.ts";
-import { LayoutContext } from "../../../src/lib/elements/pdf-element.ts";
+import { LayoutContext, PDFElement } from "../../../src/lib/elements/pdf-element.ts";
+import { DefaultTextStyleElement } from "../../../src/lib/elements/layout/default-text-style-element.ts";
 import { Text } from "../../../src/lib/api/text.ts";
 import { testMetrics } from "../support/metrics.ts";
 
@@ -122,6 +123,31 @@ describe("an Expanded's child is the flex item, so it aligns like any other", ()
   it("the container's align reaches it too", () => {
     const box = inner();
     expect(yOf(Row({ height: 200, align: "end" }, [tile(), Expanded(box)]), box, 200)).toBe(180);
+  });
+
+  it("its own size is measured in the context it is laid out in, through a wrapper that hands one down", () => {
+    // A DefaultTextStyle between the Row and the Expanded makes the text 30pt. Measured without it, the
+    // child would be aligned as if its text were the default size.
+    const metricsCtx = {
+      metrics: testMetrics(),
+      pageConfig: { width: 595, height: 842, margin: 0 },
+    };
+    const centredY = (wrap: (e: PDFElement) => PDFElement, size?: number) => {
+      const text = Text("x", size ? { size } : {});
+      Row({ height: 200, align: "center" }, [wrap(Expanded(text))]).calculateLayout(
+        new BoxConstraints(0, 400, 0, 200),
+        { x: 0, y: 0 },
+        metricsCtx as never,
+      );
+      return text.getProps().y as number;
+    };
+    const styled = (e: PDFElement) =>
+      new DefaultTextStyleElement({ style: { fontSize: 30 }, child: e });
+    expect(centredY(styled)).toBeCloseTo(
+      centredY((e) => e, 30),
+      6,
+    );
+    expect(centredY(styled)).toBeLessThan(centredY((e) => e)); // taller text, so higher up
   });
 
   it("a text in it still wraps when it is not stretched", () => {
