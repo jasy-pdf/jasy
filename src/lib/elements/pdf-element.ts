@@ -68,6 +68,9 @@ export interface LayoutContext {
    *  means "move to the next page", never an overflow - only content at the top of a fresh page is
    *  forced on and reported. Set by `packChildren`; absent = top of the page. */
   belowContent?: boolean;
+  /** What a `Box`'s percentage padding resolves against: the width the Box itself was offered (CSS:
+   *  the containing block), not its inner width. Set by the Box for its own padding only. */
+  boxPaddingBase?: number;
 }
 
 let _nextStructId = 0;

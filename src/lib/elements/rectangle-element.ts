@@ -12,6 +12,7 @@ import {
 } from "../layout/box-constraints.ts";
 import { stackMinIntrinsic, withDeclaredExtent } from "../layout/min-intrinsic.ts";
 import { positionedIn } from "./layout/positioned-element.ts";
+import { PaddingElement } from "./layout/padding-element.ts";
 import {
   Fragmentable,
   FragmentResult,
@@ -149,7 +150,7 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
       this.children,
       innerMaxHeight,
       innerWidth,
-      insetContext(ctx, 2 * this.borderWidth),
+      insetContext(this.paddingContext(ctx, width), 2 * this.borderWidth),
     );
     // Fits with no forced cut: return the whole box unchanged. A trailing forced break is the
     // exception - fall through so the box is rebuilt from the packed children (without the consumed
@@ -164,9 +165,11 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
     // Nothing fit below the content above: move on whole, not as an empty bordered box.
     if (fitted.length === 0 && !forceBreak) return { fitted: null, remainder: this };
 
+    const childCtx = this.paddingContext(ctx, width);
     const contentHeight = (kids: PDFElement[]): number =>
       kids.reduce(
-        (sum, child) => sum + child.measure(BoxConstraints.loose(innerWidth, Infinity), ctx).height,
+        (sum, child) =>
+          sum + child.measure(BoxConstraints.loose(innerWidth, Infinity), childCtx).height,
         0,
       );
 
@@ -228,6 +231,13 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
       : [this.sizeMemory.height, this.sizeMemory.heightFactor];
     if (requested.some((v) => v !== undefined)) return false;
     return this.children.some((c) => c.needsBoundedMain(horizontal));
+  }
+
+  /** A Box's own padding resolves a percentage against what the Box was OFFERED (CSS: the containing
+   *  block), not against the inner width it hands its children - so it is told. */
+  private paddingContext(ctx: LayoutContext, offered: number): LayoutContext {
+    const own = this.children[0];
+    return own instanceof PaddingElement && own.ofBox ? { ...ctx, boxPaddingBase: offered } : ctx;
   }
 
   /** A Box stacks its children vertically inside its border, which is on both sides of the axis. */
@@ -301,7 +311,10 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
       this.relative && offset
         ? { origin: { x: 0, y: 0 }, size: { width: 0, height: 0 } }
         : undefined;
-    const childCtx: LayoutContext = frame ? { ...ctx, frame } : ctx;
+    const childCtx: LayoutContext = this.paddingContext(
+      frame ? { ...ctx, frame } : ctx,
+      constraints.maxWidth,
+    );
 
     // Lay out children stacked inside the border (inset by the border width). Width is finalized here;
     // height is left unbounded so each child sizes to its own content - EXCEPT for a child that cannot

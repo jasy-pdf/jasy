@@ -63,6 +63,31 @@ describe("through the factories", () => {
     expect(size.height).toBe(30); // 2 x 5% of 300
   });
 
+  it("a Box's padding resolves against what the BOX was offered, not its own inner width (CSS)", () => {
+    // Chrome: a 100px-wide div with padding 10% inside a 400px parent is inset 40, not 10.
+    const el = Box({ width: 100, borderWidth: 0, padding: "10%" }, [
+      Box({ borderWidth: 0, height: 0 }, []),
+    ]);
+    expect(
+      el.calculateLayout(BoxConstraints.loose(400, Infinity), { x: 0, y: 0 }, ctx).height,
+    ).toBe(80);
+    // A border does not move the base either: still 10% of the 400 offered.
+    const bordered = Box({ width: 100, borderWidth: 5, padding: "10%" }, [
+      Box({ borderWidth: 0, height: 0 }, []),
+    ]);
+    expect(
+      bordered.calculateLayout(BoxConstraints.loose(400, Infinity), { x: 0, y: 0 }, ctx).height,
+    ).toBe(90);
+  });
+
+  it("only the Box's own padding: a Padding inside it resolves against what IT is offered", () => {
+    const inner = Padding("10%", Box({ borderWidth: 0, height: 0 }, []));
+    const el = Box({ width: 100, borderWidth: 0 }, [inner]);
+    expect(
+      el.calculateLayout(BoxConstraints.loose(400, Infinity), { x: 0, y: 0 }, ctx).height,
+    ).toBe(20);
+  });
+
   it("a page margin resolves against the page width", () => {
     // The page is the one box whose geometry needs no parent, so this resolves at build time.
     const page = Page({ size: "A4", margin: "10%" }, [Text("hi")]);
