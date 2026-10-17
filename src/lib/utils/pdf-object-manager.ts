@@ -355,7 +355,7 @@ export class PDFObjectManager implements FontMetrics {
 
   // A unique, binary-safe placeholder for a stream's bytes, swapped for ciphertext in finalizeEncryption().
   private encToken(id: number): string {
-    return ` JENC:${id} `;
+    return `\x00\x01JENC:${id}\x01\x00`;
   }
 
   // The same trick for a literal STRING. A separate marker because the two are swapped differently: a
@@ -1206,9 +1206,8 @@ endstream`;
   }
 
   // Whether to kern. Document-level: measuring (via `runAdvance`, which reads this off the metrics)
-  // and drawing (the backend emits a `TJ`) both consult it, so they can never disagree. OFF while the
-  // embedded-font path (kern/GPOS) is unbuilt - a standard-14-only kerning would set the 14 system
-  // fonts finer than a user's own font, which is worse than none. Flip to on when GPOS lands.
+  // and drawing (the backend emits a `TJ`) both consult it, so they can never disagree. The default
+  // here is off; `renderPdf` turns it on unless the document says `kerning: false`.
   kerningEnabled = false;
 
   setKerning(enabled: boolean): void {
@@ -1260,7 +1259,8 @@ endstream`;
     for (let i = 0; i < chars.length - 1; i++) {
       const a = chars[i];
       const b = chars[i + 1];
-      if (a === " " || b === " ") {
+      // A no-break space is a space: never kerned (the AFM names it `space`, with pairs of its own).
+      if (a === " " || b === " " || a === "\u00a0" || b === "\u00a0") {
         out.push(0);
       } else if (ttf) {
         out.push(

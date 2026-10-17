@@ -34,6 +34,8 @@ export interface SvgStyle {
   fillOpacity: number;
   strokeOpacity: number;
   opacity: number;
+  /** `visibility` (inherits): a hidden shape paints nothing, but a child may set `visible` again. */
+  visible: boolean;
 }
 
 /** The colour a shape actually paints with: its raw colour, times the opacities that reached it. */
@@ -51,6 +53,7 @@ export const ROOT_STYLE: SvgStyle = {
   fillOpacity: 1,
   strokeOpacity: 1,
   opacity: 1,
+  visible: true,
 };
 
 /** The stroke properties an element may set; they inherit individually, so they are kept apart. */
@@ -216,5 +219,14 @@ export function resolveStyle(
     fillOpacity: ratio(read("fill-opacity"), parent.fillOpacity),
     strokeOpacity: ratio(read("stroke-opacity"), parent.strokeOpacity),
     opacity,
+    visible: visibility(read("visibility"), parent.visible),
   };
+}
+
+/** `hidden` and `collapse` hide, `visible` shows, anything else (`inherit`, unset) keeps the parent's. */
+function visibility(value: string | undefined, parent: boolean): boolean {
+  const v = value?.trim();
+  if (v === "hidden" || v === "collapse") return false;
+  if (v === "visible") return true;
+  return parent;
 }

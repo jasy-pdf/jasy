@@ -13,6 +13,8 @@ import { PDFDocumentElement } from "../../../src/lib/elements/pdf-document-eleme
 import { PageElement } from "../../../src/lib/elements/page-element";
 import { ContainerElement } from "../../../src/lib/elements/container-element";
 import { TextElement } from "../../../src/lib/elements/text-element";
+import { Box, Document, Page, renderToBytes } from "../../../src/lib/api/index.ts";
+import { drawnNodes } from "../support/drawn.ts";
 
 // A fixed-size element that records where it was placed and the height it was offered.
 class MockBox extends PDFElement {
@@ -142,5 +144,37 @@ describe("page driver - header/footer repeat on every physical page", () => {
     const pdf = await HeaderFooterDoc.render();
     expect(pdf.indexOf("(Block 0)")).toBeLessThan(pdf.indexOf("(Block 79)"));
     for (const i of [0, 40, 79]) expect(pdf).toContain(`(Block ${i})`);
+  });
+});
+
+describe("resolvePageContentBox - a landscape page", () => {
+  // The margins are the TURNED page's: `left` is the left edge of what is drawn landscape. Subtracting
+  // them from the portrait size and turning afterwards swapped them - with left/right 100 and
+  // top/bottom 10 the box came out 821.89 wide at x=100 and ran 80pt past the page edge.
+  it("subtracts left/right from the landscape width and top/bottom from its height", () => {
+    const landscape: PDFPageConfig = {
+      pageSize: PageSize.A4,
+      orientation: Orientation.landscape,
+      margin: { top: 10, right: 100, bottom: 10, left: 100 },
+    };
+    const { origin, width, height } = resolvePageContentBox(landscape);
+    expect(origin).toEqual({ x: 100, y: 10 });
+    expect(width).toBeCloseTo(841.89 - 200, 2);
+    expect(height).toBeCloseTo(595.28 - 20, 2);
+  });
+
+  it("draws a full-width box inside the page", async () => {
+    const nodes = await drawnNodes(() =>
+      renderToBytes(
+        Document([
+          Page({ size: "A4", orientation: "landscape", margin: { x: 100, y: 10 } }, [
+            Box({ height: 20, bg: "red" }, []),
+          ]),
+        ]),
+      ),
+    );
+    const rect = nodes[0]!.find((n) => n.type === "rect")! as { x: number; width: number };
+    expect(rect.x).toBe(100);
+    expect(rect.x + rect.width).toBeCloseTo(841.89 - 100, 2);
   });
 });

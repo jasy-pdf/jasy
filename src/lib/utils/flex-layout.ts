@@ -98,6 +98,18 @@ function inLayoutOrder(children: PDFElement[], reverse: boolean): PDFElement[] {
   return reverse ? [...ordered].reverse() : ordered;
 }
 
+/**
+ * The main-axis alignment as the container means it. Reversed, the axis runs from the other end: `start`
+ * is where the first child of the REVERSED order sits - the right of a Row, the bottom of a Column (CSS
+ * `row-reverse` with `flex-start`, Flutter's `MainAxisAlignment.start` on a reversed axis). `center`,
+ * `between` and `around` are symmetric and stay.
+ */
+function mainAlignOf(options: FlexOptions): MainAlign {
+  const main = options.main ?? "start";
+  if (!options.reverse) return main;
+  return main === "start" ? "end" : main === "end" ? "start" : main;
+}
+
 export class FlexLayoutHelper {
   /**
    * Lays out the children along `axis`, on one line or several.
@@ -200,7 +212,7 @@ export class FlexLayoutHelper {
 
     // Each line keeps SOURCE order internally: the ordering was applied above, and applying it again
     // per line would reverse twice.
-    const lineOptions = { ...options, wrap: false, reverse: false };
+    const lineOptions = { ...options, wrap: false, reverse: false, main: mainAlignOf(options) };
     const measure = lines.map((line) =>
       FlexLayoutHelper.layoutLine(
         line,
@@ -310,7 +322,7 @@ export class FlexLayoutHelper {
     const remaining = Number.isFinite(leftover) ? Math.max(leftover, 0) : 0;
     const weight = shareLeftover(line, remaining);
     const spacing = mainSpacing(
-      options.main ?? "start",
+      mainAlignOf(options),
       gap,
       ordered.length,
       mainAvail,

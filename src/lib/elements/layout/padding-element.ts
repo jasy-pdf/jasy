@@ -13,17 +13,31 @@ import { resolveEdges, type EdgeSpecs } from "../../layout/insets.ts";
 interface PaddingElementParams extends WithChild {
   /** Still unresolved: a side may be a percentage of the offered WIDTH (see `Insets`). */
   margin: EdgeSpecs;
+  /** This is a `Box`'s own padding: a percentage resolves against what the Box was offered
+   *  (`ctx.boxPaddingBase`), as CSS resolves it against the containing block. */
+  ofBox?: boolean;
 }
 
 export class PaddingElement extends SizedPDFElement implements Fragmentable {
   private child: PDFElement;
   private margin: EdgeSpecs;
+  readonly ofBox: boolean;
 
-  constructor({ margin, child }: PaddingElementParams) {
+  constructor({ margin, child, ofBox = false }: PaddingElementParams) {
     super({ x: 0, y: 0 });
 
     this.child = child;
     this.margin = margin;
+    this.ofBox = ofBox;
+  }
+
+  /** The width a percentage side resolves against, and the context the child sees: a Box's base is
+   *  for this padding alone, so it does not travel further down. */
+  private percentBase(width: number, ctx: LayoutContext): number {
+    return this.ofBox && ctx.boxPaddingBase !== undefined ? ctx.boxPaddingBase : width;
+  }
+  private childContext(ctx: LayoutContext): LayoutContext {
+    return ctx.boxPaddingBase === undefined ? ctx : { ...ctx, boxPaddingBase: undefined };
   }
 
   /**
@@ -37,20 +51,28 @@ export class PaddingElement extends SizedPDFElement implements Fragmentable {
       return { fitted: null, remainder: this };
     }
 
-    const [marginTop, marginRight, marginBottom, marginLeft] = resolveEdges(this.margin, width);
+    const [marginTop, marginRight, marginBottom, marginLeft] = resolveEdges(
+      this.margin,
+      this.percentBase(width, ctx),
+    );
     const childWidth = width - marginLeft - marginRight;
     const childMaxHeight = maxHeight - marginTop - marginBottom;
 
     const split = this.child.fragment(
       childMaxHeight,
       childWidth,
-      insetContext(ctx, marginTop + marginBottom),
+      insetContext(this.childContext(ctx), marginTop + marginBottom),
     );
     return {
       fitted: split.fitted ? this.cloneWithChild(split.fitted) : null,
       remainder: split.remainder ? this.cloneWithChild(split.remainder) : null,
       forceBreak: split.forceBreak,
     };
+  }
+
+  /** A wrapper: it needs a bound exactly when its child does, and passes the bound on. */
+  override needsBoundedMain(horizontal: boolean): boolean {
+    return this.child.needsBoundedMain(horizontal);
   }
 
   override hasForcedBreak(): boolean {
@@ -68,7 +90,7 @@ export class PaddingElement extends SizedPDFElement implements Fragmentable {
   }
 
   private cloneWithChild(child: PDFElement): PaddingElement {
-    return new PaddingElement({ margin: this.margin, child }).asPieceOf(this);
+    return new PaddingElement({ margin: this.margin, child, ofBox: this.ofBox }).asPieceOf(this);
   }
 
   /**
@@ -102,22 +124,30 @@ export class PaddingElement extends SizedPDFElement implements Fragmentable {
     ctx: LayoutContext,
     mode: "layout" | "measure",
   ): Size {
-    // Percentages resolve against the width we were OFFERED, so every pass gets the same answer.
+    // Percentages resolve against the width we were OFFERED (a Box's: what the Box was offered), so
+    // every pass gets the same answer.
     const [marginTop, marginRight, marginBottom, marginLeft] = resolveEdges(
       this.margin,
-      constraints.maxWidth,
+      this.percentBase(constraints.maxWidth, ctx),
     );
 
-    // The child is inset by the margins: shifted down/right, narrowed by the
-    // horizontal margins, and left height-unbounded so it sizes to its own content.
+    // The child is inset by the margins: shifted down/right, narrowed by the horizontal margins, and
+    // left height-unbounded so it sizes to its own content - unless it cannot lay itself out without a
+    // bound (a stack holding a Spacer): that one gets the height inside the margins, as it would without
+    // the padding.
     const childWidth = constraints.hasBoundedWidth
       ? Math.max(0, constraints.maxWidth - marginLeft - marginRight)
       : Infinity;
-    const childConstraints = BoxConstraints.loose(childWidth, Infinity);
+    const childHeight =
+      constraints.hasBoundedHeight && this.child.needsBoundedMain(false)
+        ? Math.max(0, constraints.maxHeight - marginTop - marginBottom)
+        : Infinity;
+    const childConstraints = BoxConstraints.loose(childWidth, childHeight);
+    const childCtx = this.childContext(ctx);
     const childSize =
       mode === "layout"
-        ? this.child.calculateLayout(childConstraints, { x: marginLeft, y: marginTop }, ctx)
-        : this.child.measure(childConstraints, ctx);
+        ? this.child.calculateLayout(childConstraints, { x: marginLeft, y: marginTop }, childCtx)
+        : this.child.measure(childConstraints, childCtx);
 
     // Padding takes the width it is offered; its height shrink-wraps the child. Unbounded width (a
     // fixed child in a Row) shrink-wraps to the child + insets, as Container/Row do.
