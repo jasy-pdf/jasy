@@ -45,6 +45,14 @@ describe("spaces as written", () => {
     expect(spanLines([" Hallo du"], 78).map((l) => l.text)).toEqual([" Hallo", "du"]);
   });
 
+  it("a line holding only spaces pushes no blank line before a word that does not fit", () => {
+    // " Hallo" is 55 in a 50 box: the word overflows on its own line, after its space.
+    expect(stringLines(" Hallo", 50)).toEqual([" Hallo"]);
+    expect(spanLines([" Hallo"], 50).map((l) => l.text)).toEqual([" Hallo"]);
+    expect(stringLines("a\n Hallo", 50)).toEqual(["a", " Hallo"]);
+    expect(stringLines("  Hallo du", 50)).toEqual(["  Hallo", "du"]);
+  });
+
   it("spaces at the end of a line hang: not drawn, not in its width", () => {
     expect(stringLines("Total  ", 1000)).toEqual(["Total"]);
     expect(spanLines(["Total  "], 1000)).toEqual([{ text: "Total", width: 50 }]);

@@ -205,6 +205,9 @@ export function breakSegmentsIntoLines(
   // Whether the line holds a word yet - an empty one too: a space is text as written, so a leading one
   // and both of a double space count.
   let open = false;
+  // Whether anything DRAWN is on the line. Only then does a word that does not fit start a new one:
+  // a line of spaces alone is empty, and closing it would push a blank line before the word.
+  let inked = false;
   let ink = 0; // the line's width up to its last drawn glyph - the spaces after it hang
   // An empty piece (what a span leaves after its `\n`) has nothing to draw, and its font must not size
   // the line it lands on - a big span ending in `\n` made the next line as tall as itself. Only a blank
@@ -281,6 +284,7 @@ export function breakSegmentsIntoLines(
         width = 0;
         gaps = 0;
         open = false;
+        inked = false;
         ink = 0;
         lineSegments = [];
         lineStart = at(paragraphStart);
@@ -319,6 +323,7 @@ export function breakSegmentsIntoLines(
             width = 0;
             gaps = 0;
             open = false;
+            inked = false;
             ink = 0;
             lineStart = at(startAt);
           };
@@ -342,7 +347,7 @@ export function breakSegmentsIntoLines(
             placeWord(word.slice(head), wordAt + head, false);
             return;
           }
-          if (open) {
+          if (inked) {
             close(lineSegments, ink, "soft", !joined);
             freshLine(wordAt);
             placeWord(word, wordAt, false);
@@ -370,7 +375,7 @@ export function breakSegmentsIntoLines(
         if (split) {
           // Close whatever is already on the line FIRST: the pieces were measured against the full box,
           // not against what is left of this line.
-          if (open) {
+          if (inked) {
             close(lineSegments, ink, "soft", !joined);
             lineSegments = [{ ...segment, fontFamily: family, content: "" }];
             combined = "";
@@ -394,6 +399,7 @@ export function breakSegmentsIntoLines(
           width = runAdvance(metrics, combined, font, letterSpacing);
           gaps = 0;
           open = true;
+          inked = true;
           ink = width;
           lineSegments[lineSegments.length - 1]!.content = combined;
           return;
@@ -409,7 +415,7 @@ export function breakSegmentsIntoLines(
         // Break before a word that won't fit - counting the space that would join it. A word wider than
         // the whole box still sits on its (empty) line and overflows, rather than pushing a phantom
         // empty line before it.
-        if (candidate - squeeze > room && open) {
+        if (candidate - squeeze > room && inked) {
           // A space that does not fit hangs past the edge, as in CSS. Closing the line on it would end
           // the paragraph's last line "soft" (stretched when justified) or push a blank line before `\n`.
           if (word === "") return;
@@ -418,6 +424,7 @@ export function breakSegmentsIntoLines(
           width = wordWidth;
           gaps = 0;
           ink = wordWidth;
+          inked = true;
           lineSegments = [];
           combined = word;
           lineSegments.push({ ...segment, content: combined });
@@ -426,7 +433,10 @@ export function breakSegmentsIntoLines(
           width = candidate;
           if (joins) gaps += 1;
           open = true;
-          if (word !== "") ink = width;
+          if (word !== "") {
+            ink = width;
+            inked = true;
+          }
           if (lineSegments.length === 0) {
             lineSegments.push({ ...segment, fontFamily: family, content: combined });
           }
