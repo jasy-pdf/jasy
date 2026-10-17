@@ -337,13 +337,29 @@ export class ImageElement extends SizedPDFElement {
       else if (h !== undefined && w === undefined) w = bounds.constrainWidth(h * ratio);
     }
 
-    // Fall back to the prior behavior for an unpinned axis: a bounded axis fills, otherwise keep the
-    // requested fixed size (or undefined). Read from `requested`, never the mutated this.width/height.
-    const width = w ?? (bounds.hasBoundedWidth ? bounds.maxWidth : this.requested.width);
-    const height = h ?? (bounds.hasBoundedHeight ? bounds.maxHeight : this.requested.height);
+    // An unpinned axis: a bounded one fills; an unbounded one takes the image's own extent (1px = 1pt) -
+    // what `fit: none` (the default) draws there, so the layout reserves exactly what is drawn. Read from
+    // `requested`, never the mutated this.width/height.
+    const width =
+      w ??
+      (bounds.hasBoundedWidth
+        ? bounds.maxWidth
+        : (this.requested.width ?? this.ownExtent(bounds, "width")));
+    const height =
+      h ??
+      (bounds.hasBoundedHeight
+        ? bounds.maxHeight
+        : (this.requested.height ?? this.ownExtent(bounds, "height")));
 
     // Top-left coordinates; the fit logic (renderer) and the Y-flip (seam) run later.
     return { width, height };
+  }
+
+  /** The image's own pixel extent on one axis, clamped by its min/max; unknown before the pre-pass. */
+  private ownExtent(bounds: BoxConstraints, axis: "width" | "height"): number | undefined {
+    const own = this.intrinsic?.[axis];
+    if (own === undefined) return undefined;
+    return axis === "width" ? bounds.constrainWidth(own) : bounds.constrainHeight(own);
   }
 
   override getProps() {
