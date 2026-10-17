@@ -40,7 +40,8 @@ export interface FlexAxis {
    * unbounded main axis and shrink-wraps as before.
    */
   measureConstraints(crossAvail: number, mainMax?: number): BoxConstraints;
-  /** Constraints for a flex child (fills the cross axis like a stretched child). */
+  /** Constraints for a flex child: its main extent is SET (it fills its share, whatever size it asked
+   *  for), across it is an ordinary child. */
   flexConstraints(mainExtent: number, crossAvail: number): BoxConstraints;
   /** Offset (from the stack's top-left) of a child at main position `mainPos`, cross `crossPos`. */
   offsetAt(mainPos: number, crossPos: number): Offset;
@@ -51,7 +52,8 @@ export const VERTICAL_AXIS: FlexAxis = {
   mainOf: (s) => s.height,
   crossOf: (s) => s.width,
   measureConstraints: (crossAvail, mainMax = Infinity) => BoxConstraints.loose(crossAvail, mainMax),
-  flexConstraints: (mainExtent, crossAvail) => BoxConstraints.loose(crossAvail, mainExtent),
+  flexConstraints: (mainExtent, crossAvail) =>
+    new BoxConstraints(0, crossAvail, mainExtent, mainExtent),
   offsetAt: (mainPos, crossPos) => ({ x: crossPos, y: mainPos }),
 };
 
@@ -60,7 +62,8 @@ export const HORIZONTAL_AXIS: FlexAxis = {
   mainOf: (s) => s.width,
   crossOf: (s) => s.height,
   measureConstraints: (crossAvail, mainMax = Infinity) => BoxConstraints.loose(mainMax, crossAvail),
-  flexConstraints: (mainExtent, crossAvail) => BoxConstraints.loose(mainExtent, crossAvail),
+  flexConstraints: (mainExtent, crossAvail) =>
+    new BoxConstraints(mainExtent, mainExtent, 0, crossAvail),
   offsetAt: (mainPos, crossPos) => ({ x: mainPos, y: crossPos }),
 };
 
