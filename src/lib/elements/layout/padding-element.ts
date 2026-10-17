@@ -1,5 +1,11 @@
 import { Validator } from "../../validators/element-validator.ts";
-import { PDFElement, LayoutContext, WithChild, SizedPDFElement } from "../pdf-element.ts";
+import {
+  PDFElement,
+  LayoutContext,
+  WithChild,
+  SizedPDFElement,
+  withPaddingBase,
+} from "../pdf-element.ts";
 import { BoxConstraints, Offset, Size } from "../../layout/box-constraints.ts";
 import {
   Fragmentable,
@@ -31,13 +37,18 @@ export class PaddingElement extends SizedPDFElement implements Fragmentable {
     this.ofBox = ofBox;
   }
 
+  /** Some side is a percentage. */
+  get hasPercentSide(): boolean {
+    return this.margin.some((side) => typeof side !== "number" && side.factor !== undefined);
+  }
+
   /** The width a percentage side resolves against, and the context the child sees: a Box's base is
    *  for this padding alone, so it does not travel further down. */
   private percentBase(width: number, ctx: LayoutContext): number {
     return this.ofBox && ctx.boxPaddingBase !== undefined ? ctx.boxPaddingBase : width;
   }
   private childContext(ctx: LayoutContext): LayoutContext {
-    return ctx.boxPaddingBase === undefined ? ctx : { ...ctx, boxPaddingBase: undefined };
+    return withPaddingBase(ctx, undefined);
   }
 
   /**

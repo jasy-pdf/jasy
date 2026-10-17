@@ -43,10 +43,20 @@ export class RotatedElement extends PDFElement {
     return [this.child];
   }
 
+  // The spin is paint-only, so to a surrounding Row or Column the child is the item (CSS: a `transform`
+  // leaves an item an item).
+  override proxied(): PDFElement {
+    return this.child;
+  }
+
   // It takes the child's space, so the child's sizing hints and its break-before/after are its own.
   // It is never split - half a rotation on each page means nothing - so a break INSIDE stays inside.
   override relativeSizeFactor(horizontal: boolean): number | undefined {
     return this.child.relativeSizeFactor(horizontal);
+  }
+
+  override maxExtent(horizontal: boolean): number {
+    return this.child.maxExtent(horizontal);
   }
 
   override needsBoundedMain(horizontal: boolean): boolean {

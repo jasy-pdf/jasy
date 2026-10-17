@@ -75,9 +75,15 @@ export interface LayoutContext {
    *  means "move to the next page", never an overflow - only content at the top of a fresh page is
    *  forced on and reported. Set by `packChildren`; absent = top of the page. */
   belowContent?: boolean;
-  /** What a `Box`'s percentage padding resolves against: the width the Box itself was offered (CSS:
-   *  the containing block), not its inner width. Set by the Box for its own padding only. */
+  /** What a `Box`'s percentage padding resolves against (CSS: the containing block). A Row sets it for
+   *  its children - it offers them no width, so the Box could not know it; otherwise the Box sets it
+   *  from what it was offered. Consumed by the Box's own padding, so it never travels further down. */
   boxPaddingBase?: number;
+}
+
+/** `ctx` with `boxPaddingBase` set to `base` - the same object when nothing changes. */
+export function withPaddingBase(ctx: LayoutContext, base: number | undefined): LayoutContext {
+  return ctx.boxPaddingBase === base ? ctx : { ...ctx, boxPaddingBase: base };
 }
 
 let _nextStructId = 0;
@@ -188,6 +194,17 @@ export abstract class PDFElement {
     return undefined;
   }
 
+  /** The context the element `proxied()` names is laid out in: this one's, unless it hands something
+   *  down (a `DefaultTextStyle`). */
+  proxiedContext(ctx: LayoutContext): LayoutContext {
+    return ctx;
+  }
+
+  /** A `Box` with percentage padding: a surrounding Row tells it its own width (`boxPaddingBase`). */
+  hasPercentPadding(): boolean {
+    return false;
+  }
+
   /** Lays out its own `Positioned` descendants (a page, a `relative` Box); a walk for them stops here. */
   isPositioningFrame(): boolean {
     return false;
@@ -201,6 +218,12 @@ export abstract class PDFElement {
    */
   relativeSizeFactor(_horizontal: boolean): number | undefined {
     return undefined;
+  }
+
+  /** The most this element may be on an axis in points (its `maxWidth`/`maxHeight`): a flex line freezes
+   *  a flex child there. A percentage max resolves against what the child is given, so it is not one. */
+  maxExtent(_horizontal: boolean): number {
+    return Infinity;
   }
 
   /**

@@ -8,9 +8,15 @@ import type { CrossAlign } from "./alignment.ts";
  * wrapper were not there. A value set on the wrapper itself wins over one set inside it.
  */
 
-/** The child, then each element it is transparent for, outermost first. */
+/**
+ * The child, then each element it is transparent for, outermost first. An `Expanded` is one of them:
+ * `Expanded(child)` is `flex: 1` on the child, so the child's `alignSelf` and `order` are the item's.
+ */
 function* itemChain(child: PDFElement): Generator<PDFElement> {
-  for (let el: PDFElement | undefined = child; el; el = el.proxied()) yield el;
+  for (let el: PDFElement | undefined = child; el; ) {
+    yield el;
+    el = el.proxied() ?? (el instanceof FlexiblePDFElement ? el.layoutChildren()[0] : undefined);
+  }
 }
 
 /** The `Expanded`/`Spacer` that makes this child flexible, if any. */
@@ -28,6 +34,12 @@ export function alignSelfOf(child: PDFElement): CrossAlign | undefined {
 export function orderOf(child: PDFElement): number {
   for (const el of itemChain(child)) if (el.order !== undefined) return el.order;
   return 0;
+}
+
+/** The child is a `Box` with percentage padding. */
+export function hasPercentPaddingItem(child: PDFElement): boolean {
+  for (const el of itemChain(child)) if (el.hasPercentPadding()) return true;
+  return false;
 }
 
 /** CSS `flex-shrink`, 1 when unset (the CSS default). */

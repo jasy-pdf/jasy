@@ -1,4 +1,4 @@
-import { flexibleOf } from "../layout/flex-item.ts";
+import { flexibleOf, hasPercentPaddingItem } from "../layout/flex-item.ts";
 import {
   BoxConstraints,
   Offset,
@@ -16,7 +16,13 @@ import {
 } from "../utils/flex-layout.ts";
 import { stackMinIntrinsic, withDeclaredExtent } from "../layout/min-intrinsic.ts";
 import { diagnose, pageOf } from "../common/diagnostics.ts";
-import { LayoutContext, PDFElement, SizedPDFElement, WithChildren } from "./pdf-element.ts";
+import {
+  LayoutContext,
+  PDFElement,
+  SizedPDFElement,
+  WithChildren,
+  withPaddingBase,
+} from "./pdf-element.ts";
 
 interface RowElementParams extends WithChildren {
   /** Space inserted between children, in points. */
@@ -115,6 +121,10 @@ export class RowElement extends SizedPDFElement {
 
   override relativeSizeFactor(horizontal: boolean): number | undefined {
     return horizontal ? this.requested.widthFactor : this.requested.heightFactor;
+  }
+
+  override maxExtent(horizontal: boolean): number {
+    return (horizontal ? this.requested.maxWidth : this.requested.maxHeight) ?? Infinity;
   }
 
   /** The mirror of `ContainerElement`: a Row's OWN flex child needs a bounded width, and the need of any
@@ -240,12 +250,23 @@ export class RowElement extends SizedPDFElement {
           wrap: this.wrap,
           alignContent: this.alignContent,
         },
-        ctx,
+        this.childContext(ctx, mainAvail),
         mode,
       );
     }
 
     return { width: boundedWidth ?? result.mainUsed, height: boundedHeight ?? result.crossUsed };
+  }
+
+  private percentPaddingChild?: boolean;
+
+  /** A child's `%` padding resolves against this Row's width (CSS: the containing block), which the Row
+   *  never offers - its children get their natural size - so it is told. Only when a child uses it,
+   *  since every key below would otherwise change with the Row's width. */
+  private childContext(ctx: LayoutContext, mainAvail: number): LayoutContext {
+    this.percentPaddingChild ??= this.children.some(hasPercentPaddingItem);
+    if (!this.percentPaddingChild) return ctx;
+    return withPaddingBase(ctx, Number.isFinite(mainAvail) ? mainAvail : undefined);
   }
 
   override layoutChildren(): readonly PDFElement[] {

@@ -29,6 +29,11 @@ export class ExpandedElement extends FlexiblePDFElement implements Fragmentable 
     return this.child.minIntrinsicMain(horizontal, ctx);
   }
 
+  /** And the ceiling is the child's. */
+  override maxExtent(horizontal: boolean): number {
+    return this.child.maxExtent(horizontal);
+  }
+
   calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
     Validator.validateFlexElement(this);
     const size = this.sizeWith(constraints, ctx, offset);
@@ -52,8 +57,12 @@ export class ExpandedElement extends FlexiblePDFElement implements Fragmentable 
     // A bounded region: fill it - the normal flex behavior. Unbounded (measuring while paginating):
     // there's no leftover space to fill, so collapse to the child's natural height. This lets an
     // overflowing column flow instead of the flex silently hiding the overflow.
-    const childConstraints = BoxConstraints.loose(
+    // `Expanded(child)` is `flex: 1` on the child: the extent its line SET (the min) is the child's too,
+    // so its own width or height gives way to its share - as in CSS and Flutter.
+    const childConstraints = new BoxConstraints(
+      constraints.minWidth,
       width,
+      constraints.minHeight,
       constraints.hasBoundedHeight ? constraints.maxHeight : Infinity,
     );
     const childSize = offset

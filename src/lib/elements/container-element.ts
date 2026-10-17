@@ -28,6 +28,7 @@ import {
   SizedElement,
   SizedPDFElement,
   WithChildren,
+  withPaddingBase,
 } from "./pdf-element.ts";
 
 interface ContainerElementParams extends SizedElement, WithChildren {
@@ -140,7 +141,7 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
       this.children,
       maxHeight,
       ownWidth,
-      ctx,
+      withPaddingBase(ctx, undefined),
       this.gap,
     );
     // Fits as one region with no forced cut: hand the whole container back so the page renders
@@ -181,6 +182,10 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
 
   override relativeSizeFactor(horizontal: boolean): number | undefined {
     return horizontal ? this.requested.widthFactor : this.requested.heightFactor;
+  }
+
+  override maxExtent(horizontal: boolean): number {
+    return (horizontal ? this.requested.maxWidth : this.requested.maxHeight) ?? Infinity;
   }
 
   /**
@@ -281,7 +286,8 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
           wrap: this.wrap,
           alignContent: this.alignContent,
         },
-        ctx,
+        // A Row's width is for its own children; these resolve against this column, what it offers.
+        withPaddingBase(ctx, undefined),
         mode,
       );
     }
