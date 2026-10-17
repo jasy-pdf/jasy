@@ -26,11 +26,8 @@ interface ImageDimensions {
 }
 
 export async function getImageDimensions(buffer: Uint8Array): Promise<ImageDimensions> {
-  const dataView = new DataView(
-    buffer.buffer,
-    // buffer.byteOffset,
-    // buffer.byteLength
-  );
+  // The view's own window: a `Uint8Array` may be a slice of a larger buffer (a Node `Buffer` usually is).
+  const dataView = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
 
   // Check for JPEG (0xFFD8 is the start of JPEG file)
   if (dataView.getUint16(0) === 0xffd8) {
