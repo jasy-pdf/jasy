@@ -69,7 +69,6 @@ export function reportOverflow(
   ctx: LayoutContext,
 ): void {
   const policy = ctx.onOverflow ?? "ignore";
-  if (policy === "ignore") return;
   const name = child.constructor.name.replace(/Element$/, "");
   const detail =
     `${name} is ${Math.round(childHeight)}pt tall but the page region is only ` +
@@ -82,6 +81,8 @@ export function reportOverflow(
     message: `Layout overflow (clipped): ${detail}`,
     about: child,
     page: pageOf(ctx),
+    // `ignore` means "no console" - an `onDiagnostic` handler still hears of it.
+    fallback: policy === "ignore" ? "silent" : "warn",
   });
 }
 

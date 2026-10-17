@@ -11,6 +11,7 @@ import {
   keepTogether,
   mm,
   renderToBytes,
+  span,
   type Diagnostic,
 } from "../../../src/lib/api/index.ts";
 
@@ -98,6 +99,41 @@ describe("onDiagnostic - each finding, once", () => {
       expect.objectContaining({ code: "missing-glyphs", element: "Text", text: "Schnee ☃ heute" }),
     ]);
     expect(dropped).toEqual(["☃"]);
+  });
+
+  it('onOverflow "ignore" keeps the console quiet, but the handler still hears of it', async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const seen = await collect(
+      Document([Page({ size: mm(50, 40), margin: 4 }, [Text("X", { size: 300 })])]),
+      { onOverflow: "ignore" },
+    );
+    expect(seen).toEqual([expect.objectContaining({ code: "overflow-clipped" })]);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("an ignored PageBreak names its page", async () => {
+    const seen = await collect(
+      Document([Page([Column([Text("one"), PageBreak(), Row([Text("a"), PageBreak()])])])]),
+    );
+    expect(seen).toEqual([expect.objectContaining({ code: "page-break-ignored", page: 2 })]);
+  });
+
+  it("a finding in a header names the page too", async () => {
+    const seen = await collect(
+      Document([
+        Page({ header: Row([Box({ breakBefore: true }, [Text("head")])]) }, [Text("body")]),
+      ]),
+    );
+    expect(seen).toEqual([expect.objectContaining({ code: "break-ignored", page: 1 })]);
+  });
+
+  it("one report per Text, with every character it lost", async () => {
+    const seen = await collect(
+      Document([Page([Text([span("snow \u2603 "), span("plane \u2708")])])]),
+    );
+    expect(seen).toHaveLength(1);
+    expect(seen[0]!.message).toContain("\u2603");
+    expect(seen[0]!.message).toContain("\u2708");
   });
 
   it("a clean document says nothing", async () => {

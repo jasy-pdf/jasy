@@ -549,11 +549,12 @@ function mainSpacing(
  * line's cross extent before anything is placed.
  */
 function measureFlex(line: FlexLine, weight: number, remaining: number): void {
-  if (!(line.totalFlex > 0)) return;
   for (const child of line.children) {
     const flexible = flexibleOf(child);
     if (!flexible) continue;
-    const mainExtent = basisOf(line, child, flexible) + (flexible.getFlex() / weight) * remaining;
+    // A pure `flexBasis` slot (`flex: 0`) has no share but still has a size across the line.
+    const share = weight > 0 ? (flexible.getFlex() / weight) * remaining : 0;
+    const mainExtent = basisOf(line, child, flexible) + share;
     const size = measureInto(line, child, line.axis.flexConstraints(mainExtent, line.crossAvail));
     line.crossUsed = Math.max(line.crossUsed, line.axis.crossOf(size));
   }

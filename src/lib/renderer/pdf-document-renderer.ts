@@ -124,6 +124,7 @@ export class PDFDocumentRenderer {
       onOverflow: ctx.onOverflow,
       diagnostics: ctx.diagnostics,
       frame: pageFrame(config),
+      paginatingPage: firstPage, // the bands are laid out here once, for the first sheet
     };
     const { bodyWidth: width, bodyHeight: height } = layoutPageBands(
       config,

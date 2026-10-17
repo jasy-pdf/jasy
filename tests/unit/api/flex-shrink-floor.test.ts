@@ -70,6 +70,13 @@ describe("min-content is the floor under shrinking", () => {
     expect(b.getProps().width).toBe(150);
   });
 
+  it("a pure basis slot (flex 0) still counts across the line - a centred sibling is centred in it", () => {
+    const tall = Expanded({ flex: 0, flexBasis: 100 }, Box({ height: 50 }, []));
+    const small = Box({ width: 40, height: 10 }, []);
+    layout(Row({ gap: 0, align: "center" }, [tall, small]), 400);
+    expect(small.getProps().y).toBe(20);
+  });
+
   it("a flex child asking for a basis but no growth keeps its basis, not NaN", () => {
     // `flex: 0` with a basis makes `totalFlex` zero, and the share used to be 0/0. A NaN there becomes
     // the offset of every later sibling - the shape of the Spacer bug (#10).

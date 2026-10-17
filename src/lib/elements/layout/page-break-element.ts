@@ -1,5 +1,6 @@
 import { BoxConstraints, Offset, Size } from "../../layout/box-constraints.ts";
 import { LayoutContext, PDFElement } from "../pdf-element.ts";
+import { pageOf } from "../../common/diagnostics.ts";
 
 /**
  * A forced page break. Placed in a flow (a `Column`/`Row`/`Box`), it makes everything AFTER it start
@@ -11,7 +12,11 @@ import { LayoutContext, PDFElement } from "../pdf-element.ts";
  * too. A break wins over a `keepTogether` (a forced break cannot be avoided) - CSS behaves the same.
  */
 export class PageBreakElement extends PDFElement {
-  calculateLayout(_constraints: BoxConstraints, _offset: Offset, _ctx: LayoutContext): Size {
+  /** The page it was last laid out on - only so an ineffective break can name it. */
+  page?: number;
+
+  calculateLayout(_constraints: BoxConstraints, _offset: Offset, ctx: LayoutContext): Size {
+    this.page = pageOf(ctx);
     return { width: 0, height: 0 };
   }
 

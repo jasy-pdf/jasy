@@ -25,6 +25,7 @@ export class PageBreakRenderer {
         "horizontal line) or a PageBuilder (built for one page and placed whole, Columns inside it " +
         "included). Move the break out, into a Column that flows across pages.",
       about: element,
+      page: element.page,
     });
     return [];
   }

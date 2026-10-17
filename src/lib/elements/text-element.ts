@@ -327,17 +327,20 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
    * back unchanged, so an ordinary document is byte-identical.
    */
   private covered(content: TextSegment[], metrics: FontMetrics): TextSegment[] {
-    const report = (dropped: number[]) => metrics.reportMissingGlyph?.(dropped, this);
-    return content.map((seg) => {
+    // Collected over every span first: the element is reported ONCE, with everything it lost.
+    const lost: number[] = [];
+    const covered = content.map((seg) => {
       const { text, dropped } = coverText(
         seg.content,
         seg.fontFamily ?? this.fontFamily,
         seg.fontStyle ?? this.fontStyle,
         metrics,
       );
-      if (dropped.length > 0) report(dropped);
+      lost.push(...dropped);
       return text === seg.content ? seg : { ...seg, content: text };
     });
+    if (lost.length > 0) metrics.reportMissingGlyph?.([...new Set(lost)], this);
+    return covered;
   }
 
   /** The content as spans, with `text-transform` applied, and nothing else. */
