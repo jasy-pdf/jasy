@@ -50,6 +50,8 @@ export interface TextSegment {
   /** Extra space after every glyph, in points; unset inherits the Text's own value. */
   letterSpacing?: number;
   textTransform?: TextTransform;
+  wordSpacing?: number;
+  ligatures?: boolean;
   /**
    * CSS `vertical-align`, for a footnote marker or a formula index. Shifts THIS run's baseline;
    * it does not resize the text, and it does not change the line's height - set `fontSize` yourself

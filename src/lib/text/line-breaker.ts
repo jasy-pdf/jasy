@@ -65,10 +65,10 @@ export function runStyleOf(seg: TextSegment, defaults: SegmentDefaults): RunStyl
       fontFamily: seg.fontFamily || defaults.fontFamily,
       fontSize: seg.fontSize || defaults.fontSize,
       fontStyle: seg.fontStyle || defaults.fontStyle,
-      ligatures: defaults.ligatures,
+      ligatures: seg.ligatures ?? defaults.ligatures,
     },
     letterSpacing: seg.letterSpacing ?? defaults.letterSpacing ?? 0,
-    wordSpacing: defaults.wordSpacing ?? 0,
+    wordSpacing: seg.wordSpacing ?? defaults.wordSpacing ?? 0,
   };
 }
 
@@ -222,7 +222,9 @@ export function breakSegmentsIntoLines(
   const lines: SegmentLine[] = [];
   const { indent = 0, shrink = 0 } = defaults;
   let width = 0;
-  let gaps = 0; // spaces on the line, which is what a justified line can squeeze
+  // The spaces on the line, summed - what a justified line can squeeze. Summed, not counted: each space
+  // is as wide as its own span makes it.
+  let gapWidth = 0;
   let lineSegments: TextSegment[] = [];
   let combined = "";
   let lineStart: SegmentPosition = { segment: 0, offset: 0 }; // where the current line begins
@@ -373,7 +375,7 @@ export function breakSegmentsIntoLines(
       if (paragraphIndex > 0) {
         close(lineSegments, ink, "hard");
         width = 0;
-        gaps = 0;
+        gapWidth = 0;
         open = false;
         inked = false;
         ink = 0;
@@ -412,7 +414,7 @@ export function breakSegmentsIntoLines(
         lineStart = glued.from!;
         width = carried.width;
         ink = carried.ink;
-        gaps = 0;
+        gapWidth = 0;
         open = true;
         inked = true;
       };
@@ -428,7 +430,7 @@ export function breakSegmentsIntoLines(
           lineSegments = [started({ ...segment, fontFamily: family, content: "" }, at(wordAt))];
           combined = "";
           width = 0;
-          gaps = 0;
+          gapWidth = 0;
           open = false;
           inked = false;
           ink = 0;
@@ -443,8 +445,9 @@ export function breakSegmentsIntoLines(
 
         // How much a JUSTIFIED line may be squeezed to keep one more word: the spaces already on the
         // line plus the one that would join it, each giving up at most `shrink` of its width. Zero for
-        // every other alignment, where a squeezed line would simply overflow instead.
-        const squeeze = (gaps + (joins ? 1 : 0)) * spaceWidth * shrink;
+        // every other alignment, where a squeezed line would simply overflow instead. The drawing
+        // spreads the same total evenly over the gaps (`justifyExtra`).
+        const squeeze = (gapWidth + (joins ? spaceWidth : 0)) * shrink;
         // A hyphen inside the word is a break opportunity, taken only when the whole word does not fit
         // here - the same test, squeeze included, as below.
         const fitsHere = (w: number): boolean =>
@@ -455,7 +458,7 @@ export function breakSegmentsIntoLines(
             lineSegments = [started({ ...segment, fontFamily: family, content: "" }, at(startAt))];
             combined = "";
             width = 0;
-            gaps = 0;
+            gapWidth = 0;
             open = false;
             inked = false;
             ink = 0;
@@ -541,7 +544,7 @@ export function breakSegmentsIntoLines(
           lineStart = at(pieceAt);
           combined = split[split.length - 1]!.text;
           width = runAdvance(metrics, combined, font, letterSpacing);
-          gaps = 0;
+          gapWidth = 0;
           open = true;
           inked = true;
           ink = width;
@@ -577,7 +580,7 @@ export function breakSegmentsIntoLines(
             close(lineSegments, ink, "soft", !joined);
             lineStart = at(wordAt);
             width = wordWidth;
-            gaps = 0;
+            gapWidth = 0;
             ink = wordWidth;
             inked = true;
             lineSegments = [];
@@ -588,7 +591,7 @@ export function breakSegmentsIntoLines(
         }
         combined += joins ? " " + word : word;
         width = candidate;
-        if (joins) gaps += 1;
+        if (joins) gapWidth += spaceWidth;
         open = true;
         if (word !== "") {
           ink = width;

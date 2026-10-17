@@ -61,11 +61,8 @@ export class TextRenderer {
       x,
       y,
       width,
-      fontSize,
       color,
       spans,
-      fontFamily,
-      fontStyle,
       textAlignment,
       maxLines,
       overflow,
@@ -73,11 +70,8 @@ export class TextRenderer {
       underline,
       strikethrough,
       skipInk,
-      letterSpacing,
       direction,
-      wordSpacing,
       textIndent,
-      ligatures,
       role,
       breaking,
     } = textElement.getProps();
@@ -87,9 +81,6 @@ export class TextRenderer {
     const { runs, links, decorations, linkGroups } = TextRenderer._buildRuns(
       spans,
       breaking,
-      fontSize,
-      fontFamily,
-      fontStyle,
       objectManager,
       width ?? Number.NaN,
       textAlignment,
@@ -103,11 +94,8 @@ export class TextRenderer {
       underline,
       strikethrough,
       skipInk,
-      letterSpacing,
       direction,
-      wordSpacing,
       textIndent,
-      ligatures,
     );
 
     // Accessible tagging: this whole text block is one structure element (a paragraph P, or a heading
@@ -342,9 +330,6 @@ export class TextRenderer {
     content: TextSegment[],
     // How the text is broken - the element's own settings, the ones it was measured with.
     breaking: SegmentDefaults,
-    fontSize: number,
-    fontFamily: string,
-    fontStyle: FontStyle,
     objectManager: PDFObjectManager,
     maxWidth: number,
     textAlignment: HorizontalAlignment,
@@ -357,11 +342,8 @@ export class TextRenderer {
     underline = false,
     strikethrough = false,
     skipInk = false,
-    letterSpacing = 0,
     direction: Direction = "ltr",
-    wordSpacing = 0,
     textIndent = 0,
-    ligatures = true,
   ): { runs: TextRun[]; links: Link[]; decorations: Line[]; linkGroups: LinkGroup[] } {
     const runs: TextRun[] = [];
     // /Link annotation rects for any `href` spans, collected as we place segments. Empty for the
@@ -400,23 +382,30 @@ export class TextRenderer {
      * single byte 32, so an embedded (Identity-H) font would ignore it entirely.
      */
     const justifyExtra = (
-      line: string,
+      segments: TextSegment[],
       naturalWidth: number,
       isLast: boolean,
       indent = 0,
     ): number => {
       if (align !== HorizontalAlignment.justify) return 0;
-      const gaps = [...line].filter((c) => c === " ").length;
+      // Each space as the breaker counts it: its own span's font and word-spacing.
+      let gaps = 0;
+      let gapWidth = 0;
+      for (const seg of segments) {
+        const spaces = [...seg.content].filter((c) => c === " ").length;
+        if (spaces === 0) continue;
+        const run = runStyleOf(seg, breaking);
+        gaps += spaces;
+        gapWidth +=
+          spaces * (runAdvance(objectManager, " ", run.font, run.letterSpacing) + run.wordSpacing);
+      }
       if (gaps === 0) return 0;
       const slack = maxWidth - indent - naturalWidth;
       // Negative slack is real now: the breaker keeps a word when the line can be SQUEEZED to hold
       // it, so justification has to deliver that squeeze. The floor is the same limit the breaker
-      // used, which is what stops a line it never promised from being crushed.
-      // A space as the breaker counts it: word-spacing included.
-      const spaceWidth =
-        runAdvance(objectManager, " ", { fontFamily, fontSize, fontStyle }, letterSpacing) +
-        wordSpacing;
-      const extra = Math.max(slack / gaps, -spaceWidth * MAX_SPACE_SHRINK);
+      // used - the gaps' widths, summed - which is what stops a line it never promised from being
+      // crushed.
+      const extra = Math.max(slack / gaps, (-gapWidth * MAX_SPACE_SHRINK) / gaps);
       // The last line is never STRETCHED - the rule print and CSS follow. It may still be SQUEEZED:
       // the breaker was allowed to pack it that way, and drawing it loose would push it out of its box.
       return isLast ? Math.min(0, extra) : extra;
@@ -564,6 +553,7 @@ export class TextRenderer {
       part: { text: string; logical: string; rtl: boolean },
       family: string,
       style: FontStyle,
+      runLigatures: boolean,
     ): { text: string; glyphs?: number[] } => {
       // The run's OWN setting, not the default: measuring asked with it (`runAdvance` -> RunFont), and
       // drawing has to ask the same question or the line is measured one width and drawn another.
@@ -571,7 +561,7 @@ export class TextRenderer {
         part.logical,
         family,
         style,
-        ligatures ? undefined : [],
+        runLigatures ? undefined : [],
       );
       if (!shaped) return { text: part.text };
       const ordered = part.rtl ? [...shaped].reverse() : shaped;
@@ -588,9 +578,7 @@ export class TextRenderer {
       let x = initialX + indent + alignmentOffset(line.width, indent);
       // Word-spacing is a per-gap advance just like the justification slack, so it rides the same
       // mechanism: `Tw` would reach only the single byte 32 and miss every embedded font.
-      const extra =
-        wordSpacing +
-        justifyExtra(line.segments.map((seg) => seg.content).join(""), line.width, isLast, indent);
+      const justify = justifyExtra(line.segments, line.width, isLast, indent);
       // Across span boundaries, so a Hebrew span is ordered against its neighbours rather than inside
       // itself. Each run keeps the segment it came from, and with it that span's style.
       const ordered = visualRunsOf(
@@ -604,7 +592,8 @@ export class TextRenderer {
         const run = runStyleOf(segment, breaking);
         const { fontFamily: family, fontSize: size, fontStyle: style } = run.font;
         const segLetterSpacing = run.letterSpacing;
-        const piece = shapedPiece(part, family, style);
+        const runLigatures = run.font.ligatures ?? true;
+        const piece = shapedPiece(part, family, style, runLigatures);
         const runText = piece.text;
         const runColor = segment.fontColor || color;
         // `vertical-align`: this run alone leaves the line's baseline. Its own decoration and link box
@@ -614,10 +603,11 @@ export class TextRenderer {
         const firstRun = runs.length;
         const drawn = emitPiece(
           piece,
-          (word) => shapedPiece({ text: word, logical: word, rtl: part.rtl }, family, style),
+          (word) =>
+            shapedPiece({ text: word, logical: word, rtl: part.rtl }, family, style, runLigatures),
           part.rtl,
           x,
-          extra,
+          run.wordSpacing + justify,
           {
             y: runY,
             fontFamily: family,
