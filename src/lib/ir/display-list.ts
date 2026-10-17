@@ -10,8 +10,8 @@ import type { FormFieldSpec, FieldStyle } from "../forms/field.ts";
  * are intentionally "dumb": absolute geometry + semantic style, with no PDF
  * operators, no font indices, and no object numbers - those are the backend's job.
  *
- * Coordinates are in PDF points (1/72"). Which origin they use is still the
- * producer's concern for now; centralizing the Y-flip at this seam is Phase 3.
+ * Coordinates are in PDF points (1/72") with the engine's top-left origin. The Y-flip to PDF's
+ * bottom-left happens once per page, at this seam (`PdfBackend.flipY`).
  */
 
 /**

@@ -41,6 +41,7 @@ interface ContextKey {
   textStyle: LayoutContext["textStyle"];
   pageConfig: LayoutContext["pageConfig"] | undefined;
   pageInfo: LayoutContext["pageInfo"];
+  boxPaddingBase: number | undefined;
 }
 
 const contextKeyOf = (ctx: LayoutContext, onPage: boolean): ContextKey => ({
@@ -50,6 +51,7 @@ const contextKeyOf = (ctx: LayoutContext, onPage: boolean): ContextKey => ({
   textStyle: ctx.textStyle,
   pageConfig: onPage ? ctx.pageConfig : undefined,
   pageInfo: onPage ? ctx.pageInfo : undefined,
+  boxPaddingBase: ctx.boxPaddingBase,
 });
 
 const sameContext = (a: ContextKey, b: ContextKey): boolean =>
@@ -58,7 +60,8 @@ const sameContext = (a: ContextKey, b: ContextKey): boolean =>
   a.kerning === b.kerning &&
   a.textStyle === b.textStyle &&
   a.pageConfig === b.pageConfig &&
-  a.pageInfo === b.pageInfo;
+  a.pageInfo === b.pageInfo &&
+  a.boxPaddingBase === b.boxPaddingBase;
 
 /** A size's key: the context inputs plus the constraints. */
 interface Key {

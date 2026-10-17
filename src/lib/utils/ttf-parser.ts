@@ -129,6 +129,13 @@ function detScale(m: Affine): number {
   return Math.sqrt(Math.abs(m[0] * m[3] - m[1] * m[2]));
 }
 
+/** Thrown when font bytes are a format jasy cannot embed - said by name, never embedded broken. */
+export class FontFormatError extends Error {
+  constructor(message: string) {
+    super(`@jasy/pdf: ${message}`);
+  }
+}
+
 export class TTFParser {
   unitsPerEm = 1000;
   // FontDescriptor metrics, in PDF glyph space (1000 units / em).
@@ -170,6 +177,21 @@ export class TTFParser {
   private gsubTable?: GsubTable | null;
 
   constructor(private data: Uint8Array) {
+    // Every font path meets here (bytes, a file, a URL, an unwrapped WOFF/WOFF2). A CFF font has the
+    // same tables up front and measured fine, then went into the PDF as a TrueType program it is not.
+    const tag = String.fromCharCode(...data.subarray(0, 4));
+    if (tag === "OTTO") {
+      throw new FontFormatError(
+        "this is an OpenType font with PostScript (CFF) outlines, which jasy does not embed yet - " +
+          "use its TrueType-flavoured version (.ttf, or a .woff/.woff2 made from one)",
+      );
+    }
+    if (tag === "ttcf") {
+      throw new FontFormatError(
+        "this is a TrueType Collection (.ttc), which jasy does not read yet - extract the one face " +
+          "you need into a .ttf",
+      );
+    }
     this.readTableDirectory();
     const head = this.table("head").offset;
     this.unitsPerEm = u16(this.data, head + 18);
@@ -488,15 +510,20 @@ export class TTFParser {
     }
     if (kernLookups.size === 0) return;
 
-    // The PairPos subtables of those lookups (a lookup of another type in the set is ignored).
+    // The PairPos subtables of those lookups (a lookup of another type in the set is ignored). A large
+    // font wraps its lookups in Extension subtables (type 9) for their 32-bit offsets - read through.
     const lookupCount = u16(this.data, lookupListOffset);
     for (const idx of kernLookups) {
       if (idx >= lookupCount) continue;
       const lookup = lookupListOffset + u16(this.data, lookupListOffset + 2 + idx * 2);
-      if (u16(this.data, lookup) !== 2) continue; // lookupType 2 = pair adjustment
+      const type = u16(this.data, lookup);
+      if (type !== 2 && type !== 9) continue; // 2 = pair adjustment, 9 = extension
       const subTableCount = u16(this.data, lookup + 4);
       for (let s = 0; s < subTableCount; s++) {
-        this.gposPairPos.push(lookup + u16(this.data, lookup + 6 + s * 2));
+        const sub = lookup + u16(this.data, lookup + 6 + s * 2);
+        if (type === 2) this.gposPairPos.push(sub);
+        else if (u16(this.data, sub + 2) === 2)
+          this.gposPairPos.push(sub + u32(this.data, sub + 4));
       }
     }
     if (this.gposPairPos.length > 0) this.hasKerning = true;

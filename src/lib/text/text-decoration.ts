@@ -7,11 +7,11 @@
  * `FontBBox`. Keep the two kinds of number in two places so they cannot be mixed up again.
  *
  * Every number here comes out of the font: the standard-14 AFM header, or a TrueType `post` +
- * `OS/2` table. Nothing is invented. Verified against `google-chrome --headless --print-to-pdf` on
- * the same font: Chrome's strikethrough centre lands on `xHeight / 2` (measured 0.260 em vs the
- * font's 0.262), and its underline stroke with `text-decoration-thickness: from-font` is the font's
- * `underlineThickness` (0.048 em vs 0.050). Chrome does NOT use the font's underline POSITION - it
- * has its own offset - so we follow the font there and land within 0.02 em of it.
+ * `OS/2` table. Nothing is invented. The strikethrough sits at `xHeight / 2` - our rule, not
+ * Chrome's: on the font first measured Chrome's centre landed there too (0.260 em vs 0.262), on
+ * Liberation Sans and Noto Sans it sat 2-4 pt higher at 40 pt. The underline stroke is the font's
+ * `underlineThickness`, as Chrome draws it with `text-decoration-thickness: from-font`; its POSITION
+ * follows the font, where Chrome has an offset of its own.
  */
 
 /** A font's decoration metrics, as fractions of the em. */
