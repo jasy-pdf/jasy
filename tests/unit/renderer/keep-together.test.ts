@@ -75,6 +75,28 @@ describe("keepTogether", () => {
     warn.mockRestore();
   });
 
+  it("a break before its FIRST child is a break before the group: it moves whole, no warning", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const pdf = await render(
+      Document([
+        Page({ margin: 40 }, [
+          Column({ gap: 2 }, [
+            ...lines(3),
+            keepTogether([
+              Column({ breakBefore: true }, [Text("GTOP", { size: 12 })]),
+              ...lines(6),
+              Text("GBOT", { size: 12 }),
+            ]),
+          ]),
+        ]),
+      ]),
+    );
+    expect(pageOf(pdf, "GTOP")).toBe(2);
+    expect(pageOf(pdf, "GBOT")).toBe(2);
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
   it("nested keepTogethers still apply when an outer one degrades (outer->inner)", async () => {
     // The outer group is taller than a page, so it must split; an inner keepTogether small enough to fit
     // should still be kept whole rather than split at the boundary.
