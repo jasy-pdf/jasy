@@ -71,3 +71,58 @@ describe("line-breaker", () => {
     expect(lines[0].segments.map((s) => s.content).join("")).toBe("wide");
   });
 });
+
+describe("a span boundary is no break opportunity", () => {
+  // A style change inside a word (`span("Rech") + span("nung")`) must not break it: the same text cut
+  // into spans anywhere breaks exactly where the one string does.
+  const text = (lines: ReturnType<typeof breakSegmentsIntoLines>) =>
+    lines.map((l) => l.segments.map((s) => s.content).join(""));
+  const source = "abc defghijklmnop qr stuvw";
+  const whole = text(breakSegmentsIntoLines([{ content: source }], defaults, 100, metrics));
+
+  it("cut once, anywhere: the same lines as one string", () => {
+    for (let cut = 1; cut < source.length; cut++) {
+      const spans = [{ content: source.slice(0, cut) }, { content: source.slice(cut) }];
+      expect(text(breakSegmentsIntoLines(spans, defaults, 100, metrics)), `cut ${cut}`).toEqual(
+        whole,
+      );
+    }
+  });
+
+  it("cut twice, anywhere: the same lines as one string", () => {
+    for (let a = 1; a < source.length - 1; a++) {
+      for (let b = a + 1; b < source.length; b++) {
+        const spans = [source.slice(0, a), source.slice(a, b), source.slice(b)].map((content) => ({
+          content,
+        }));
+        expect(text(breakSegmentsIntoLines(spans, defaults, 100, metrics)), `${a}/${b}`).toEqual(
+          whole,
+        );
+      }
+    }
+  });
+
+  it("a line that starts inside an earlier span says so - a paragraph split across pages resumes there", () => {
+    const lines = breakSegmentsIntoLines(
+      [{ content: "abc defg" }, { content: "hijklmnop" }],
+      defaults,
+      100,
+      metrics,
+    );
+    expect(lines[1]!.start).toEqual({ segment: 0, offset: 4 });
+  });
+
+  it("a hyphen ending a span is an opportunity - but not before a digit", () => {
+    const at = (spans: string[], width: number) =>
+      text(
+        breakSegmentsIntoLines(
+          spans.map((content) => ({ content })),
+          defaults,
+          width,
+          metrics,
+        ),
+      );
+    expect(at(["abc Rech-", "nungen"], 100)).toEqual(["abc Rech-", "nungen"]);
+    expect(at(["abc 2026-", "10"], 80)).toEqual(["abc", "2026-10"]);
+  });
+});
