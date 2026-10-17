@@ -1,5 +1,13 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { Document, Page, Image, renderToBytes } from "../../../src/lib/api/index.ts";
+import {
+  Document,
+  Page,
+  Image,
+  Svg,
+  PageBuilder,
+  renderToBytes,
+} from "../../../src/lib/api/index.ts";
+import { SvgElement } from "../../../src/lib/elements/svg-element.ts";
 import { ImageUrlError, type ImageElement } from "../../../src/lib/elements/image-element.ts";
 
 // An image from a URL is fetched when the document renders, with the same timeout and size ceiling as a
@@ -16,6 +24,11 @@ const stubFetch = (respond: () => Response) => {
   vi.stubGlobal("fetch", fetch);
   return fetch;
 };
+// A 2:1 drawing.
+const SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 10"><rect width="20" height="10"/></svg>';
+const text = (t: string) => new TextEncoder().encode(t);
+
 const ok = (bytes: Uint8Array) =>
   ({ ok: true, status: 200, arrayBuffer: async () => bytes.slice().buffer }) as unknown as Response;
 const status = (code: number) => ({ ok: false, status: code }) as unknown as Response;
@@ -71,6 +84,49 @@ describe("an image file that cannot be read", () => {
   it("says which file, instead of a later 'call loadAndConvertImage first'", async () => {
     await expect(pdfOf(Image("/nonexistent/jasy-test.png"))).rejects.toThrow(
       /could not read the image at \/nonexistent\/jasy-test\.png/,
+    );
+  });
+});
+
+describe("an SVG from a URL", () => {
+  it("is fetched once, stays a vector, and takes its ratio from the drawing", async () => {
+    const fetch = stubFetch(() => ok(text(SVG)));
+    const svg = Image("https://x.example/logo.svg?v=2", { width: 40 });
+    expect(svg).toBeInstanceOf(SvgElement);
+    const pdf = await pdfOf(svg);
+    expect(pdf).not.toMatch(/\/Subtype \/Image/);
+    expect((svg as SvgElement).getProps().height).toBe(20);
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
+  it("reads a data:image/svg+xml URL without the network", async () => {
+    const svg = Image(`data:image/svg+xml,${encodeURIComponent(SVG)}`, { width: 40 });
+    expect(svg).toBeInstanceOf(SvgElement);
+    await pdfOf(svg);
+    expect((svg as SvgElement).getProps().height).toBe(20);
+  });
+
+  it("is drawn when it sits in a subtree built during layout", async () => {
+    stubFetch(() => ok(text(SVG)));
+    const pdf = new TextDecoder("latin1").decode(
+      await renderToBytes(
+        Document([
+          Page([PageBuilder(() => Svg("https://x.example/logo.svg", { width: 40, height: 20 }))]),
+        ]),
+        { compress: false },
+      ),
+    );
+    expect(pdf).toMatch(/\bre\b|\bm\b/); // the rectangle's path
+  });
+
+  it("stops the render naming the URL when the link is dead or the file is no SVG", async () => {
+    stubFetch(() => status(404));
+    await expect(pdfOf(Image("https://x.example/gone.svg"))).rejects.toThrow(
+      /SVG at https:\/\/x\.example\/gone\.svg could not be fetched: HTTP 404/,
+    );
+    stubFetch(() => ok(PNG));
+    await expect(pdfOf(Image("https://x.example/logo.svg"))).rejects.toThrow(
+      /SVG at https:\/\/x\.example\/logo\.svg could not be read/,
     );
   });
 });

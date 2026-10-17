@@ -1,16 +1,18 @@
 import { PDFElement, hasChildrenProp, hasChildProp } from "../elements/pdf-element.ts";
 import { ImageElement } from "../elements/image-element.ts";
+import { SvgElement } from "../elements/svg-element.ts";
 
 /**
  * Walks the element tree (via `getProps`, the same shallow-reflection style as the validator) and
- * returns every `ImageElement`. A pre-layout pass uses this to resolve each image's intrinsic pixel
- * size asynchronously: layout is synchronous and cannot await jimp, yet it needs the aspect ratio to
- * give a width-only image its proportional height. Cheap - images are few and this runs once.
+ * returns every image - a bitmap, or an SVG (which needs this only when it comes from a URL). A
+ * pre-layout pass uses this to resolve each one's intrinsic size asynchronously: layout is synchronous
+ * and cannot await a decoder or a fetch, yet it needs the aspect ratio to give a width-only image its
+ * proportional height. Cheap - images are few and this runs once.
  */
-export function collectImageElements(root: PDFElement): ImageElement[] {
-  const out: ImageElement[] = [];
+export function collectImageElements(root: PDFElement): (ImageElement | SvgElement)[] {
+  const out: (ImageElement | SvgElement)[] = [];
   const visit = (el: PDFElement): void => {
-    if (el instanceof ImageElement) out.push(el);
+    if (el instanceof ImageElement || el instanceof SvgElement) out.push(el);
     const props = el.getProps() as object;
     if (hasChildrenProp(props)) for (const c of props.children) visit(c);
     else if (hasChildProp(props)) visit(props.child);

@@ -134,6 +134,9 @@ export class ImageUrlError extends Error {
   }
 }
 
+/** How long an image from a URL may take, and how large it may be - a raster image and an SVG alike. */
+export const IMAGE_FETCH_LIMITS = { timeoutMs: 15_000, maxBytes: 32 * 1024 * 1024 };
+
 /** Whether an image source string is an address to fetch rather than a file path. */
 export const isImageUrl = (src: string): boolean => /^(https?:|data:)/i.test(src.trim());
 
@@ -156,10 +159,7 @@ export class CustomUrlImage extends CustomImage {
   }
 
   private async load(): Promise<CustomBytesImage> {
-    const bytes = await fetchBytes(this.url, "image", ImageUrlError, {
-      timeoutMs: 15_000,
-      maxBytes: 32 * 1024 * 1024,
-    });
+    const bytes = await fetchBytes(this.url, "image", ImageUrlError, IMAGE_FETCH_LIMITS);
     const jpeg = bytes[0] === 0xff && bytes[1] === 0xd8;
     const png = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47;
     if (!jpeg && !png) {
@@ -167,7 +167,7 @@ export class CustomUrlImage extends CustomImage {
       const looksLikeMarkup =
         new TextDecoder().decode(bytes.subarray(0, 64)).trimStart()[0] === "<";
       throw new ImageUrlError(
-        `the file at ${this.url} is ${looksLikeMarkup ? "markup (an HTML page or an SVG)" : "not an image we can embed"} - jasy embeds PNG and JPEG`,
+        `the file at ${this.url} is ${looksLikeMarkup ? "markup (an HTML page, or an SVG - pass that to Svg(url))" : "not an image we can embed"} - jasy embeds PNG and JPEG`,
       );
     }
     return new CustomBytesImage(bytes);

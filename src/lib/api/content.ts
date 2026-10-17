@@ -166,15 +166,18 @@ export function Svg(source: SvgSource, opts: SvgOptions = {}): SvgElement {
 /** SVG is recognised by its extension or by its own opening bytes - never by a caller having to say. */
 function isSvg(src: ImageSource): src is string | Uint8Array {
   if (typeof src === "string") {
+    // A URL by its media type (`data:image/svg+xml`) or the extension of its PATH - a query may follow.
+    const path = isImageUrl(src) ? src.trim().replace(/[?#].*$/, "") : src.trim();
+    if (/^data:image\/svg\+xml[;,]/i.test(src.trim())) return true;
     // `.svgz` is a GZIPPED svg. It is caught here rather than left to the image path, because the
     // error a user needs says what the file is - not "unsupported image bytes".
-    if (/\.svgz$/i.test(src.trim())) {
+    if (/\.svgz$/i.test(path)) {
       throw new Error(
         "@jasy/pdf: SVGZ (a gzip-compressed SVG) is not supported. Decompress it first " +
           "(`gunzip logo.svgz`) and pass the plain .svg.",
       );
     }
-    return /\.svg$/i.test(src.trim()) || /^\s*[<\ufeff]/.test(src);
+    return /\.svg$/i.test(path) || /^\s*[<\ufeff]/.test(src);
   }
   if (src instanceof Uint8Array) {
     const head = new TextDecoder().decode(src.subarray(0, 200)).trimStart();
