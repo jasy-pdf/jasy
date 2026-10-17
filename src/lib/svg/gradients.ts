@@ -188,6 +188,14 @@ export function resolveSvgGradient(
   const scale = Math.abs(matrix[0]);
 
   const extend = SPREAD[attributes["spreadMethod"] ?? "pad"] ?? "pad";
+  if (extend !== "pad") {
+    // A PDF shading only clamps its end colours; repeating or mirroring would need a tiling pattern.
+    // Drawn as `pad` it is a different picture - so it is named.
+    throw new SvgUnsupportedError(
+      `spreadMethod="${extend}" on a gradient`,
+      "Only pad (the default) is drawn. Expand the repeats into stops in your editor.",
+    );
+  }
 
   if (def.kind === "linear") {
     // Both anchors go through the transform, so a rotation or a shear lands correctly by itself.

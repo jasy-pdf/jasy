@@ -2,11 +2,11 @@ import { describe, it, expect } from "vitest";
 import { PDFObjectManager, FontStyle } from "../../../src/lib/utils/pdf-object-manager";
 import { runAdvance } from "../../../src/lib/text/advance";
 import { Document, Page, Text, renderToBytes } from "../../../src/lib/api";
-import { buildKernTtf, buildGposKernTtf } from "../utils/ttf-fixture";
+import { buildKernTtf, buildGposKernTtf, buildGposExtensionKernTtf } from "../utils/ttf-fixture";
 
 // Standard-14 kerning: measuring (runAdvance) and drawing (a TJ array) both read the SAME AFM pairs,
-// so a kerned run is exactly as wide as it is drawn. OFF by default (embedded fonts are not kerned
-// yet), so every existing document stays byte-identical.
+// so a kerned run is exactly as wide as it is drawn. On by default in `renderPdf`; the object manager
+// used here starts with it off, so each test says which it wants.
 
 const om = (kerning = false) => {
   const m = new PDFObjectManager();
@@ -19,6 +19,14 @@ describe("getKernPairs (AFM)", () => {
   it("returns the font's declared pairs, one per gap", () => {
     // Helvetica.afm: KPX A V -70, KPX V A -80. "AVA" has gaps A-V and V-A.
     expect(om().getKernPairs("AVA", "Helvetica", FontStyle.Normal)).toEqual([-70, -80]);
+  });
+
+  it("finds pairs with punctuation, umlauts and quotes - the AFM names them by glyph", () => {
+    // KPX T period -120, KPX T comma -120, KPX L quoteright -160, KPX T adieresis -120,
+    // KPX V Adieresis -80. Looked up by the character itself, only letter-letter pairs ever hit.
+    expect(om().getKernPairs("T.T,L\u2019T\u00e4V\u00c4", "Helvetica", FontStyle.Normal)).toEqual([
+      -120, 0, -120, 0, -160, 0, -120, 0, -80,
+    ]);
   });
 
   it("is zero next to a space (letters are never kerned against a space)", () => {
@@ -98,6 +106,10 @@ describe("embedded fonts: kern table and GPOS", () => {
   it("reads kerning from GPOS Type 2 on a font with NO kern table", () => {
     // Only the GPOS PairPos parser (feature scan -> lookup -> coverage -> value record) can find this.
     expect(kern(custom(buildGposKernTtf(-150)), "AB")).toEqual([-150]);
+  });
+
+  it("reads GPOS kerning behind an Extension lookup (type 9), as large fonts write it", () => {
+    expect(kern(custom(buildGposExtensionKernTtf(-150)), "AB")).toEqual([-150]);
   });
 
   it("returns 0 for a pair the font does not kern, and next to a space", () => {

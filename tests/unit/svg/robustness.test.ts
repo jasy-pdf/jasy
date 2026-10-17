@@ -104,3 +104,41 @@ describe("preserveAspectRatio", () => {
     ).toThrow(/preserveAspectRatio/);
   });
 });
+
+describe("what is hidden is not drawn", () => {
+  it('display="none" removes the element and everything inside it - unsupported content included', () => {
+    expect(paths(`<g display="none"><rect width="5" height="5"/><text>x</text></g>`)).toHaveLength(
+      0,
+    );
+    expect(
+      paths(`<rect style="display:none" width="5" height="5"/><rect width="5" height="5"/>`),
+    ).toHaveLength(1);
+  });
+
+  it('visibility="hidden" paints nothing, but a child may show itself again (it inherits)', () => {
+    const drawn = paths(
+      `<g visibility="hidden"><rect width="5" height="5"/><rect visibility="visible" x="9" width="5" height="5"/></g>`,
+    );
+    expect(drawn).toHaveLength(1);
+  });
+});
+
+describe("what is not drawn yet is named, never skipped", () => {
+  it("a marker", () => {
+    expect(() => ir(`<path d="M0 0 L10 10" stroke="black" marker-end="url(#arrow)"/>`)).toThrow(
+      SvgUnsupportedError,
+    );
+    expect(paths(`<path d="M0 0 L10 10" stroke="black" marker-end="none"/>`)).toHaveLength(1);
+  });
+
+  it("a repeating or mirrored gradient", () => {
+    const grad = (spread: string) =>
+      ir(
+        `<defs><linearGradient id="g" spreadMethod="${spread}"><stop offset="0" stop-color="red"/>` +
+          `<stop offset="1" stop-color="blue"/></linearGradient></defs><rect width="9" height="9" fill="url(#g)"/>`,
+      );
+    expect(() => grad("reflect")).toThrow(/spreadMethod="reflect"/);
+    expect(() => grad("repeat")).toThrow(/spreadMethod="repeat"/);
+    expect(() => grad("pad")).not.toThrow();
+  });
+});

@@ -201,6 +201,7 @@ export function Box(a: BoxOptions | PDFElement[], b?: PDFElement[]): PDFElement 
           new PaddingElement({
             margin: toEdges(opts.padding),
             child: children.length === 1 ? children[0] : Column(children),
+            ofBox: true,
           }),
         ]
       : children.length > 1 && children.some((child) => child instanceof ExpandedElement)

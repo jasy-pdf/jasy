@@ -13,6 +13,8 @@ import {
   renderPdf,
 } from "../../../src/lib/api";
 import { PdfBackend } from "../../../src/lib/renderer/pdf-backend";
+import { renderToBytes } from "../../../src/lib/api/index.ts";
+import { drawnNodes } from "../support/drawn.ts";
 import { IRNode } from "../../../src/lib/ir/display-list";
 
 // The y a `Td` operator places the given text at (uncompressed content stream, PDF bottom-left origin).
@@ -251,5 +253,31 @@ describe("a nested stack with a Spacer grows only into what is left", () => {
     const x = await drawnIn(Row([Row([T("L"), Spacer(), T("R")]), Expanded(T("EXP"))]));
     expect(x["EXP"]!).toBeGreaterThan(10 + 50); // the Expanded got a share, it did not collapse to 0
     expect(x["EXP"]! + 20.01).toBeLessThanOrEqual(RIGHT + 0.01);
+  });
+});
+
+describe("a padded Box passes its height on", () => {
+  // `Box({ height, padding }, [a, Spacer(), b])` must push `b` down exactly as `Box({ height },
+  // [Column([a, Spacer(), b])])` does - the padding only insets it. It used to give the stack an
+  // unbounded height, so the Spacer had nothing to fill and `b` sat right under `a`.
+  const bOf = async (box: ReturnType<typeof Box>) => {
+    const [nodes] = await drawnNodes(() => renderToBytes(Document([Page([box])])));
+    const rects = nodes!.filter((n) => n.type === "rect") as { y: number; height: number }[];
+    const [outer, , b] = rects;
+    return outer!.y + outer!.height - (b!.y + b!.height); // space left under b
+  };
+  const kids = () => [
+    Box({ height: 20, borderWidth: 0, bg: "#aaaaaa" }, []),
+    Spacer(),
+    Box({ height: 20, borderWidth: 0, bg: "#ff0000" }, []),
+  ];
+
+  it("b ends at the bottom, inside the padding", async () => {
+    expect(await bOf(Box({ height: 200, borderWidth: 0, bg: "#eeeeee" }, [Column(kids())]))).toBe(
+      0,
+    );
+    expect(
+      await bOf(Box({ height: 200, borderWidth: 0, bg: "#eeeeee", padding: 10 }, kids())),
+    ).toBe(10);
   });
 });

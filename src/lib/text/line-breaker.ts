@@ -209,6 +209,9 @@ export function breakSegmentsIntoLines(
   // a line of spaces alone is empty, and closing it would push a blank line before the word.
   let inked = false;
   let ink = 0; // the line's width up to its last drawn glyph - the spaces after it hang
+  // A space that did not fit was not added (it hangs), so the line's text no longer shows that it ends
+  // in a break opportunity - this does.
+  let hung = false;
   // An empty piece (what a span leaves after its `\n`) has nothing to draw, and its font must not size
   // the line it lands on - a big span ending in `\n` made the next line as tall as itself. Only a blank
   // line keeps one: it is what gives that line its height.
@@ -260,6 +263,89 @@ export function breakSegmentsIntoLines(
     });
   };
 
+  // Where each piece of the line begins in the source: a word that runs across a span boundary can move
+  // to the next line together with its earlier part, which then starts that line in an earlier span.
+  const origin = new WeakMap<TextSegment, SegmentPosition>();
+  const started = (piece: TextSegment, from: SegmentPosition): TextSegment => {
+    origin.set(piece, from);
+    return piece;
+  };
+
+  /** The width and ink of `pieces`, summed exactly as `placeWord` builds a line: word by word, a space
+   *  joining the words inside a piece, nothing between pieces. */
+  const measure = (pieces: TextSegment[]): { width: number; ink: number } => {
+    let total = 0;
+    let ink = 0;
+    let open = false;
+    for (const piece of pieces) {
+      const font = {
+        fontFamily: piece.fontFamily || defaults.fontFamily,
+        fontSize: piece.fontSize || defaults.fontSize,
+        fontStyle: piece.fontStyle || defaults.fontStyle,
+        ligatures: defaults.ligatures,
+      };
+      const spacing = piece.letterSpacing ?? defaults.letterSpacing ?? 0;
+      const space = runAdvance(metrics, " ", font, spacing) + wordSpacing;
+      piece.content.split(" ").forEach((word, i) => {
+        total = total + ((open && i > 0 ? space : 0) + runAdvance(metrics, word, font, spacing));
+        open = true;
+        if (word !== "") ink = total;
+      });
+    }
+    return { width: total, ink };
+  };
+
+  /**
+   * The line is full and the next word follows the line's last piece with NO space: it continues a word
+   * that began in an earlier span (`span("Rech") + span("nung")`). A span boundary is no break
+   * opportunity, so the break belongs at the last one before that word - a space, or a hyphen or soft
+   * hyphen ending a span - and the word's earlier part moves down with it. `null`: the line has none
+   * before it, and the word stays, as the same text in one string would.
+   */
+  const gluedTail = (
+    next: string,
+    afterSpace: boolean,
+  ): {
+    keep: TextSegment[];
+    moved: TextSegment[];
+    from?: SegmentPosition;
+    hyphen: boolean;
+  } | null => {
+    const pieces = lineSegments.slice(0, -1); // the last is the current span's own, still empty
+    const moved: TextSegment[] = [];
+    let following = next;
+    const inks = (keep: TextSegment[]) =>
+      keep.some((p) => withoutSoftHyphens(p.content).trim() !== "");
+    if (afterSpace) return inks(pieces) ? { keep: pieces, moved, hyphen: false } : null;
+    for (let i = pieces.length - 1; i >= 0; i--) {
+      const piece = pieces[i]!;
+      const c = piece.content;
+      const soft = c.endsWith(SOFT_HYPHEN);
+      if (c.endsWith(" ") || soft || (c.endsWith("-") && !/^\d/.test(following))) {
+        const keep = pieces.slice(0, i + 1);
+        return inks(keep)
+          ? { keep, moved, from: moved[0] && origin.get(moved[0]), hyphen: soft }
+          : null;
+      }
+      const space = c.lastIndexOf(" ");
+      if (space >= 0) {
+        const from = origin.get(piece)!;
+        const head = started({ ...piece, content: c.slice(0, space + 1) }, from);
+        const tail = started(
+          { ...piece, content: c.slice(space + 1) },
+          { segment: from.segment, offset: from.offset + space + 1 },
+        );
+        const keep = [...pieces.slice(0, i), head];
+        return inks(keep)
+          ? { keep, moved: [tail, ...moved], from: origin.get(tail), hyphen: false }
+          : null;
+      }
+      moved.unshift(piece);
+      following = c + following;
+    }
+    return null;
+  };
+
   segments.forEach((segment, segmentIndex) => {
     const family = segment.fontFamily || defaults.fontFamily;
     const size = segment.fontSize || defaults.fontSize;
@@ -286,6 +372,7 @@ export function breakSegmentsIntoLines(
         open = false;
         inked = false;
         ink = 0;
+        hung = false;
         lineSegments = [];
         lineStart = at(paragraphStart);
       }
@@ -295,11 +382,53 @@ export function breakSegmentsIntoLines(
       // Start this segment's piece empty; its content is filled word-by-word below. (Not
       // the original content - otherwise a segment whose FIRST word overflows would carry
       // its whole text into the line that just closed.)
-      lineSegments.push({ ...segment, fontFamily: family, content: "" });
+      lineSegments.push(
+        started({ ...segment, fontFamily: family, content: "" }, at(paragraphStart)),
+      );
       combined = "";
+
+      /** Close the line before a word whose earlier part (`glued.moved`) moves down with it. */
+      const carryOver = (
+        glued: {
+          keep: TextSegment[];
+          moved: TextSegment[];
+          from?: SegmentPosition;
+          hyphen: boolean;
+        },
+        wordAt: number,
+      ): void => {
+        close(glued.keep, measure(glued.keep).ink, "soft", glued.hyphen);
+        const carried = measure(glued.moved);
+        lineSegments = [
+          ...glued.moved,
+          started({ ...segment, fontFamily: family, content: "" }, at(wordAt)),
+        ];
+        combined = "";
+        lineStart = glued.from!;
+        width = carried.width;
+        ink = carried.ink;
+        gaps = 0;
+        open = true;
+        inked = true;
+      };
 
       // One word, placed at source offset `wordAt`; `joined`: a space joins it to the word before.
       const placeWord = (word: string, wordAt: number, joined: boolean): void => {
+        const afterSpace = hung;
+        hung = false;
+        // The space before this word hung past the edge, so the line is full: the word starts the next
+        // one. It must not slip in behind the space it was written after, however narrow it is.
+        if (afterSpace && inked && word !== "") {
+          close(lineSegments, ink, "soft");
+          lineSegments = [started({ ...segment, fontFamily: family, content: "" }, at(wordAt))];
+          combined = "";
+          width = 0;
+          gaps = 0;
+          open = false;
+          inked = false;
+          ink = 0;
+          lineStart = at(wordAt);
+        }
         // Only a word that follows something on this line is joined to it by the space.
         const joins = open && joined;
         const wordWidth = runAdvance(metrics, word, font, letterSpacing);
@@ -318,7 +447,7 @@ export function breakSegmentsIntoLines(
         const breaks = mayBreak(word) ? hyphenBreaks(word) : NO_BREAKS;
         if (breaks.length > 0 && !fitsHere(wordWidth)) {
           const freshLine = (startAt: number) => {
-            lineSegments = [{ ...segment, fontFamily: family, content: "" }];
+            lineSegments = [started({ ...segment, fontFamily: family, content: "" }, at(startAt))];
             combined = "";
             width = 0;
             gaps = 0;
@@ -340,7 +469,9 @@ export function breakSegmentsIntoLines(
             ink = width;
             combined += joins ? " " + part : part;
             if (lineSegments.length === 0)
-              lineSegments.push({ ...segment, fontFamily: family, content: "" });
+              lineSegments.push(
+                started({ ...segment, fontFamily: family, content: "" }, at(wordAt)),
+              );
             lineSegments[lineSegments.length - 1]!.content = combined;
             close(lineSegments, ink, endAt(word, head));
             freshLine(wordAt + head);
@@ -348,10 +479,18 @@ export function breakSegmentsIntoLines(
             return;
           }
           if (inked) {
-            close(lineSegments, ink, "soft", !joined);
-            freshLine(wordAt);
-            placeWord(word, wordAt, false);
-            return;
+            const glued = joined ? undefined : gluedTail(word, afterSpace);
+            if (glued && glued.moved.length > 0) {
+              carryOver(glued, wordAt);
+              placeWord(word, wordAt, false);
+              return;
+            }
+            if (glued !== null) {
+              close(lineSegments, ink, "soft", !joined);
+              freshLine(wordAt);
+              placeWord(word, wordAt, false);
+              return;
+            }
           }
           placeWord(headAt(word, breaks[0]!), wordAt, joined);
           close(lineSegments, ink, endAt(word, breaks[0]!));
@@ -377,7 +516,7 @@ export function breakSegmentsIntoLines(
           // not against what is left of this line.
           if (inked) {
             close(lineSegments, ink, "soft", !joined);
-            lineSegments = [{ ...segment, fontFamily: family, content: "" }];
+            lineSegments = [started({ ...segment, fontFamily: family, content: "" }, at(wordAt))];
             combined = "";
           }
           // Each piece starts where the source text of the previous one ended.
@@ -391,8 +530,8 @@ export function breakSegmentsIntoLines(
               runAdvance(metrics, piece.text, font, letterSpacing),
               piece.hyphen ? "hyphen" : "split",
             );
-            lineSegments = [{ ...segment, fontFamily: family, content: "" }];
             pieceAt += piece.source;
+            lineSegments = [started({ ...segment, fontFamily: family, content: "" }, at(pieceAt))];
           }
           lineStart = at(pieceAt);
           combined = split[split.length - 1]!.text;
@@ -418,30 +557,44 @@ export function breakSegmentsIntoLines(
         if (candidate - squeeze > room && inked) {
           // A space that does not fit hangs past the edge, as in CSS. Closing the line on it would end
           // the paragraph's last line "soft" (stretched when justified) or push a blank line before `\n`.
-          if (word === "") return;
-          close(lineSegments, ink, "soft", !joined);
-          lineStart = at(wordAt);
-          width = wordWidth;
-          gaps = 0;
-          ink = wordWidth;
-          inked = true;
-          lineSegments = [];
-          combined = word;
-          lineSegments.push({ ...segment, content: combined });
-        } else {
-          combined += joins ? " " + word : word;
-          width = candidate;
-          if (joins) gaps += 1;
-          open = true;
-          if (word !== "") {
-            ink = width;
+          if (word === "") {
+            hung = true;
+            return;
+          }
+          const glued = joined ? undefined : gluedTail(word, afterSpace);
+          if (glued && glued.moved.length > 0) {
+            carryOver(glued, wordAt);
+            placeWord(word, wordAt, false);
+            return;
+          }
+          // `null`: nowhere to break before this word - it stays on the line, below.
+          if (glued !== null) {
+            close(lineSegments, ink, "soft", !joined);
+            lineStart = at(wordAt);
+            width = wordWidth;
+            gaps = 0;
+            ink = wordWidth;
             inked = true;
+            lineSegments = [];
+            combined = word;
+            lineSegments.push(started({ ...segment, content: combined }, at(wordAt)));
+            return;
           }
-          if (lineSegments.length === 0) {
-            lineSegments.push({ ...segment, fontFamily: family, content: combined });
-          }
-          lineSegments[lineSegments.length - 1].content = combined;
         }
+        combined += joins ? " " + word : word;
+        width = candidate;
+        if (joins) gaps += 1;
+        open = true;
+        if (word !== "") {
+          ink = width;
+          inked = true;
+        }
+        if (lineSegments.length === 0) {
+          lineSegments.push(
+            started({ ...segment, fontFamily: family, content: combined }, at(wordAt)),
+          );
+        }
+        lineSegments[lineSegments.length - 1].content = combined;
       };
       words.forEach((word, wordIndex) => {
         const wordAt = wordStart;

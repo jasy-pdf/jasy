@@ -311,14 +311,14 @@ export class PdfBackend {
   }
 
   /**
-   * Clamp the four radii into the box. Each is capped at half the box, and two radii sharing an edge
-   * are scaled down together when they would overlap - the CSS rule, and what keeps the path from
-   * folding back on itself.
+   * Clamp the four radii into the box: two radii sharing an edge are scaled down together when they
+   * would overlap - the CSS rule (css-backgrounds-3, corner overlap), and what keeps the path from
+   * folding back on itself. A single corner is NOT capped at half the box: on a 200x40 box a lone
+   * 30pt corner stays 30, as in CSS; equal corners still end at half the short side.
    */
   private static clampRadii(radius: number | Radii, w: number, h: number): Required<Radii> {
     const n = typeof radius === "number" ? radius : 0;
-    const cap = Math.max(0, Math.min(w, h) / 2);
-    const at = (v: number | undefined) => Math.max(0, Math.min(v ?? n, cap));
+    const at = (v: number | undefined) => Math.max(0, v ?? n);
     const r =
       typeof radius === "number"
         ? { tl: at(radius), tr: at(radius), br: at(radius), bl: at(radius) }

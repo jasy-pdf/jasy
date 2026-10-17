@@ -152,9 +152,16 @@ function rootMapping(root: XmlElement, target: SvgTarget): { matrix: Affine; siz
  * it draws something the file did not describe: a drop-shadow logo as a hard silhouette. `clip-path`
  * used to be listed here; it is resolved now, which is the honest version of the same rule.
  */
+const MARKER_HINT =
+  "Markers (arrowheads, dots on a line) are not drawn yet; expand them into shapes in your editor.";
+
 const REFUSED_ATTRIBUTES: Record<string, string> = {
   mask: "Masks are pixel operations; flatten the artwork in your editor instead.",
   filter: "Filters are pixel operations; rasterise that part to a PNG instead.",
+  marker: MARKER_HINT,
+  "marker-start": MARKER_HINT,
+  "marker-mid": MARKER_HINT,
+  "marker-end": MARKER_HINT,
 };
 
 function refuseAttributes(tagName: string, read: (name: string) => string | undefined): void {
@@ -278,6 +285,9 @@ function walk(
   // Everything below reads through the cascade, not the raw attributes: `filter="url(#f)"` and
   // `style="filter:url(#f)"` are the same instruction, and a `<style>` rule can set either.
   const read = cascadedReader(attributes, css);
+  // `display: none` takes the element out with everything inside it - nothing of it is drawn, so
+  // nothing of it can be unsupported either.
+  if (read("display")?.trim() === "none") return;
   refuseAttributes(tagName, read);
   const style = resolveStyle(parentStyle, attributes, css);
   const transform = attributes["transform"]
@@ -325,7 +335,7 @@ function walk(
     }
     // A shape with neither fill nor stroke, or with no geometry, paints nothing - and an empty Path
     // node would only cost bytes.
-    if (commands.length > 0 && (style.fill || style.stroke)) {
+    if (commands.length > 0 && style.visible && (style.fill || style.stroke)) {
       // A gradient is resolved HERE too, and for the same reason: in its default units its anchors
       // are fractions of the SHAPE's bounding box, which only exists at this point.
       const shapeAlpha = style.fillOpacity * style.opacity;

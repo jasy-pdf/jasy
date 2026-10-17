@@ -113,6 +113,36 @@ export function buildGposKernTtf(xAdvance = -150): Buffer {
   return assembleTtf([...baseTables([0, 500, 700, 250]), ["GPOS", g]]);
 }
 
+// The same kerning, with the PairPos behind an Extension subtable (lookup type 9) - how large fonts
+// reach subtables past 64 KB. The PairPos keeps its bytes; only the lookup points through 8 more.
+export function buildGposExtensionKernTtf(xAdvance = -150): Buffer {
+  const plain = buildGposKernTtf(xAdvance);
+  const gpos = gposOf(plain);
+  const g = Buffer.alloc(gpos.length + 8);
+  gpos.copy(g, 0, 0, 38); // header, feature list, lookup list, lookup
+  g.writeUInt16BE(9, 30); // lookupType 9 = extension; its subtable is still @38
+  g.writeUInt16BE(1, 38); // posFormat 1
+  g.writeUInt16BE(2, 40); // extensionLookupType 2 = pair adjustment
+  g.writeUInt32BE(8, 42); // extensionOffset -> PairPos @46
+  gpos.copy(g, 46, 38);
+  return assembleTtf([...baseTables([0, 500, 700, 250]), ["GPOS", g]]);
+}
+
+/** The GPOS table's bytes out of an assembled font. */
+function gposOf(font: Buffer): Buffer {
+  const numTables = font.readUInt16BE(4);
+  for (let i = 0; i < numTables; i++) {
+    const rec = 12 + i * 16;
+    if (font.toString("latin1", rec, rec + 4) === "GPOS") {
+      return font.subarray(
+        font.readUInt32BE(rec + 8),
+        font.readUInt32BE(rec + 8) + font.readUInt32BE(rec + 12),
+      );
+    }
+  }
+  throw new Error("no GPOS");
+}
+
 // A minimal TTF whose cmap is FORMAT 12, mapping a single astral code point (default U+1F600 😀)
 // to a glyph with a known advance (default 900 units @ em 1000). Lets tests assert that astral
 // text is measured by code point, not by UTF-16 unit (an emoji is one glyph, not two half-widths).
