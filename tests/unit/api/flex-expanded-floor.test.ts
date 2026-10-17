@@ -1,5 +1,5 @@
 // `Expanded(child)` makes the CHILD the flex item (CSS `flex: 1` on the child itself): its own width or
-// height gives way to its share.
+// height gives way to its share, which never drops below what its content needs nor rises above its max.
 import { describe, it, expect } from "vitest";
 import { Box, Column, Row, Expanded } from "../../../src/lib/api/layout.ts";
 import { Text } from "../../../src/lib/api/text.ts";
@@ -13,6 +13,8 @@ const layout = (el: ReturnType<typeof Row>, width: number) =>
   el.calculateLayout(BoxConstraints.loose(width, Infinity), { x: 0, y: 0 }, ctx());
 
 const widthOf = (el: { getProps(): { width?: unknown } }) => el.getProps().width as number;
+
+const LONG = "Verpflichtungserklaerung";
 
 describe("the child of an Expanded fills its share", () => {
   it("its own width gives way to its share", () => {
@@ -37,5 +39,34 @@ describe("the child of an Expanded fills its share", () => {
     layout(Row([Expanded(a), Expanded(b)]), 200);
     expect(widthOf(a)).toBe(100);
     expect(widthOf(b)).toBe(100);
+  });
+
+  it("next to a full-width sibling, the sibling makes room instead of the Expanded collapsing to 0", () => {
+    const fixed = Box({ width: 200 }, [Text("x", { size: 12 })]);
+    const inner = Box({ width: 40 }, [Text("B", { size: 12 })]);
+    layout(Row([fixed, Expanded(inner)]), 200);
+    const floor = inner.minIntrinsicMain(true, ctx());
+    expect(floor).toBeGreaterThan(0);
+    // Chrome, `<div style="flex:1; width:40">B</div>` beside a 200 wide sibling: the item keeps its text.
+    expect(widthOf(inner)).toBeCloseTo(floor, 6);
+    expect(widthOf(fixed) + widthOf(inner)).toBeCloseTo(200, 6);
+  });
+
+  it("a share below the content is frozen there and the rest goes to the others", () => {
+    const short = Box([Text("a", { size: 12 })]);
+    const long = Box([Text(LONG, { size: 12 })]);
+    layout(Row([Expanded(short), Expanded(long)]), 400);
+    const word = long.minIntrinsicMain(true, ctx());
+    expect(word).toBeGreaterThan(200); // wider than an equal half - the case this is about
+    expect(widthOf(long)).toBeCloseTo(word, 6);
+    expect(widthOf(short)).toBeCloseTo(400 - word, 6);
+  });
+
+  it("a max is frozen too, and the rest goes to the others", () => {
+    const capped = Box({ maxWidth: 100 }, []);
+    const free = Box([]);
+    layout(Row([Expanded(capped), Expanded(free)]), 500);
+    expect(widthOf(capped)).toBe(100);
+    expect(widthOf(free)).toBe(400);
   });
 });

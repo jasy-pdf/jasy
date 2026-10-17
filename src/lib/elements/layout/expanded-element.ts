@@ -29,6 +29,11 @@ export class ExpandedElement extends FlexiblePDFElement implements Fragmentable 
     return this.child.minIntrinsicMain(horizontal, ctx);
   }
 
+  /** And the ceiling is the child's. */
+  override maxExtent(horizontal: boolean): number {
+    return this.child.maxExtent(horizontal);
+  }
+
   calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
     Validator.validateFlexElement(this);
     const size = this.sizeWith(constraints, ctx, offset);

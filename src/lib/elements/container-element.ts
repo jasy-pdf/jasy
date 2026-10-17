@@ -184,6 +184,10 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
     return horizontal ? this.requested.widthFactor : this.requested.heightFactor;
   }
 
+  override maxExtent(horizontal: boolean): number {
+    return (horizontal ? this.requested.maxWidth : this.requested.maxHeight) ?? Infinity;
+  }
+
   /**
    * A Column stacks vertically, so a flex child of its OWN only ever needs a bounded height. But the need
    * also propagates: a `Spacer` two levels down is just as unable to resolve against an infinite axis, so

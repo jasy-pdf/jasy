@@ -223,6 +223,10 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
     return horizontal ? this.sizeMemory.widthFactor : this.sizeMemory.heightFactor;
   }
 
+  override maxExtent(horizontal: boolean): number {
+    return (horizontal ? this.sizeMemory.maxWidth : this.sizeMemory.maxHeight) ?? Infinity;
+  }
+
   /** A box has no flex children of its own, but it must not swallow the need of the stack inside it: a
    *  `Spacer` in a box can only resolve if the box itself was given a bounded extent to pass down. With an
    *  explicit size on an axis the box already knows its extent there and asks for nothing. */

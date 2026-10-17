@@ -214,6 +214,12 @@ export abstract class PDFElement {
     return undefined;
   }
 
+  /** The most this element may be on an axis in points (its `maxWidth`/`maxHeight`): a flex line freezes
+   *  a flex child there. A percentage max resolves against what the child is given, so it is not one. */
+  maxExtent(_horizontal: boolean): number {
+    return Infinity;
+  }
+
   /**
    * Whether this element needs a BOUNDED extent on the given axis to lay itself out (`true` for a
    * horizontal axis = width). A flex parent measures its fixed children with an unbounded main axis, so

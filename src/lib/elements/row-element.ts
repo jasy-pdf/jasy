@@ -123,6 +123,10 @@ export class RowElement extends SizedPDFElement {
     return horizontal ? this.requested.widthFactor : this.requested.heightFactor;
   }
 
+  override maxExtent(horizontal: boolean): number {
+    return (horizontal ? this.requested.maxWidth : this.requested.maxHeight) ?? Infinity;
+  }
+
   /** The mirror of `ContainerElement`: a Row's OWN flex child needs a bounded width, and the need of any
    *  descendant propagates on both axes (see the Column for the reasoning). */
   override needsBoundedMain(horizontal: boolean): boolean {

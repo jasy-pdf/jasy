@@ -60,6 +60,10 @@ export abstract class ProxyElement extends PDFElement implements Fragmentable {
     return this.child.relativeSizeFactor(horizontal);
   }
 
+  override maxExtent(horizontal: boolean): number {
+    return this.child.maxExtent(horizontal);
+  }
+
   override needsBoundedMain(horizontal: boolean): boolean {
     return this.child.needsBoundedMain(horizontal);
   }
