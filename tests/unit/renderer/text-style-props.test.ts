@@ -90,6 +90,17 @@ describe("wordSpacing", () => {
     const runs = await drawn(text("aa bb"));
     expect(runs.map((r) => r.text)).toEqual(["aa bb"]);
   });
+
+  it("reaches span text too, across a span boundary", async () => {
+    const runs = await drawn(text([{ content: "aa " }, { content: "bb" }], { wordSpacing: 6 }));
+    expect(runs.map((r) => r.text)).toEqual(["aa", "bb"]);
+    expect(runs.map((r) => r.x)).toEqual([0, 36]);
+  });
+
+  it("is counted when span text is broken", async () => {
+    const runs = await drawn(text([{ content: "aa bb cc" }], { wordSpacing: 40 }), 120);
+    expect(new Set(runs.map((r) => r.y)).size).toBe(2);
+  });
 });
 
 describe("textIndent", () => {

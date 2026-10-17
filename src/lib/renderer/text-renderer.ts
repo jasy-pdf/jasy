@@ -92,16 +92,7 @@ export class TextRenderer {
     // Segments: each line's box comes from the fonts actually on it. `splitting` has to travel with
     // them for the same reason `letterSpacing` does: it changes where a line ENDS, so leaving it out
     // measures a paragraph at one line count and draws it at another.
-    const defaults = {
-      fontFamily,
-      fontSize,
-      fontStyle,
-      letterSpacing,
-      splitting: lineOptions.splitting,
-      ligatures: lineOptions.ligatures,
-      shownLines: lineOptions.shownLines,
-      indent: lineOptions.indent,
-    };
+    const defaults = { fontFamily, fontSize, fontStyle, letterSpacing, ...lineOptions };
     const lines = breakSegmentsIntoLines(
       content,
       defaults,
@@ -731,12 +722,10 @@ export class TextRenderer {
     const pushLine = (line: SegmentLine, lineY: number, isLast: boolean, indent: number): void => {
       // CSS `text-indent`, as for a plain string: the FIRST line starts in, with that much less room.
       let x = initialX + indent + alignmentOffset(line.width, indent);
-      const extra = justifyExtra(
-        line.segments.map((seg) => seg.content).join(""),
-        line.width,
-        isLast,
-        indent,
-      );
+      // Word-spacing rides the justification slack, as for a plain string.
+      const extra =
+        wordSpacing +
+        justifyExtra(line.segments.map((seg) => seg.content).join(""), line.width, isLast, indent);
       // Across span boundaries, so a Hebrew span is ordered against its neighbours rather than inside
       // itself. Each run keeps the segment it came from, and with it that span's style.
       const ordered = visualRunsOf(
@@ -830,6 +819,8 @@ export class TextRenderer {
       ligatures,
       shownLines,
       indent: textIndent,
+      wordSpacing,
+      shrink: align === HorizontalAlignment.justify ? MAX_SPACE_SHRINK : 0,
     };
     let top = yPosition;
     const segmentLines = breakSegmentsIntoLines(

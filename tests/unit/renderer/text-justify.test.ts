@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { TextRenderer } from "../../../src/lib/renderer/text-renderer.ts";
 import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager.ts";
-import { TextElement } from "../../../src/lib/elements/text-element.ts";
+import { TextElement, type TextSegment } from "../../../src/lib/elements/text-element.ts";
 import { HorizontalAlignment } from "../../../src/lib/elements/pdf-element.ts";
 import { BoxConstraints } from "../../../src/lib/layout/box-constraints.ts";
 import { testMetrics } from "../support/metrics.ts";
@@ -25,7 +25,11 @@ const om = () =>
   }) as unknown as PDFObjectManager;
 
 /** The text runs of a paragraph laid out in a box `width` wide, in drawing order. */
-const drawn = async (content: string, width: number, align?: HorizontalAlignment) => {
+const drawn = async (
+  content: string | TextSegment[],
+  width: number,
+  align?: HorizontalAlignment,
+) => {
   const el = new TextElement({
     content,
     fontSize: 10,
@@ -114,6 +118,13 @@ describe("squeezing a line to keep one more word", () => {
     expect(lines[0].map((r) => r.text)).toEqual(["aa", "bb", "cc"]);
   });
 
+  it("squeezes span text exactly like a plain string", async () => {
+    const spans = [{ content: "aa bb " }, { content: "cc dd ee ff" }];
+    const lines = byLine(await drawn(spans, 105, HorizontalAlignment.justify));
+    expect(lines[0].map((r) => r.text)).toEqual(["aa", "bb", "cc", "dd"]);
+    expect(lines[0].map((r) => Math.round(r.x * 100) / 100)).toEqual([0, 28.33, 56.67, 85]);
+  });
+
   it("never squeezes text that is not justified - it would just overflow", async () => {
     const lines = byLine(await drawn("aa bb cc dd", 105));
     expect(lines).toHaveLength(2);
@@ -144,6 +155,23 @@ describe("the measure pass and the draw pass must agree", () => {
     const drawnLines = byLine(await drawn(content, 105, HorizontalAlignment.justify)).length;
     // The unit-metrics line box is exactly one em, so the height IS the line count times the size.
     expect(measured).toBe(drawnLines * 10);
+  });
+
+  it("counts the same lines it draws for span text", async () => {
+    const content = [{ content: "aa bb cc " }, { content: "dd ee ff gg hh" }];
+    const el = new TextElement({
+      content,
+      fontSize: 10,
+      fontFamily: "Helvetica",
+      textAlignment: HorizontalAlignment.justify,
+    });
+    const manager = om();
+    el.calculateLayout(BoxConstraints.tight(105, 400), { x: 0, y: 0 }, {
+      metrics: manager,
+    } as never);
+    const drawnLines = byLine(await drawn(content, 105, HorizontalAlignment.justify)).length;
+    expect(drawnLines).toBe(2);
+    expect((el.getProps() as { height: number }).height).toBe(drawnLines * 10);
   });
 });
 
