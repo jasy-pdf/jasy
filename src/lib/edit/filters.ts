@@ -45,7 +45,7 @@ export function asciiHexDecode(data: Uint8Array): Uint8Array {
 }
 
 /** `/ASCII85Decode`: groups of five in `!`..`u`, `z` for four zero bytes, `~>` ends it. */
-export function ascii85Decode(data: Uint8Array): Uint8Array {
+export function ascii85Decode(data: Uint8Array, max: number): Uint8Array {
   const out: number[] = [];
   const group: number[] = [];
   const flush = (count: number) => {
@@ -54,6 +54,7 @@ export function ascii85Decode(data: Uint8Array): Uint8Array {
     if (n > 0xffffffff) throw new PdfFilterError("ASCII85Decode: a group decodes past 32 bits");
     for (let i = 0; i < count - 1; i++) out.push((n >>> (24 - 8 * i)) & 0xff);
     group.length = 0;
+    if (out.length > max) throw tooLarge(max);
   };
   for (let i = 0; i < data.length; i++) {
     const c = data[i];
@@ -61,6 +62,7 @@ export function ascii85Decode(data: Uint8Array): Uint8Array {
     if (c === 0x20 || (c >= 0x09 && c <= 0x0d) || c === 0x00) continue;
     if (c === 0x7a && group.length === 0) {
       out.push(0, 0, 0, 0); // "z"
+      if (out.length > max) throw tooLarge(max);
       continue;
     }
     if (c < 0x21 || c > 0x75) {

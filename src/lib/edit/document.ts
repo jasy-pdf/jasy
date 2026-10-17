@@ -138,10 +138,12 @@ export class PdfDocument {
     try {
       doc.security = await doc.securityHandlerFor(opts.password);
     } catch (e) {
-      // Only the attached files are encrypted (Acrobat's "encrypt only file attachments"): the document
-      // opens as it is, and an attachment asks for the password when it is read.
+      // Only the attached files are encrypted (Acrobat's "encrypt only file attachments"): without a
+      // password the document opens as it is, and an attachment asks for it when it is read. A WRONG
+      // password is still reported as one.
       const filesOnly = !doc.enciphered.streams && !doc.enciphered.strings;
-      if (!(filesOnly && e instanceof PdfEncryptedError && e.needsPassword)) throw e;
+      const noPassword = opts.password === undefined;
+      if (!(filesOnly && noPassword && e instanceof PdfEncryptedError && e.needsPassword)) throw e;
     }
     await doc.decryptEverything();
     return doc;
@@ -806,7 +808,7 @@ export class PdfDocument {
         return asciiHexDecode(data);
       case "ASCII85Decode":
       case "A85":
-        return ascii85Decode(data);
+        return ascii85Decode(data, this.maxStreamSize);
       case "RunLengthDecode":
       case "RL":
         return runLengthDecode(data, this.maxStreamSize);

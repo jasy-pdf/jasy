@@ -4,6 +4,8 @@ import { PdfDocument, PdfEncryptedError } from "../../../src/lib/edit/document.t
 import { readAttachments, AttachmentError } from "../../../src/lib/edit/attachments.ts";
 import { Document, Page, Text, renderToBytes } from "../../../src/lib/api/index.ts";
 import { createSecurityHandler } from "../../../src/lib/crypto/security-handler.ts";
+import { ascii85Decode } from "../../../src/lib/edit/filters.ts";
+import { PdfStreamTooLargeError } from "../../../src/lib/utils/inflate.ts";
 
 // Every attachment, with everything the file says about it, and its exact bytes. Read against three
 // producers (pdf-lib, PDFKit, a hand-built file - see tests/fixtures/attachments/README.md) and against
@@ -109,6 +111,12 @@ describe("hand-built - nested name tree, every standard filter, odd names", () =
     )!;
     expect(() => bad.bytes()).toThrow(AttachmentError);
     expect(() => bad.bytes()).toThrow(/does not match its own checksum/);
+  });
+
+  it("bounds ASCII85 on what it produces - `z` is four bytes for one", () => {
+    const z = (n: number) => new TextEncoder().encode("z".repeat(n) + "~>");
+    expect(ascii85Decode(z(4), 16)).toEqual(new Uint8Array(16));
+    expect(() => ascii85Decode(z(5), 16)).toThrow(PdfStreamTooLargeError);
   });
 
   it("reads a date with its time zone", async () => {
@@ -230,6 +238,14 @@ describe("crypt filters - each part of an encrypted file follows its own", () =>
     );
     const open = readAttachments(await PdfDocument.open(bytes, { password: "geheim" }));
     expect(open[0]!.text()).toBe(XML);
+  });
+
+  it("only the attached files encrypted, a wrong password: said so on open", async () => {
+    const bytes = await build("/StmF /Identity /StrF /Identity /EFF /StdCF", {
+      strings: false,
+      file: true,
+    });
+    await expect(PdfDocument.open(bytes, { password: "falsch" })).rejects.toThrow(/wrong password/);
   });
 
   it("strings left in the clear (/StrF /Identity) are read as they are, even ones shaped like ciphertext", async () => {
