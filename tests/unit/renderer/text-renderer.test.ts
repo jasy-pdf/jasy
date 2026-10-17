@@ -21,6 +21,7 @@ describe("TextRenderer", () => {
         fontStyle: FontStyle.Normal,
         color: new Color(0, 0, 0), // Black
         textAlignment: "left",
+        breaking: { fontFamily: "Helvetica", fontSize: 12, fontStyle: FontStyle.Normal },
       }),
     } as unknown as TextElement;
 
@@ -65,6 +66,7 @@ describe("TextRenderer", () => {
         fontStyle: FontStyle.Normal,
         color: new Color(0, 0, 0),
         textAlignment: "left",
+        breaking: { fontFamily: "Helvetica", fontSize: 12, fontStyle: FontStyle.Normal },
       }),
     } as unknown as TextElement;
 
@@ -106,6 +108,7 @@ describe("TextRenderer", () => {
         fontStyle: FontStyle.Normal,
         color: new Color(0, 0, 0),
         textAlignment: HorizontalAlignment.center,
+        breaking: { fontFamily: "Helvetica", fontSize: 12, fontStyle: FontStyle.Normal },
       }),
     } as unknown as TextElement;
 
@@ -150,6 +153,7 @@ describe("TextRenderer", () => {
         fontStyle: FontStyle.Normal,
         color: new Color(0, 0, 0),
         textAlignment: HorizontalAlignment.right,
+        breaking: { fontFamily: "Helvetica", fontSize: 12, fontStyle: FontStyle.Normal },
       }),
     } as unknown as TextElement;
 
@@ -191,6 +195,7 @@ describe("TextRenderer", () => {
         fontStyle: FontStyle.Normal,
         color: new Color(0, 0, 0),
         textAlignment: "left",
+        breaking: { fontFamily: "Helvetica", fontSize: 12, fontStyle: FontStyle.Normal },
       }),
     } as unknown as TextElement;
 
@@ -244,6 +249,7 @@ describe("TextRenderer", () => {
         fontStyle: FontStyle.Normal,
         color: new Color(0, 0, 0),
         textAlignment: "left",
+        breaking: { fontFamily: "Helvetica", fontSize: 12, fontStyle: FontStyle.Normal },
       }),
     } as unknown as TextElement;
 
@@ -305,6 +311,7 @@ describe("TextRenderer", () => {
         fontStyle: FontStyle.Normal,
         color: new Color(0, 0, 0),
         textAlignment: HorizontalAlignment.center,
+        breaking: { fontFamily: "Helvetica", fontSize: 12, fontStyle: FontStyle.Normal },
       }),
     } as unknown as TextElement;
 

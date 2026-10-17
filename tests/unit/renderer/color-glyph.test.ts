@@ -24,6 +24,7 @@ const textElement = (content: string): TextElement =>
       maxLines: undefined,
       overflow: undefined,
       lineHeight: 1,
+      breaking: { fontFamily: "Emoji", fontSize: 100, fontStyle: FontStyle.Normal },
     }),
   }) as unknown as TextElement;
 
@@ -97,6 +98,7 @@ describe("TextRenderer - COLR color glyph expansion", () => {
           fontStyle: FontStyle.Normal,
           textAlignment: HorizontalAlignment.left,
           lineHeight: 1,
+          breaking: { fontFamily: "Helvetica", fontSize: 12, fontStyle: FontStyle.Normal },
         }),
       } as unknown as TextElement,
       om,
@@ -147,6 +149,7 @@ describe("TextRenderer - COLR color glyph expansion", () => {
         fontStyle: FontStyle.Normal,
         textAlignment: HorizontalAlignment.left,
         lineHeight: 1,
+        breaking: { fontFamily: "Normal", fontSize: 100, fontStyle: FontStyle.Normal },
       }),
     } as unknown as TextElement;
 
@@ -178,6 +181,7 @@ describe("TextRenderer - COLR color glyph expansion", () => {
         fontStyle: FontStyle.Normal,
         textAlignment: HorizontalAlignment.left,
         lineHeight: 1,
+        breaking: { fontFamily: "Normal", fontSize: 12, fontStyle: FontStyle.Normal },
       }),
     } as unknown as TextElement;
 

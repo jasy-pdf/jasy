@@ -16,6 +16,7 @@ import { emojiImageNode } from "./emoji-image.ts";
 import {
   MAX_SPACE_SHRINK,
   breakSegmentsIntoLines,
+  type SegmentDefaults,
   SegmentLine,
   TextOverflow,
 } from "../text/line-breaker.ts";
@@ -28,7 +29,6 @@ import {
   strikethroughStroke,
   underlineStroke,
 } from "../text/text-decoration.ts";
-import type { Hyphenator } from "../text/word-splitting.ts";
 import { quadToCubic } from "../vector/path.ts";
 
 /** One link as a reader meets it: its annotation rects (one per line) and the runs it covers. */
@@ -36,7 +36,7 @@ interface LinkGroup {
   target: string;
   links: Link[];
   runs: TextRun[];
-  /** Its text as written, one piece per line (a justified line draws one run per word). */
+  /** Its text as read, one piece per line (a justified line draws one run per word). */
   pieces: { text: string; y: number }[];
 }
 
@@ -76,17 +76,16 @@ export class TextRenderer {
       direction,
       wordSpacing,
       textIndent,
-      breakWord,
-      hyphenate,
       ligatures,
       role,
-      shownLines,
+      breaking,
     } = textElement.getProps();
 
     // Component -> display list: the lines come from the one breaker, positioning stays here; the
     // backend turns each run into BT/Tf/Td/Tj/ET.
     const { runs, links, decorations, linkGroups } = TextRenderer._buildRuns(
       spans,
+      breaking,
       fontSize,
       fontFamily,
       fontStyle,
@@ -107,10 +106,7 @@ export class TextRenderer {
       direction,
       wordSpacing,
       textIndent,
-      breakWord,
-      hyphenate,
       ligatures,
-      shownLines,
     );
 
     // Accessible tagging: this whole text block is one structure element (a paragraph P, or a heading
@@ -343,6 +339,8 @@ export class TextRenderer {
   // only the output form changed from PDF strings to `TextRun`s.
   private static _buildRuns(
     content: TextSegment[],
+    // How the text is broken - the element's own settings, the ones it was measured with.
+    breaking: SegmentDefaults,
     fontSize: number,
     fontFamily: string,
     fontStyle: FontStyle,
@@ -362,10 +360,7 @@ export class TextRenderer {
     direction: Direction = "ltr",
     wordSpacing = 0,
     textIndent = 0,
-    breakWord = false,
-    hyphenate?: Hyphenator,
     ligatures = true,
-    shownLines?: number,
   ): { runs: TextRun[]; links: Link[]; decorations: Line[]; linkGroups: LinkGroup[] } {
     const runs: TextRun[] = [];
     // /Link annotation rects for any `href` spans, collected as we place segments. Empty for the
@@ -671,21 +666,9 @@ export class TextRenderer {
 
     // yPosition is the top of the text box (top-left). Each line seats its own baseline inside its
     // own box (tallest ascent / deepest descent ON THAT LINE), then the next line starts below it.
-    // The seam flips the whole thing to PDF space. `letterSpacing` MUST be in the defaults so a span
-    // that does not override it wraps and aligns with the element's spacing - the same defaults the
-    // measure path (calculateTextHeight) uses, or segmented spaced text mis-wraps (measured != drawn).
-    const defaults = {
-      fontFamily,
-      fontSize,
-      fontStyle,
-      letterSpacing,
-      splitting: { breakWord, hyphenate },
-      ligatures,
-      shownLines,
-      indent: textIndent,
-      wordSpacing,
-      shrink: align === HorizontalAlignment.justify ? MAX_SPACE_SHRINK : 0,
-    };
+    // The seam flips the whole thing to PDF space. The lines are broken with the element's own
+    // settings - the ones `textHeight` measured with - so measured equals drawn by construction.
+    const defaults = breaking;
     let top = yPosition;
     const segmentLines = breakSegmentsIntoLines(
       content,

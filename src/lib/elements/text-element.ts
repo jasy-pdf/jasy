@@ -549,13 +549,9 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
   }
 
   /** The unwrapped single-line width of the content (used when width is unbounded, e.g. inside a Row).
-   *  Must match the LINE-BREAKER's one-line measure EXACTLY - not just algebraically but BIT-for-bit,
-   *  so a text laid out at this width never re-wraps inside its own natural-width box. The breaker
-   *  accumulates `currentWidth += wordWidth + spaceWidth`, grouping the word and its trailing space
-   *  into one term; we must group the same way. Adding word and space as two separate steps is
-   *  algebraically equal but, because floating-point addition is not associative, drifts by a sub-ULP
-   *  - enough to tip a borderline string (e.g. "20 Jun 2026", wider than "04 Jul 2026" only because
-   *  'n' beats 'l') one bit over its own width, dropping the last word onto a second line. */
+   *  Must match the breaker's one-line sum BIT for bit - it adds `width + (space + word)`, and the same
+   *  numbers grouped differently drift by a sub-ULP, enough to wrap a text inside its own natural-width
+   *  box. `singleLineWidth` is that sum. */
   private naturalWidth(metrics: FontMetrics): number {
     // The breaker's own sum, to the last bit - see `singleLineWidth`.
     const oneLine = (
@@ -660,6 +656,8 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       content: this.content,
       /** The content as it is measured and drawn: spans, recased, split by font, drawable glyphs only. */
       spans: this.resolved ?? this.display(),
+      /** How the text is broken - the settings it is measured with, so drawing breaks it the same. */
+      breaking: this.segmentDefaults(),
       textAlignment: this.textAlignment,
       maxLines: this.maxLines,
       orphans: this.orphans,

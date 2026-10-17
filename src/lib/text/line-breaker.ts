@@ -182,10 +182,10 @@ export function breakStringIntoLines(
 }
 
 /**
- * Break styled segments into lines that fit within `maxWidth`. Same greedy word-splitting as the
- * string breaker; each line keeps the segments that landed on it, which is what `line-metrics.ts`
- * later derives the line's height from. Single source of truth: both height measurement and
- * rendering call this.
+ * Break text - spans; a plain string is one - into lines that fit within `maxWidth`, greedily: a word
+ * stays on the current line unless it would overflow. Each line keeps the segments that landed on it,
+ * which is what `line-metrics.ts` derives the line's height from. The one breaker: measuring,
+ * fragmenting and drawing all call this.
  */
 export function breakSegmentsIntoLines(
   segments: TextSegment[],
