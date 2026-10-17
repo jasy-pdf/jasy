@@ -126,3 +126,24 @@ describe("a span boundary is no break opportunity", () => {
     expect(at(["abc 2026-", "10"], 80)).toEqual(["abc", "2026-10"]);
   });
 });
+
+describe("a space that hangs ends the line", () => {
+  // Here a space (20) is wider than an `x` (10): after "abcdef" (60) the trailing space does not fit
+  // in 75 and hangs, and the next span's "x" would still have fit behind "abcdef" - glued on, its
+  // space lost ("abcdefx").
+  const wide = testMetrics({
+    getStringWidth: (text) => [...text].reduce((w, c) => w + (c === " " ? 20 : 10), 0),
+    getCharWidth: () => 0,
+  });
+
+  it("the word after it starts the next line", () => {
+    const lines = breakSegmentsIntoLines(
+      [{ content: "abcdef " }, { content: "x" }],
+      defaults,
+      75,
+      wide,
+    );
+    expect(lines.map((l) => l.segments.map((s) => s.content).join(""))).toEqual(["abcdef", "x"]);
+    expect(lines[1]!.start).toEqual({ segment: 1, offset: 0 });
+  });
+});

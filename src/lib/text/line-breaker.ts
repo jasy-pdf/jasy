@@ -416,6 +416,19 @@ export function breakSegmentsIntoLines(
       const placeWord = (word: string, wordAt: number, joined: boolean): void => {
         const afterSpace = hung;
         hung = false;
+        // The space before this word hung past the edge, so the line is full: the word starts the next
+        // one. It must not slip in behind the space it was written after, however narrow it is.
+        if (afterSpace && inked && word !== "") {
+          close(lineSegments, ink, "soft");
+          lineSegments = [started({ ...segment, fontFamily: family, content: "" }, at(wordAt))];
+          combined = "";
+          width = 0;
+          gaps = 0;
+          open = false;
+          inked = false;
+          ink = 0;
+          lineStart = at(wordAt);
+        }
         // Only a word that follows something on this line is joined to it by the space.
         const joins = open && joined;
         const wordWidth = runAdvance(metrics, word, font, letterSpacing);
