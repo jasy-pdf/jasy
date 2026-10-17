@@ -60,6 +60,9 @@ export type TextOverflow = "clip" | "ellipsis";
  *  (WinAnsi) and any embedded TTF - whereas U+2026 needs a glyph the font may not carry. */
 const ELLIPSIS = "...";
 
+/** The spaces that end a line: they hang past its edge, neither drawn nor in its width. */
+const TRAILING_SPACES = / +$/;
+
 /** One laid-out line of segments. How TALL it is does not live here: the breaker owns the horizontal
  *  half, `text/line-metrics.ts` owns the vertical one and derives the box from the fonts on the line. */
 export interface SegmentLine {
@@ -187,10 +190,20 @@ export function breakStringIntoLines(
   let currentWidth = 0;
   let gaps = 0; // spaces on the current line, which is what a justified line can squeeze
   let lineStart = 0; // source offset the current line begins at
+  // Whether the line holds a word yet - an empty one too: a space is text as written, so a leading one
+  // and both of a double space count.
+  let open = false;
   const lines: BrokenLine[] = [];
-  // Soft hyphens leave the line here: whatever was not broken at is invisible.
-  const close = (end: LineEnd) =>
-    lines.push({ text: withoutSoftHyphens(currentLine).trim(), start: lineStart, end });
+  // Soft hyphens leave the line here: whatever was not broken at is invisible. So do the spaces it ends
+  // in - they hang.
+  const close = (end: LineEnd) => {
+    const text = withoutSoftHyphens(currentLine).replace(TRAILING_SPACES, "");
+    lines.push({ text, start: lineStart, end });
+    currentLine = "";
+    currentWidth = 0;
+    gaps = 0;
+    open = false;
+  };
 
   const font = { fontFamily, fontSize, fontStyle, ligatures };
   // A `\n` is a HARD break: wrap each paragraph on its own, then cut. An EMPTY paragraph still has to
@@ -199,9 +212,6 @@ export function breakStringIntoLines(
   text.split("\n").forEach((paragraph, paragraphIndex) => {
     if (paragraphIndex > 0) {
       close("hard");
-      currentLine = "";
-      currentWidth = 0;
-      gaps = 0;
     }
     lineStart = paragraphStart;
     let wordStart = paragraphStart;
@@ -218,7 +228,7 @@ export function breakStringIntoLines(
 
       // Whether `width` more fits on the current line - the same test, squeeze included, as below.
       const fitsHere = (width: number): boolean =>
-        currentLine === ""
+        !open
           ? width <= room
           : currentWidth + (spaceWidth + width) - (gaps + 1) * spaceWidth * shrink <= room;
       // A hyphen inside the word is a break opportunity (UAX #14, as browsers break). Only taken when the
@@ -234,21 +244,15 @@ export function breakStringIntoLines(
         }
         if (head > 0) {
           const part = headAt(word, head);
-          if (currentLine === "") lineStart = at;
-          currentLine = currentLine === "" ? part : `${currentLine} ${part}`;
+          if (!open) lineStart = at;
+          currentLine = open ? `${currentLine} ${part}` : part;
           close(endAt(word, head));
-          currentLine = "";
-          currentWidth = 0;
-          gaps = 0;
           placeWord(word.slice(head), at + head);
           return;
         }
-        if (currentLine !== "") {
+        if (open) {
           // Not even the first piece fits after what is on the line: start a fresh one and try again.
           close("soft");
-          currentLine = "";
-          currentWidth = 0;
-          gaps = 0;
           placeWord(word, at);
           return;
         }
@@ -256,9 +260,6 @@ export function breakStringIntoLines(
         // or overflowing as before), and the rest starts the next line.
         placeWord(headAt(word, breaks[0]!), at);
         close(endAt(word, breaks[0]!));
-        currentLine = "";
-        currentWidth = 0;
-        gaps = 0;
         placeWord(word.slice(breaks[0]), at + breaks[0]!);
         return;
       }
@@ -276,10 +277,10 @@ export function breakStringIntoLines(
       // The pieces land on lines that are NOT the first one whenever the current line is closed below,
       // so they get the full box - `room` only loses the indent while we are genuinely still filling
       // the indented first line.
-      const splitRoom = lines.length === 0 && currentLine === "" ? room : maxWidth;
+      const splitRoom = lines.length === 0 && !open ? room : maxWidth;
       const split = splitLongWord(word, splitRoom, font, metrics, letterSpacing, splitting);
       if (split) {
-        if (currentLine !== "") close("soft");
+        if (open) close("soft");
         // Each piece starts where the source text of the previous one ended.
         let pieceStart = at;
         for (const piece of split.slice(0, -1)) {
@@ -291,17 +292,17 @@ export function breakStringIntoLines(
         currentLine = split[split.length - 1]!.text;
         lineStart = pieceStart;
         currentWidth = runAdvance(metrics, currentLine, font, letterSpacing);
-        gaps = 0;
+        open = true;
         return;
       }
 
       const candidate = currentWidth + (spaceWidth + wordWidth);
 
-      if (currentLine === "") {
+      if (!open) {
         currentLine = word;
         currentWidth = wordWidth;
         lineStart = at;
-        gaps = 0;
+        open = true;
         // How much a JUSTIFIED line may be squeezed to keep one more word: the spaces already on the
         // line plus the one that would join it, each giving up at most `shrink` of its width. Zero for
         // every other alignment, where a squeezed line would simply overflow instead.
@@ -316,7 +317,7 @@ export function breakStringIntoLines(
         currentLine = word;
         currentWidth = wordWidth;
         lineStart = at;
-        gaps = 0;
+        open = true;
       } else {
         currentLine += " " + word;
         currentWidth = candidate;
@@ -382,6 +383,8 @@ export function breakSegmentsIntoLines(
   let lineSegments: TextSegment[] = [];
   let combined = "";
   let lineStart: SegmentPosition = { segment: 0, offset: 0 }; // where the current line begins
+  let open = false; // as in the string path: whether the line holds a word yet, an empty one too
+  let ink = 0; // the line's width up to its last drawn glyph - the spaces after it hang
   // An empty piece (what a span leaves after its `\n`) has nothing to draw, and its font must not size
   // the line it lands on - a big span ending in `\n` made the next line as tall as itself. Only a blank
   // line keeps one: it is what gives that line its height.
@@ -409,6 +412,13 @@ export function breakSegmentsIntoLines(
         i === lastIndex ? { ...seg, content: withoutSoftHyphens(seg.content) + HYPHEN } : seg,
       );
       ends = "hyphen";
+    }
+    // The spaces the line ends in hang: not drawn, and `width` (the ink) already stops before them.
+    for (let i = segs.length - 1; i >= 0; i--) {
+      const kept = segs[i]!.content.replace(TRAILING_SPACES, "");
+      if (kept !== segs[i]!.content)
+        segs = segs.map((seg, j) => (j === i ? { ...seg, content: kept } : seg));
+      if (kept !== "") break;
     }
     // Soft hyphens leave the line here, as in the string path - a blank line's piece included.
     const stripped = segs.map((seg) =>
@@ -444,8 +454,10 @@ export function breakSegmentsIntoLines(
     let paragraphStart = 0;
     segment.content.split("\n").forEach((paragraph, paragraphIndex) => {
       if (paragraphIndex > 0) {
-        close(lineSegments, width, "hard");
+        close(lineSegments, ink, "hard");
         width = 0;
+        open = false;
+        ink = 0;
         lineSegments = [];
         lineStart = at(paragraphStart);
       }
@@ -468,13 +480,15 @@ export function breakSegmentsIntoLines(
         // A hyphen inside the word is a break opportunity, taken only when the whole word does not fit
         // here - the same rule as the string path.
         const fitsHere = (w: number): boolean =>
-          width === 0 ? w <= room : width + ((joined ? spaceWidth : 0) + w) <= room;
+          !open ? w <= room : width + ((joined ? spaceWidth : 0) + w) <= room;
         const breaks = mayBreak(word) ? hyphenBreaks(word) : NO_BREAKS;
         if (breaks.length > 0 && !fitsHere(wordWidth)) {
           const freshLine = (startAt: number) => {
             lineSegments = [{ ...segment, fontFamily: family, content: "" }];
             combined = "";
             width = 0;
+            open = false;
+            ink = 0;
             lineStart = at(startAt);
           };
           let head = 0;
@@ -484,31 +498,32 @@ export function breakSegmentsIntoLines(
           }
           if (head > 0) {
             const part = headAt(word, head);
-            const joiner = width > 0 && joined ? spaceWidth : 0;
-            if (width === 0) lineStart = at(wordAt);
+            const joiner = open && joined ? spaceWidth : 0;
+            if (!open) lineStart = at(wordAt);
             width += joiner + runAdvance(metrics, part, font, letterSpacing);
+            ink = width;
             combined += joiner > 0 ? " " + part : part;
             if (lineSegments.length === 0)
               lineSegments.push({ ...segment, fontFamily: family, content: "" });
             lineSegments[lineSegments.length - 1]!.content = combined;
-            close(lineSegments, width, endAt(word, head));
+            close(lineSegments, ink, endAt(word, head));
             freshLine(wordAt + head);
             placeWord(word.slice(head), wordAt + head, false);
             return;
           }
-          if (width > 0) {
-            close(lineSegments, width, "soft");
+          if (open) {
+            close(lineSegments, ink, "soft");
             freshLine(wordAt);
             placeWord(word, wordAt, false);
             return;
           }
           placeWord(headAt(word, breaks[0]!), wordAt, joined);
-          close(lineSegments, width, endAt(word, breaks[0]!));
+          close(lineSegments, ink, endAt(word, breaks[0]!));
           freshLine(wordAt + breaks[0]!);
           placeWord(word.slice(breaks[0]), wordAt + breaks[0]!, false);
           return;
         }
-        const splitRoom = lines.length === 0 && width === 0 ? room : maxWidth;
+        const splitRoom = lines.length === 0 && !open ? room : maxWidth;
 
         // Same treatment as the string path: a word too wide for the box is split into pieces that fit.
         // Each finished piece closes the line it sits on, keeping this segment's style.
@@ -525,8 +540,8 @@ export function breakSegmentsIntoLines(
           // not against what is left of this line - appending the first one put a line 80 wide into a
           // 50 box, and reported 50, which is exactly why it went unnoticed. The string path has always
           // pushed its current line before splitting; this is the same move.
-          if (width > 0) {
-            close(lineSegments, width, "soft");
+          if (open) {
+            close(lineSegments, ink, "soft");
             lineSegments = [{ ...segment, fontFamily: family, content: "" }];
             combined = "";
           }
@@ -547,6 +562,8 @@ export function breakSegmentsIntoLines(
           lineStart = at(pieceAt);
           combined = split[split.length - 1]!.text;
           width = runAdvance(metrics, combined, font, letterSpacing);
+          open = true;
+          ink = width;
           lineSegments[lineSegments.length - 1]!.content = combined;
           return;
         }
@@ -560,17 +577,20 @@ export function breakSegmentsIntoLines(
 
         // Same guard as the string path: don't open a phantom empty line for an over-wide first word -
         // place it (overflowing) on the current empty line instead.
-        if (candidate > room && width > 0) {
+        if (candidate > room && open) {
           if (word === "") return; // a space that does not fit hangs, as in the string path
-          close(lineSegments, width, "soft");
+          close(lineSegments, ink, "soft");
           lineStart = at(wordAt);
           width = wordWidth;
+          ink = wordWidth;
           lineSegments = [];
           combined = word;
           lineSegments.push({ ...segment, content: combined });
         } else {
           combined += joined ? " " + word : word;
           width = candidate;
+          open = true;
+          if (word !== "") ink = width;
           if (lineSegments.length === 0) {
             lineSegments.push({ ...segment, fontFamily: family, content: combined });
           }
@@ -590,7 +610,7 @@ export function breakSegmentsIntoLines(
   // ending in `\n` is ONE line there - the two must not disagree about the same text. An empty
   // paragraph in the MIDDLE still becomes a line; that one is pushed at the break, not here.
   if (lineSegments.some((seg) => seg.content !== "")) {
-    close(lineSegments, width, "end");
+    close(lineSegments, ink, "end");
   }
 
   // Open-end by default; cap only when maxLines is set.
