@@ -496,7 +496,9 @@ enforces it (`skonto.ts` for "Skonto is not an allowance"), and everywhere else 
 7. **Bidi mirroring SUBSTITUTES the character** (as react-pdf does) where Chrome mirrors the glyph, so
    extracted text has swapped brackets. **GPOS mark positioning** and GSUB type 6 are not built;
    react-pdf does neither either (measured).
-8. `breakWord`/`hyphenate` are read per `Text`, not per `span` (#81, with the other span styles).
+8. **A word that runs across two spans is split per span.** `breakWord` breaks at the span boundary where
+   Chrome would fill the line (Chrome: a break after a character is allowed by THAT character's
+   `overflow-wrap`), and `hyphenate` sees only the span's piece of the word, not the whole word.
 9. `manual-test` has machine-specific paths.
 
 ## Roadmap, packages, repo

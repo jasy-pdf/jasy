@@ -52,6 +52,10 @@ export interface TextSegment {
   textTransform?: TextTransform;
   wordSpacing?: number;
   ligatures?: boolean;
+  /** How a word wider than the box splits, for the characters of THIS run (Chrome: a break after a
+   *  character is allowed by that character's own `overflow-wrap`). */
+  breakWord?: boolean;
+  hyphenate?: Hyphenator;
   /**
    * CSS `vertical-align`, for a footnote marker or a formula index. Shifts THIS run's baseline;
    * it does not resize the text, and it does not change the line's height - set `fontSize` yourself
@@ -605,9 +609,11 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     // therefore how wide it is. Leaving it out would measure a floor the drawing never matches.
     const widest = (text: string, run: RunStyle): number => {
       // Split on the same boundaries the breaker uses - a hard break ends a line too, and so may a
-      // hyphen inside a word.
+      // hyphen inside a word. A run that may split its words may split them anywhere.
       const pieces =
-        this.breakWord || this.hyphenate ? [...text] : text.split(/[ \n]/).flatMap(hyphenPieces);
+        run.splitting.breakWord || run.splitting.hyphenate
+          ? [...text]
+          : text.split(/[ \n]/).flatMap(hyphenPieces);
       return pieces.reduce(
         (max, piece) => Math.max(max, runAdvance(metrics, piece, run.font, run.letterSpacing)),
         0,

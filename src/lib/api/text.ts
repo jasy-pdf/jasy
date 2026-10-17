@@ -162,6 +162,8 @@ export function span(text: string, style: TextStyle = {}): TextSegment {
     textTransform: style.textTransform,
     wordSpacing: style.wordSpacing,
     ligatures: style.ligatures,
+    breakWord: style.breakWord,
+    hyphenate: style.hyphenate,
     verticalAlign: style.verticalAlign,
     href: style.href,
     dest: style.to,

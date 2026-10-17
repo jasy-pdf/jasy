@@ -48,11 +48,12 @@ export interface RunDefaults {
 /** Everything the breaker reads besides the spans: what they inherit, and how lines end. */
 export type SegmentDefaults = RunDefaults & LineOptions;
 
-/** How one span is measured and drawn. */
+/** How one span is measured, broken and drawn. */
 export interface RunStyle {
   font: RunFont;
   letterSpacing: number;
   wordSpacing: number;
+  splitting: WordSplitting;
 }
 
 /**
@@ -69,6 +70,10 @@ export function runStyleOf(seg: TextSegment, defaults: SegmentDefaults): RunStyl
     },
     letterSpacing: seg.letterSpacing ?? defaults.letterSpacing ?? 0,
     wordSpacing: seg.wordSpacing ?? defaults.wordSpacing ?? 0,
+    splitting: {
+      breakWord: seg.breakWord ?? defaults.splitting?.breakWord,
+      hyphenate: seg.hyphenate ?? defaults.splitting?.hyphenate,
+    },
   };
 }
 
@@ -362,7 +367,7 @@ export function breakSegmentsIntoLines(
   };
 
   segments.forEach((segment, segmentIndex) => {
-    const { font, letterSpacing, wordSpacing } = runStyleOf(segment, defaults);
+    const { font, letterSpacing, wordSpacing, splitting } = runStyleOf(segment, defaults);
     const family = font.fontFamily;
     const spaceWidth = runAdvance(metrics, " ", font, letterSpacing) + wordSpacing;
     const at = (offset: number): SegmentPosition => ({ segment: segmentIndex, offset });
@@ -511,14 +516,7 @@ export function breakSegmentsIntoLines(
         // A word too wide for the box is split into pieces that fit (hyphenation first, break-word as
         // the floor). Each finished piece closes the line it sits on, keeping this segment's style. Off
         // by default, so a document that asks for neither never gets here.
-        const split = splitLongWord(
-          word,
-          splitRoom,
-          font,
-          metrics,
-          letterSpacing,
-          defaults.splitting ?? {},
-        );
+        const split = splitLongWord(word, splitRoom, font, metrics, letterSpacing, splitting);
         if (split) {
           // Close whatever is already on the line FIRST: the pieces were measured against the full box,
           // not against what is left of this line.
