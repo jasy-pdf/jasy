@@ -355,7 +355,7 @@ export class PDFObjectManager implements FontMetrics {
 
   // A unique, binary-safe placeholder for a stream's bytes, swapped for ciphertext in finalizeEncryption().
   private encToken(id: number): string {
-    return ` JENC:${id} `;
+    return `\x00\x01JENC:${id}\x01\x00`;
   }
 
   // The same trick for a literal STRING. A separate marker because the two are swapped differently: a
