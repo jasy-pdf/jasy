@@ -491,7 +491,7 @@ enforces it (`skonto.ts` for "Skonto is not an allowance"), and everywhere else 
 7. **Bidi mirroring SUBSTITUTES the character** (as react-pdf does) where Chrome mirrors the glyph, so
    extracted text has swapped brackets. **GPOS mark positioning** and GSUB type 6 are not built;
    react-pdf does neither either (measured).
-8. `breakWord`/`hyphenate` are read per `Text`, not per `span` (ISSUE-13).
+8. `breakWord`/`hyphenate` are read per `Text`, not per `span` (#81, with the other span styles).
 9. `manual-test` has machine-specific paths.
 
 ## Roadmap, packages, repo
@@ -509,8 +509,10 @@ English and short, do not break the font math.**
   writes the GitHub Release (`scripts/gh-release.mjs`). Siblings depend by RANGE (`workspace:^`) and
   `@jasy/pdf` is a PEER of `vue` and `nuxt`, so an engine patch needs one release, not five - and a
   consumer cannot end up with two copies. Current versions: npm, not this file.
+- **Docs carry version badges from beta.4 on** (only NEW: "since beta.4", or BREAKING: "changed in beta.4"; maintained on superseded/2.0) - the
+  rule lives in the landing's CLAUDE.md; a new feature or a breaking change built here gets one.
 - **The landing is a separate repo**, `~/projects/jasy-landing` → jasy.dev (Nuxt 4). Own CLAUDE.md,
-  HARD RULES: never start or stop its dev server, only Flo commits. Package links use npmx.dev.
+  HARD RULES: its dev server (3001) is Flo's - restart only via the takeover flag the Nuxt CLI names, never pattern-kill; only Flo commits. Package links use npmx.dev.
 - **`@jasy/vue`'s typed props are held to the engine by a test** (`packages/vue/tests/text-props.test.ts`
   reads the option names out of `src/lib/api/text.ts`); the components forward `{ ...attrs, ...props }`,
   so an undeclared prop still WORKS, which is how eight options once drifted in unnoticed. A

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { Box, Padding, Row } from "../../../src/lib/api/layout.ts";
+import { Box, Column, Expanded, Padding, Row } from "../../../src/lib/api/layout.ts";
 import { Document, renderToBytes } from "../../../src/lib/api/index.ts";
 import { drawnNodes } from "../support/drawn.ts";
 import { Page } from "../../../src/lib/api/structure.ts";
@@ -82,16 +82,34 @@ describe("through the factories", () => {
     ).toBe(90);
   });
 
-  it("in a Row, which offers no width, a Box's padding still resolves against the Box's own width", async () => {
-    // Regression guard: "8% of an unbounded offer" is 0, which took the padding away entirely.
+  // A Row offers its children no width, so it tells a Box with `%` padding its own (CSS: the flex
+  // container is the containing block). Page 540 wide, margin 20: the Row is 500.
+  const insetInRow = async (row: ReturnType<typeof Row>, label = "x") => {
     const nodes = await drawnNodes(() =>
-      renderToBytes(
-        Document([Page([Row([Box({ width: 100, borderWidth: 0, padding: "8%" }, [Text("x")])])])]),
-      ),
+      renderToBytes(Document([Page({ size: { width: 540, height: 300 }, margin: 20 }, [row])])),
     );
-    const box = nodes[0]!.find((n) => n.type === "rect") as { x: number };
-    const text = nodes[0]!.find((n) => n.type === "text") as { x: number };
-    expect(text.x - box.x).toBe(8);
+    const text = nodes[0]!.find((n) => n.type === "text" && n.text === label) as { x: number };
+    return text.x - 20;
+  };
+
+  it("in a Row, a Box's padding resolves against the Row's width, as CSS does", async () => {
+    const box = () => Box({ width: 100, borderWidth: 0, padding: "8%" }, [Text("x")]);
+    expect(await insetInRow(Row([box()]))).toBe(40);
+    // Through an Expanded, and with gaps: still the Row, not the line minus its gaps.
+    expect(await insetInRow(Row({ gap: 20 }, [Expanded(box()), Text("y")]))).toBe(40);
+  });
+
+  it("a Row's width reaches only its own children - a Column inside it is the base below it", async () => {
+    const sibling = Box({ width: 100, borderWidth: 0, padding: "8%" }, [Text("x")]);
+    const inner = Box({ borderWidth: 0, padding: "10%" }, [Text("y")]);
+    const row = Row([sibling, Column({ width: 200 }, [inner])]);
+    expect(await insetInRow(row, "y")).toBe(100 + 20); // after the sibling, 10% of the column's 200
+  });
+
+  it("a Row that is itself unbounded leaves a Box's own width", async () => {
+    // Regression guard: "8% of an unbounded offer" is 0, which took the padding away entirely.
+    const box = Box({ width: 100, borderWidth: 0, padding: "8%" }, [Text("x")]);
+    expect(await insetInRow(Row([Row([box])]))).toBe(8);
   });
 
   it("only the Box's own padding: a Padding inside it resolves against what IT is offered", () => {

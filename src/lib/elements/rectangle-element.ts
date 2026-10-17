@@ -27,6 +27,7 @@ import {
   SizedElement,
   SizedPDFElement,
   WithChildren,
+  withPaddingBase,
 } from "./pdf-element.ts";
 
 /** Per-side border colors. When set, each present side is stroked individually (sharp
@@ -233,15 +234,20 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
     return this.children.some((c) => c.needsBoundedMain(horizontal));
   }
 
-  /** A Box's own padding resolves a percentage against what the Box was OFFERED (CSS: the containing
-   *  block), not against the inner width it hands its children - so it is told. Only a bounded offer:
-   *  in a Row a child is offered no width at all, and there the padding keeps resolving against the
-   *  Box's own width, as it always did. */
+  /** A Box's own padding resolves a percentage against its containing block, not against the inner
+   *  width it hands its children - so it is told: the base a surrounding Row set, else what the Box was
+   *  offered. Neither (an unbounded offer outside a Row) leaves the Box's own width. */
   private paddingContext(ctx: LayoutContext, offered: number): LayoutContext {
+    if (!this.hasPercentPadding()) return withPaddingBase(ctx, undefined);
+    return withPaddingBase(
+      ctx,
+      ctx.boxPaddingBase ?? (Number.isFinite(offered) ? offered : undefined),
+    );
+  }
+
+  override hasPercentPadding(): boolean {
     const own = this.children[0];
-    return own instanceof PaddingElement && own.ofBox && Number.isFinite(offered)
-      ? { ...ctx, boxPaddingBase: offered }
-      : ctx;
+    return own instanceof PaddingElement && own.ofBox && own.hasPercentSide;
   }
 
   /** A Box stacks its children vertically inside its border, which is on both sides of the axis. */

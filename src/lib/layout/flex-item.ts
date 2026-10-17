@@ -30,6 +30,15 @@ export function orderOf(child: PDFElement): number {
   return 0;
 }
 
+/** The child is a `Box` with percentage padding, looked through markers and an `Expanded` around it. */
+export function hasPercentPaddingItem(child: PDFElement): boolean {
+  for (let el: PDFElement | undefined = child; el; ) {
+    if (el.hasPercentPadding()) return true;
+    el = el.proxied() ?? (el instanceof FlexiblePDFElement ? el.layoutChildren()[0] : undefined);
+  }
+  return false;
+}
+
 /** CSS `flex-shrink`, 1 when unset (the CSS default). */
 export function flexShrinkOf(child: PDFElement): number {
   for (const el of itemChain(child)) if (el.flexShrink !== undefined) return el.flexShrink;
