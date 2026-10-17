@@ -176,9 +176,23 @@ export class SvgElement extends SizedPDFElement {
     let h = resolved.height;
     const bounds = resolved.constraints;
 
+    // An SVG from a URL that was never fetched sits in content built DURING layout (a PageBuilder, an auto
+    // table column), which the pass before layout cannot reach. Its ratio is unknown here, so it needs
+    // its whole box - a named error instead of a drawing sized to nothing. A FAILED fetch is not this
+    // case: the renderer reports that one by its URL.
+    if (
+      this.url !== undefined &&
+      this.loading === undefined &&
+      (w === undefined || h === undefined)
+    ) {
+      throw new ImageUrlError(
+        `the SVG at ${this.url} sits in content built during layout (a PageBuilder or an auto table ` +
+          `column), where its size cannot be read before it is placed - give it both a width and a ` +
+          `height, or an aspectRatio`,
+      );
+    }
     // One pinned axis derives the other from the drawing's own ratio (CSS `width: 120; height: auto`).
     // A bitmap needs a decode pass before it can do this; an SVG knows it from its viewBox.
-    // Not fetched yet (an SVG from a URL inside a subtree built during layout): only what was given.
     const intrinsic = this.intrinsic ?? { width: 0, height: 0 };
     if (this.sizing.aspectRatio === undefined && intrinsic.width > 0 && intrinsic.height > 0) {
       const ratio = intrinsic.width / intrinsic.height;

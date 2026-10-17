@@ -119,6 +119,16 @@ describe("an SVG from a URL", () => {
     expect(pdf).toMatch(/\bre\b|\bm\b/); // the rectangle's path
   });
 
+  it("asks for its whole box when it sits in content built during layout", async () => {
+    stubFetch(() => ok(text(SVG)));
+    const inBuilder = (opts: { width?: number; height?: number; aspectRatio?: number }) =>
+      renderToBytes(Document([Page([PageBuilder(() => Svg("https://x.example/logo.svg", opts))])]));
+    await expect(inBuilder({ width: 40 })).rejects.toThrow(
+      /built during layout .* width and a height/,
+    );
+    await expect(inBuilder({ width: 40, aspectRatio: 2 })).resolves.toBeInstanceOf(Uint8Array);
+  });
+
   it("stops the render naming the URL when the link is dead or the file is no SVG", async () => {
     stubFetch(() => status(404));
     await expect(pdfOf(Image("https://x.example/gone.svg"))).rejects.toThrow(
