@@ -58,6 +58,7 @@ export class SvgElement extends SizedPDFElement {
   private intrinsic?: SvgSize;
   private readonly url?: string;
   private loading?: Promise<void>;
+  private failed = false;
   private alt?: string;
   private requested: { width?: number; height?: number };
   private sizing: SizingParams;
@@ -94,12 +95,16 @@ export class SvgElement extends SizedPDFElement {
     this.source = source;
   }
 
-  /** Fetches and parses an SVG from a URL - once, however often it is asked. A no-op otherwise. */
-  async load(): Promise<void> {
+  /**
+   * Fetches and parses an SVG from a URL - once per render, however often it is asked. A no-op
+   * otherwise. A failure sticks for that render only: `fresh` (a new render begins) asks again.
+   */
+  async load(fresh = false): Promise<void> {
     const url = this.url;
     if (url === undefined) return;
-    await (this.loading ??= fetchBytes(url, "SVG", ImageUrlError, IMAGE_FETCH_LIMITS).then(
-      (bytes) => {
+    if (fresh && this.failed) this.loading = undefined;
+    this.loading ??= fetchBytes(url, "SVG", ImageUrlError, IMAGE_FETCH_LIMITS)
+      .then((bytes) => {
         try {
           this.parse(new TextDecoder().decode(bytes));
         } catch (e) {
@@ -107,8 +112,17 @@ export class SvgElement extends SizedPDFElement {
             `the SVG at ${url} could not be read: ${String((e as Error)?.message ?? e)}`,
           );
         }
-      },
-    ));
+      })
+      .then(
+        () => {
+          this.failed = false;
+        },
+        (e: unknown) => {
+          this.failed = true;
+          throw e;
+        },
+      );
+    await this.loading;
   }
 
   /**
@@ -117,7 +131,7 @@ export class SvgElement extends SizedPDFElement {
    */
   async resolveIntrinsicSize(): Promise<void> {
     try {
-      await this.load();
+      await this.load(true); // a render begins here
     } catch {
       // the renderer reports it
     }

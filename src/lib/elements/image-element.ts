@@ -29,7 +29,8 @@ export enum BoxFit {
 }
 
 export abstract class CustomImage {
-  abstract init(): void | Promise<void>;
+  /** Loads the image. `fresh`: a new render begins - a load that failed in an earlier one is tried again. */
+  abstract init(fresh?: boolean): void | Promise<void>;
   abstract getImageType(): string | Promise<string>;
   abstract getFileData(): string | Promise<string>;
   abstract getImageDimensions(): Promise<{ width: number; height: number }>;
@@ -148,14 +149,24 @@ export const isImageUrl = (src: string): boolean => /^(https?:|data:)/i.test(src
 export class CustomUrlImage extends CustomImage {
   private loading?: Promise<CustomBytesImage>;
   private loaded?: CustomBytesImage;
+  private failed = false;
 
   constructor(private readonly url: string) {
     super();
   }
 
-  // One fetch however often it is asked: the pre-layout size pass and the renderer both call init().
-  async init(): Promise<void> {
-    this.loaded = await (this.loading ??= this.load());
+  // One fetch per render, however often it is asked: the pre-layout size pass and the renderer both
+  // call init(). A failure sticks for that render only - the next one asks again (`fresh`).
+  async init(fresh = false): Promise<void> {
+    if (fresh && this.failed) this.loading = undefined;
+    this.loading ??= this.load().then(
+      (image) => ((this.failed = false), image),
+      (e: unknown) => {
+        this.failed = true;
+        throw e;
+      },
+    );
+    this.loaded = await this.loading;
   }
 
   private async load(): Promise<CustomBytesImage> {
@@ -268,7 +279,7 @@ export class ImageElement extends SizedPDFElement {
    */
   async resolveIntrinsicSize(): Promise<void> {
     try {
-      await this.image.init();
+      await this.image.init(true); // a render begins here
       this.intrinsic = await this.image.getImageDimensions();
     } catch {
       // leave intrinsic undefined - aspect derivation simply doesn't fire

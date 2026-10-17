@@ -130,3 +130,31 @@ describe("an SVG from a URL", () => {
     );
   });
 });
+
+describe("a failed fetch is not kept", () => {
+  it("is tried once per render, and again on the next render of the same document", async () => {
+    let calls = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(++calls === 1 ? status(503) : ok(PNG))),
+    );
+    const doc = Document([Page([Image("https://x.example/a.png", { width: 20 })])]);
+    await expect(renderToBytes(doc)).rejects.toThrow(/HTTP 503/);
+    expect(calls).toBe(1); // one attempt per render - a dead host is not waited for twice
+    await expect(renderToBytes(doc)).resolves.toBeInstanceOf(Uint8Array);
+    expect(calls).toBe(2);
+  });
+
+  it("does the same for an SVG", async () => {
+    let calls = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(++calls === 1 ? status(503) : ok(text(SVG)))),
+    );
+    const doc = Document([Page([Image("https://x.example/a.svg", { width: 20 })])]);
+    await expect(renderToBytes(doc)).rejects.toThrow(/HTTP 503/);
+    expect(calls).toBe(1); // one attempt per render - a dead host is not waited for twice
+    await expect(renderToBytes(doc)).resolves.toBeInstanceOf(Uint8Array);
+    expect(calls).toBe(2);
+  });
+});
