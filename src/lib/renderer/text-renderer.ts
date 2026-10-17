@@ -3,7 +3,6 @@ import { Color } from "../common/color.ts";
 import { HorizontalAlignment } from "../elements/pdf-element.ts";
 import { VERTICAL_TEXT_SHIFT, TextElement, TextSegment } from "../elements/text-element.ts";
 import { FontStyle, PDFObjectManager } from "../utils/pdf-object-manager.ts";
-import type { FontMetrics } from "../utils/font-metrics.ts";
 import type {
   GlyphPathCommand,
   Paint,
@@ -15,7 +14,6 @@ import { IRNode, TextRun, PathCommand, Gradient, Line, Link } from "../ir/displa
 import { isEmojiCodePoint } from "../text/emoji-codepoints.ts";
 import { emojiImageNode } from "./emoji-image.ts";
 import {
-  type LineOptions,
   MAX_SPACE_SHRINK,
   breakSegmentsIntoLines,
   SegmentLine,
@@ -53,38 +51,6 @@ function spokenText(pieces: readonly { text: string; y: number }[]): string {
 }
 
 export class TextRenderer {
-  // Measuring only needs metrics, not the full object manager. (The render pass below
-  // still receives the manager because it also registers fonts/images.)
-  public static calculateTextHeight(
-    content: TextSegment[],
-    fontSize: number,
-    fontFamily: string,
-    fontStyle: FontStyle,
-    objectManager: FontMetrics,
-    maxWidth: number,
-    maxLines?: number,
-    overflow?: TextOverflow,
-    lineHeight?: number,
-    letterSpacing = 0,
-    lineOptions: LineOptions = {},
-  ): number {
-    // Each line's box comes from the fonts actually on it.
-    const defaults = { fontFamily, fontSize, fontStyle, letterSpacing, ...lineOptions };
-    const lines = breakSegmentsIntoLines(
-      content,
-      defaults,
-      maxWidth,
-      objectManager,
-      maxLines,
-      overflow,
-    );
-    return lines.reduce(
-      (total, line) =>
-        total + lineBoxForSegmentLine(line, defaults, objectManager, lineHeight).height,
-      0,
-    );
-  }
-
   static async render(
     textElement: TextElement,
     objectManager: PDFObjectManager,

@@ -1,9 +1,4 @@
 import { Color } from "../common/color.ts";
-// Import the renderer DIRECTLY, not via the "../renderer" barrel: the barrel pulls in
-// pdf-renderer (and every element) while this element module is still loading, which under
-// ESM (Vite/vitest, and the future framework bindings) duplicates the element classes and
-// breaks the constructor-keyed RendererRegistry. A direct import keeps the graph acyclic.
-import { TextRenderer } from "../renderer/text-renderer.ts";
 import { FontStyle } from "../utils/pdf-object-manager.ts";
 import { DEFAULT_TEXT_STYLE, ResolvedTextStyle } from "../text/text-style.ts";
 import type { FontMetrics } from "../utils/font-metrics.ts";
@@ -28,7 +23,7 @@ import {
   DEFAULT_WIDOWS,
   type OrphanWidowRule,
 } from "../text/orphans-widows.ts";
-import { lineBoxForSegmentLine } from "../text/line-metrics.ts";
+import { lineBoxForSegmentLine, textHeight } from "../text/line-metrics.ts";
 import { HorizontalAlignment, LayoutContext, SizedPDFElement } from "./pdf-element.ts";
 import { normalizeContent } from "../text/whitespace.ts";
 import { coverText } from "../text/glyph-coverage.ts";
@@ -401,7 +396,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
   fragment(maxHeight: number, width: number, ctx: LayoutContext): FragmentResult {
     this.resolveStyle(ctx);
     const content = this.display(ctx.metrics);
-    // The SAME knobs measuring and drawing break with (`calculateTextHeight`, the renderer), or this
+    // The SAME knobs measuring and drawing break with (`textHeight`, the renderer), or this
     // would cut a paragraph at a line count it is never drawn with. Each line's height comes from
     // the fonts on it, so lines are packed by their cumulative height.
     const defaults = this.segmentDefaults();
@@ -446,7 +441,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     };
   }
 
-  /** How the text is broken: the knobs `calculateTextHeight` and the renderer pass too. */
+  /** How the text is broken: the knobs `textHeight` and the renderer pass too. */
   private segmentDefaults(): SegmentDefaults {
     return {
       fontFamily: this.fontFamily,
@@ -542,18 +537,14 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
   }
 
   private measuredHeight(metrics: FontMetrics, width: number, content: TextSegment[]): number {
-    return TextRenderer.calculateTextHeight(
+    return textHeight(
       content,
-      this.fontSize,
-      this.fontFamily,
-      this.fontStyle,
-      metrics,
+      this.segmentDefaults(),
       width,
+      metrics,
       this.maxLines,
       this.overflow,
       this.lineHeight,
-      this.letterSpacing,
-      this.lineOptions(),
     );
   }
 
