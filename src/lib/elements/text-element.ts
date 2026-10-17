@@ -44,8 +44,10 @@ export interface TextSegment {
   /** Unset inherits the Text's own setting; `true`/`false` overrides it for this run only. */
   underline?: boolean;
   strikethrough?: boolean;
+  skipInk?: boolean;
   /** Extra space after every glyph, in points; unset inherits the Text's own value. */
   letterSpacing?: number;
+  textTransform?: TextTransform;
   /**
    * CSS `vertical-align`, for a footnote marker or a formula index. Shifts THIS run's baseline;
    * it does not resize the text, and it does not change the line's height - set `fontSize` yourself
@@ -352,14 +354,16 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
   /** The content as spans, with `text-transform` applied, and nothing else. */
   private recased(): TextSegment[] {
     // A string is one span: from here on, measuring, breaking and drawing know only spans.
-    const spans = typeof this.content === "string" ? [{ content: this.content }] : this.content;
-    if (this.textTransform === "none") return spans;
+    const spans: TextSegment[] =
+      typeof this.content === "string" ? [{ content: this.content }] : this.content;
+    const transformOf = (seg: TextSegment) => seg.textTransform ?? this.textTransform;
+    if (spans.every((seg) => transformOf(seg) === "none")) return spans;
     // The capitalisation state runs THROUGH the spans: `span("hel") + span("lo")` is one word.
     let atWordStart = true;
     return spans.map((seg) => {
-      const done = applyTextTransform(seg.content, this.textTransform, atWordStart);
+      const done = applyTextTransform(seg.content, transformOf(seg), atWordStart);
       atWordStart = done.atWordStart;
-      return { ...seg, content: done.text };
+      return done.text === seg.content ? seg : { ...seg, content: done.text };
     });
   }
 

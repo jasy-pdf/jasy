@@ -477,6 +477,7 @@ export class TextRenderer {
       wantsUnderline: boolean,
       wantsStrikethrough: boolean,
       runLetterSpacing: number,
+      runSkipInk: boolean,
     ): void => {
       if ((!wantsUnderline && !wantsStrikethrough) || runWidth <= 0) return;
       const metrics = objectManager.getFontDecoration(family, style);
@@ -504,6 +505,7 @@ export class TextRenderer {
           style,
           stroke,
           runLetterSpacing,
+          runSkipInk,
         )) {
           push(from, to, stroke);
         }
@@ -526,8 +528,9 @@ export class TextRenderer {
       style: FontStyle,
       stroke: DecorationStroke,
       runLetterSpacing: number,
+      runSkipInk: boolean,
     ): Array<[number, number]> => {
-      if (!skipInk) return [[0, runWidth]];
+      if (!runSkipInk) return [[0, runWidth]];
       if (!objectManager.isCustomFont(family, style)) {
         throw new Error(
           `skipInk needs an embedded font, but "${family}" is a standard-14 font whose glyph outlines ` +
@@ -639,6 +642,7 @@ export class TextRenderer {
           segment.underline ?? underline,
           segment.strikethrough ?? strikethrough,
           segLetterSpacing,
+          segment.skipInk ?? skipInk,
         );
         // An href/to span becomes a /Link annotation over exactly this run's glyph box: from its own
         // ascent above the baseline down to its own descender. A span wrapped across lines yields
