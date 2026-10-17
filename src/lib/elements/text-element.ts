@@ -19,9 +19,9 @@ import {
   MAX_SPACE_SHRINK,
   breakStringIntoLines,
   breakSegmentsIntoLines,
-  hyphenPieces,
   TextOverflow,
 } from "../text/line-breaker.ts";
+import { hyphenPieces } from "../text/hyphen-breaks.ts";
 import {
   adjustForOrphansWidows,
   DEFAULT_ORPHANS,

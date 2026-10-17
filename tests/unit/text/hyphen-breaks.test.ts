@@ -2,9 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   breakSegmentsIntoLines,
   breakStringIntoLines,
-  hyphenBreaks,
-  hyphenPieces,
 } from "../../../src/lib/text/line-breaker.ts";
+import { hyphenBreaks, hyphenPieces } from "../../../src/lib/text/hyphen-breaks.ts";
 import { TextElement } from "../../../src/lib/elements/text-element.ts";
 import type { LayoutContext } from "../../../src/lib/elements/pdf-element.ts";
 import { FontStyle, PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager.ts";
