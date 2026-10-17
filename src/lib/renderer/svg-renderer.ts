@@ -15,7 +15,9 @@ export class SvgRenderer {
     objectManager: PDFObjectManager,
     scope: RenderScope,
   ): Promise<IRNode[]> {
+    await element.load(); // an SVG from a URL; already done when the pre-layout pass reached it
     const { x: ownX, y: ownY, width, height, source, alt } = element.getProps();
+    if (source === undefined) throw new Error("@jasy/pdf: an SVG was drawn before it was loaded");
     // Its own position is relative to `scope.origin`; the IR wants page coordinates.
     const x = scope.origin.x + (ownX ?? 0);
     const y = scope.origin.y + (ownY ?? 0);

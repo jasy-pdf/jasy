@@ -5,6 +5,8 @@ import {
   CustomImage,
   CustomLocalImage,
   CustomBytesImage,
+  CustomUrlImage,
+  isImageUrl,
   BoxFit,
 } from "../elements/image-element.ts";
 import { PDFElement } from "../elements/pdf-element.ts";
@@ -62,7 +64,7 @@ export interface SvgOptions extends BoundsInput {
   alt?: string;
 }
 
-/** An image source: a local file path (Node), raw bytes (e.g. a browser fetch/upload), or a `CustomImage`. */
+/** An image source: a URL (`http(s):`, `data:`), a local file path (Node), raw bytes, or a `CustomImage`. */
 export type ImageSource = string | Uint8Array | CustomImage;
 
 /** How the image fills its box (locked §4). Mirrors CSS `object-fit`. */
@@ -164,15 +166,18 @@ export function Svg(source: SvgSource, opts: SvgOptions = {}): SvgElement {
 /** SVG is recognised by its extension or by its own opening bytes - never by a caller having to say. */
 function isSvg(src: ImageSource): src is string | Uint8Array {
   if (typeof src === "string") {
+    // A URL by its media type (`data:image/svg+xml`) or the extension of its PATH - a query may follow.
+    const path = isImageUrl(src) ? src.trim().replace(/[?#].*$/, "") : src.trim();
+    if (/^data:image\/svg\+xml[;,]/i.test(src.trim())) return true;
     // `.svgz` is a GZIPPED svg. It is caught here rather than left to the image path, because the
     // error a user needs says what the file is - not "unsupported image bytes".
-    if (/\.svgz$/i.test(src.trim())) {
+    if (/\.svgz$/i.test(path)) {
       throw new Error(
         "@jasy/pdf: SVGZ (a gzip-compressed SVG) is not supported. Decompress it first " +
           "(`gunzip logo.svgz`) and pass the plain .svg.",
       );
     }
-    return /\.svg$/i.test(src.trim()) || /^\s*[<\ufeff]/.test(src);
+    return /\.svg$/i.test(path) || /^\s*[<\ufeff]/.test(src);
   }
   if (src instanceof Uint8Array) {
     const head = new TextDecoder().decode(src.subarray(0, 200)).trimStart();
@@ -182,8 +187,8 @@ function isSvg(src: ImageSource): src is string | Uint8Array {
 }
 
 /**
- * An image. `src` is a local file path (wrapped in a `CustomLocalImage`) or a ready
- * `CustomImage` for non-filesystem sources. Maps to an `ImageElement`.
+ * An image. `src` is a URL (fetched when the document renders), a local file path, raw bytes, or a
+ * ready `CustomImage`. Maps to an `ImageElement`.
  *
  * An SVG source is routed to `Svg` instead, so `Image({ src: "logo.svg" })` just works and a logo
  * stays a VECTOR in the PDF rather than becoming a bitmap.
@@ -220,7 +225,9 @@ function rasterImage(src: ImageSource, opts: ImageOptions = {}): ImageElement {
   return new ImageElement({
     image:
       typeof src === "string"
-        ? new CustomLocalImage(src)
+        ? isImageUrl(src)
+          ? new CustomUrlImage(src)
+          : new CustomLocalImage(src)
         : src instanceof Uint8Array
           ? new CustomBytesImage(src)
           : src,

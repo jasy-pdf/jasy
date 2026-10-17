@@ -2,6 +2,7 @@ import type { Radii } from "../ir/display-list.ts";
 import { getImageDimensions } from "../utils/image-helper.ts";
 import { latin1FromBytes } from "../utils/bytes.ts";
 import { readFileBytesAsync } from "../platform/node-fs.ts";
+import { fetchBytes } from "../utils/fetch-bytes.ts";
 import {
   BoxConstraints,
   Offset,
@@ -28,7 +29,8 @@ export enum BoxFit {
 }
 
 export abstract class CustomImage {
-  abstract init(): void | Promise<void>;
+  /** Loads the image. `fresh`: a new render begins - a load that failed in an earlier one is tried again. */
+  abstract init(fresh?: boolean): void | Promise<void>;
   abstract getImageType(): string | Promise<string>;
   abstract getFileData(): string | Promise<string>;
   abstract getImageDimensions(): Promise<{ width: number; height: number }>;
@@ -48,10 +50,11 @@ export class CustomLocalImage extends CustomImage {
   async init(): Promise<void> {
     if (this.fileBuffer) return; // idempotent: the pre-layout size pass and the renderer both call init()
     try {
-      // Loading image and convert it to base64
       await this.loadImage(this.imagePath);
-    } catch (error) {
-      console.error("Error loading image:", error);
+    } catch (e) {
+      throw new Error(
+        `@jasy/pdf: could not read the image at ${this.imagePath}: ${String((e as Error)?.message ?? e)}`,
+      );
     }
   }
 
@@ -88,9 +91,7 @@ export class CustomLocalImage extends CustomImage {
 
   async getImageDimensions(): Promise<{ width: number; height: number }> {
     if (this.dims) return this.dims; // reuse: the pre-layout size pass and the renderer both ask
-    if (!this.fileBuffer) {
-      throw new Error("You must first call the `loadAndConvertImage` method");
-    }
+    if (!this.fileBuffer) throw new Error("@jasy/pdf: an image was measured before it was loaded");
     this.dims = await getImageDimensions(this.fileBuffer);
     return this.dims;
   }
@@ -124,6 +125,80 @@ export class CustomBytesImage extends CustomImage {
   async getImageDimensions(): Promise<{ width: number; height: number }> {
     if (!this.dims) this.dims = await getImageDimensions(this.bytes); // reuse across pre-pass + render
     return this.dims;
+  }
+}
+
+/** Thrown when an image could not be fetched or is not one we can embed. Always says which URL. */
+export class ImageUrlError extends Error {
+  constructor(message: string) {
+    super(`@jasy/pdf: ${message}`);
+  }
+}
+
+/** How long an image from a URL may take, and how large it may be - a raster image and an SVG alike. */
+export const IMAGE_FETCH_LIMITS = { timeoutMs: 15_000, maxBytes: 32 * 1024 * 1024 };
+
+/** Whether an image source string is an address to fetch rather than a file path. */
+export const isImageUrl = (src: string): boolean => /^(https?:|data:)/i.test(src.trim());
+
+/**
+ * An image from a URL - `http(s):` or a `data:` URL - fetched in the async pass before layout, with
+ * the same timeout and size ceiling as a font. What it IS comes from its bytes, never from the
+ * address, so `.../photo?id=7` works. A dead link stops the render with an `ImageUrlError` naming it.
+ */
+export class CustomUrlImage extends CustomImage {
+  private loading?: Promise<CustomBytesImage>;
+  private loaded?: CustomBytesImage;
+  private failed = false;
+
+  constructor(private readonly url: string) {
+    super();
+  }
+
+  // One fetch per render, however often it is asked: the pre-layout size pass and the renderer both
+  // call init(). A failure sticks for that render only - the next one asks again (`fresh`).
+  async init(fresh = false): Promise<void> {
+    if (fresh && this.failed) this.loading = undefined;
+    this.loading ??= this.load().then(
+      (image) => ((this.failed = false), image),
+      (e: unknown) => {
+        this.failed = true;
+        throw e;
+      },
+    );
+    this.loaded = await this.loading;
+  }
+
+  private async load(): Promise<CustomBytesImage> {
+    const bytes = await fetchBytes(this.url, "image", ImageUrlError, IMAGE_FETCH_LIMITS);
+    const jpeg = bytes[0] === 0xff && bytes[1] === 0xd8;
+    const png = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47;
+    if (!jpeg && !png) {
+      // An error page answers with a 200 often enough to name it rather than fail deep inside.
+      const looksLikeMarkup =
+        new TextDecoder().decode(bytes.subarray(0, 64)).trimStart()[0] === "<";
+      throw new ImageUrlError(
+        `the file at ${this.url} is ${looksLikeMarkup ? "markup (an HTML page, or an SVG - pass that to Svg(url))" : "not an image we can embed"} - jasy embeds PNG and JPEG`,
+      );
+    }
+    return new CustomBytesImage(bytes);
+  }
+
+  private image(): CustomBytesImage {
+    if (!this.loaded) throw new Error("@jasy/pdf: an image was measured before it was loaded");
+    return this.loaded;
+  }
+
+  getImageType(): Promise<string> {
+    return this.image().getImageType();
+  }
+
+  getFileData(): string {
+    return this.image().getFileData();
+  }
+
+  getImageDimensions(): Promise<{ width: number; height: number }> {
+    return this.image().getImageDimensions();
   }
 }
 
@@ -204,7 +279,7 @@ export class ImageElement extends SizedPDFElement {
    */
   async resolveIntrinsicSize(): Promise<void> {
     try {
-      await this.image.init();
+      await this.image.init(true); // a render begins here
       this.intrinsic = await this.image.getImageDimensions();
     } catch {
       // leave intrinsic undefined - aspect derivation simply doesn't fire
