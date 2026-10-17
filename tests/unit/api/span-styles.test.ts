@@ -1,0 +1,161 @@
+// A span takes every inline text style: set on the span it applies to that run, unset it inherits the
+// Text's. What belongs to the whole paragraph (`direction`, `textIndent`, `align`) is not a span option.
+import { describe, it, expect } from "vitest";
+import { Document, Page, renderToBytes } from "../../../src/lib/api/index.ts";
+import { Box } from "../../../src/lib/api/layout.ts";
+import { Text, span } from "../../../src/lib/api/text.ts";
+import { drawnTextRuns } from "../support/drawn.ts";
+import { testMetrics } from "../support/metrics.ts";
+
+const drawn = async (text: ReturnType<typeof Text>) =>
+  (await drawnTextRuns(() => renderToBytes(Document([Page([text])])))).map((r) => r.text).join("");
+
+describe("textTransform on a span", () => {
+  it("recases just that run", async () => {
+    expect(await drawn(Text([span("abc", { textTransform: "uppercase" }), span(" def")]))).toBe(
+      "ABC def",
+    );
+  });
+
+  it("unset, a span inherits the Text's; set, it wins", async () => {
+    const text = Text([span("abc"), span(" def", { textTransform: "none" })], {
+      textTransform: "uppercase",
+    });
+    expect(await drawn(text)).toBe("ABC def");
+  });
+
+  it("capitalize runs through the spans: a word split over two spans is one word", async () => {
+    const text = Text([span("hel", { textTransform: "capitalize" }), span("lo world")], {
+      textTransform: "capitalize",
+    });
+    expect(await drawn(text)).toBe("Hello World");
+  });
+});
+
+describe("textTransform on a span, across a page break", () => {
+  it("a word split over the break is not capitalised again where it continues", async () => {
+    // Courier 10pt is 6pt a character: 48pt holds 8. "abcdefghijkl" is one word, split by breakWord
+    // after 8 characters; a page holds one line, so the continuation "ijkl" starts the next page.
+    const page = Page({ size: { width: 88, height: 52 }, margin: 20 }, [
+      Box({ width: 48 }, [
+        Text([span("abcdefghijkl", { textTransform: "capitalize" })], {
+          font: "Courier",
+          size: 10,
+          breakWord: true,
+          orphans: 1,
+          widows: 1,
+        }),
+      ]),
+    ]);
+    const runs = await drawnTextRuns(() => renderToBytes(Document([page])));
+    expect(runs.map((r) => r.text)).toEqual(["Abcdefgh", "ijkl"]);
+  });
+});
+
+describe("skipInk on a span", () => {
+  // A standard-14 font has no outlines to step around, so asking for skipInk with one is a named
+  // error - which makes it visible whether the span's own setting reached the drawing.
+  const render = (text: ReturnType<typeof Text>) => renderToBytes(Document([Page([text])]));
+
+  it("set on a span, it applies to that run", async () => {
+    const text = Text([span("Hxgp", { underline: true, skipInk: true })], { size: 40 });
+    await expect(render(text)).rejects.toThrow(/skipInk needs an embedded font/);
+  });
+
+  it("a span can switch the Text's off", async () => {
+    const text = Text([span("Hxgp", { skipInk: false })], {
+      size: 40,
+      underline: true,
+      skipInk: true,
+    });
+    await expect(render(text)).resolves.toBeInstanceOf(Uint8Array);
+  });
+});
+
+describe("breakWord and hyphenate on a span", () => {
+  // Courier at 10pt is 6pt a character: a 48pt box holds exactly 8.
+  const lines = async (text: ReturnType<typeof Text>) =>
+    (await drawnTextRuns(() => renderToBytes(Document([Page([Box({ width: 48 }, [text])])])))).map(
+      (r) => r.text,
+    );
+  const mono = { font: "Courier", size: 10 } as const;
+
+  it("breakWord set on a span splits that span's word", async () => {
+    expect(await lines(Text([span("aaaaaaaaaa", { breakWord: true })], mono))).toEqual([
+      "aaaaaaaa",
+      "aa",
+    ]);
+  });
+
+  it("a span can switch the Text's breakWord off - its word overflows whole", async () => {
+    expect(
+      await lines(Text([span("aaaaaaaaaa", { breakWord: false })], { ...mono, breakWord: true })),
+    ).toEqual(["aaaaaaaaaa"]);
+  });
+
+  it("hyphenate set on a span splits that span's word at the hyphenator's points", async () => {
+    const hyphenate = (word: string) => [word.slice(0, 5), word.slice(5)];
+    expect(await lines(Text([span("abcdefghij", { hyphenate })], mono))).toEqual([
+      "abcde-",
+      "fghij",
+    ]);
+  });
+
+  it("a span that may split lowers the min-content floor to a character, as the Text-wide setting does", () => {
+    const ctx = {
+      metrics: testMetrics(),
+      pageConfig: { width: 595, height: 842, margin: 0 },
+    } as never;
+    const word = "Verpflichtungserklaerung";
+    const whole = Text([span(word)], { size: 12 }).minIntrinsicMain(true, ctx);
+    const splittable = Text([span(word, { breakWord: true })], { size: 12 }).minIntrinsicMain(
+      true,
+      ctx,
+    );
+    expect(splittable).toBeLessThan(whole / 5);
+  });
+});
+
+describe("breakWord on a word that runs across spans", () => {
+  // Measured in Chrome (Courier 12pt, a 60pt box = 8 characters): a break AFTER a character is allowed
+  // by that character's own `overflow-wrap`, and the line is filled before it breaks.
+  const a = "aaaaaaaaaa";
+  const b = "bbbbbbbbbb";
+  const mono = { font: "Courier", size: 12 } as const;
+  const lines = async (text: ReturnType<typeof Text>) => {
+    const runs = await drawnTextRuns(() =>
+      renderToBytes(Document([Page([Box({ width: 60 }, [text])])])),
+    );
+    const byLine = new Map<number, string>();
+    for (const r of runs) byLine.set(Math.round(r.y), (byLine.get(Math.round(r.y)) ?? "") + r.text);
+    return [...byLine.values()];
+  };
+
+  it("set on the first span: it splits, and the line may end where that span ends", async () => {
+    expect(await lines(Text([span(a, { breakWord: true }), span(b)], mono))).toEqual([
+      "aaaaaaaa",
+      "aa",
+      "bbbbbbbbbb",
+    ]);
+  });
+
+  it("set on the second span only: no break at the boundary, one character is forced on", async () => {
+    expect(await lines(Text([span(a), span(b, { breakWord: true })], mono))).toEqual([
+      "aaaaaaaaaab",
+      "bbbbbbbb",
+      "b",
+    ]);
+  });
+
+  it("set on the whole Text: the word is filled across the boundary as one word", async () => {
+    expect(await lines(Text([span(a), span(b)], { ...mono, breakWord: true }))).toEqual([
+      "aaaaaaaa",
+      "aabbbbbb",
+      "bbbb",
+    ]);
+  });
+
+  it("set nowhere: the word overflows whole", async () => {
+    expect(await lines(Text([span(a), span(b)], mono))).toEqual(["aaaaaaaaaabbbbbbbbbb"]);
+  });
+});

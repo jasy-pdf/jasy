@@ -16,8 +16,8 @@ import type { Hyphenator } from "../text/word-splitting.ts";
 // them. `Hyphenator` in particular IS the contract of `Text({ hyphenate })`.
 export type { TextOverflow, Direction, TextTransform, Hyphenator };
 
-/** Text styling shared by `Text`, `Paragraph` and `span`. `bold`/`italic` are booleans
- *  (locked §7.3) and combine into one engine `FontStyle`. */
+/** Text styling shared by `Text`, `Paragraph` and `span` - what applies to a run. `bold`/`italic` are
+ *  booleans (locked §7.3) and combine into one engine `FontStyle`. */
 export interface TextStyle {
   size?: number;
   /** Font family, or a STACK: each code point is drawn by the first family in the list that has a
@@ -37,16 +37,10 @@ export interface TextStyle {
   skipInk?: boolean;
   /** Extra space after every glyph, in points (CSS `letter-spacing`). Negative tightens. Default 0. */
   letterSpacing?: number;
-  /** Base writing direction (CSS `direction`): `"rtl"` starts the line on the right, for Hebrew or
-   *  Arabic. Mixed text is reordered per Unicode UAX #9 either way, so Hebrew inside an `ltr`
-   *  paragraph already comes out right - this decides where the LINE starts. */
-  direction?: Direction;
   /** CSS `text-transform`: recase the text. `capitalize` upper-cases the first letter of each word. */
   textTransform?: TextTransform;
   /** CSS `word-spacing`, in points: extra advance at every space. Negative tightens. */
   wordSpacing?: number;
-  /** CSS `text-indent`, in points: how far the FIRST line of a paragraph starts in. */
-  textIndent?: number;
   /** Split a word that is wider than its box, anywhere, no hyphen (CSS `overflow-wrap:
    *  break-word`). The floor under `hyphenate`: an e-mail, an IBAN or an invoice number has no
    *  valid hyphenation point anywhere. Off by default - a too-wide word overflows, as in CSS. */
@@ -72,6 +66,12 @@ export interface TextStyle {
 // CSS `vertical-align` is inert on a block for the same reason. It was in the type and silently dropped
 // by the factory below; put it on a `span(...)` instead.
 export interface TextOptions extends Omit<TextStyle, "verticalAlign"> {
+  /** Base writing direction (CSS `direction`): `"rtl"` starts the line on the right, for Hebrew or
+   *  Arabic. Mixed text is reordered per Unicode UAX #9 either way, so Hebrew inside an `ltr`
+   *  paragraph already comes out right - this decides where the LINE starts. */
+  direction?: Direction;
+  /** CSS `text-indent`, in points: how far the FIRST line of a paragraph starts in. */
+  textIndent?: number;
   /** Text-internal alignment (left/center/right) - independent of a parent's `cross` (§5). */
   align?: "left" | "center" | "right" | "justify";
   /** Cap the number of wrapped lines (default: unlimited - the text grows down as far as it needs,
@@ -157,7 +157,13 @@ export function span(text: string, style: TextStyle = {}): TextSegment {
     fontColor: style.color !== undefined ? toColor(style.color) : undefined,
     underline: style.underline,
     strikethrough: style.strikethrough,
+    skipInk: style.skipInk,
     letterSpacing: style.letterSpacing,
+    textTransform: style.textTransform,
+    wordSpacing: style.wordSpacing,
+    ligatures: style.ligatures,
+    breakWord: style.breakWord,
+    hyphenate: style.hyphenate,
     verticalAlign: style.verticalAlign,
     href: style.href,
     dest: style.to,

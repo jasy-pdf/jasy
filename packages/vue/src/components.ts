@@ -36,20 +36,23 @@ const textStyleProps = {
   /** Step the underline around descenders. Needs an embedded font. */
   skipInk: { type: Boolean, default: undefined },
   letterSpacing: Number,
-  /** Base writing direction (CSS `direction`): `"rtl"` starts the line on the right. */
-  direction: String as PropType<Direction>,
   /** CSS `text-transform`: recase the text. */
   textTransform: String as PropType<TextTransform>,
   /** CSS `word-spacing`, in points: extra advance at every space. */
   wordSpacing: Number,
-  /** CSS `text-indent`, in points: how far the FIRST line starts in. */
-  textIndent: Number,
   /** Split a word wider than its box, anywhere, no hyphen (CSS `overflow-wrap: break-word`). */
   breakWord: { type: Boolean, default: undefined },
   /** The ligatures the font's designer drew (`fi`, `fl`, `ffi`). On by default; `false` opts out. */
   ligatures: { type: Boolean, default: undefined },
   /** Language-aware splitting: given a word, return its parts. Bring your own (`hyphen`, ...). */
   hyphenate: Function as PropType<Hyphenator>,
+};
+// What belongs to a whole paragraph, so a `<Span>` does not offer it.
+const paragraphProps = {
+  /** Base writing direction (CSS `direction`): `"rtl"` starts the line on the right. */
+  direction: String as PropType<Direction>,
+  /** CSS `text-indent`, in points: how far the FIRST line starts in. */
+  textIndent: Number,
 };
 // A link target. Shared by `<Text>`/`<Paragraph>` (links the whole run) and `<Span>` (links just that
 // run). NOT part of `textStyleProps`: `<Document>` and `<DefaultTextStyle>` set defaults, they cannot link.
@@ -68,6 +71,7 @@ const spanOnlyProps = {
 };
 const textProps = {
   ...textStyleProps,
+  ...paragraphProps,
   ...linkTargetProps,
   align: alignProp,
   lineHeight: Number,
@@ -143,6 +147,7 @@ const pageProps = {
 };
 const documentProps = {
   ...textStyleProps,
+  ...paragraphProps,
   align: alignProp,
   lineHeight: Number,
   meta: Object as PropType<{ title?: string; author?: string }>,
@@ -161,6 +166,7 @@ const positionedProps = {
 };
 const defaultTextStyleProps = {
   ...textStyleProps,
+  ...paragraphProps,
   align: alignProp,
   lineHeight: Number,
 };
@@ -374,7 +380,13 @@ export const RotatedBox = defineComponent({
 // The current page / the document total, as text. Usable anywhere, not just in a `#footer`. `offset` is
 // added to the number - use `-1` when a cover page should not count.
 // (`PageBuilder` from the core is not exposed: it takes a closure, which a template cannot express.)
-const pageNumberProps = { ...textStyleProps, align: alignProp, lineHeight: Number, offset: Number };
+const pageNumberProps = {
+  ...textStyleProps,
+  ...paragraphProps,
+  align: alignProp,
+  lineHeight: Number,
+  offset: Number,
+};
 export const PageNumber = defineComponent({
   name: "JasyPageNumber",
   inheritAttrs: false,

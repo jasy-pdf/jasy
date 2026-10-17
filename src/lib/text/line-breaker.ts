@@ -48,6 +48,35 @@ export interface RunDefaults {
 /** Everything the breaker reads besides the spans: what they inherit, and how lines end. */
 export type SegmentDefaults = RunDefaults & LineOptions;
 
+/** How one span is measured, broken and drawn. */
+export interface RunStyle {
+  font: RunFont;
+  letterSpacing: number;
+  wordSpacing: number;
+  splitting: WordSplitting;
+}
+
+/**
+ * A span's run style: what it sets itself, else what the paragraph sets. The ONE place a span inherits
+ * it, so breaking, drawing and the element's own sizing ask the same question.
+ */
+export function runStyleOf(seg: TextSegment, defaults: SegmentDefaults): RunStyle {
+  return {
+    font: {
+      fontFamily: seg.fontFamily || defaults.fontFamily,
+      fontSize: seg.fontSize || defaults.fontSize,
+      fontStyle: seg.fontStyle || defaults.fontStyle,
+      ligatures: seg.ligatures ?? defaults.ligatures,
+    },
+    letterSpacing: seg.letterSpacing ?? defaults.letterSpacing ?? 0,
+    wordSpacing: seg.wordSpacing ?? defaults.wordSpacing ?? 0,
+    splitting: {
+      breakWord: seg.breakWord ?? defaults.splitting?.breakWord,
+      hyphenate: seg.hyphenate ?? defaults.splitting?.hyphenate,
+    },
+  };
+}
+
 /** What happens to text beyond `maxLines`: `"clip"` drops it, `"ellipsis"` ends the last kept line
  *  with an ellipsis. Mirrors Flutter's `TextOverflow`. */
 export type TextOverflow = "clip" | "ellipsis";
@@ -196,9 +225,11 @@ export function breakSegmentsIntoLines(
   overflow?: TextOverflow,
 ): SegmentLine[] {
   const lines: SegmentLine[] = [];
-  const { indent = 0, wordSpacing = 0, shrink = 0 } = defaults;
+  const { indent = 0, shrink = 0 } = defaults;
   let width = 0;
-  let gaps = 0; // spaces on the line, which is what a justified line can squeeze
+  // The spaces on the line, summed - what a justified line can squeeze. Summed, not counted: each space
+  // is as wide as its own span makes it.
+  let gapWidth = 0;
   let lineSegments: TextSegment[] = [];
   let combined = "";
   let lineStart: SegmentPosition = { segment: 0, offset: 0 }; // where the current line begins
@@ -229,13 +260,8 @@ export function breakSegmentsIntoLines(
       last?.content.endsWith(SOFT_HYPHEN) &&
       !withoutSoftHyphens(last.content).endsWith("-")
     ) {
-      const font = {
-        fontFamily: last.fontFamily || defaults.fontFamily,
-        fontSize: last.fontSize || defaults.fontSize,
-        fontStyle: last.fontStyle || defaults.fontStyle,
-        ligatures: defaults.ligatures,
-      };
-      width += runAdvance(metrics, HYPHEN, font, last.letterSpacing ?? defaults.letterSpacing ?? 0);
+      const run = runStyleOf(last, defaults);
+      width += runAdvance(metrics, HYPHEN, run.font, run.letterSpacing);
       segs = segs.map((seg, i) =>
         i === lastIndex ? { ...seg, content: withoutSoftHyphens(seg.content) + HYPHEN } : seg,
       );
@@ -278,13 +304,7 @@ export function breakSegmentsIntoLines(
     let ink = 0;
     let open = false;
     for (const piece of pieces) {
-      const font = {
-        fontFamily: piece.fontFamily || defaults.fontFamily,
-        fontSize: piece.fontSize || defaults.fontSize,
-        fontStyle: piece.fontStyle || defaults.fontStyle,
-        ligatures: defaults.ligatures,
-      };
-      const spacing = piece.letterSpacing ?? defaults.letterSpacing ?? 0;
+      const { font, letterSpacing: spacing, wordSpacing } = runStyleOf(piece, defaults);
       const space = runAdvance(metrics, " ", font, spacing) + wordSpacing;
       piece.content.split(" ").forEach((word, i) => {
         total = total + ((open && i > 0 ? space : 0) + runAdvance(metrics, word, font, spacing));
@@ -347,16 +367,8 @@ export function breakSegmentsIntoLines(
   };
 
   segments.forEach((segment, segmentIndex) => {
-    const family = segment.fontFamily || defaults.fontFamily;
-    const size = segment.fontSize || defaults.fontSize;
-    const style = segment.fontStyle || defaults.fontStyle;
-    const letterSpacing = segment.letterSpacing ?? defaults.letterSpacing ?? 0;
-    const font = {
-      fontFamily: family,
-      fontSize: size,
-      fontStyle: style,
-      ligatures: defaults.ligatures,
-    };
+    const { font, letterSpacing, wordSpacing, splitting } = runStyleOf(segment, defaults);
+    const family = font.fontFamily;
     const spaceWidth = runAdvance(metrics, " ", font, letterSpacing) + wordSpacing;
     const at = (offset: number): SegmentPosition => ({ segment: segmentIndex, offset });
 
@@ -368,7 +380,7 @@ export function breakSegmentsIntoLines(
       if (paragraphIndex > 0) {
         close(lineSegments, ink, "hard");
         width = 0;
-        gaps = 0;
+        gapWidth = 0;
         open = false;
         inked = false;
         ink = 0;
@@ -407,9 +419,60 @@ export function breakSegmentsIntoLines(
         lineStart = glued.from!;
         width = carried.width;
         ink = carried.ink;
-        gaps = 0;
+        gapWidth = 0;
         open = true;
         inked = true;
+      };
+
+      /**
+       * No regular break before a word glued to the line, and it does not fit: Chrome's `overflow-wrap`
+       * emergency break, where a break after a character is allowed by THAT character's own setting.
+       * As much of the word as fits stays here if its span may split; else the line ends at the span
+       * boundary if the span before it may split; else one character is forced on if this span may
+       * split at all. `false`: none applies, and the word overflows on this line as before.
+       */
+      const emergencyBreak = (word: string, wordAt: number, room: number): boolean => {
+        let before: TextSegment | undefined;
+        for (let i = lineSegments.length - 1; i >= 0 && !before; i--)
+          if (lineSegments[i]!.content !== "") before = lineSegments[i];
+        const beforeMaySplit =
+          before !== undefined && runStyleOf(before, defaults).splitting.breakWord === true;
+        let head: number | null = null; // how much of the word's source stays on this line
+        if (splitting.breakWord) {
+          const split = splitLongWord(word, room - width, font, metrics, letterSpacing, {
+            breakWord: true,
+          });
+          if (split) head = split[0]!.source;
+        }
+        if (head === null && beforeMaySplit) {
+          close(lineSegments, ink, "split");
+          startLine(wordAt);
+          placeWord(word, wordAt, false);
+          return true;
+        }
+        if (head === null && splitting.breakWord)
+          head = String.fromCodePoint(word.codePointAt(0)!).length;
+        if (head === null) return false;
+        combined += word.slice(0, head);
+        width += runAdvance(metrics, word.slice(0, head), font, letterSpacing);
+        ink = width;
+        lineSegments[lineSegments.length - 1]!.content = combined;
+        close(lineSegments, ink, "split");
+        startLine(wordAt + head);
+        placeWord(word.slice(head), wordAt + head, false);
+        return true;
+      };
+
+      /** An empty line, starting at source offset `startAt` in this segment. */
+      const startLine = (startAt: number): void => {
+        lineSegments = [started({ ...segment, fontFamily: family, content: "" }, at(startAt))];
+        combined = "";
+        width = 0;
+        gapWidth = 0;
+        open = false;
+        inked = false;
+        ink = 0;
+        lineStart = at(startAt);
       };
 
       // One word, placed at source offset `wordAt`; `joined`: a space joins it to the word before.
@@ -420,14 +483,7 @@ export function breakSegmentsIntoLines(
         // one. It must not slip in behind the space it was written after, however narrow it is.
         if (afterSpace && inked && word !== "") {
           close(lineSegments, ink, "soft");
-          lineSegments = [started({ ...segment, fontFamily: family, content: "" }, at(wordAt))];
-          combined = "";
-          width = 0;
-          gaps = 0;
-          open = false;
-          inked = false;
-          ink = 0;
-          lineStart = at(wordAt);
+          startLine(wordAt);
         }
         // Only a word that follows something on this line is joined to it by the space.
         const joins = open && joined;
@@ -438,24 +494,15 @@ export function breakSegmentsIntoLines(
 
         // How much a JUSTIFIED line may be squeezed to keep one more word: the spaces already on the
         // line plus the one that would join it, each giving up at most `shrink` of its width. Zero for
-        // every other alignment, where a squeezed line would simply overflow instead.
-        const squeeze = (gaps + (joins ? 1 : 0)) * spaceWidth * shrink;
+        // every other alignment, where a squeezed line would simply overflow instead. The drawing
+        // spreads the same total evenly over the gaps (`justifyExtra`).
+        const squeeze = (gapWidth + (joins ? spaceWidth : 0)) * shrink;
         // A hyphen inside the word is a break opportunity, taken only when the whole word does not fit
         // here - the same test, squeeze included, as below.
         const fitsHere = (w: number): boolean =>
           !open ? w <= room : width + ((joins ? spaceWidth : 0) + w) - squeeze <= room;
         const breaks = mayBreak(word) ? hyphenBreaks(word) : NO_BREAKS;
         if (breaks.length > 0 && !fitsHere(wordWidth)) {
-          const freshLine = (startAt: number) => {
-            lineSegments = [started({ ...segment, fontFamily: family, content: "" }, at(startAt))];
-            combined = "";
-            width = 0;
-            gaps = 0;
-            open = false;
-            inked = false;
-            ink = 0;
-            lineStart = at(startAt);
-          };
           let head = 0;
           for (const k of breaks) {
             if (!fitsHere(runAdvance(metrics, headAt(word, k), font, letterSpacing))) break;
@@ -474,7 +521,7 @@ export function breakSegmentsIntoLines(
               );
             lineSegments[lineSegments.length - 1]!.content = combined;
             close(lineSegments, ink, endAt(word, head));
-            freshLine(wordAt + head);
+            startLine(wordAt + head);
             placeWord(word.slice(head), wordAt + head, false);
             return;
           }
@@ -487,30 +534,33 @@ export function breakSegmentsIntoLines(
             }
             if (glued !== null) {
               close(lineSegments, ink, "soft", !joined);
-              freshLine(wordAt);
+              startLine(wordAt);
               placeWord(word, wordAt, false);
               return;
             }
           }
           placeWord(headAt(word, breaks[0]!), wordAt, joined);
           close(lineSegments, ink, endAt(word, breaks[0]!));
-          freshLine(wordAt + breaks[0]!);
+          startLine(wordAt + breaks[0]!);
           placeWord(word.slice(breaks[0]), wordAt + breaks[0]!, false);
           return;
+        }
+        // A word glued to the line - it continues one from an earlier span - that does not fit here.
+        if (!joined && !afterSpace && inked && word !== "" && !fitsHere(wordWidth)) {
+          const glued = gluedTail(word, afterSpace);
+          if (glued && glued.moved.length > 0) {
+            carryOver(glued, wordAt);
+            placeWord(word, wordAt, false);
+            return;
+          }
+          if (glued === null && emergencyBreak(word, wordAt, room)) return;
         }
         const splitRoom = lines.length === 0 && !open ? room : maxWidth;
 
         // A word too wide for the box is split into pieces that fit (hyphenation first, break-word as
         // the floor). Each finished piece closes the line it sits on, keeping this segment's style. Off
         // by default, so a document that asks for neither never gets here.
-        const split = splitLongWord(
-          word,
-          splitRoom,
-          font,
-          metrics,
-          letterSpacing,
-          defaults.splitting ?? {},
-        );
+        const split = splitLongWord(word, splitRoom, font, metrics, letterSpacing, splitting);
         if (split) {
           // Close whatever is already on the line FIRST: the pieces were measured against the full box,
           // not against what is left of this line.
@@ -536,7 +586,7 @@ export function breakSegmentsIntoLines(
           lineStart = at(pieceAt);
           combined = split[split.length - 1]!.text;
           width = runAdvance(metrics, combined, font, letterSpacing);
-          gaps = 0;
+          gapWidth = 0;
           open = true;
           inked = true;
           ink = width;
@@ -572,7 +622,7 @@ export function breakSegmentsIntoLines(
             close(lineSegments, ink, "soft", !joined);
             lineStart = at(wordAt);
             width = wordWidth;
-            gaps = 0;
+            gapWidth = 0;
             ink = wordWidth;
             inked = true;
             lineSegments = [];
@@ -583,7 +633,7 @@ export function breakSegmentsIntoLines(
         }
         combined += joins ? " " + word : word;
         width = candidate;
-        if (joins) gaps += 1;
+        if (joins) gapWidth += spaceWidth;
         open = true;
         if (word !== "") {
           ink = width;
@@ -673,34 +723,25 @@ function ellipsizeLine(
 ): void {
   const segs = line.segments;
   if (segs.length === 0) return;
-  const lsOf = (seg: TextSegment): number => seg.letterSpacing ?? defaults.letterSpacing ?? 0;
   // Summed word by word, as the breaker sums a line - one owner for a line's width.
-  const widthOf = (seg: TextSegment): number =>
-    singleLineWidth(
-      seg.content,
-      {
-        fontFamily: seg.fontFamily || defaults.fontFamily,
-        fontSize: seg.fontSize || defaults.fontSize,
-        fontStyle: seg.fontStyle || defaults.fontStyle,
-        ligatures: defaults.ligatures,
-      },
-      metrics,
-      lsOf(seg),
-      defaults.wordSpacing,
-    );
+  const widthOf = (seg: TextSegment): number => {
+    const run = runStyleOf(seg, defaults);
+    return singleLineWidth(seg.content, run.font, metrics, run.letterSpacing, run.wordSpacing);
+  };
   let prefix = 0;
   for (let i = 0; i < segs.length - 1; i++) prefix += widthOf(segs[i]);
   const last = segs[segs.length - 1];
+  const run = runStyleOf(last, defaults);
   last.content = ellipsize(
     last.content,
-    last.fontFamily || defaults.fontFamily,
-    last.fontSize || defaults.fontSize,
-    last.fontStyle || defaults.fontStyle,
+    run.font.fontFamily,
+    run.font.fontSize,
+    run.font.fontStyle,
     maxWidth - prefix,
     metrics,
-    lsOf(last),
-    defaults.wordSpacing,
-    defaults.ligatures,
+    run.letterSpacing,
+    run.wordSpacing,
+    run.font.ligatures,
   );
   line.width = prefix + widthOf(last);
 }

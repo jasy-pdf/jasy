@@ -10,6 +10,8 @@ import { runAdvance } from "../text/advance.ts";
 import { Fragmentable, FragmentResult } from "../layout/fragmentation.ts";
 import {
   type LineOptions,
+  type RunStyle,
+  runStyleOf,
   type SegmentDefaults,
   singleLineWidth,
   MAX_SPACE_SHRINK,
@@ -44,8 +46,16 @@ export interface TextSegment {
   /** Unset inherits the Text's own setting; `true`/`false` overrides it for this run only. */
   underline?: boolean;
   strikethrough?: boolean;
+  skipInk?: boolean;
   /** Extra space after every glyph, in points; unset inherits the Text's own value. */
   letterSpacing?: number;
+  textTransform?: TextTransform;
+  wordSpacing?: number;
+  ligatures?: boolean;
+  /** How a word wider than the box splits, for the characters of THIS run (Chrome: a break after a
+   *  character is allowed by that character's own `overflow-wrap`). */
+  breakWord?: boolean;
+  hyphenate?: Hyphenator;
   /**
    * CSS `vertical-align`, for a footnote marker or a formula index. Shifts THIS run's baseline;
    * it does not resize the text, and it does not change the line's height - set `fontSize` yourself
@@ -352,14 +362,16 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
   /** The content as spans, with `text-transform` applied, and nothing else. */
   private recased(): TextSegment[] {
     // A string is one span: from here on, measuring, breaking and drawing know only spans.
-    const spans = typeof this.content === "string" ? [{ content: this.content }] : this.content;
-    if (this.textTransform === "none") return spans;
+    const spans: TextSegment[] =
+      typeof this.content === "string" ? [{ content: this.content }] : this.content;
+    const transformOf = (seg: TextSegment) => seg.textTransform ?? this.textTransform;
+    if (spans.every((seg) => transformOf(seg) === "none")) return spans;
     // The capitalisation state runs THROUGH the spans: `span("hel") + span("lo")` is one word.
     let atWordStart = true;
     return spans.map((seg) => {
-      const done = applyTextTransform(seg.content, this.textTransform, atWordStart);
+      const done = applyTextTransform(seg.content, transformOf(seg), atWordStart);
       atWordStart = done.atWordStart;
-      return { ...seg, content: done.text };
+      return done.text === seg.content ? seg : { ...seg, content: done.text };
     });
   }
 
@@ -480,7 +492,10 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     piece: { shownLines?: number; maxLines?: number } = {},
   ): TextElement {
     return new TextElement({
-      content,
+      // Cut from `display()`, already recased - a span's own transform too.
+      content: content.map((seg) =>
+        (seg.textTransform ?? "none") === "none" ? seg : { ...seg, textTransform: "none" },
+      ),
       fontSize: this.fontSize,
       fontFamily: this.fontFamily,
       fontStyle: this.fontStyle,
@@ -500,8 +515,8 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
       textIndent: indent,
       role: this.role,
       fontFallback: this.fontFallback,
-      // The content is cut from `display()`, already recased: `capitalize` again would capitalise
-      // the half of a word continued on the next page.
+      // Already recased: `capitalize` again would capitalise the half of a word continued on the next
+      // page.
       textTransform: "none",
       breakWord: this.breakWord,
       hyphenate: this.hyphenate,
@@ -567,36 +582,16 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
    *  numbers grouped differently drift by a sub-ULP, enough to wrap a text inside its own natural-width
    *  box. `singleLineWidth` is that sum. */
   private naturalWidth(metrics: FontMetrics): number {
-    // The breaker's own sum, to the last bit - see `singleLineWidth`.
-    const oneLine = (
-      text: string,
-      family: string,
-      size: number,
-      style: FontStyle,
-      letterSpacing: number,
-    ): number =>
-      singleLineWidth(
-        text,
-        // `ligatures` is part of the font: it decides which glyphs are drawn, hence the width.
-        { fontFamily: family, fontSize: size, fontStyle: style, ligatures: this.ligatures },
-        metrics,
-        letterSpacing,
-        this.wordSpacing,
-      );
+    const defaults = this.segmentDefaults();
     // The FIRST line starts `textIndent` in, so an unbounded box has to be that much wider.
     const indent = Math.max(0, this.textIndent);
-    return this.display(metrics).reduce(
-      (sum, seg) =>
-        sum +
-        oneLine(
-          seg.content,
-          seg.fontFamily ?? this.fontFamily,
-          seg.fontSize ?? this.fontSize,
-          seg.fontStyle ?? this.fontStyle,
-          seg.letterSpacing ?? this.letterSpacing,
-        ),
-      indent,
-    );
+    return this.display(metrics).reduce((sum, seg) => {
+      // The breaker's own sum, to the last bit - see `singleLineWidth`.
+      const run = runStyleOf(seg, defaults);
+      return (
+        sum + singleLineWidth(seg.content, run.font, metrics, run.letterSpacing, run.wordSpacing)
+      );
+    }, indent);
   }
 
   /**
@@ -613,46 +608,27 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     if (!horizontal) return 0;
     this.resolveStyle(ctx);
     const metrics = ctx.metrics;
-    const widest = (
-      text: string,
-      family: string,
-      size: number,
-      style: FontStyle,
-      letterSpacing: number,
-    ): number => {
-      // `ligatures` belongs to the FONT: it decides which glyphs are drawn and therefore how wide the
-      // piece is. Leaving it out here would measure a floor the drawing never matches.
-      const font = {
-        fontFamily: family,
-        fontSize: size,
-        fontStyle: style,
-        ligatures: this.ligatures,
-      };
+    // The run style is the FONT a piece is measured in: `ligatures` decides which glyphs are drawn and
+    // therefore how wide it is. Leaving it out would measure a floor the drawing never matches.
+    const widest = (text: string, run: RunStyle): number => {
       // Split on the same boundaries the breaker uses - a hard break ends a line too, and so may a
-      // hyphen inside a word.
+      // hyphen inside a word. A run that may split its words may split them anywhere.
       const pieces =
-        this.breakWord || this.hyphenate ? [...text] : text.split(/[ \n]/).flatMap(hyphenPieces);
+        run.splitting.breakWord || run.splitting.hyphenate
+          ? [...text]
+          : text.split(/[ \n]/).flatMap(hyphenPieces);
       return pieces.reduce(
-        (max, piece) => Math.max(max, runAdvance(metrics, piece, font, letterSpacing)),
+        (max, piece) => Math.max(max, runAdvance(metrics, piece, run.font, run.letterSpacing)),
         0,
       );
     };
+    const defaults = this.segmentDefaults();
     const content = this.display(metrics);
     // Segments join without a space, so a word may straddle two of them; taking the widest piece per
     // segment can therefore UNDER-estimate. That errs towards squeezing a little too far, which lands
     // back on the old overflow behaviour rather than on something new.
     return content.reduce(
-      (max, seg) =>
-        Math.max(
-          max,
-          widest(
-            seg.content,
-            seg.fontFamily ?? this.fontFamily,
-            seg.fontSize ?? this.fontSize,
-            seg.fontStyle ?? this.fontStyle,
-            seg.letterSpacing ?? this.letterSpacing,
-          ),
-        ),
+      (max, seg) => Math.max(max, widest(seg.content, runStyleOf(seg, defaults))),
       0,
     );
   }
