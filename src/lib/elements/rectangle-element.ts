@@ -234,10 +234,14 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
   }
 
   /** A Box's own padding resolves a percentage against what the Box was OFFERED (CSS: the containing
-   *  block), not against the inner width it hands its children - so it is told. */
+   *  block), not against the inner width it hands its children - so it is told. Only a bounded offer:
+   *  in a Row a child is offered no width at all, and there the padding keeps resolving against the
+   *  Box's own width, as it always did. */
   private paddingContext(ctx: LayoutContext, offered: number): LayoutContext {
     const own = this.children[0];
-    return own instanceof PaddingElement && own.ofBox ? { ...ctx, boxPaddingBase: offered } : ctx;
+    return own instanceof PaddingElement && own.ofBox && Number.isFinite(offered)
+      ? { ...ctx, boxPaddingBase: offered }
+      : ctx;
   }
 
   /** A Box stacks its children vertically inside its border, which is on both sides of the axis. */

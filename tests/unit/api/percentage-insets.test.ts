@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { Box, Padding } from "../../../src/lib/api/layout.ts";
+import { Box, Padding, Row } from "../../../src/lib/api/layout.ts";
+import { Document, renderToBytes } from "../../../src/lib/api/index.ts";
+import { drawnNodes } from "../support/drawn.ts";
 import { Page } from "../../../src/lib/api/structure.ts";
 import { Text } from "../../../src/lib/api/text.ts";
 import { toEdges } from "../../../src/lib/api/insets.ts";
@@ -78,6 +80,18 @@ describe("through the factories", () => {
     expect(
       bordered.calculateLayout(BoxConstraints.loose(400, Infinity), { x: 0, y: 0 }, ctx).height,
     ).toBe(90);
+  });
+
+  it("in a Row, which offers no width, a Box's padding still resolves against the Box's own width", async () => {
+    // Regression guard: "8% of an unbounded offer" is 0, which took the padding away entirely.
+    const nodes = await drawnNodes(() =>
+      renderToBytes(
+        Document([Page([Row([Box({ width: 100, borderWidth: 0, padding: "8%" }, [Text("x")])])])]),
+      ),
+    );
+    const box = nodes[0]!.find((n) => n.type === "rect") as { x: number };
+    const text = nodes[0]!.find((n) => n.type === "text") as { x: number };
+    expect(text.x - box.x).toBe(8);
   });
 
   it("only the Box's own padding: a Padding inside it resolves against what IT is offered", () => {
