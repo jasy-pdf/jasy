@@ -203,7 +203,9 @@ export function Box(a: BoxOptions | PDFElement[], b?: PDFElement[]): PDFElement 
             child: children.length === 1 ? children[0] : Column(children),
           }),
         ]
-      : children;
+      : children.length > 1 && children.some((child) => child instanceof ExpandedElement)
+        ? [Column(children)]
+        : children;
 
   // A side is set if it (or the uniform `border`) is given. If ANY differs from a plain
   // uniform border, we hand the engine per-side colors (which draws individual lines).
