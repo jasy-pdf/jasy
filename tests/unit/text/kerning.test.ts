@@ -21,6 +21,14 @@ describe("getKernPairs (AFM)", () => {
     expect(om().getKernPairs("AVA", "Helvetica", FontStyle.Normal)).toEqual([-70, -80]);
   });
 
+  it("finds pairs with punctuation, umlauts and quotes - the AFM names them by glyph", () => {
+    // KPX T period -120, KPX T comma -120, KPX L quoteright -160, KPX T adieresis -120,
+    // KPX V Adieresis -80. Looked up by the character itself, only letter-letter pairs ever hit.
+    expect(om().getKernPairs("T.T,L\u2019T\u00e4V\u00c4", "Helvetica", FontStyle.Normal)).toEqual([
+      -120, 0, -120, 0, -160, 0, -120, 0, -80,
+    ]);
+  });
+
   it("is zero next to a space (letters are never kerned against a space)", () => {
     const pairs = om().getKernPairs("A V", "Helvetica", FontStyle.Normal);
     expect(pairs).toEqual([0, 0]); // A-space, space-V

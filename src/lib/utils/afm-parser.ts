@@ -178,7 +178,9 @@ export class AFMParser {
     return this.advanceWidths[this.getGlyphName(charName)] || 0;
   }
 
+  /** The pair's kerning. The AFM keys its pairs by GLYPH name (`KPX T comma`), like its widths - so the
+   *  characters are named first, or only letter-letter pairs (where the two coincide) would ever hit. */
   getKerning(firstChar: string, secondChar: string): number {
-    return this.kerningPairs[firstChar]?.[secondChar] ?? 0;
+    return this.kerningPairs[this.getGlyphName(firstChar)]?.[this.getGlyphName(secondChar)] ?? 0;
   }
 }
