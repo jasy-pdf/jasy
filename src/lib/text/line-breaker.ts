@@ -424,6 +424,57 @@ export function breakSegmentsIntoLines(
         inked = true;
       };
 
+      /**
+       * No regular break before a word glued to the line, and it does not fit: Chrome's `overflow-wrap`
+       * emergency break, where a break after a character is allowed by THAT character's own setting.
+       * As much of the word as fits stays here if its span may split; else the line ends at the span
+       * boundary if the span before it may split; else one character is forced on if this span may
+       * split at all. `false`: none applies, and the word overflows on this line as before.
+       */
+      const emergencyBreak = (word: string, wordAt: number, room: number): boolean => {
+        let before: TextSegment | undefined;
+        for (let i = lineSegments.length - 1; i >= 0 && !before; i--)
+          if (lineSegments[i]!.content !== "") before = lineSegments[i];
+        const beforeMaySplit =
+          before !== undefined && runStyleOf(before, defaults).splitting.breakWord === true;
+        let head: number | null = null; // how much of the word's source stays on this line
+        if (splitting.breakWord) {
+          const split = splitLongWord(word, room - width, font, metrics, letterSpacing, {
+            breakWord: true,
+          });
+          if (split) head = split[0]!.source;
+        }
+        if (head === null && beforeMaySplit) {
+          close(lineSegments, ink, "split");
+          startLine(wordAt);
+          placeWord(word, wordAt, false);
+          return true;
+        }
+        if (head === null && splitting.breakWord)
+          head = String.fromCodePoint(word.codePointAt(0)!).length;
+        if (head === null) return false;
+        combined += word.slice(0, head);
+        width += runAdvance(metrics, word.slice(0, head), font, letterSpacing);
+        ink = width;
+        lineSegments[lineSegments.length - 1]!.content = combined;
+        close(lineSegments, ink, "split");
+        startLine(wordAt + head);
+        placeWord(word.slice(head), wordAt + head, false);
+        return true;
+      };
+
+      /** An empty line, starting at source offset `startAt` in this segment. */
+      const startLine = (startAt: number): void => {
+        lineSegments = [started({ ...segment, fontFamily: family, content: "" }, at(startAt))];
+        combined = "";
+        width = 0;
+        gapWidth = 0;
+        open = false;
+        inked = false;
+        ink = 0;
+        lineStart = at(startAt);
+      };
+
       // One word, placed at source offset `wordAt`; `joined`: a space joins it to the word before.
       const placeWord = (word: string, wordAt: number, joined: boolean): void => {
         const afterSpace = hung;
@@ -432,14 +483,7 @@ export function breakSegmentsIntoLines(
         // one. It must not slip in behind the space it was written after, however narrow it is.
         if (afterSpace && inked && word !== "") {
           close(lineSegments, ink, "soft");
-          lineSegments = [started({ ...segment, fontFamily: family, content: "" }, at(wordAt))];
-          combined = "";
-          width = 0;
-          gapWidth = 0;
-          open = false;
-          inked = false;
-          ink = 0;
-          lineStart = at(wordAt);
+          startLine(wordAt);
         }
         // Only a word that follows something on this line is joined to it by the space.
         const joins = open && joined;
@@ -459,16 +503,6 @@ export function breakSegmentsIntoLines(
           !open ? w <= room : width + ((joins ? spaceWidth : 0) + w) - squeeze <= room;
         const breaks = mayBreak(word) ? hyphenBreaks(word) : NO_BREAKS;
         if (breaks.length > 0 && !fitsHere(wordWidth)) {
-          const freshLine = (startAt: number) => {
-            lineSegments = [started({ ...segment, fontFamily: family, content: "" }, at(startAt))];
-            combined = "";
-            width = 0;
-            gapWidth = 0;
-            open = false;
-            inked = false;
-            ink = 0;
-            lineStart = at(startAt);
-          };
           let head = 0;
           for (const k of breaks) {
             if (!fitsHere(runAdvance(metrics, headAt(word, k), font, letterSpacing))) break;
@@ -487,7 +521,7 @@ export function breakSegmentsIntoLines(
               );
             lineSegments[lineSegments.length - 1]!.content = combined;
             close(lineSegments, ink, endAt(word, head));
-            freshLine(wordAt + head);
+            startLine(wordAt + head);
             placeWord(word.slice(head), wordAt + head, false);
             return;
           }
@@ -500,16 +534,26 @@ export function breakSegmentsIntoLines(
             }
             if (glued !== null) {
               close(lineSegments, ink, "soft", !joined);
-              freshLine(wordAt);
+              startLine(wordAt);
               placeWord(word, wordAt, false);
               return;
             }
           }
           placeWord(headAt(word, breaks[0]!), wordAt, joined);
           close(lineSegments, ink, endAt(word, breaks[0]!));
-          freshLine(wordAt + breaks[0]!);
+          startLine(wordAt + breaks[0]!);
           placeWord(word.slice(breaks[0]), wordAt + breaks[0]!, false);
           return;
+        }
+        // A word glued to the line - it continues one from an earlier span - that does not fit here.
+        if (!joined && !afterSpace && inked && word !== "" && !fitsHere(wordWidth)) {
+          const glued = gluedTail(word, afterSpace);
+          if (glued && glued.moved.length > 0) {
+            carryOver(glued, wordAt);
+            placeWord(word, wordAt, false);
+            return;
+          }
+          if (glued === null && emergencyBreak(word, wordAt, room)) return;
         }
         const splitRoom = lines.length === 0 && !open ? room : maxWidth;
 

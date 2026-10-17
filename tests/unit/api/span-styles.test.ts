@@ -95,3 +95,47 @@ describe("breakWord and hyphenate on a span", () => {
     expect(splittable).toBeLessThan(whole / 5);
   });
 });
+
+describe("breakWord on a word that runs across spans", () => {
+  // Measured in Chrome (Courier 12pt, a 60pt box = 8 characters): a break AFTER a character is allowed
+  // by that character's own `overflow-wrap`, and the line is filled before it breaks.
+  const a = "aaaaaaaaaa";
+  const b = "bbbbbbbbbb";
+  const mono = { font: "Courier", size: 12 } as const;
+  const lines = async (text: ReturnType<typeof Text>) => {
+    const runs = await drawnTextRuns(() =>
+      renderToBytes(Document([Page([Box({ width: 60 }, [text])])])),
+    );
+    const byLine = new Map<number, string>();
+    for (const r of runs) byLine.set(Math.round(r.y), (byLine.get(Math.round(r.y)) ?? "") + r.text);
+    return [...byLine.values()];
+  };
+
+  it("set on the first span: it splits, and the line may end where that span ends", async () => {
+    expect(await lines(Text([span(a, { breakWord: true }), span(b)], mono))).toEqual([
+      "aaaaaaaa",
+      "aa",
+      "bbbbbbbbbb",
+    ]);
+  });
+
+  it("set on the second span only: no break at the boundary, one character is forced on", async () => {
+    expect(await lines(Text([span(a), span(b, { breakWord: true })], mono))).toEqual([
+      "aaaaaaaaaab",
+      "bbbbbbbb",
+      "b",
+    ]);
+  });
+
+  it("set on the whole Text: the word is filled across the boundary as one word", async () => {
+    expect(await lines(Text([span(a), span(b)], { ...mono, breakWord: true }))).toEqual([
+      "aaaaaaaa",
+      "aabbbbbb",
+      "bbbb",
+    ]);
+  });
+
+  it("set nowhere: the word overflows whole", async () => {
+    expect(await lines(Text([span(a), span(b)], mono))).toEqual(["aaaaaaaaaabbbbbbbbbb"]);
+  });
+});
