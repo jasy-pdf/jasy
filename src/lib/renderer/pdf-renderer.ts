@@ -1,4 +1,4 @@
-import { encodePdfText } from "../text/pdf-text-string.ts";
+import { comparePdfText } from "../text/pdf-text-string.ts";
 import { PDFDocumentElement } from "../elements/pdf-document-element.ts";
 import { PDFDocumentRenderer } from "./pdf-document-renderer.ts";
 import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
@@ -146,7 +146,7 @@ export class PDFRenderer {
       // choke point - encoded and, in an encrypted file, enciphered. A name tree is SORTED by its keys
       // (a reader may search it), so the keys are ordered by their bytes first.
       const names = [...attachments]
-        .sort((a, b) => compareBytes(encodePdfText(a.name), encodePdfText(b.name)))
+        .sort((a, b) => comparePdfText(a.name, b.name))
         .map((a) => `${objectManager.pdfString(a.name)} ${a.filespec} 0 R`)
         .join(" ");
       const af = attachments.map((a) => `${a.filespec} 0 R`).join(" ");
@@ -201,8 +201,3 @@ export class PDFRenderer {
     return pdfContent;
   }
 }
-
-const compareBytes = (a: Uint8Array, b: Uint8Array): number => {
-  for (let i = 0; i < Math.min(a.length, b.length); i++) if (a[i] !== b[i]) return a[i]! - b[i]!;
-  return a.length - b.length;
-};
