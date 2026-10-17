@@ -48,6 +48,30 @@ export interface RunDefaults {
 /** Everything the breaker reads besides the spans: what they inherit, and how lines end. */
 export type SegmentDefaults = RunDefaults & LineOptions;
 
+/** How one span is measured and drawn. */
+export interface RunStyle {
+  font: RunFont;
+  letterSpacing: number;
+  wordSpacing: number;
+}
+
+/**
+ * A span's run style: what it sets itself, else what the paragraph sets. The ONE place a span inherits
+ * it, so breaking, drawing and the element's own sizing ask the same question.
+ */
+export function runStyleOf(seg: TextSegment, defaults: SegmentDefaults): RunStyle {
+  return {
+    font: {
+      fontFamily: seg.fontFamily || defaults.fontFamily,
+      fontSize: seg.fontSize || defaults.fontSize,
+      fontStyle: seg.fontStyle || defaults.fontStyle,
+      ligatures: defaults.ligatures,
+    },
+    letterSpacing: seg.letterSpacing ?? defaults.letterSpacing ?? 0,
+    wordSpacing: defaults.wordSpacing ?? 0,
+  };
+}
+
 /** What happens to text beyond `maxLines`: `"clip"` drops it, `"ellipsis"` ends the last kept line
  *  with an ellipsis. Mirrors Flutter's `TextOverflow`. */
 export type TextOverflow = "clip" | "ellipsis";
@@ -196,7 +220,7 @@ export function breakSegmentsIntoLines(
   overflow?: TextOverflow,
 ): SegmentLine[] {
   const lines: SegmentLine[] = [];
-  const { indent = 0, wordSpacing = 0, shrink = 0 } = defaults;
+  const { indent = 0, shrink = 0 } = defaults;
   let width = 0;
   let gaps = 0; // spaces on the line, which is what a justified line can squeeze
   let lineSegments: TextSegment[] = [];
@@ -229,13 +253,8 @@ export function breakSegmentsIntoLines(
       last?.content.endsWith(SOFT_HYPHEN) &&
       !withoutSoftHyphens(last.content).endsWith("-")
     ) {
-      const font = {
-        fontFamily: last.fontFamily || defaults.fontFamily,
-        fontSize: last.fontSize || defaults.fontSize,
-        fontStyle: last.fontStyle || defaults.fontStyle,
-        ligatures: defaults.ligatures,
-      };
-      width += runAdvance(metrics, HYPHEN, font, last.letterSpacing ?? defaults.letterSpacing ?? 0);
+      const run = runStyleOf(last, defaults);
+      width += runAdvance(metrics, HYPHEN, run.font, run.letterSpacing);
       segs = segs.map((seg, i) =>
         i === lastIndex ? { ...seg, content: withoutSoftHyphens(seg.content) + HYPHEN } : seg,
       );
@@ -278,13 +297,7 @@ export function breakSegmentsIntoLines(
     let ink = 0;
     let open = false;
     for (const piece of pieces) {
-      const font = {
-        fontFamily: piece.fontFamily || defaults.fontFamily,
-        fontSize: piece.fontSize || defaults.fontSize,
-        fontStyle: piece.fontStyle || defaults.fontStyle,
-        ligatures: defaults.ligatures,
-      };
-      const spacing = piece.letterSpacing ?? defaults.letterSpacing ?? 0;
+      const { font, letterSpacing: spacing, wordSpacing } = runStyleOf(piece, defaults);
       const space = runAdvance(metrics, " ", font, spacing) + wordSpacing;
       piece.content.split(" ").forEach((word, i) => {
         total = total + ((open && i > 0 ? space : 0) + runAdvance(metrics, word, font, spacing));
@@ -347,16 +360,8 @@ export function breakSegmentsIntoLines(
   };
 
   segments.forEach((segment, segmentIndex) => {
-    const family = segment.fontFamily || defaults.fontFamily;
-    const size = segment.fontSize || defaults.fontSize;
-    const style = segment.fontStyle || defaults.fontStyle;
-    const letterSpacing = segment.letterSpacing ?? defaults.letterSpacing ?? 0;
-    const font = {
-      fontFamily: family,
-      fontSize: size,
-      fontStyle: style,
-      ligatures: defaults.ligatures,
-    };
+    const { font, letterSpacing, wordSpacing } = runStyleOf(segment, defaults);
+    const family = font.fontFamily;
     const spaceWidth = runAdvance(metrics, " ", font, letterSpacing) + wordSpacing;
     const at = (offset: number): SegmentPosition => ({ segment: segmentIndex, offset });
 
@@ -673,34 +678,25 @@ function ellipsizeLine(
 ): void {
   const segs = line.segments;
   if (segs.length === 0) return;
-  const lsOf = (seg: TextSegment): number => seg.letterSpacing ?? defaults.letterSpacing ?? 0;
   // Summed word by word, as the breaker sums a line - one owner for a line's width.
-  const widthOf = (seg: TextSegment): number =>
-    singleLineWidth(
-      seg.content,
-      {
-        fontFamily: seg.fontFamily || defaults.fontFamily,
-        fontSize: seg.fontSize || defaults.fontSize,
-        fontStyle: seg.fontStyle || defaults.fontStyle,
-        ligatures: defaults.ligatures,
-      },
-      metrics,
-      lsOf(seg),
-      defaults.wordSpacing,
-    );
+  const widthOf = (seg: TextSegment): number => {
+    const run = runStyleOf(seg, defaults);
+    return singleLineWidth(seg.content, run.font, metrics, run.letterSpacing, run.wordSpacing);
+  };
   let prefix = 0;
   for (let i = 0; i < segs.length - 1; i++) prefix += widthOf(segs[i]);
   const last = segs[segs.length - 1];
+  const run = runStyleOf(last, defaults);
   last.content = ellipsize(
     last.content,
-    last.fontFamily || defaults.fontFamily,
-    last.fontSize || defaults.fontSize,
-    last.fontStyle || defaults.fontStyle,
+    run.font.fontFamily,
+    run.font.fontSize,
+    run.font.fontStyle,
     maxWidth - prefix,
     metrics,
-    lsOf(last),
-    defaults.wordSpacing,
-    defaults.ligatures,
+    run.letterSpacing,
+    run.wordSpacing,
+    run.font.ligatures,
   );
   line.width = prefix + widthOf(last);
 }

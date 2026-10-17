@@ -10,6 +10,8 @@ import { runAdvance } from "../text/advance.ts";
 import { Fragmentable, FragmentResult } from "../layout/fragmentation.ts";
 import {
   type LineOptions,
+  type RunStyle,
+  runStyleOf,
   type SegmentDefaults,
   singleLineWidth,
   MAX_SPACE_SHRINK,
@@ -571,36 +573,16 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
    *  numbers grouped differently drift by a sub-ULP, enough to wrap a text inside its own natural-width
    *  box. `singleLineWidth` is that sum. */
   private naturalWidth(metrics: FontMetrics): number {
-    // The breaker's own sum, to the last bit - see `singleLineWidth`.
-    const oneLine = (
-      text: string,
-      family: string,
-      size: number,
-      style: FontStyle,
-      letterSpacing: number,
-    ): number =>
-      singleLineWidth(
-        text,
-        // `ligatures` is part of the font: it decides which glyphs are drawn, hence the width.
-        { fontFamily: family, fontSize: size, fontStyle: style, ligatures: this.ligatures },
-        metrics,
-        letterSpacing,
-        this.wordSpacing,
-      );
+    const defaults = this.segmentDefaults();
     // The FIRST line starts `textIndent` in, so an unbounded box has to be that much wider.
     const indent = Math.max(0, this.textIndent);
-    return this.display(metrics).reduce(
-      (sum, seg) =>
-        sum +
-        oneLine(
-          seg.content,
-          seg.fontFamily ?? this.fontFamily,
-          seg.fontSize ?? this.fontSize,
-          seg.fontStyle ?? this.fontStyle,
-          seg.letterSpacing ?? this.letterSpacing,
-        ),
-      indent,
-    );
+    return this.display(metrics).reduce((sum, seg) => {
+      // The breaker's own sum, to the last bit - see `singleLineWidth`.
+      const run = runStyleOf(seg, defaults);
+      return (
+        sum + singleLineWidth(seg.content, run.font, metrics, run.letterSpacing, run.wordSpacing)
+      );
+    }, indent);
   }
 
   /**
@@ -617,46 +599,25 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     if (!horizontal) return 0;
     this.resolveStyle(ctx);
     const metrics = ctx.metrics;
-    const widest = (
-      text: string,
-      family: string,
-      size: number,
-      style: FontStyle,
-      letterSpacing: number,
-    ): number => {
-      // `ligatures` belongs to the FONT: it decides which glyphs are drawn and therefore how wide the
-      // piece is. Leaving it out here would measure a floor the drawing never matches.
-      const font = {
-        fontFamily: family,
-        fontSize: size,
-        fontStyle: style,
-        ligatures: this.ligatures,
-      };
+    // The run style is the FONT a piece is measured in: `ligatures` decides which glyphs are drawn and
+    // therefore how wide it is. Leaving it out would measure a floor the drawing never matches.
+    const widest = (text: string, run: RunStyle): number => {
       // Split on the same boundaries the breaker uses - a hard break ends a line too, and so may a
       // hyphen inside a word.
       const pieces =
         this.breakWord || this.hyphenate ? [...text] : text.split(/[ \n]/).flatMap(hyphenPieces);
       return pieces.reduce(
-        (max, piece) => Math.max(max, runAdvance(metrics, piece, font, letterSpacing)),
+        (max, piece) => Math.max(max, runAdvance(metrics, piece, run.font, run.letterSpacing)),
         0,
       );
     };
+    const defaults = this.segmentDefaults();
     const content = this.display(metrics);
     // Segments join without a space, so a word may straddle two of them; taking the widest piece per
     // segment can therefore UNDER-estimate. That errs towards squeezing a little too far, which lands
     // back on the old overflow behaviour rather than on something new.
     return content.reduce(
-      (max, seg) =>
-        Math.max(
-          max,
-          widest(
-            seg.content,
-            seg.fontFamily ?? this.fontFamily,
-            seg.fontSize ?? this.fontSize,
-            seg.fontStyle ?? this.fontStyle,
-            seg.letterSpacing ?? this.letterSpacing,
-          ),
-        ),
+      (max, seg) => Math.max(max, widest(seg.content, runStyleOf(seg, defaults))),
       0,
     );
   }

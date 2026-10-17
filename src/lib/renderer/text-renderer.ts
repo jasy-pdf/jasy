@@ -16,6 +16,7 @@ import { emojiImageNode } from "./emoji-image.ts";
 import {
   MAX_SPACE_SHRINK,
   breakSegmentsIntoLines,
+  runStyleOf,
   type SegmentDefaults,
   SegmentLine,
   TextOverflow,
@@ -600,10 +601,9 @@ export class TextRenderer {
         // A blank line keeps its height (its box is sized from the piece), but there is nothing to draw.
         if (part.text === "") return;
         const segment = part.source;
-        const family = segment.fontFamily || fontFamily;
-        const size = segment.fontSize || fontSize;
-        const style = segment.fontStyle || fontStyle;
-        const segLetterSpacing = segment.letterSpacing ?? letterSpacing;
+        const run = runStyleOf(segment, breaking);
+        const { fontFamily: family, fontSize: size, fontStyle: style } = run.font;
+        const segLetterSpacing = run.letterSpacing;
         const piece = shapedPiece(part, family, style);
         const runText = piece.text;
         const runColor = segment.fontColor || color;
@@ -627,7 +627,7 @@ export class TextRenderer {
             ...(segLetterSpacing ? { letterSpacing: segLetterSpacing } : {}),
           },
           // `ligatures` is part of the font: the advances must be the glyphs that are drawn.
-          { fontFamily: family, fontSize: size, fontStyle: style, ligatures },
+          run.font,
           segLetterSpacing,
         );
         decorate(
