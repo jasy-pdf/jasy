@@ -432,6 +432,11 @@ enforces it (`skonto.ts` for "Skonto is not an allowance"), and everywhere else 
 - **A hyphen and a soft hyphen in the text ARE break opportunities, always** - as browsers do (UAX #14
   for `-`: never before a digit; U+00AD as `hyphens: manual`: invisible and zero-width unless broken at,
   then a real hyphen). Taken only when the whole word does not fit, so text that fits never moves.
+- **`Expanded(child)` makes the CHILD the flex item** - CSS `flex: 1` on the child itself, never a wrapper
+  box around it. So the child's own `width` is overridden by its share (as Flutter does), its floor is
+  what its CONTENT needs (Chrome: `<div style="flex:1; width:40">` shrinks to its text, 212.2 vs our
+  212.0), and its `%` padding resolves against the Row. One reading for all three; the tests in
+  `flex-expanded-floor.test.ts` and `percentage-insets.test.ts` pin it.
 - **Box/layout props never inherit; text styles do** (`explicit > inherited > built-in`, via
   `LayoutContext.textStyle`). The CSS line.
 - **`lineHeight` unset = the font's natural line height**; a number = a multiplier of the font size.
