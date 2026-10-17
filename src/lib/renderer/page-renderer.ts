@@ -119,7 +119,7 @@ export class PageRenderer {
       const action =
         node.dest !== undefined
           ? `/A << /S /GoTo /D ${objectManager.pdfString(node.dest)} >>`
-          : `/A << /S /URI /URI ${objectManager.pdfString(node.href ?? "")} >>`;
+          : `/A << /S /URI /URI ${objectManager.pdfUri(node.href ?? "")} >>`;
       const tagged =
         structParent === undefined
           ? ""

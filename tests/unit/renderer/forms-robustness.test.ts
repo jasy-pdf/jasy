@@ -103,8 +103,8 @@ describe("form fields - encoding and escaping", () => {
     );
     const runs = drawnRuns(decode(bytes));
     expect(runs.some((r) => /^\?+ \?+$/.test(r) || r.includes("?"))).toBe(true);
-    // The stored value is untouched - only the DRAWN appearance is limited.
-    expect(decode(bytes)).toContain("/V (");
+    // The stored value is untouched - only the DRAWN appearance is limited: UTF-16BE, "日本" = 65E5 672C.
+    expect(decode(bytes)).toMatch(/\/V <feff65e5672c/i);
   });
 });
 

@@ -379,6 +379,11 @@ export async function renderPdf(doc: PDFDocumentElement, options?: RenderOptions
           if (value.boldItalic) om.registerCustomFont(name, value.boldItalic, FontStyle.BoldItalic);
         }
       }
+      // Version, id and encryption first - they create no objects, and an attachment's stream and name
+      // are written below and must already be enciphered. The handler after the version: R6 needs PDF 2.0.
+      if (options?.pdfVersion) om.setPdfVersion(options.pdfVersion);
+      if (options?.documentId) om.enableDocumentId();
+      if (securityHandler) om.setSecurityHandler(securityHandler);
       for (const a of attachments) {
         om.attachFile(a.name, a.data, {
           relationship: a.relationship,
@@ -393,9 +398,6 @@ export async function renderPdf(doc: PDFDocumentElement, options?: RenderOptions
       else if (emoji && "url" in emoji) om.setEmojiImageSource(emoji.url, emoji.format ?? "png");
       if (options?.xmp) om.setXmpMetadata(options.xmp);
       if (options?.outputIntent) om.setOutputIntent(options.outputIntent);
-      if (options?.pdfVersion) om.setPdfVersion(options.pdfVersion);
-      if (options?.documentId) om.enableDocumentId();
-      if (securityHandler) om.setSecurityHandler(securityHandler);
       if (options?.accessible) {
         om.struct.enabled = true;
         if (options.lang) om.struct.lang = options.lang;

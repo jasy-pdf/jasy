@@ -373,7 +373,10 @@ obvious `unzlibSync(data, { out })` would have replaced an OOM with quiet data c
 a form field's `/T`, every bookmark `/Title`, link `/URI` and `/DA` sat in the encrypted file in plain
 text - a leak in RELEASED code. `pdfString()` is the one choke point, mirroring `streamPayload()`: no
 handler → the escaped literal, a handler → registered and swapped for ciphertext at finalize. A new
-emitter that writes a string any other way reopens the leak.
+emitter that writes a string any other way reopens the leak - the attachment name-tree key did, and so
+did registering attachments before the handler was set. It also ENCODES the text string
+(`text/pdf-text-string.ts`): PDFDocEncoding or UTF-16BE, never the Windows-1252 page encoding, where "–"
+reads back as "Œ" and "€" as "•". A URI is `pdfUri()`: ASCII, the rest percent-encoded.
 
 **`sh` floods the current clip.** PDF has no gradient FILL colour, so a gradient box becomes the clip,
 the shading paints inside it, and the border is stroked afterwards on its own.

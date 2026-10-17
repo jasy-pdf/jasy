@@ -1,3 +1,4 @@
+import { encodePdfText } from "../text/pdf-text-string.ts";
 import { PDFDocumentElement } from "../elements/pdf-document-element.ts";
 import { PDFDocumentRenderer } from "./pdf-document-renderer.ts";
 import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
@@ -56,7 +57,6 @@ import { PageBuilderRenderer } from "./page-builder-renderer.ts";
 import { RotatedElement } from "../elements/layout/rotated-element.ts";
 import { RotatedBoxElement } from "../elements/layout/rotated-box-element.ts";
 import { RotatedRenderer } from "./rotated-renderer.ts";
-import { PdfBackend } from "./pdf-backend.ts";
 import { collectImageElements } from "../layout/collect-images.ts";
 import { LayoutContext } from "../elements/pdf-element.ts";
 import { DEFAULT_TEXT_STYLE, mergeTextStyle } from "../text/text-style.ts";
@@ -142,11 +142,12 @@ export class PDFRenderer {
 
     const attachments = objectManager.getAttachments();
     if (attachments.length > 0) {
-      // The name-tree key is a PDF literal string, so it needs the same escaping the /Filespec's /F and
-      // /UF get in attachFile(). Unescaped, a ")" or "\" in a file name closes the string early and the
-      // rest of it leaks out as raw operators.
-      const names = attachments
-        .map((a) => `(${PdfBackend.escapePdfString(a.name)}) ${a.filespec} 0 R`)
+      // The name-tree key is a text string like the /Filespec's /F and /UF, so it goes through the same
+      // choke point - encoded and, in an encrypted file, enciphered. A name tree is SORTED by its keys
+      // (a reader may search it), so the keys are ordered by their bytes first.
+      const names = [...attachments]
+        .sort((a, b) => compareBytes(encodePdfText(a.name), encodePdfText(b.name)))
+        .map((a) => `${objectManager.pdfString(a.name)} ${a.filespec} 0 R`)
         .join(" ");
       const af = attachments.map((a) => `${a.filespec} 0 R`).join(" ");
       catalogParts.push(`/AF [${af}]`);
@@ -200,3 +201,8 @@ export class PDFRenderer {
     return pdfContent;
   }
 }
+
+const compareBytes = (a: Uint8Array, b: Uint8Array): number => {
+  for (let i = 0; i < Math.min(a.length, b.length); i++) if (a[i] !== b[i]) return a[i]! - b[i]!;
+  return a.length - b.length;
+};

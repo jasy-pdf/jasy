@@ -31,6 +31,7 @@ export function featureKey(f: readonly string[]): string {
 const features = (ligatures: boolean): readonly string[] =>
   ligatures ? LATIN_FEATURES : NO_FEATURES;
 import { getArrayBuffer, isWindows1252 } from "./utf8-to-windows1252-encoder.ts";
+import { encodePdfText, isPlainPdfText } from "../text/pdf-text-string.ts";
 import type { SecurityHandler } from "../crypto/security-handler.ts";
 import type { Gradient, GradientStop } from "../ir/display-list.ts";
 import { isEmojiCodePoint } from "../text/emoji-codepoints.ts";
@@ -375,14 +376,28 @@ export class PDFObjectManager implements FontMetrics {
    * A string INSIDE a content stream needs none of this - the stream is enciphered as a whole.
    */
   pdfString(text: string): string {
+    // A TEXT string: PDFDocEncoding where it can say everything, else UTF-16BE (text/pdf-text-string.ts).
+    const bytes = encodePdfText(text);
     if (!this.security) {
-      return `(${text.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)")})`;
+      // Plain Latin-1 comes out of the Windows-1252 page encoder as the same bytes PDFDocEncoding reads
+      // back, so it stays a readable literal; anything else is written as hex, past that encoder.
+      if (isPlainPdfText(text)) {
+        return `(${text.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)")})`;
+      }
+      return `<${[...bytes].map((b) => b.toString(16).padStart(2, "0")).join("")}>`;
     }
     // Encrypt the bytes the unencrypted path would have written, so a viewer decrypts to the same value.
     // No escaping is applied: the result is emitted as a HEX string, which has no escapes to get wrong.
-    const bytes = new Uint8Array(getArrayBuffer(text));
     const id = this.strJobs.push(bytes) - 1;
     return this.strToken(id);
+  }
+
+  /**
+   * A URI: 7-bit ASCII by definition, so anything else is percent-encoded as UTF-8 - the way a browser
+   * writes the link - rather than squeezed into a text encoding.
+   */
+  pdfUri(uri: string): string {
+    return this.pdfString(uri.replace(/[^\x20-\x7e]/gu, (c) => encodeURIComponent(c)));
   }
 
   // The single encryption choke-point every stream emitter routes through (stream(), registerImage). Without
@@ -612,7 +627,7 @@ endstream`;
   // (swap each placeholder for its ciphertext) and add the /Encrypt object the trailer references.
   async finalizeEncryption(): Promise<void> {
     if (!this.security) return;
-    if (this.outputIntent !== undefined || this.attachments.length > 0) {
+    if (this.outputIntent !== undefined) {
       throw new Error("@jasy/pdf: cannot encrypt a PDF/A document - PDF/A forbids encryption.");
     }
     for (let id = 0; id < this.encJobs.length; id++) {
