@@ -8,6 +8,9 @@ import {
 } from "../../../src/lib/text/line-breaker.ts";
 import { TextElement } from "../../../src/lib/elements/text-element.ts";
 import { BoxConstraints } from "../../../src/lib/layout/box-constraints.ts";
+import { TextRenderer } from "../../../src/lib/renderer/text-renderer.ts";
+import type { TextRun } from "../../../src/lib/ir/display-list.ts";
+import { PAGE_SCOPE } from "../support/scope.ts";
 
 // Latin ligatures are ON, like kerning: the font's designer drew them, every other renderer applies
 // them, and nobody should need the word to get text set properly. `ligatures: false` opts out - on a
@@ -53,6 +56,26 @@ describe("on by default", () => {
   });
 });
 
+describe("with word spacing", () => {
+  it("still spaces a run whose words were merged into ligatures", async () => {
+    // "AB" is one glyph of 6; a space is 2.5. With 6pt of word-spacing the second word starts at
+    // 6 + 2.5 + 6 = 14.5 - as the breaker measured it - and keeps its ligature.
+    const m = om();
+    const el = new TextElement({ content: "AB AB", ...FONT, wordSpacing: 6 });
+    el.calculateLayout(
+      BoxConstraints.tight(200, 100),
+      { x: 0, y: 0 },
+      { metrics: m, pageConfig: {} },
+    );
+    const runs = (await TextRenderer.render(el, m, PAGE_SCOPE)).filter(
+      (n): n is TextRun => n.type === "text",
+    );
+    expect(runs.map((r) => r.text)).toEqual(["AB", "AB"]);
+    expect(runs.map((r) => r.x)).toEqual([0, 14.5]);
+    expect(runs.map((r) => r.glyphs)).toEqual([[4], [4]]);
+  });
+});
+
 describe("switched off", () => {
   const off = { ...FONT, ligatures: false };
 
@@ -66,6 +89,21 @@ describe("switched off", () => {
 
   it("measures what it draws either way - the two settings must not agree by accident", () => {
     expect(runAdvance(om(), "AB ", FONT, 0)).not.toBeCloseTo(runAdvance(om(), "AB ", off, 0), 5);
+  });
+
+  it("places the next span after what this one DRAWS, letters apart", async () => {
+    // "AB " apart is 5 + 7 + 2.5 = 14.5; merged it would be 8.5, and the second span would overlap.
+    const m = om();
+    const el = new TextElement({ content: [{ content: "AB " }, { content: "AB" }], ...off });
+    el.calculateLayout(
+      BoxConstraints.tight(200, 100),
+      { x: 0, y: 0 },
+      { metrics: m, pageConfig: {} },
+    );
+    const runs = (await TextRenderer.render(el, m, PAGE_SCOPE)).filter(
+      (n): n is TextRun => n.type === "text",
+    );
+    expect(runs.map((r) => r.x)).toEqual([0, 14.5]);
   });
 
   it("sizes an unbounded text (a Text in a Row) at the width it draws, so it stays one line", () => {

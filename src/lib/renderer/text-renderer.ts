@@ -411,12 +411,10 @@ export class TextRenderer {
       // Negative slack is real now: the breaker keeps a word when the line can be SQUEEZED to hold
       // it, so justification has to deliver that squeeze. The floor is the same limit the breaker
       // used, which is what stops a line it never promised from being crushed.
-      const spaceWidth = runAdvance(
-        objectManager,
-        " ",
-        { fontFamily, fontSize, fontStyle },
-        letterSpacing,
-      );
+      // A space as the breaker counts it: word-spacing included.
+      const spaceWidth =
+        runAdvance(objectManager, " ", { fontFamily, fontSize, fontStyle }, letterSpacing) +
+        wordSpacing;
       const extra = Math.max(slack / gaps, -spaceWidth * MAX_SPACE_SHRINK);
       // The last line is never STRETCHED - the rule print and CSS follow. It may still be SQUEEZED:
       // the breaker was allowed to pack it that way, and drawing it loose would push it out of its box.
@@ -424,15 +422,18 @@ export class TextRenderer {
     };
 
     /**
-     * Push one drawn piece and return the advance it took. When the line is justified the pen jumps an
-     * extra `extra` at every space, which means one run per word - the only way that works for an
-     * embedded font, whose spaces `Tw` cannot reach.
+     * Push one drawn piece and return the advance it took. When the spaces get more room (word-spacing,
+     * justification) the pen jumps an extra `extra` at every space, which means one run per word - the
+     * only way that works for an embedded font, whose spaces `Tw` cannot reach.
      *
-     * A SHAPED piece is never split: its glyph list is in drawn order with ligatures merged, so no
-     * slice of it is correct. Such a piece keeps its natural spacing.
+     * A SHAPED piece is split there too, each word shaped on its own (`shape`): no slice of its glyph
+     * list is correct, but neither a ligature nor Arabic joining crosses a space - and a word plus a
+     * space is what the breaker measured.
      */
     const emitPiece = (
       piece: { text: string; glyphs?: number[] },
+      shape: (word: string) => { text: string; glyphs?: number[] },
+      rtl: boolean,
       x: number,
       extra: number,
       style: Omit<TextRun, "type" | "x" | "text" | "glyphs">,
@@ -442,16 +443,19 @@ export class TextRenderer {
       const push = (at: number, text: string, glyphs?: number[]): void => {
         runs.push({ type: "text", x: at, text, ...(glyphs ? { glyphs } : {}), ...style });
       };
-      if (extra === 0 || piece.glyphs || !piece.text.includes(" ")) {
+      if (extra === 0 || !piece.text.includes(" ")) {
         push(x, piece.text, piece.glyphs);
         return runAdvance(objectManager, piece.text, runFont, spacing);
       }
       const spaceWidth = runAdvance(objectManager, " ", runFont, spacing);
+      // A shaped piece holds its LOGICAL text: drawn right to left, its words come in reverse.
       const words = piece.text.split(" ");
+      if (piece.glyphs && rtl) words.reverse();
       let pen = x;
       words.forEach((word, i) => {
         if (word !== "") {
-          push(pen, word);
+          const drawn = piece.glyphs ? shape(word) : { text: word };
+          push(pen, drawn.text, drawn.glyphs);
           pen += runAdvance(objectManager, word, runFont, spacing);
         }
         if (i < words.length - 1) pen += spaceWidth + extra;
@@ -607,6 +611,8 @@ export class TextRenderer {
         const firstRun = runs.length;
         const drawn = emitPiece(
           piece,
+          (word) => shapedPiece({ text: word, logical: word, rtl: part.rtl }, family, style),
+          part.rtl,
           x,
           extra,
           {
@@ -617,7 +623,8 @@ export class TextRenderer {
             color: runColor,
             ...(segLetterSpacing ? { letterSpacing: segLetterSpacing } : {}),
           },
-          { fontFamily: family, fontSize: size, fontStyle: style },
+          // `ligatures` is part of the font: the advances must be the glyphs that are drawn.
+          { fontFamily: family, fontSize: size, fontStyle: style, ligatures },
           segLetterSpacing,
         );
         decorate(

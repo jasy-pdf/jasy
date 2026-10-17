@@ -29,12 +29,14 @@ const drawn = async (
   content: string | TextSegment[],
   width: number,
   align?: HorizontalAlignment,
+  wordSpacing?: number,
 ) => {
   const el = new TextElement({
     content,
     fontSize: 10,
     fontFamily: "Helvetica",
     textAlignment: align,
+    wordSpacing,
   });
   const manager = om();
   el.calculateLayout(BoxConstraints.tight(width, 400), { x: 0, y: 0 }, {
@@ -123,6 +125,14 @@ describe("squeezing a line to keep one more word", () => {
     const lines = byLine(await drawn(spans, 105, HorizontalAlignment.justify));
     expect(lines[0].map((r) => r.text)).toEqual(["aa", "bb", "cc", "dd"]);
     expect(lines[0].map((r) => Math.round(r.x * 100) / 100)).toEqual([0, 28.33, 56.67, 85]);
+  });
+
+  it("delivers the squeeze the breaker allowed when word-spacing widens the spaces", async () => {
+    // With 10pt of word-spacing a space is 20: "aa bb cc dd" is 140, and its three gaps may give up a
+    // quarter each (15) - so the breaker keeps it in 130. Drawing must squeeze to 130, not stop at 2.5.
+    const lines = byLine(await drawn("aa bb cc dd ee ff", 130, HorizontalAlignment.justify, 10));
+    expect(lines[0].map((r) => r.text)).toEqual(["aa", "bb", "cc", "dd"]);
+    expect(lines[0][3]!.x + 20).toBeCloseTo(130, 9);
   });
 
   it("never squeezes text that is not justified - it would just overflow", async () => {
