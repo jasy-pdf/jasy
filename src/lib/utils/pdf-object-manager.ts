@@ -1260,7 +1260,8 @@ endstream`;
     for (let i = 0; i < chars.length - 1; i++) {
       const a = chars[i];
       const b = chars[i + 1];
-      if (a === " " || b === " ") {
+      // A no-break space is a space: never kerned (the AFM names it `space`, with pairs of its own).
+      if (a === " " || b === " " || a === "\u00a0" || b === "\u00a0") {
         out.push(0);
       } else if (ttf) {
         out.push(

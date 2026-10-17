@@ -10,6 +10,13 @@ function glyphList(): Record<string, string> {
     const parts = line.trim().split(";");
     if (parts.length >= 2) map[String.fromCharCode(parseInt(parts[0]!, 16))] = parts[1]!;
   }
+  // Windows-1252 characters the AGLFN leaves out, by the glyph WinAnsiEncoding draws them with
+  // (ISO 32000-1, Annex D). Unnamed, they were measured as "?" while the viewer drew the real glyph.
+  map["\u00a0"] = "space";
+  map["\u00ad"] = "hyphen";
+  map["\u00b2"] = "twosuperior";
+  map["\u00b3"] = "threesuperior";
+  map["\u00b9"] = "onesuperior";
   return (sharedGlyphMap = map);
 }
 import type { FontVerticals } from "../text/line-metrics.ts";
