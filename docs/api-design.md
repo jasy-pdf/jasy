@@ -354,9 +354,10 @@ Roadmap to 1.1, each one independently shippable.
 ## 6f. Flow - content through regions (2026-10-18, experimental)
 
 ```ts
-Flow(content, {
-  template: ({ index }) => Row({ gap: 12 }, [Expanded(Region()), Expanded(Region())]),
-});
+Flow(
+  { template: ({ index }) => Row({ gap: 12 }, [Expanded(Region()), Expanded(Region())]) },
+  content,
+);
 SplitView({ columns: 2, gap: 12 }, content); // newspaper columns: a Flow with a ready template
 ColumnBreak(); // continue in the next Region
 ```

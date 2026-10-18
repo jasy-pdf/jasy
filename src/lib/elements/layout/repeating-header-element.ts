@@ -7,6 +7,14 @@ import {
 } from "../../layout/fragmentation.ts";
 import { LayoutContext, PDFElement } from "../pdf-element.ts";
 
+/** Gives every element of `fresh` the tagging identity of its twin in `from` (the same shape). */
+function adoptStructIds(fresh: PDFElement, from: PDFElement): void {
+  fresh.adoptStructId(from);
+  const a = fresh.layoutChildren();
+  const b = from.layoutChildren();
+  for (let i = 0; i < a.length && i < b.length; i++) adoptStructIds(a[i]!, b[i]!);
+}
+
 /**
  * Stacks a `header` above a `body` and, when it paginates, **repeats the header on every
  * fragment**. Used by `Table` so column headings reappear at the top of each page. Layout
@@ -19,12 +27,23 @@ export class RepeatingHeaderElement extends PDFElement implements Fragmentable {
   private width = 0;
   private height = 0;
 
+  /** `rebuild` makes a fresh copy of the header for each continuation: two pieces may share a page
+   *  (two Regions of a Flow), and one element has one position. */
   constructor(
     private header: PDFElement,
     private body: PDFElement,
     private gap: number = 0,
+    private rebuild?: () => PDFElement,
   ) {
     super();
+  }
+
+  /** The header for the next piece: a fresh copy that tags as the same header, else the same one. */
+  private nextHeader(): PDFElement {
+    if (!this.rebuild) return this.header;
+    const fresh = this.rebuild();
+    adoptStructIds(fresh, this.header);
+    return fresh;
   }
 
   calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
@@ -78,10 +97,17 @@ export class RepeatingHeaderElement extends PDFElement implements Fragmentable {
     // break inside the body is passed on, so the page ends there.
     return {
       fitted: split.fitted
-        ? new RepeatingHeaderElement(this.header, split.fitted, this.gap).asPieceOf(this)
+        ? new RepeatingHeaderElement(this.header, split.fitted, this.gap, this.rebuild).asPieceOf(
+            this,
+          )
         : null,
       remainder: split.remainder
-        ? new RepeatingHeaderElement(this.header, split.remainder, this.gap).asPieceOf(this)
+        ? new RepeatingHeaderElement(
+            this.nextHeader(),
+            split.remainder,
+            this.gap,
+            this.rebuild,
+          ).asPieceOf(this)
         : null,
       forceBreak: split.forceBreak,
     };

@@ -232,6 +232,7 @@ function composeTable(opts: TableOptions, rows: Cell[][], columns: ColumnWidth[]
         buildRow(opts.header, true, rule !== undefined, true),
         body,
         rowGap,
+        () => buildRow(opts.header!, true, rule !== undefined, true),
       )
     : body;
   return new StructGroup({ role: "Table", child: table });
