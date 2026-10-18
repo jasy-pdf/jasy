@@ -5,6 +5,7 @@ import type {
   Direction,
   Hyphenator,
   Insets,
+  ImageAlign,
   ImageSource,
   FontSource,
   PageSizeInput,
@@ -117,6 +118,7 @@ const imageProps = {
   width: Number,
   height: Number,
   fit: String as PropType<"none" | "contain" | "cover" | "fill">,
+  align: String as PropType<ImageAlign>,
   radius: Number,
 };
 // `<JasySvg>` takes the same three source shapes as the factory: markup, a file path (Node only) or

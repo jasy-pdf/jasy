@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import { Box, Column, Expanded, Row } from "../../../src/lib/api/layout.ts";
-import type { CrossAlign } from "../../../src/lib/layout/alignment.ts";
 import { BoxConstraints } from "../../../src/lib/layout/box-constraints.ts";
 import { LayoutContext, PDFElement } from "../../../src/lib/elements/pdf-element.ts";
 import { DefaultTextStyleElement } from "../../../src/lib/elements/layout/default-text-style-element.ts";

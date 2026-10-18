@@ -1,5 +1,5 @@
 import type { Radii } from "../ir/display-list.ts";
-import { getImageDimensions } from "../utils/image-helper.ts";
+import { getImageDimensions, type FitAlign } from "../utils/image-helper.ts";
 import { latin1FromBytes } from "../utils/bytes.ts";
 import { readFileBytesAsync } from "../platform/node-fs.ts";
 import { fetchBytes } from "../utils/fetch-bytes.ts";
@@ -221,9 +221,12 @@ interface ImageElementParams {
   maxHeightFactor?: number;
   /** width / height; overrides the image's OWN ratio (CSS `aspect-ratio`), `fit` then places it. */
   aspectRatio?: number;
+  /** How the image fills its box (CSS `object-fit`); `fill` by default, as in CSS. */
   fit?: BoxFit;
   /** Corner radius in points - one number or per corner; rounds the image box (0 = sharp, default). */
   radius?: number | Radii;
+  /** Where the image sits in its box when `fit` leaves space or cuts it: 0 = start, 1 = end per axis. */
+  align?: FitAlign;
   /** Alternate text for accessibility (tagged PDF). With `alt` the image is a Figure; without, decoration. */
   alt?: string;
 }
@@ -234,6 +237,7 @@ export class ImageElement extends SizedPDFElement {
   private heightFactor?: number;
   private fit: BoxFit;
   private radius: number | Radii;
+  private align?: FitAlign;
   private readonly alt?: string;
   // The requested size (fixed points), kept separate from the laid-out this.width/height so a
   // re-layout (fragmentation measures more than once) still resolves the factor, instead of
@@ -251,8 +255,9 @@ export class ImageElement extends SizedPDFElement {
     height,
     widthFactor,
     heightFactor,
-    fit = BoxFit.none,
+    fit = BoxFit.fill,
     radius,
+    align,
     alt,
     ...sizing
   }: ImageElementParams) {
@@ -268,6 +273,7 @@ export class ImageElement extends SizedPDFElement {
     this.sizing = sizing;
     this.fit = fit;
     this.radius = radius ?? 0;
+    this.align = align;
     this.alt = alt;
   }
 
@@ -316,9 +322,7 @@ export class ImageElement extends SizedPDFElement {
       widthFactor: this.widthFactor,
       heightFactor: this.heightFactor,
     });
-    // An explicit `aspectRatio` wins over the image's own, as it does in CSS - and only it may size a
-    // box with NEITHER axis pinned. Left to the intrinsic ratio that would change what an unsized image
-    // has always done here (fill both axes and let `fit` sort it out).
+    // An explicit `aspectRatio` wins over the image's own.
     const resolved = resolveSize(specs.width, specs.height, this.sizing.aspectRatio, constraints);
     let w = resolved.width;
     let h = resolved.height;
@@ -333,13 +337,18 @@ export class ImageElement extends SizedPDFElement {
       this.intrinsic.height > 0
     ) {
       const ratio = this.intrinsic.width / this.intrinsic.height;
+      // Neither pinned: its own size (1px = 1pt), scaled down to what is offered - never up, and never
+      // past the cap, which is what keeps anything from running off the page. The width clamp does the
+      // width; a height cap is turned into a width at the image's ratio.
+      if (w === undefined && h === undefined) {
+        w = bounds.constrainWidth(Math.min(this.intrinsic.width, bounds.maxHeight * ratio));
+      }
       if (w !== undefined && h === undefined) h = bounds.constrainHeight(w / ratio);
       else if (h !== undefined && w === undefined) w = bounds.constrainWidth(h * ratio);
     }
 
-    // An unpinned axis: a bounded one fills; an unbounded one takes the image's own extent (1px = 1pt) -
-    // what `fit: none` (the default) draws there, so the layout reserves exactly what is drawn. Read from
-    // `requested`, never the mutated this.width/height.
+    // Still unpinned (no intrinsic size known): a bounded axis fills; an unbounded one takes the image's
+    // own extent (1px = 1pt). Read from `requested`, never the mutated this.width/height.
     const width =
       w ??
       (bounds.hasBoundedWidth
@@ -371,6 +380,7 @@ export class ImageElement extends SizedPDFElement {
       image: this.image,
       fit: this.fit,
       radius: this.radius,
+      align: this.align,
       alt: this.alt,
     };
   }

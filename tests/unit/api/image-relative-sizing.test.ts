@@ -65,8 +65,36 @@ describe("Image relative sizing + aspect auto-height", () => {
     );
   });
 
-  it("an image given NO size still draws at its intrinsic size, like an unsized <img>", () => {
-    expect(Image(new FakeImage(400, 200)).getProps().fit).toBe(BoxFit.none);
+  it("an image given NO size keeps its own size, scaled down to what it is offered, never up", async () => {
+    const img = Image(new FakeImage(400, 200));
+    await img.resolveIntrinsicSize();
+    expect(img.getProps().fit).toBe(BoxFit.fill);
+    expect(img.calculateLayout(BoxConstraints.loose(300, Infinity), { x: 0, y: 0 }, ctx)).toEqual({
+      width: 300,
+      height: 150,
+    });
+    // Offered a height only (a Row of fixed height): scaled down to it, the width follows.
+    expect(img.calculateLayout(BoxConstraints.loose(Infinity, 50), { x: 0, y: 0 }, ctx)).toEqual({
+      width: 100,
+      height: 50,
+    });
+    // Both bounded: the tighter one wins, so the ratio holds.
+    expect(img.calculateLayout(BoxConstraints.loose(300, 50), { x: 0, y: 0 }, ctx)).toEqual({
+      width: 100,
+      height: 50,
+    });
+    // More than enough offered: its own size, not stretched.
+    expect(img.calculateLayout(BoxConstraints.loose(1000, 1000), { x: 0, y: 0 }, ctx)).toEqual({
+      width: 400,
+      height: 200,
+    });
+    // Nothing offered: its own size (1px = 1pt).
+    expect(
+      img.calculateLayout(new BoxConstraints(0, Infinity, 0, Infinity), { x: 0, y: 0 }, ctx),
+    ).toEqual({
+      width: 400,
+      height: 200,
+    });
   });
 
   it("an explicit fit always wins over the auto-fill default", () => {

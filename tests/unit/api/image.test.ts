@@ -21,8 +21,9 @@ describe("Image factory", () => {
     expect(props(Image(custom)).image).toBe(custom);
   });
 
-  it("maps fit names to BoxFit and defaults to none", () => {
-    expect(props(Image("a.png")).fit).toBe(BoxFit.none);
+  it("maps fit names to BoxFit and defaults to fill, as CSS object-fit", () => {
+    expect(props(Image("a.png")).fit).toBe(BoxFit.fill);
+    expect(props(Image("a.png", { fit: "none" })).fit).toBe(BoxFit.none);
     expect(props(Image("a.png", { fit: "cover" })).fit).toBe(BoxFit.cover);
     expect(props(Image("a.png", { fit: "contain" })).fit).toBe(BoxFit.contain);
   });

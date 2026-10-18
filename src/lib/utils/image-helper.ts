@@ -153,7 +153,7 @@ export async function convertImageToGrayscaleBuffer(imagePath: string): Promise<
   return grayscaleBuffer;
 }
 
-// Helper for caluclating sizes (contain, cover..)
+/** The drawn size of an image in its box, and where it sits there. */
 export interface FitResult {
   width: number;
   height: number;
@@ -161,96 +161,79 @@ export interface FitResult {
   offsetY: number;
 }
 
+/** Where an image smaller or larger than its box sits in it, per axis: 0 = start, 0.5 = centre, 1 = end. */
+export interface FitAlign {
+  x: number;
+  y: number;
+}
+
+const CENTRE: FitAlign = { x: 0.5, y: 0.5 };
+
+/** The one place a fitted image is positioned: what is left over (or overhangs) is split by `align`. */
+function placed(
+  width: number,
+  height: number,
+  containerWidth: number,
+  containerHeight: number,
+  align: FitAlign,
+): FitResult {
+  return {
+    width,
+    height,
+    offsetX: (containerWidth - width) * align.x,
+    offsetY: (containerHeight - height) * align.y,
+  };
+}
+
+/** Scaled by the width's or the height's factor; that axis takes the box's extent exactly. */
+function scaled(
+  imageWidth: number,
+  imageHeight: number,
+  containerWidth: number,
+  containerHeight: number,
+  align: FitAlign,
+  byWidthWins: (byWidth: number, byHeight: number) => boolean,
+): FitResult {
+  const byWidth = containerWidth / imageWidth;
+  const byHeight = containerHeight / imageHeight;
+  return byWidthWins(byWidth, byHeight)
+    ? placed(containerWidth, imageHeight * byWidth, containerWidth, containerHeight, align)
+    : placed(imageWidth * byHeight, containerHeight, containerWidth, containerHeight, align);
+}
+
+/** Scaled to fit inside the box, whole image visible. */
 export function applyContainFit(
   imageWidth: number,
   imageHeight: number,
   containerWidth: number,
   containerHeight: number,
+  align: FitAlign = CENTRE,
 ): FitResult {
-  const imageAspectRatio = imageWidth / imageHeight;
-  const containerAspectRatio = containerWidth / containerHeight;
-  let width, height, offsetX, offsetY;
-
-  if (imageAspectRatio > containerAspectRatio) {
-    // The images width is bigger than the containers width
-    const scaleFactor = containerWidth / imageWidth;
-    width = containerWidth;
-    height = imageHeight * scaleFactor;
-    offsetX = 0;
-    offsetY = (containerHeight - height) / 2; // Center vertically
-  } else {
-    // THe images height is bigge rthan the containers height
-    const scaleFactor = containerHeight / imageHeight;
-    width = imageWidth * scaleFactor;
-    height = containerHeight;
-    offsetX = (containerWidth - width) / 2; // Center horizontally
-    offsetY = 0;
-  }
-
-  return {
-    width,
-    height,
-    offsetX,
-    offsetY,
-  };
+  return scaled(imageWidth, imageHeight, containerWidth, containerHeight, align, (w, h) => w < h);
 }
 
+/** Scaled to cover the box, the overhang cut off. */
 export function applyCoverFit(
   imageWidth: number,
   imageHeight: number,
   containerWidth: number,
   containerHeight: number,
+  align: FitAlign = CENTRE,
 ): FitResult {
-  const imageAspectRatio = imageWidth / imageHeight;
-  const containerAspectRatio = containerWidth / containerHeight;
-  let width, height, offsetX, offsetY;
-
-  if (imageAspectRatio > containerAspectRatio) {
-    // The images width is bigger than containers width
-    const scaleFactor = containerHeight / imageHeight;
-    width = imageWidth * scaleFactor;
-    height = containerHeight;
-    offsetX = (containerWidth - width) / 2; // Center horizontally
-    offsetY = 0;
-  } else {
-    // The images height is bigger than containers height
-    const scaleFactor = containerWidth / imageWidth;
-    width = containerWidth;
-    height = imageHeight * scaleFactor;
-    offsetX = 0;
-    offsetY = (containerHeight - height) / 2; // Center vertically
-  }
-
-  return {
-    width,
-    height,
-    offsetX,
-    offsetY,
-  };
+  return scaled(imageWidth, imageHeight, containerWidth, containerHeight, align, (w, h) => w >= h);
 }
 
 export function applyFillFit(containerWidth: number, containerHeight: number): FitResult {
-  return {
-    width: containerWidth,
-    height: containerHeight,
-    offsetX: 0,
-    offsetY: 0,
-  };
+  return { width: containerWidth, height: containerHeight, offsetX: 0, offsetY: 0 };
 }
 
+/** At its own size (1px = 1pt), the overhang cut off. */
 export function applyFitNone(
   imageWidth: number,
   imageHeight: number,
   containerWidth: number,
   containerHeight: number,
-) {
-  const offsetX = (containerWidth - imageWidth) / 2; // Center horizontally
-  const offsetY = (containerHeight - imageHeight) / 2; // Center vertically
-
-  return {
-    width: imageWidth, // Hold orignal image size
-    height: imageHeight,
-    offsetX,
-    offsetY,
-  };
+  align: FitAlign = CENTRE,
+): FitResult {
+  return placed(imageWidth, imageHeight, containerWidth, containerHeight, align);
 }
