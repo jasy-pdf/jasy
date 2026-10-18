@@ -250,7 +250,7 @@ export function applyFitNone(
   return {
     width: imageWidth, // Hold orignal image size
     height: imageHeight,
-    offsetX: offsetX > 0 ? offsetX : 0, // Dont move outside the container...
-    offsetY: offsetY > 0 ? offsetY : 0,
+    offsetX,
+    offsetY,
   };
 }
