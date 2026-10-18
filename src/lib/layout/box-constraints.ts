@@ -266,6 +266,28 @@ export function resolveSize(
   };
 }
 
+/**
+ * The open axes of a box that has its own size (an image, an SVG), after `resolveSize`: one pinned axis
+ * derives the other from the own ratio; none pinned is the own size, scaled down to `bounds` and never
+ * up - the cap is what keeps it on the page.
+ */
+export function sizeAtOwnRatio(
+  width: number | undefined,
+  height: number | undefined,
+  own: { width: number; height: number },
+  bounds: BoxConstraints,
+): { width?: number; height?: number } {
+  const ratio = own.width / own.height;
+  if (width === undefined && height === undefined) {
+    // The width clamp does the width; a height cap is turned into a width at the ratio.
+    width = bounds.constrainWidth(Math.min(own.width, bounds.maxHeight * ratio));
+  }
+  if (width !== undefined && height === undefined) height = bounds.constrainHeight(width / ratio);
+  else if (height !== undefined && width === undefined)
+    width = bounds.constrainWidth(height * ratio);
+  return { width, height };
+}
+
 /** The size an element resolves to and returns UP the tree. */
 export interface Size {
   width: number;

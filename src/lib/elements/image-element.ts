@@ -10,6 +10,7 @@ import {
   SizingParams,
   extentSpecs,
   resolveSize,
+  sizeAtOwnRatio,
 } from "../layout/box-constraints.ts";
 import { LayoutContext, SizedPDFElement } from "./pdf-element.ts";
 
@@ -328,23 +329,14 @@ export class ImageElement extends SizedPDFElement {
     let h = resolved.height;
     const bounds = resolved.constraints;
 
-    // Aspect auto-size: when exactly ONE axis is pinned, derive the other from the intrinsic ratio
-    // (CSS `width: 50%; height: auto`). Only fires once the pre-pass resolved the pixel size.
+    // Its own ratio fills an open axis, once the pre-pass resolved the pixel size.
     if (
       this.sizing.aspectRatio === undefined &&
       this.intrinsic &&
       this.intrinsic.width > 0 &&
       this.intrinsic.height > 0
     ) {
-      const ratio = this.intrinsic.width / this.intrinsic.height;
-      // Neither pinned: its own size (1px = 1pt), scaled down to what is offered - never up, and never
-      // past the cap, which is what keeps anything from running off the page. The width clamp does the
-      // width; a height cap is turned into a width at the image's ratio.
-      if (w === undefined && h === undefined) {
-        w = bounds.constrainWidth(Math.min(this.intrinsic.width, bounds.maxHeight * ratio));
-      }
-      if (w !== undefined && h === undefined) h = bounds.constrainHeight(w / ratio);
-      else if (h !== undefined && w === undefined) w = bounds.constrainWidth(h * ratio);
+      ({ width: w, height: h } = sizeAtOwnRatio(w, h, this.intrinsic, bounds));
     }
 
     // Still unpinned (no intrinsic size known): a bounded axis fills; an unbounded one takes the image's

@@ -7,6 +7,7 @@ import {
   SizingParams,
   extentSpecs,
   resolveSize,
+  sizeAtOwnRatio,
 } from "../layout/box-constraints.ts";
 import { LayoutContext, SizedPDFElement } from "./pdf-element.ts";
 import { IMAGE_FETCH_LIMITS, ImageUrlError, isImageUrl } from "./image-element.ts";
@@ -191,17 +192,13 @@ export class SvgElement extends SizedPDFElement {
           `height, or an aspectRatio`,
       );
     }
-    // One pinned axis derives the other from the drawing's own ratio (CSS `width: 120; height: auto`).
-    // A bitmap needs a decode pass before it can do this; an SVG knows it from its viewBox.
+    // Its own ratio fills an open axis, as for a bitmap - which needs a decode pass for it; an SVG
+    // knows it from its viewBox. Unsized, it is its own size scaled down to fit: a 24pt icon stays 24pt.
     const intrinsic = this.intrinsic ?? { width: 0, height: 0 };
     if (this.sizing.aspectRatio === undefined && intrinsic.width > 0 && intrinsic.height > 0) {
-      const ratio = intrinsic.width / intrinsic.height;
-      if (w !== undefined && h === undefined) h = bounds.constrainHeight(w / ratio);
-      else if (h !== undefined && w === undefined) w = bounds.constrainWidth(h * ratio);
+      ({ width: w, height: h } = sizeAtOwnRatio(w, h, intrinsic, bounds));
     }
 
-    // Nothing pinned: draw at the intrinsic size, as an unsized `<img>` does - never fill the region,
-    // which would blow a 24pt icon up to the whole page.
     return {
       width: w ?? bounds.constrainWidth(intrinsic.width),
       height: h ?? bounds.constrainHeight(intrinsic.height),

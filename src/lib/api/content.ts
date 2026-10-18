@@ -234,6 +234,12 @@ export function Image(src: ImageSource, opts: ImageOptions = {}): ImageElement |
         "@jasy/pdf: radius is not supported for an SVG yet - wrap it in a Box instead.",
       );
     }
+    if (opts.align !== undefined) {
+      throw new Error(
+        "@jasy/pdf: align is not supported for an SVG yet - it is always drawn centred in its box. " +
+          "Size the box to the drawing, or place it with the parent's align.",
+      );
+    }
     return Svg(src, opts);
   }
   return rasterImage(src, opts);
