@@ -73,6 +73,7 @@ export class ImageRenderer {
         height = fitContainResult.height;
         break;
       case BoxFit.none:
+        mustCreateOverflowContainer = true;
         const fitNoneResult = applyFitNone(
           dimensions.width,
           dimensions.height,
