@@ -21,6 +21,7 @@ import {
   toRadius,
 } from "./dimension.ts";
 import { SvgElement, type SvgSource } from "../elements/svg-element.ts";
+import type { FitAlign } from "../utils/image-helper.ts";
 import { CanvasElement, type CanvasPaint } from "../elements/canvas-element.ts";
 
 /** A horizontal rule (locked §4). */
@@ -77,14 +78,41 @@ const FIT: Record<ImageFit, BoxFit> = {
   fill: BoxFit.fill,
 };
 
+/** Where an image sits in its own box - the image's counterpart of a Text's `align`. */
+export type ImageAlign =
+  | "center"
+  | "top"
+  | "bottom"
+  | "left"
+  | "right"
+  | "top left"
+  | "top right"
+  | "bottom left"
+  | "bottom right";
+
+const IMAGE_ALIGN: Record<ImageAlign, FitAlign> = {
+  center: { x: 0.5, y: 0.5 },
+  top: { x: 0.5, y: 0 },
+  bottom: { x: 0.5, y: 1 },
+  left: { x: 0, y: 0.5 },
+  right: { x: 1, y: 0.5 },
+  "top left": { x: 0, y: 0 },
+  "top right": { x: 1, y: 0 },
+  "bottom left": { x: 0, y: 1 },
+  "bottom right": { x: 1, y: 1 },
+};
+
 export interface ImageOptions extends BoundsInput {
   /** Size on each axis: points (fixed) or a percentage string like `"50%"` (a fraction of the offered
    *  space). Pin exactly ONE axis and the other follows the image's aspect ratio (CSS `height: auto`). */
   width?: SizeInput;
   height?: SizeInput;
-  /** Fit within the box. Default `none` (the image's own size); with any explicit size or an
-   *  `aspectRatio`, `fill` - the image scales into its box, as `<img width height>` does. */
+  /** How the image fills its box (CSS `object-fit`). Default `fill`. Given no size, the box is the image's
+   *  own size, scaled down to fit what is offered (never up) - so `fill` draws it undistorted. */
   fit?: ImageFit;
+  /** Where the image sits in its box when `fit` leaves space or cuts it off. Default `"center"`; a
+   *  portrait in a `cover` box keeps its top with `"top"`. */
+  align?: ImageAlign;
   /** Corner radius in points (rounds the image box). */
   radius?: RadiusInput;
   /** Alternate text for accessibility (tagged PDF): describes the image for screen readers. With `alt`
@@ -206,6 +234,12 @@ export function Image(src: ImageSource, opts: ImageOptions = {}): ImageElement |
         "@jasy/pdf: radius is not supported for an SVG yet - wrap it in a Box instead.",
       );
     }
+    if (opts.align !== undefined) {
+      throw new Error(
+        "@jasy/pdf: align is not supported for an SVG yet - it is always drawn centred in its box. " +
+          "Size the box to the drawing, or place it with the parent's align.",
+      );
+    }
     return Svg(src, opts);
   }
   return rasterImage(src, opts);
@@ -214,13 +248,6 @@ export function Image(src: ImageSource, opts: ImageOptions = {}): ImageElement |
 function rasterImage(src: ImageSource, opts: ImageOptions = {}): ImageElement {
   const w = opts.width !== undefined ? toDimension(opts.width) : undefined;
   const h = opts.height !== undefined ? toDimension(opts.height) : undefined;
-  // ANY explicit size scales the image into the box (fit: fill), which is what `<img width height>`
-  // does in HTML and what react-pdf does. Two pinned axes used to keep `none` - drawing the image at
-  // its pixel size regardless - so a logo asked for at 48x48 spanned a third of the page.
-  // An image with NO size given still draws at its intrinsic size, as an unsized `<img>` does.
-  const sized =
-    opts.width !== undefined || opts.height !== undefined || opts.aspectRatio !== undefined;
-  const fit = opts.fit ? FIT[opts.fit] : sized ? BoxFit.fill : undefined;
 
   return new ImageElement({
     image:
@@ -236,7 +263,8 @@ function rasterImage(src: ImageSource, opts: ImageOptions = {}): ImageElement {
     widthFactor: w?.factor,
     heightFactor: h?.factor,
     ...toBounds(opts),
-    fit,
+    fit: opts.fit ? FIT[opts.fit] : undefined,
+    align: opts.align ? IMAGE_ALIGN[opts.align] : undefined,
     radius: opts.radius !== undefined ? toRadius(opts.radius) : undefined,
     alt: opts.alt,
   })

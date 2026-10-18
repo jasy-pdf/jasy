@@ -18,10 +18,20 @@ export class ImageRenderer {
     scope: RenderScope,
   ): Promise<IRNode[]> {
     // Load the image and convert it in a binary string
-    let { x: ownX, y: ownY, width, height, image, fit, radius, alt } = imageElement.getProps();
+    const {
+      x: ownX,
+      y: ownY,
+      width,
+      height,
+      image,
+      fit,
+      radius,
+      align,
+      alt,
+    } = imageElement.getProps();
     // Its own position is relative to `scope.origin`; the IR wants page coordinates.
-    let x = scope.origin.x + (ownX ?? 0);
-    let y = scope.origin.y + (ownY ?? 0);
+    const x = scope.origin.x + (ownX ?? 0);
+    const y = scope.origin.y + (ownY ?? 0);
     await image.init(); // Load and initialize the image
     const imageType = await image.getImageType(); // For the moment we can handle `png` and `jpg/jpeg` files
     const fileData = await image.getFileData();
@@ -41,84 +51,40 @@ export class ImageRenderer {
       smask = decoded.smask;
     }
 
-    // Now we check the `fit` property and changing the dimensions of the image
-    // Optionally we must add an overflow container
-    let mustCreateOverflowContainer: boolean = false;
-    const containerDimensions = JSON.parse(JSON.stringify({ x, y, width, height })); // Deep clone images dimensions
-    switch (fit) {
-      case BoxFit.cover:
-        mustCreateOverflowContainer = true;
-        const fitCoverResult = applyCoverFit(
-          dimensions.width,
-          dimensions.height,
-          width ?? 0,
-          height ?? 0,
-        );
-        x += fitCoverResult.offsetX;
-        y += fitCoverResult.offsetY;
-        width = fitCoverResult.width;
-        height = fitCoverResult.height;
-        break;
-      case BoxFit.contain:
-        mustCreateOverflowContainer = true;
-        const fitContainResult = applyContainFit(
-          dimensions.width,
-          dimensions.height,
-          width ?? 0,
-          height ?? 0,
-        );
-        x += fitContainResult.offsetX;
-        y += fitContainResult.offsetY;
-        width = fitContainResult.width;
-        height = fitContainResult.height;
-        break;
-      case BoxFit.none:
-        mustCreateOverflowContainer = true;
-        const fitNoneResult = applyFitNone(
-          dimensions.width,
-          dimensions.height,
-          width ?? 0,
-          height ?? 0,
-        );
-        x += fitNoneResult.offsetX;
-        y += fitNoneResult.offsetY;
-        width = fitNoneResult.width;
-        height = fitNoneResult.height;
-        break;
-      case BoxFit.fill:
-        const fitFillResult = applyFillFit(width ?? 0, height ?? 0);
-        width = fitFillResult.width;
-        height = fitFillResult.height;
-    }
+    // The box laid out for it; `fit` decides what is drawn in it and where.
+    const box = {
+      x,
+      y,
+      width: width ?? dimensions.width,
+      height: height ?? dimensions.height,
+    };
+    const fitted =
+      fit === BoxFit.cover
+        ? applyCoverFit(dimensions.width, dimensions.height, box.width, box.height, align)
+        : fit === BoxFit.contain
+          ? applyContainFit(dimensions.width, dimensions.height, box.width, box.height, align)
+          : fit === BoxFit.none
+            ? applyFitNone(dimensions.width, dimensions.height, box.width, box.height, align)
+            : applyFillFit(box.width, box.height);
 
-    // A radius rounds the image BOX (the element frame), so it clips to that frame too -
-    // independent of the cover/contain overflow clip.
-    const wantsClip = mustCreateOverflowContainer || isRounded(radius);
+    // Anything but `fill` may leave the box, so it is clipped to it; a radius rounds the box too.
+    const wantsClip = fit !== BoxFit.fill || isRounded(radius);
 
     // The fitted geometry becomes a display-list primitive; the backend registers
     // the XObject and emits the placement (+ clip, rounded when a radius is set).
     const node: Image = {
       type: "image",
-      x,
-      y,
-      width: width!,
-      height: height!,
+      x: x + fitted.offsetX,
+      y: y + fitted.offsetY,
+      width: fitted.width,
+      height: fitted.height,
       intrinsicWidth: dimensions.width,
       intrinsicHeight: dimensions.height,
       data: embedData,
       imageType,
       ...(smask ? { smask } : {}),
       ...(radius ? { radius } : {}),
-      ...(wantsClip
-        ? {
-            clip: {
-              x: containerDimensions.x,
-              y: containerDimensions.y,
-              width: containerDimensions.width,
-              height: containerDimensions.height,
-            },
-          }
-        : {}),
+      ...(wantsClip ? { clip: box } : {}),
     };
 
     // Accessible tagging: an image WITH alt text is a Figure; without, it stays untagged and the backend
