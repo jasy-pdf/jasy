@@ -180,14 +180,12 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
       // A trailing forced break leaves nothing to carry over: no remainder box, no extra page.
       // Only the CONTINUATION carries `breakAfter` (a box that splits still breaks after its LAST
       // fragment, not its first); `breakBefore` is dropped, already honoured before the split.
+      // It gets no height, as a Column's piece does: it is sized where it lands, which may be a
+      // narrower or wider region (a Flow's), or one that gives a region-sized rest its height.
       remainder:
         remainder.length === 0
           ? null
-          : this.cloneWithChildren(
-              remainder,
-              contentHeight(remainder) + 2 * this.borderWidth,
-              this.breakAfter,
-            ),
+          : this.cloneWithChildren(remainder, undefined, this.breakAfter),
       forceBreak,
     };
   }
@@ -198,7 +196,7 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
 
   private cloneWithChildren(
     children: PDFElement[],
-    height: number,
+    height: number | undefined,
     breakAfter = false,
   ): RectangleElement {
     return new RectangleElement({

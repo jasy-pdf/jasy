@@ -445,7 +445,9 @@ enforces it (`skonto.ts` for "Skonto is not an allowance"), and everywhere else 
   box around it. So the child's own `width` is overridden by its share (as Flutter does), its floor is
   what its CONTENT needs (Chrome: `<div style="flex:1; width:40">` shrinks to its text, 212.2 vs our
   212.0), and its `%` padding resolves against the Row. One reading for all three; the tests in
-  `flex-expanded-floor.test.ts` and `percentage-insets.test.ts` pin it.
+  `flex-expanded-floor.test.ts` and `percentage-insets.test.ts` pin it. Down a column the floor is its
+  content's HEIGHT (CSS `min-height: auto` - squeezed below it, it drew over the next sibling); across
+  the line it is as big as its child, so a `%` there resolves once. A lone `Expanded` in a Box flexes too.
 - **Box/layout props never inherit; text styles do** (`explicit > inherited > built-in`, via
   `LayoutContext.textStyle`). The CSS line.
 - **`lineHeight` unset = the font's natural line height**; a number = a multiplier of the font size.

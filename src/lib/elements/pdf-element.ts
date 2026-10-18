@@ -77,6 +77,8 @@ export interface LayoutContext {
   belowContent?: boolean;
   /** Packing into a Region of a `Flow`, where a `ColumnBreak` moves on to the next Region. */
   inFlowRegion?: boolean;
+  /** Laying out a page of a `Flow`'s template: the page a `Region` laid out here belongs to. */
+  flowPage?: object;
   /** What a `Box`'s percentage padding resolves against (CSS: the containing block). A Row sets it for
    *  its children - it offers them no width, so the Box could not know it; otherwise the Box sets it
    *  from what it was offered. Consumed by the Box's own padding, so it never travels further down. */

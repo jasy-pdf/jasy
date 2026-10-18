@@ -71,6 +71,9 @@ interface RowElementParams extends WithChildren {
  * does not fit (handled by the parent's `packChildren`); synchronized cell splitting is a
  * Grid/Table concern.
  */
+/** How far a line may run past its box before it is reported, in points (floating-point slack). */
+const WIDE_EPSILON = 0.01;
+
 export class RowElement extends SizedPDFElement {
   private children: PDFElement[];
   private gap: number;
@@ -255,6 +258,19 @@ export class RowElement extends SizedPDFElement {
       );
     }
 
+    if (mode === "layout" && result.mainUsed > mainAvail + WIDE_EPSILON) {
+      diagnose(ctx.diagnostics, {
+        code: "overflow-wide",
+        severity: "warning",
+        message:
+          `A Row's children need ${Math.round(result.mainUsed)}pt but it is ` +
+          `${Math.round(mainAvail)}pt wide; they are drawn past its edge. Let them wrap ` +
+          '(`breakWord`, `wrap`), make room, or clip with a Box\'s `overflow: "hidden"`.',
+        about: this,
+        page: pageOf(ctx),
+        fallback: "silent",
+      });
+    }
     return { width: boundedWidth ?? result.mainUsed, height: boundedHeight ?? result.crossUsed };
   }
 

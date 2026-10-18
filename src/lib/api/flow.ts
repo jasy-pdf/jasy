@@ -7,8 +7,13 @@ import { BoundsInput, SizeInput, toBounds, toDimension } from "./dimension.ts";
 import { Expanded, Row } from "./layout.ts";
 
 export type { FlowPage, FlowTemplate } from "../elements/layout/flow-element.ts";
-export { FlowUnboundedError, FlowWithoutRegionError } from "../elements/layout/flow-element.ts";
-export { RegionOutsideFlowError } from "../elements/layout/region-element.ts";
+export {
+  FlowRegionsEmptyError,
+  FlowUnboundedError,
+  FlowWithoutRegionError,
+  RegionInPageBuilderError,
+} from "../elements/layout/flow-element.ts";
+export { RegionOutsideFlowError, RegionReusedError } from "../elements/layout/region-element.ts";
 
 export interface FlowOptions {
   /** The layout of one page of the Flow, built per page; its `Region`s are where the content goes. */
@@ -61,6 +66,10 @@ export function ColumnBreak(): ColumnBreakElement {
   return new ColumnBreakElement();
 }
 
+/** A value as the author wrote it: `"2"` quoted, `NaN` as NaN. */
+const shown = (value: unknown) =>
+  typeof value === "string" ? JSON.stringify(value) : String(value);
+
 export interface SplitViewOptions {
   /** How many columns, side by side and equally wide (default 2). */
   columns?: number;
@@ -81,7 +90,17 @@ export interface SplitViewOptions {
 export function SplitView(opts: SplitViewOptions, content: PDFElement[]): FlowElement {
   const columns = opts.columns ?? 2;
   if (!Number.isInteger(columns) || columns < 1) {
-    throw new Error(`Invalid SplitView columns ${columns}: use a whole number of 1 or more.`);
+    throw new Error(
+      `Invalid SplitView columns ${shown(columns)}: use a whole number of 1 or more.`,
+    );
+  }
+  for (const key of ["gap", "rowGap", "colGap"] as const) {
+    const value = opts[key];
+    if (value !== undefined && !(Number.isFinite(value) && value >= 0)) {
+      throw new Error(
+        `Invalid SplitView ${key} ${shown(value)}: use a number of points, 0 or more.`,
+      );
+    }
   }
   const colGap = opts.colGap ?? opts.gap;
   return Flow(

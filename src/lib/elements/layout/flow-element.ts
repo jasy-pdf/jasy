@@ -3,6 +3,7 @@ import type { FragmentResult } from "../../layout/fragmentation.ts";
 import { diagnose, pageOf } from "../../common/diagnostics.ts";
 import { ContainerElement } from "../container-element.ts";
 import { LayoutContext, PDFElement, SizedPDFElement } from "../pdf-element.ts";
+import { PageBuilderElement } from "./page-builder-element.ts";
 import { RegionElement } from "./region-element.ts";
 
 /** What a template is built from: `index` counts THIS Flow's pages (0 = where it starts). */
@@ -24,6 +25,18 @@ export class FlowWithoutRegionError extends Error {
   }
 }
 
+/** A template that leaves every Region without room, where the Flow cannot move on to find more. */
+export class FlowRegionsEmptyError extends Error {
+  constructor(width: number, height: number) {
+    super(
+      `@jasy/pdf: a Flow's template leaves its Regions no room in ${Math.round(width)} x ` +
+        `${Math.round(height)}pt - every Region is 0 wide or 0 tall (too many columns or gaps for the ` +
+        "width, or the rest of the template is taller than the space). Give the Regions room.",
+    );
+    this.name = "FlowRegionsEmptyError";
+  }
+}
+
 /** Laid out with no height to fill: every line would land in the first Region. */
 export class FlowUnboundedError extends Error {
   constructor() {
@@ -36,24 +49,48 @@ export class FlowUnboundedError extends Error {
   }
 }
 
-/** The Regions of a template, in tree order - the order the content flows through them. */
+/** A PageBuilder builds again for the page it is drawn on, so Regions inside it lose their content. */
+export class RegionInPageBuilderError extends Error {
+  constructor() {
+    super(
+      "@jasy/pdf: a Region inside a PageBuilder - it builds again for the page it is drawn on, and " +
+        "its Regions would come back empty. A Flow's template is built for every page already and " +
+        "gets { index, pageNumber }: build the Regions there.",
+    );
+    this.name = "RegionInPageBuilderError";
+  }
+}
+
+/** The Regions of a laid-out template, in tree order - the order the content flows through them. */
 function regionsIn(root: PDFElement): RegionElement[] {
   const out: RegionElement[] = [];
-  const visit = (el: PDFElement): void => {
-    if (el instanceof RegionElement) out.push(el);
-    else for (const child of el.layoutChildren()) visit(child);
+  const visit = (el: PDFElement, built: boolean): void => {
+    if (el instanceof RegionElement) {
+      if (built) throw new RegionInPageBuilderError();
+      out.push(el);
+    } else {
+      const inBuilder = built || el instanceof PageBuilderElement;
+      for (const child of el.layoutChildren()) visit(child, inBuilder);
+    }
   };
-  visit(root);
+  visit(root, false);
   return out;
 }
 
 const SLACK_EPSILON = 1e-6;
+// How close the last page's height gets to the tightest one that holds the content, in points.
+const SHRINK_PRECISION = 0.01;
 
-/** One page of a Flow: its template, laid out once, with each Region holding its content. */
+/**
+ * One page of a Flow: its template, with each Region holding its content. It is drawn laid out at the
+ * height it was filled at - not at its own size, which a template that does not fill (`50%`) differs from.
+ */
 export class FlowPieceElement extends SizedPDFElement {
   constructor(
     private readonly template: PDFElement,
     private readonly size: Size,
+    private readonly bound: number,
+    private readonly page: object,
   ) {
     super({ x: 0, y: 0, ...size });
   }
@@ -62,9 +99,9 @@ export class FlowPieceElement extends SizedPDFElement {
     this.x = offset.x;
     this.y = offset.y;
     this.template.calculateLayout(
-      BoxConstraints.loose(this.size.width, this.size.height),
+      BoxConstraints.loose(this.size.width, this.bound),
       { x: 0, y: 0 },
-      ctx,
+      { ...ctx, flowPage: this.page },
     );
     return this.size;
   }
@@ -123,7 +160,8 @@ export class FlowElement extends SizedPDFElement {
   }
 
   fragment(maxHeight: number, width: number, ctx: LayoutContext): FragmentResult {
-    const filled = this.fill(maxHeight, width, ctx);
+    // Below other content, a template with no room here may find it on the next page.
+    const filled = this.fill(maxHeight, width, ctx, !ctx.belowContent);
     // Nothing fit: move on whole. On a fresh page the packer forces it on, so this always advances.
     if (!filled.placed) return { fitted: null, remainder: this };
     return {
@@ -141,7 +179,7 @@ export class FlowElement extends SizedPDFElement {
     }
     this.x = offset.x;
     this.y = offset.y;
-    const filled = this.fill(constraints.maxHeight, constraints.maxWidth, ctx);
+    const filled = this.fill(constraints.maxHeight, constraints.maxWidth, ctx, true);
     // Not paginated here (a box with a height): what does not fit is cut, as any overflow is.
     if (filled.rest) {
       diagnose(ctx.diagnostics, {
@@ -166,7 +204,7 @@ export class FlowElement extends SizedPDFElement {
     if (!constraints.hasBoundedHeight || !constraints.hasBoundedWidth) {
       return { width: constraints.hasBoundedWidth ? constraints.maxWidth : 0, height: 0 };
     }
-    return this.fill(constraints.maxHeight, constraints.maxWidth, ctx).piece.measure(
+    return this.fill(constraints.maxHeight, constraints.maxWidth, ctx, false).piece.measure(
       constraints,
       ctx,
     );
@@ -177,24 +215,40 @@ export class FlowElement extends SizedPDFElement {
    * fragmented into its Regions in turn, and - when the content ends here - the template shrunk to
    * what it used.
    */
-  private fill(maxHeight: number, width: number, ctx: LayoutContext) {
+  private fill(maxHeight: number, width: number, ctx: LayoutContext, final: boolean) {
     const template = this.template({ index: this.index, pageNumber: pageOf(ctx) ?? 1 });
+    // Laid out as this page of the Flow, its Regions claim themselves - wherever the template made
+    // them, a PageBuilder or a Table included - and are collected from the laid-out tree.
+    const pageCtx = { ...ctx, flowPage: this };
+    const layOut = (height: number) =>
+      template.calculateLayout(BoxConstraints.loose(width, height), { x: 0, y: 0 }, pageCtx);
+
+    const size = layOut(maxHeight);
     const regions = regionsIn(template);
     if (regions.length === 0) throw new FlowWithoutRegionError();
-    for (const region of regions) region.claim();
-    const layOut = (height: number) =>
-      template.calculateLayout(BoxConstraints.loose(width, height), { x: 0, y: 0 }, ctx);
-
-    let size = layOut(maxHeight);
+    const room = (r: RegionElement) => r.getProps().width! > 0 && r.getProps().height! > 0;
+    // No room here: every Region is empty, or the rest of the template (its height with the Regions
+    // empty) is taller than the space.
+    const own = template.measure(BoxConstraints.loose(width, Infinity), ctx).height;
+    if (own > maxHeight + SLACK_EPSILON || !regions.some(room)) {
+      if (final) throw new FlowRegionsEmptyError(width, maxHeight);
+      const piece = new FlowPieceElement(template, size, maxHeight, this);
+      return { piece, rest: this.content, placed: false, forceBreak: false };
+    }
     let rest: ContainerElement | null = this.content;
     let placed = false;
     let forceBreak = false;
     for (const region of regions) {
       if (!rest) break;
-      const { width: w, height: h } = region.getProps();
-      if (!w || !h || w <= 0 || h <= 0) continue;
+      if (!room(region)) continue;
+      const { width: w, height: h } = region.getProps() as Size;
       // Each Region is a fragmentation region of its own: a page break inside it is measured by it.
-      const split = rest.fragment(h, w, { ...ctx, pageBodyHeight: h, inFlowRegion: true });
+      const split = rest.fragment(h, w, {
+        ...ctx,
+        pageBodyHeight: h,
+        inFlowRegion: true,
+        flowPage: undefined,
+      });
       region.hold(split.fitted);
       if (split.fitted) placed = true;
       rest = split.remainder as ContainerElement | null;
@@ -206,37 +260,57 @@ export class FlowElement extends SizedPDFElement {
       }
     }
 
-    if (!rest && placed) size = this.shrink(template, regions, size, maxHeight, layOut, ctx);
-    return { piece: new FlowPieceElement(template, size), rest, placed, forceBreak };
+    const last =
+      !rest && placed ? this.shrink(template, regions, size, own, maxHeight, layOut, ctx) : null;
+    const piece = last
+      ? new FlowPieceElement(template, last.size, last.bound, this)
+      : new FlowPieceElement(template, size, maxHeight, this);
+    return { piece, rest, placed, forceBreak };
   }
 
   /**
-   * The last page: take off the smallest slack any filled Region without a height of its own has left,
-   * never below the template's own height (fixed Regions, `minHeight`). A template whose Regions do
-   * not shrink with it (two stacked `Expanded`) keeps its full height rather than cut its content.
+   * The last page: the smallest height at which every filled Region still holds what it was given.
+   * Only a layout knows how a template's Regions answer a height (`%`, stacked, `minHeight`, fixed), so
+   * each candidate is laid out and checked. The first is exact for Regions side by side (the full bound
+   * less the smallest slack); below it the bound is searched, down to the template's own height.
+   * Content that overflowed its Region at full height asks for no more than it had there.
    */
   private shrink(
     template: PDFElement,
     regions: RegionElement[],
     full: Size,
+    own: number,
     maxHeight: number,
     layOut: (height: number) => Size,
     ctx: LayoutContext,
-  ): Size {
-    const used = (region: RegionElement) =>
-      region.held!.measure(BoxConstraints.loose(region.getProps().width!, Infinity), ctx).height;
-    const flexible = regions.filter((r) => r.held && !r.hasOwnHeight());
-    const slack = Math.min(...flexible.map((r) => r.getProps().height! - used(r)), Infinity);
-    const own = template.measure(BoxConstraints.loose(full.width, Infinity), ctx).height;
-    const target = Math.min(
-      maxHeight,
-      Math.max(own, Number.isFinite(slack) ? full.height - slack : own),
+  ): { size: Size; bound: number } {
+    const filled = regions.filter((r) => r.held);
+    const needed = new Map(
+      filled.map((r) => {
+        const { width, height } = r.getProps();
+        const used = r.held!.measure(BoxConstraints.loose(width!, Infinity), ctx).height;
+        return [r, Math.min(used, height!)] as const;
+      }),
     );
-    if (target >= full.height) return full;
-    const shrunk = layOut(target);
-    const fits = regions.every((r) => !r.held || r.getProps().height! + SLACK_EPSILON >= used(r));
-    if (fits) return shrunk;
-    return layOut(maxHeight);
+    const slack = Math.min(...filled.map((r) => r.getProps().height! - needed.get(r)!));
+    const fitsAt = (bound: number) => {
+      const size = layOut(bound);
+      const fits = filled.every((r) => r.getProps().height! + SLACK_EPSILON >= needed.get(r)!);
+      return fits ? { size, bound } : null;
+    };
+    let low = Math.min(maxHeight, own);
+    let high = maxHeight;
+    const exact = fitsAt(Math.max(low, maxHeight - slack));
+    if (exact) {
+      if (exact.bound === low) return exact;
+      high = exact.bound;
+    }
+    while (high - low > SHRINK_PRECISION) {
+      const mid = (low + high) / 2;
+      if (fitsAt(mid)) high = mid;
+      else low = mid;
+    }
+    return { size: layOut(high), bound: high };
   }
 
   override layoutChildren(): readonly PDFElement[] {

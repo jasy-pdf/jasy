@@ -422,7 +422,14 @@ function measureLine(line: FlexLine): void {
       line.totalFlex += flexible.getFlex();
       line.totalBasis += flexible.getBasis(line.percentBase);
       if (Number.isFinite(line.mainAvail)) {
-        const floor = Math.max(0, child.minIntrinsicMain(axis.mainHorizontal, line.ctx));
+        // Down a column, a flex child keeps its content's height (CSS `min-height: auto`): squeezed
+        // below it, it would draw over the sibling that follows.
+        const content = axis.mainHorizontal
+          ? 0
+          : axis.mainOf(
+              child.measure(axis.measureConstraints(line.crossAvail, Infinity), line.ctx),
+            );
+        const floor = Math.max(0, child.minIntrinsicMain(axis.mainHorizontal, line.ctx), content);
         line.flexFloor.set(child, floor);
         // A max below the floor loses, as in CSS.
         line.flexCeil.set(child, Math.max(floor, child.maxExtent(axis.mainHorizontal)));
@@ -692,13 +699,18 @@ function placeLine(
   line.children.forEach((child, index) => {
     let mainExtent: number;
     const flexible = flexibleOf(child);
+    // A region-sized child (a Flow) takes the height the Row was given, never one its siblings make.
+    const regionSized = axis.mainHorizontal && child.needsRegion();
     if (flexible) {
       mainExtent = line.flexExtent.get(child)!;
       const align = alignSelfOf(child) ?? cross;
-      const own = align === "stretch" ? crossExtent : ownCross(line, child, mainExtent);
+      // Stretched, it is capped at the line; otherwise it may take what the line offers, and is
+      // aligned by what it takes.
+      const cap = align === "stretch" && !regionSized ? crossExtent : line.crossAvail;
+      const own = align === "stretch" || regionSized ? cap : ownCross(line, child, mainExtent);
       const size = place(
         child,
-        axis.flexConstraints(mainExtent, own),
+        axis.flexConstraints(mainExtent, cap),
         axis.offsetAt(mainPos, crossOrigin + crossOffset(align, crossExtent, own)),
       );
       placedCross = Math.max(placedCross, axis.crossOf(size));
@@ -708,7 +720,7 @@ function placeLine(
       const size = place(
         child,
         axis.measureConstraints(
-          align === "stretch" ? crossExtent : line.crossAvail,
+          align === "stretch" && !regionSized ? crossExtent : line.crossAvail,
           mainCapFor(line, child),
         ),
         axis.offsetAt(mainPos, crossOrigin + crossOffset(align, crossExtent, childCross)),

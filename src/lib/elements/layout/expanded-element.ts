@@ -92,6 +92,15 @@ export class ExpandedElement extends FlexiblePDFElement implements Fragmentable 
     };
   }
 
+  override needsRegion(): boolean {
+    return this.child.needsRegion();
+  }
+
+  // The child IS the flex item: what it needs across the line, the line must give it.
+  override needsBoundedMain(horizontal: boolean): boolean {
+    return this.child.needsBoundedMain(horizontal);
+  }
+
   // A break inside the flex child is a break in the flow it sits in.
   override hasForcedBreak(): boolean {
     return this.child.hasForcedBreak();

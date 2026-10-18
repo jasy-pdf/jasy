@@ -24,6 +24,17 @@ export class RegionOutsideFlowError extends Error {
   }
 }
 
+/** One Region instance handed to two pages of a Flow (or two Flows): both would draw the same content. */
+export class RegionReusedError extends Error {
+  constructor() {
+    super(
+      "@jasy/pdf: a Region is used by two pages of a Flow (or by two Flows). A template is called for " +
+        "every page - build the Regions, and the layout around them, inside the function.",
+    );
+    this.name = "RegionReusedError";
+  }
+}
+
 /**
  * A place in a `Flow`'s template that the content flows through. It has no size of its own: the layout
  * around it sizes it (`Expanded`, `width`, `height`, `%`), and with nothing given it fills what it is
@@ -34,7 +45,7 @@ export class RegionElement extends SizedPDFElement {
   private sizing: SizingParams;
   private widthFactor?: number;
   private heightFactor?: number;
-  private claimed = false;
+  private owner?: object;
   private content: PDFElement | null = null;
 
   constructor(params: RegionElementParams = {}) {
@@ -46,9 +57,10 @@ export class RegionElement extends SizedPDFElement {
     this.requested = { width: params.width, height: params.height };
   }
 
-  /** Marks it as part of a Flow's template - laid out anywhere else, it throws. */
-  claim(): void {
-    this.claimed = true;
+  /** Marks it as part of one page of a Flow; a second page claiming it throws. */
+  private claim(owner: object): void {
+    if (this.owner && this.owner !== owner) throw new RegionReusedError();
+    this.owner = owner;
   }
 
   /** The content it holds on this page (`null`: the content ran out before it). */
@@ -65,17 +77,33 @@ export class RegionElement extends SizedPDFElement {
     return this.requested.height !== undefined || this.heightFactor !== undefined;
   }
 
+  /** Where it has no size of its own it fills what it is offered, so the stack around it must offer
+   *  something - as for a Spacer. */
+  override needsBoundedMain(horizontal: boolean): boolean {
+    return horizontal
+      ? this.requested.width === undefined && this.widthFactor === undefined
+      : !this.hasOwnHeight();
+  }
+
+  /** A `%` size is a share of the stack it sits in, which has to know to resolve it - as for a Box. */
+  override relativeSizeFactor(horizontal: boolean): number | undefined {
+    return horizontal ? this.widthFactor : this.heightFactor;
+  }
+
   calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
-    if (!this.claimed) throw new RegionOutsideFlowError();
+    // Laid out in a Flow's template, it belongs to that page; anywhere else it has no meaning.
+    if (!ctx.flowPage) throw new RegionOutsideFlowError();
+    this.claim(ctx.flowPage);
     const size = this.sizeFor(constraints);
     this.x = offset.x;
     this.y = offset.y;
     this.width = size.width;
     this.height = size.height;
+    // Its content is not the template: a Region in it is outside any Flow (or in its own inner one).
     this.content?.calculateLayout(
       BoxConstraints.loose(size.width, size.height),
       { x: 0, y: 0 },
-      ctx,
+      { ...ctx, flowPage: undefined },
     );
     return size;
   }

@@ -30,7 +30,7 @@ import { HorizontalAlignment, LayoutContext, SizedPDFElement } from "./pdf-eleme
 import { normalizeContent } from "../text/whitespace.ts";
 import { coverText } from "../text/glyph-coverage.ts";
 import type { Hyphenator } from "../text/word-splitting.ts";
-import { pageOf } from "../common/diagnostics.ts";
+import { diagnose, pageOf } from "../common/diagnostics.ts";
 export interface TextSegment {
   content: string;
   fontStyle?: FontStyle;
@@ -539,6 +539,21 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     if (lost.length > 0) ctx.metrics.reportMissingGlyph?.(lost, this, pageOf(ctx));
     this.width = size.width;
     this.height = size.height;
+    // A piece that cannot break and does not fit the width is drawn past it - say so.
+    const piece = constraints.hasBoundedWidth ? this.minIntrinsicMain(true, ctx) : 0;
+    if (piece > size.width + 0.01) {
+      diagnose(ctx.diagnostics, {
+        code: "overflow-wide",
+        severity: "warning",
+        message:
+          `A word in this Text is ${Math.round(piece)}pt wide but the text is ` +
+          `${Math.round(size.width)}pt; it is drawn past the edge. Let it break (\`breakWord\`, ` +
+          '`hyphenate`), make room, or clip with a Box\'s `overflow: "hidden"`.',
+        about: this,
+        page: pageOf(ctx),
+        fallback: "silent",
+      });
+    }
     // Top-left coordinates (y = top of the text box). The baseline offset and the
     // Y-flip are applied downstream (the line-builder positions baselines, the seam
     // flips to PDF), so the element stays coordinate-system-blind.

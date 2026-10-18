@@ -17,6 +17,16 @@ export class DeferredElement extends PDFElement implements Fragmentable {
     super();
   }
 
+  /** A copy builds a subtree of its own, from copies, so even element cells it holds are its own. */
+  override clone(): this {
+    const copy = super.clone();
+    const resolve = this.resolve;
+    copy.resolve = (ctx, width) => resolve(ctx, width).clone();
+    copy.built = new BuiltFromContext();
+    copy.composed = undefined;
+    return copy;
+  }
+
   /** The subtree for this context and width: built once, and again only when one of them changes. */
   private subtree(ctx: LayoutContext, width: number): PDFElement {
     return this.built.get(ctx, width, () => this.resolve(ctx, width));

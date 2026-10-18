@@ -5,6 +5,7 @@ import { Document, Page, renderToBytes } from "../../../src/lib/api/index.ts";
 import { Box, Column, Row } from "../../../src/lib/api/layout.ts";
 import { Canvas, Image } from "../../../src/lib/api/content.ts";
 import { Text } from "../../../src/lib/api/text.ts";
+import { Table } from "../../../src/lib/api/table.ts";
 import { BoxConstraints } from "../../../src/lib/layout/box-constraints.ts";
 import type { PDFElement } from "../../../src/lib/elements/pdf-element.ts";
 import { drawnTextRuns } from "../support/drawn.ts";
@@ -35,6 +36,19 @@ describe("clone", () => {
       renderToBytes(Document([Page([Column([label, label.clone()])])])),
     );
     expect(runs.filter((r) => r.text === "twice").length).toBe(2);
+  });
+
+  it("a table copies too, element cells and all, before or after it was laid out", async () => {
+    const table = Table({ columns: ["auto", "1fr"], header: [Text("H")] }, [[Text("a"), "b"]]);
+    const before = table.clone();
+    const twice = await drawnTextRuns(() =>
+      renderToBytes(Document([Page([Column([table, before])])])),
+    );
+    expect(twice.filter((r) => r.text === "a").length).toBe(2);
+    const after = await drawnTextRuns(() =>
+      renderToBytes(Document([Page([Column([table, table.clone()])])])),
+    );
+    expect(after.filter((r) => r.text === "H").length).toBe(2);
   });
 
   it("shares what the element only points to, and tags as an element of its own", () => {

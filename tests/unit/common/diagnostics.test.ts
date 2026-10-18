@@ -84,8 +84,10 @@ describe("onDiagnostic - each finding, once", () => {
         ]),
       ]);
     const seen = await collect(tooTall(), { onOverflow: "warn" });
+    // 300pt type is too tall for the page AND too wide for it: both, each once.
     expect(seen).toEqual([
       expect.objectContaining({ code: "overflow-clipped", element: "Text", text: "X", page: 2 }),
+      expect.objectContaining({ code: "overflow-wide", element: "Text", text: "X", page: 2 }),
     ]);
     await expect(collect(tooTall())).rejects.toThrow(/overflow/i);
   });
@@ -107,7 +109,30 @@ describe("onDiagnostic - each finding, once", () => {
       Document([Page({ size: mm(50, 40), margin: 4 }, [Text("X", { size: 300 })])]),
       { onOverflow: "ignore" },
     );
-    expect(seen).toEqual([expect.objectContaining({ code: "overflow-clipped" })]);
+    expect(seen).toEqual([
+      expect.objectContaining({ code: "overflow-clipped" }),
+      expect.objectContaining({ code: "overflow-wide" }),
+    ]);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("content wider than its box: a word that does not break, a Row whose children need more", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const seen = await collect(
+      Document([
+        Page([
+          Box({ width: 40 }, [Text("Verpflichtungserklaerung")]),
+          Box({ width: 60 }, [Row([Text("datasheets"), Text("datasheets")])]),
+          Box({ width: 40 }, [Text("Verpflichtungserklaerung", { breakWord: true })]),
+        ]),
+      ]),
+    );
+    expect(seen).toEqual([
+      expect.objectContaining({ code: "overflow-wide", element: "Text", page: 1 }),
+      expect.objectContaining({ code: "overflow-wide", element: "Row", page: 1 }),
+    ]);
+    // Silent before, silent without a handler now.
+    await renderToBytes(Document([Page([Box({ width: 40 }, [Text("Verpflichtungserklaerung")])])]));
     expect(warn).not.toHaveBeenCalled();
   });
 

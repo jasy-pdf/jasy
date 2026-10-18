@@ -2,17 +2,21 @@
 // Every Region boundary is a real break boundary; on its last page the Flow shrinks to what it used.
 import { describe, it, expect } from "vitest";
 import { Document, Page, renderToBytes } from "../../../src/lib/api/index.ts";
-import { Box, Column, Expanded, Row, Spacer } from "../../../src/lib/api/layout.ts";
+import { Box, Column, Expanded, Row, Spacer, keepTogether } from "../../../src/lib/api/layout.ts";
 import { Canvas } from "../../../src/lib/api/content.ts";
+import { PageBuilder } from "../../../src/lib/api/page-builder.ts";
 import { Text } from "../../../src/lib/api/text.ts";
 import { Table } from "../../../src/lib/api/table.ts";
 import {
   ColumnBreak,
   Flow,
+  FlowRegionsEmptyError,
   FlowUnboundedError,
   FlowWithoutRegionError,
   Region,
+  RegionInPageBuilderError,
   RegionOutsideFlowError,
+  RegionReusedError,
   SplitView,
 } from "../../../src/lib/api/flow.ts";
 import type { Diagnostic } from "../../../src/lib/common/diagnostics.ts";
@@ -155,6 +159,148 @@ describe("Flow", () => {
   });
 });
 
+describe("Flow - wrapped", () => {
+  const all = (n: number) => [...lines(0, n).map((_, i) => `L${i}`), "after"];
+  const texts = (pages: { text: string }[][]) => pages.flat().map((r) => r.text);
+
+  it("in a Box (border, padding, background) it continues on the next page, in the box", async () => {
+    for (const opts of [{}, { border: 1 }, { padding: 10 }, { bg: "#eee" }]) {
+      const pages = await render([
+        Box(opts, [Flow({ template: twoColumns }, lines(0, 60))]),
+        Text("after", mono),
+      ]);
+      expect(texts(pages)).toEqual(all(60));
+      expect(pages.length).toBe(2);
+    }
+  });
+
+  it("in an Expanded it continues on the next page", async () => {
+    const pages = await render([
+      Expanded(Flow({ template: twoColumns }, lines(0, 60))),
+      Text("after", mono),
+    ]);
+    expect(texts(pages)).toEqual(all(60));
+  });
+
+  it("keepTogether keeps it on one page: moved on whole when it would end on the next", async () => {
+    const pages = await render([
+      ...lines(0, 20, "P"),
+      keepTogether([Flow({ template: twoColumns }, lines(0, 20))]),
+      Text("after", mono),
+    ]);
+    // Page 1 has room for 4 lines a column below the P lines, so the Flow would end on page 2.
+    expect(pages.length).toBe(2);
+    expect(texts([pages[1]!])).toEqual(all(20));
+  });
+
+  it("keepTogether on a Flow longer than a page splits it, as any too-tall group", async () => {
+    const pages = await render([
+      keepTogether([Flow({ template: twoColumns }, lines(0, 60))]),
+      Text("after", mono),
+    ]);
+    expect(texts(pages)).toEqual(all(60));
+  });
+
+  it("a Box split into a wider Region is sized there, not by the narrow one it came from", async () => {
+    const seen: Diagnostic[] = [];
+    const words = Array.from({ length: 120 }, (_, i) => `w${i}`).join(" ");
+    const template = () => Row({ gap: 20 }, [Region({ width: 60 }), Expanded(Region())]);
+    const pages = await render(
+      [Flow({ template }, [Box({ border: 1 }, [Text(words, mono)])])],
+      (d) => seen.push(d),
+    );
+    expect(seen).toEqual([]);
+    expect(pages.length).toBe(1);
+    expect(pages[0]!.find((r) => r.text.includes("w119"))!.x).toBeGreaterThan(LEFT + 60);
+  });
+
+  it("in a table cell (a Row whose height is its content's) it has no height to take", async () => {
+    await expect(
+      render([
+        Table({ columns: ["1fr", "1fr"] }, [
+          [Text("a"), Flow({ template: twoColumns }, lines(0, 5))],
+        ]),
+      ]),
+    ).rejects.toThrow(FlowUnboundedError);
+  });
+
+  it("in a Row with a height it takes that height", async () => {
+    const pages = await render([
+      Row({ height: 50 }, [Expanded(Flow({ template: twoColumns }, lines(0, 8)))]),
+      Text("after", mono),
+    ]);
+    expect(texts(pages)).toEqual(all(8));
+    expect(find(pages[0]!, "L4").x).toBe(RIGHT);
+  });
+});
+
+describe("Flow - templates", () => {
+  const texts = (pages: { text: string }[][]) => pages.flat().map((r) => r.text);
+  const all = (n: number) => [...lines(0, n).map((_, i) => `L${i}`), "after"];
+  const run = (template: () => PDFElement, n: number) =>
+    render([Flow({ template }, lines(0, n)), Text("after", mono)]);
+
+  it("Regions in a bordered, padded Box fill it; a rule between them shrinks with them", async () => {
+    const boxed = () => Box({ border: "black", padding: 10 }, [twoColumns()]);
+    const ruled = () =>
+      Row({ gap: 6 }, [Expanded(Region()), Box({ width: 1, bg: "black" }, []), Expanded(Region())]);
+    for (const template of [boxed, ruled]) {
+      const pages = await run(template, 60);
+      expect(texts(pages)).toEqual(all(60));
+      expect(pages.length).toBe(2);
+    }
+  });
+
+  it("a title above the Regions needs no Expanded: the Row of Regions takes the rest", async () => {
+    const pages = await run(() => Column([Text("Title", mono), twoColumns()]), 30);
+    expect(find(pages[0]!, "L0").y).toBeGreaterThan(find(pages[0]!, "Title").y);
+    expect(pages[0]!.some((r) => r.x === RIGHT)).toBe(true);
+  });
+
+  it("a % Region is a share of the Flow: on the last page the Flow is as tall as that share needs", async () => {
+    for (const template of [
+      () => Region({ height: "50%" }),
+      () => Row([Expanded(Region({ height: "50%" })), Expanded(Region())]),
+    ]) {
+      const pages = await run(template, 10);
+      expect(pages.length).toBe(1);
+      expect(texts(pages)).toEqual(all(10));
+      expect(find(pages[0]!, "after").y).toBeGreaterThan(find(pages[0]!, "L9").y);
+    }
+  });
+
+  it("a Region with a width of its own keeps it beside one that takes the rest", async () => {
+    const sidebar = () => Row({ gap: 10 }, [Region({ width: 60 }), Expanded(Region())]);
+    const pages = await run(sidebar, 40);
+    expect(texts(pages)).toEqual(all(40));
+    expect(find(pages[0]!, "L24").x).toBe(LEFT + 60 + 10);
+  });
+
+  it("what the template has below a % Region stays below its content", async () => {
+    const footed = () => Column([Region({ height: "50%" }), Text("foot", mono)]);
+    const pages = await run(footed, 10);
+    expect(find(pages[0]!, "foot").y).toBeGreaterThan(find(pages[0]!, "L9").y);
+  });
+
+  it("stacked Regions: on the last page each still holds what it was given", async () => {
+    const stacked = () => Column({ gap: 10 }, [Expanded(Region()), Expanded(Region())]);
+    const pages = await run(stacked, 30);
+    expect(texts(pages)).toEqual(all(30));
+    const last = pages.at(-1)!;
+    const after = find(last, "after");
+    for (const r of last) if (r.text !== "after") expect(r.y).toBeLessThan(after.y);
+  });
+
+  it("two Flows in Expanded on one page: the second starts below the first", async () => {
+    const one = () => Row([Expanded(Region())]);
+    const pages = await render([
+      Expanded(Flow({ template: one }, lines(0, 16, "A"))),
+      Expanded(Flow({ template: one }, lines(0, 2, "B"))),
+    ]);
+    expect(find(pages[0]!, "B0").y).toBeGreaterThan(find(pages[0]!, "A15").y);
+  });
+});
+
 describe("ColumnBreak", () => {
   it("continues in the next Region", async () => {
     const pages = await render([
@@ -238,6 +384,13 @@ describe("SplitView", () => {
   it("a column count that is not a whole number of 1 or more is refused", () => {
     expect(() => SplitView({ columns: 0 }, [])).toThrow(/columns 0/);
     expect(() => SplitView({ columns: 1.5 }, [])).toThrow(/columns 1.5/);
+    expect(() => SplitView({ columns: "2" as never }, [])).toThrow(/columns "2"/);
+  });
+
+  it("a gap that is not a number of points, 0 or more, is refused", () => {
+    expect(() => SplitView({ gap: -10 }, [])).toThrow(/gap -10/);
+    expect(() => SplitView({ rowGap: NaN }, [])).toThrow(/rowGap NaN/);
+    expect(() => SplitView({ colGap: Infinity }, [])).toThrow(/colGap Infinity/);
   });
 });
 
@@ -253,6 +406,51 @@ describe("Flow - named errors", () => {
       RegionOutsideFlowError,
     );
     await expect(render([Region()])).rejects.toThrow(RegionOutsideFlowError);
+  });
+
+  it("a Region in a PageBuilder (which builds again when drawn); the template has the page already", async () => {
+    const built = () => PageBuilder(() => twoColumns());
+    await expect(render([Flow({ template: built }, lines(0, 30))])).rejects.toThrow(
+      RegionInPageBuilderError,
+    );
+  });
+
+  it("a Region made while the template is laid out - in a Table cell - is found", async () => {
+    const table = () =>
+      Table({ columns: ["1fr", "1fr"] }, [[Region({ height: 200 }), Region({ height: 200 })]]);
+    const pages = await render([Flow({ template: table }, lines(0, 30))]);
+    expect(pages.flat().map((r) => r.text)).toEqual(lines(0, 30).map((_, i) => `L${i}`));
+  });
+
+  it("a template that hands out the same Region twice", async () => {
+    const tree = twoColumns();
+    await expect(render([Flow({ template: () => tree }, lines(0, 100))])).rejects.toThrow(
+      RegionReusedError,
+    );
+  });
+
+  it("a template that leaves its Regions no room - unless the next page has it", async () => {
+    const crowded = () =>
+      Row(
+        { gap: 20 },
+        Array.from({ length: 14 }, () => Expanded(Region())),
+      );
+    await expect(render([Flow({ template: crowded }, lines(0, 3))])).rejects.toThrow(
+      FlowRegionsEmptyError,
+    );
+    // A template whose own parts are taller than the space has no room either.
+    const tallFoot = () => Column([Region(), Canvas({ height: 300 }, () => {})]);
+    await expect(render([Flow({ template: tallFoot }, lines(0, 3))])).rejects.toThrow(
+      FlowRegionsEmptyError,
+    );
+    // Below other content there is only no room YET: it moves on to a fresh page.
+    const tall = ({ index }: { index: number }) =>
+      Column([...(index === 0 ? [Canvas({ height: 200 }, () => {})] : []), twoColumns()]);
+    const pages = await render([...lines(0, 10, "P"), Flow({ template: tall }, lines(0, 3))]);
+    expect(pages.flat().map((r) => r.text)).toEqual([
+      ...lines(0, 10, "P").map((_, i) => `P${i}`),
+      ...lines(0, 3).map((_, i) => `L${i}`),
+    ]);
   });
 
   it("a Flow with no height to take (a Row without a height)", async () => {

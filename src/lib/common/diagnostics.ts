@@ -18,6 +18,9 @@ export type DiagnosticCode =
   | "keep-together-split"
   /** Content taller than its page region that cannot break, placed whole and clipped. */
   | "overflow-clipped"
+  /** Content wider than its box (a word that does not break, a Row whose children need more), drawn
+   *  past the box's edge - as CSS draws it; `overflow: "hidden"` on a Box clips it. */
+  | "overflow-wide"
   /** Characters no font could draw, removed (PDF/A forbids `.notdef`). */
   | "missing-glyphs";
 

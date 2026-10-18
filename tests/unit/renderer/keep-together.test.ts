@@ -71,7 +71,7 @@ describe("keepTogether", () => {
     );
     expect(pageCount(pdf)).toBe(2); // the break wins
     expect(warn).toHaveBeenCalledOnce();
-    expect(warn.mock.calls[0][0]).toMatch(/keepTogether contains a forced page break/);
+    expect(warn.mock.calls[0][0]).toMatch(/keepTogether contains a forced break/);
     warn.mockRestore();
   });
 
