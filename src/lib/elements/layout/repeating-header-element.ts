@@ -27,23 +27,20 @@ export class RepeatingHeaderElement extends PDFElement implements Fragmentable {
   private width = 0;
   private height = 0;
 
-  /** `rebuild` makes a fresh copy of the header for each continuation: two pieces may share a page
-   *  (two Regions of a Flow), and one element has one position. */
   constructor(
     private header: PDFElement,
     private body: PDFElement,
     private gap: number = 0,
-    private rebuild?: () => PDFElement,
   ) {
     super();
   }
 
-  /** The header for the next piece: a fresh copy that tags as the same header, else the same one. */
+  /** The header for the next piece: a copy, since two pieces may share a page (two Regions of a Flow)
+   *  and one element has one position - that tags as the SAME header. */
   private nextHeader(): PDFElement {
-    if (!this.rebuild) return this.header;
-    const fresh = this.rebuild();
-    adoptStructIds(fresh, this.header);
-    return fresh;
+    const copy = this.header.clone();
+    adoptStructIds(copy, this.header);
+    return copy;
   }
 
   calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
@@ -97,17 +94,10 @@ export class RepeatingHeaderElement extends PDFElement implements Fragmentable {
     // break inside the body is passed on, so the page ends there.
     return {
       fitted: split.fitted
-        ? new RepeatingHeaderElement(this.header, split.fitted, this.gap, this.rebuild).asPieceOf(
-            this,
-          )
+        ? new RepeatingHeaderElement(this.header, split.fitted, this.gap).asPieceOf(this)
         : null,
       remainder: split.remainder
-        ? new RepeatingHeaderElement(
-            this.nextHeader(),
-            split.remainder,
-            this.gap,
-            this.rebuild,
-          ).asPieceOf(this)
+        ? new RepeatingHeaderElement(this.nextHeader(), split.remainder, this.gap).asPieceOf(this)
         : null,
       forceBreak: split.forceBreak,
     };

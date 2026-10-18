@@ -61,7 +61,7 @@ export class ElementReusedError extends Error {
     super(
       `@jasy/pdf: the same ${elementName} element is used twice on one page. An element has ONE ` +
         `position, so both copies would be drawn in the same place. Create it twice instead - call the ` +
-        `factory again (e.g. a function \`const divider = () => Divider()\`) rather than reusing one value.`,
+        `factory again (e.g. a function \`const divider = () => Divider()\`) or place \`element.clone()\`.`,
     );
   }
 }

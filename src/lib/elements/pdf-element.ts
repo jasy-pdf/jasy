@@ -181,6 +181,27 @@ export abstract class PDFElement {
    */
   protected abstract computeSize(constraints: BoxConstraints, ctx: LayoutContext): Size;
 
+  /**
+   * A copy of this element and of every element it holds, as it was built - to place one element
+   * twice, which a single instance cannot (it has one position). Everything else stays shared: an
+   * image's pixels, a callback. The copy tags as an element of its own.
+   */
+  clone(): this {
+    const copyOf = (value: unknown): unknown =>
+      value instanceof PDFElement
+        ? value.clone()
+        : Array.isArray(value)
+          ? value.map(copyOf)
+          : value;
+    const copy = Object.create(Object.getPrototypeOf(this)) as this;
+    for (const [key, value] of Object.entries(this)) {
+      (copy as Record<string, unknown>)[key] = copyOf(value);
+    }
+    copy.sizeCache = undefined;
+    copy._structId = _nextStructId++;
+    return copy;
+  }
+
   /** The elements this one lays out, for walks that must see the whole tree. Leaves have none. */
   layoutChildren(): readonly PDFElement[] {
     return [];

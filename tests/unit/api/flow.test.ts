@@ -113,6 +113,15 @@ describe("Flow", () => {
     expect(headers[1]!.x).toBeGreaterThanOrEqual(RIGHT);
   });
 
+  it("a table header given as an element repeats too - each Region gets a copy", async () => {
+    const rows = Array.from({ length: 40 }, (_, i) => [`r${i}`]);
+    const header = [Text("Item", { ...mono, bold: true })];
+    const pages = await render([
+      Flow({ template: twoColumns }, [Table({ columns: ["1fr"], header }, rows)]),
+    ]);
+    expect(pages[0]!.filter((r) => r.text === "Item").length).toBe(2);
+  });
+
   it("in a box with a height it fills that box; the rest is cut and reported", async () => {
     const seen: Diagnostic[] = [];
     const pages = await render(
