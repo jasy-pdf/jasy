@@ -21,6 +21,7 @@ import {
   FragmentResult,
   childrenForceBreak,
   packChildren,
+  packedUnchanged,
 } from "../layout/fragmentation.ts";
 import {
   LayoutContext,
@@ -148,7 +149,9 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
     // unchanged (its normal layout distributes flex / fills the page). A forced break is excluded
     // here even when nothing follows it (a trailing `PageBreak`): return the packed children, which
     // no longer hold the consumed break marker, so it does not leak into the render pass.
-    if (remainder.length === 0 && !forceBreak) return { fitted: this, remainder: null };
+    if (remainder.length === 0 && !forceBreak && packedUnchanged(this.children, fitted)) {
+      return { fitted: this, remainder: null };
+    }
     // Nothing fit below the content above: move on whole, not as an empty shell left behind.
     if (fitted.length === 0 && !forceBreak) return { fitted: null, remainder: this };
 
@@ -205,6 +208,13 @@ export class ContainerElement extends SizedPDFElement implements Fragmentable {
     if (requested.some((v) => v !== undefined)) return false;
     const ownFlexChild = !horizontal && this.children.some((c) => flexibleOf(c) !== undefined);
     return ownFlexChild || this.children.some((c) => c.needsBoundedMain(horizontal));
+  }
+
+  /** A height of its own is a region already; without one, a region-sized child needs the page's. */
+  override needsRegion(): boolean {
+    if (this.requested.height !== undefined || this.requested.heightFactor !== undefined)
+      return false;
+    return this.children.some((c) => c.needsRegion());
   }
 
   /** A Column stacks vertically, so widths overlap and heights add up. */

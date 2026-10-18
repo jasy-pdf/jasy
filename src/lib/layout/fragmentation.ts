@@ -99,6 +99,11 @@ export function childrenForceBreak(children: PDFElement[]): boolean {
   );
 }
 
+/** The packer kept every child as it was - none came back as a piece of itself (a sized Flow). */
+export function packedUnchanged(children: PDFElement[], fitted: PDFElement[]): boolean {
+  return fitted.length === children.length && fitted.every((child, i) => child === children[i]);
+}
+
 /**
  * Packs a vertical stack of children into `maxHeight`, in order. Children are measured
  * against `width` (unbounded height) and added until one would overflow; that straddling
@@ -149,8 +154,12 @@ export function packChildren(
 
     // Place whole only if it fits AND holds no forced break: a child that fits by height but contains
     // a `PageBreak` (or a break-before/after) in its subtree must still be fragmented, or the break
-    // would be swallowed.
-    if (usedHeight + lead + childHeight <= maxHeight && !child.hasForcedBreak()) {
+    // would be swallowed. A region-sized child (a Flow) has no height of its own to fit by.
+    if (
+      usedHeight + lead + childHeight <= maxHeight &&
+      !child.hasForcedBreak() &&
+      !child.needsRegion()
+    ) {
       fitted.push(child);
       usedHeight += lead + childHeight;
       // break-after: everything after this child starts a fresh page.
@@ -174,7 +183,12 @@ export function packChildren(
         // break-before at the top of the region, which CSS ignores. Keep packing the siblings after
         // it instead of spilling them, so break-before does not accidentally push later content away.
         if (!split.remainder && !childBroke) {
-          usedHeight += lead + childHeight;
+          // A region-sized child comes back as a different, sized piece: count what it holds.
+          const placed =
+            split.fitted === child
+              ? childHeight
+              : split.fitted.measure(BoxConstraints.loose(width, Infinity), ctx).height;
+          usedHeight += lead + placed;
           continue;
         }
         if (split.remainder) remainder.push(split.remainder);

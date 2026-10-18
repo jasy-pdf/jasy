@@ -252,6 +252,15 @@ export abstract class PDFElement {
   }
 
   /**
+   * Whether this element takes its height from the REGION it is fragmented into (a `Flow`), anywhere
+   * in a subtree that has no height of its own. Such an element has no natural height to measure, so
+   * the packer fragments it into the space left instead of placing it whole. Default: no.
+   */
+  needsRegion(): boolean {
+    return false;
+  }
+
+  /**
    * Whether this element IS a forced page break (a `PageBreak`). The pagination packer cuts the flow
    * at such a marker: everything before it stays, everything after starts a new page. Default: no.
    */
