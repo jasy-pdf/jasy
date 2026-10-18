@@ -13,6 +13,7 @@ import {
   FlowWithoutRegionError,
   Region,
   RegionOutsideFlowError,
+  SplitView,
 } from "../../../src/lib/api/flow.ts";
 import type { Diagnostic } from "../../../src/lib/common/diagnostics.ts";
 import type { PDFElement } from "../../../src/lib/elements/pdf-element.ts";
@@ -208,6 +209,35 @@ describe("ColumnBreak", () => {
     expect(pages.length).toBe(1);
     expect(find(pages[0]!, "L2").y - find(pages[0]!, "L1").y).toBeCloseTo(10.55, 1);
     expect(seen.filter((d) => d.code === "column-break-ignored").length).toBe(1);
+  });
+});
+
+describe("SplitView", () => {
+  it("is newspaper columns: equally wide, filled in order, then the next page", async () => {
+    // Three columns of (260 - 2 x 10) / 3 = 80.
+    const pages = await render([SplitView({ columns: 3, colGap: 10 }, lines(0, 80))]);
+    expect(pages.length).toBe(2);
+    expect(pages.flat().map((r) => r.text)).toEqual(lines(0, 80).map((_, i) => `L${i}`));
+    expect([0, 1, 2].map((c) => find(pages[0]!, `L${c * 24}`).x)).toEqual([20, 110, 200]);
+    expect(find(pages[1]!, "L72").x).toBe(LEFT);
+  });
+
+  it("`colGap` spaces the columns, `rowGap` the content", async () => {
+    const pages = await render([SplitView({ colGap: 20, rowGap: 5 }, lines(0, 30))]);
+    expect(find(pages[0]!, "L1").y - find(pages[0]!, "L0").y).toBeCloseTo(15.55, 1);
+    expect(find(pages[0]!, "L0").x).toBe(LEFT);
+    expect(pages[0]!.some((r) => r.x === RIGHT)).toBe(true);
+  });
+
+  it("`gap` spaces both", async () => {
+    const pages = await render([SplitView({ gap: 20 }, lines(0, 30))]);
+    expect(find(pages[0]!, "L1").y - find(pages[0]!, "L0").y).toBeCloseTo(30.55, 1);
+    expect(pages[0]!.some((r) => r.x === RIGHT)).toBe(true);
+  });
+
+  it("a column count that is not a whole number of 1 or more is refused", () => {
+    expect(() => SplitView({ columns: 0 }, [])).toThrow(/columns 0/);
+    expect(() => SplitView({ columns: 1.5 }, [])).toThrow(/columns 1.5/);
   });
 });
 

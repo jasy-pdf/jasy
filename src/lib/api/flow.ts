@@ -4,6 +4,7 @@ import { RegionElement } from "../elements/layout/region-element.ts";
 import { ColumnBreakElement } from "../elements/layout/column-break-element.ts";
 import { PDFElement } from "../elements/pdf-element.ts";
 import { BoundsInput, SizeInput, toBounds, toDimension } from "./dimension.ts";
+import { Expanded, Row } from "./layout.ts";
 
 export type { FlowPage, FlowTemplate } from "../elements/layout/flow-element.ts";
 export { FlowUnboundedError, FlowWithoutRegionError } from "../elements/layout/flow-element.ts";
@@ -20,7 +21,7 @@ export interface FlowOptions {
  * Content flowing through the `Region`s of a template: the first Region full, then the next, then the
  * next page. It takes its height from where it sits - the rest of the page, or a box with a height.
  *
- * @experimental The shape may still change until `SplitView` is built on it.
+ * @experimental The shape may still change.
  */
 export function Flow(opts: FlowOptions, content: PDFElement[]): FlowElement {
   return new FlowElement({
@@ -58,4 +59,40 @@ export function Region(opts: RegionOptions = {}): RegionElement {
 /** Continue in the next `Region` of the Flow it sits in (from the last one, the next page's first). */
 export function ColumnBreak(): ColumnBreakElement {
   return new ColumnBreakElement();
+}
+
+export interface SplitViewOptions {
+  /** How many columns, side by side and equally wide (default 2). */
+  columns?: number;
+  /** Gap between both the columns and the content's elements (default 0). */
+  gap?: number;
+  /** Gap between the content's elements (overrides `gap`). */
+  rowGap?: number;
+  /** Gap between the columns (overrides `gap`). */
+  colGap?: number;
+}
+
+/**
+ * Newspaper columns: the content fills the first column, then the next, then the next page. A `Flow`
+ * with a ready template - for anything else (a title area, columns of different widths) build your own.
+ *
+ * @experimental
+ */
+export function SplitView(opts: SplitViewOptions, content: PDFElement[]): FlowElement {
+  const columns = opts.columns ?? 2;
+  if (!Number.isInteger(columns) || columns < 1) {
+    throw new Error(`Invalid SplitView columns ${columns}: use a whole number of 1 or more.`);
+  }
+  const colGap = opts.colGap ?? opts.gap;
+  return Flow(
+    {
+      gap: opts.rowGap ?? opts.gap,
+      template: () =>
+        Row(
+          { gap: colGap },
+          Array.from({ length: columns }, () => Expanded(Region())),
+        ),
+    },
+    content,
+  );
 }
