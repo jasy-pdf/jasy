@@ -351,6 +351,50 @@ Roadmap to 1.1, each one independently shippable.
 
 ---
 
+## 6f. Flow - content through regions (2026-10-18, experimental)
+
+```ts
+Flow(content, {
+  template: ({ index }) => Row({ gap: 12 }, [Expanded(Region()), Expanded(Region())]),
+});
+SplitView({ columns: 2, gap: 12 }, content); // newspaper columns: a Flow with a ready template
+ColumnBreak(); // continue in the next Region
+```
+
+`content` is any elements - text, images, tables. The `template` is an ordinary layout; each `Region`
+in it is a place the content flows through, in tree order (the tagged reading order follows it). Fill
+is the newspaper's: region 1 full, then region 2. Balancing is a later OPTION, never the default.
+
+**One rule, the fragment protocol.** A Flow handed `fragment(maxHeight, width)` lays out its template
+at that size, then fragments the content into each Region in turn. What is left becomes a new Flow
+that the next region of the document (the next page) fills with a fresh template. So a Flow in a
+padded Box, in `keepTogether`, or in another Flow's Region needs no rule of its own, and every Region
+boundary is a real break boundary: orphans/widows, `keepTogether`, a table's repeated header and
+`structId` all hold there. The template gets `{ index, pageNumber }` - `index` counts THIS Flow's
+pages, so a Flow that starts mid-page has its first page there. No `pageCount`: the template decides
+the pagination it would read.
+
+**Sizes come from the template, never from the content.** A Region is sized by the layout around it
+(`Expanded`, `width`, `height`, `%`). On the Flow's last page, a height that came from the page
+shrinks to what the content used: the template is laid out full, filled, then laid out again at the
+height used, so rules and borders shrink with it. A height the author gave stays (`Region({ height:
+200 })`, or a Region in a fixed-height Box); `minHeight` shrinks but not below.
+
+**Breaks.** `ColumnBreak` moves to the next Region (from the last one, the next page's first),
+always of the innermost Flow; several skip several. `PageBreak` always means a physical page. A
+`ColumnBreak` outside a Flow is ignored with a warning, as a `PageBreak` in a Row is.
+
+**Named errors, never a loop or a silent nothing:** a template without a Region; a Region outside a
+template or inside the content; a Flow with no height bound (in a Row, every line would land in region
+1). Content larger than every Region is placed clipped in the next fresh Region and reported once, by
+the overflow policy; content that ends exactly at a Region's end opens no further page.
+
+**What it is not:** no spanning element across Regions and no balancing yet - both additive later.
+Whether a heading may end a column alone is the author's call (`keepTogether`), not the Flow's.
+`Flow` and `Region` stay experimental until `SplitView` and a hand-built template prove them.
+
+---
+
 ## 7. Decisions — LOCKED (2026-06-11)
 
 1. **Naming:** `Column` / `Row` (Flutter/CSS-familiar). ✅
