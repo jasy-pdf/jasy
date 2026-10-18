@@ -1,6 +1,7 @@
 import { ContainerElement } from "../elements/container-element.ts";
 import { FlowElement, type FlowTemplate } from "../elements/layout/flow-element.ts";
 import { RegionElement } from "../elements/layout/region-element.ts";
+import { ColumnBreakElement } from "../elements/layout/column-break-element.ts";
 import { PDFElement } from "../elements/pdf-element.ts";
 import { BoundsInput, SizeInput, toBounds, toDimension } from "./dimension.ts";
 
@@ -52,4 +53,9 @@ export function Region(opts: RegionOptions = {}): RegionElement {
     .withAlignSelf(opts.alignSelf)
     .withOrder(opts.order)
     .withFlexShrink(opts.flexShrink) as RegionElement;
+}
+
+/** Continue in the next `Region` of the Flow it sits in (from the last one, the next page's first). */
+export function ColumnBreak(): ColumnBreakElement {
+  return new ColumnBreakElement();
 }

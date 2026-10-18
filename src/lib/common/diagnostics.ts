@@ -10,6 +10,8 @@
 export type DiagnosticCode =
   /** A `PageBreak` outside a paginating flow (in a Row, in a PageBuilder) - drawn as nothing. */
   | "page-break-ignored"
+  /** A `ColumnBreak` outside a Region of a Flow - drawn as nothing. */
+  | "column-break-ignored"
   /** `breakBefore` / `breakAfter` on a child of a Row or a table row, which never breaks. */
   | "break-ignored"
   /** A `keepTogether` group contains a forced break; the break wins and the group is split. */

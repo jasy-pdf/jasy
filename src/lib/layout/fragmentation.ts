@@ -12,13 +12,16 @@ import { diagnose, pageOf } from "../common/diagnostics.ts";
  * rest, so no information flows back UP after a break. This one-way flow is what keeps
  * fragmentation terminating (no overflow-cascade fixpoint).
  */
+export type ForcedBreak = boolean | "column";
+
 export interface FragmentResult {
   fitted: PDFElement | null;
   remainder: PDFElement | null;
-  /** The split ended at a FORCED page break (a `PageBreak`), not because the region filled up. The
-   *  remainder must start a fresh page, and an enclosing flow must stop packing too - so this bubbles
-   *  up through nested `fragment()` calls. Absent/false for an ordinary height-driven break. */
-  forceBreak?: boolean;
+  /** The split ended at a FORCED break, not because the region filled up: `true` for a page break (the
+   *  remainder starts a fresh page), `"column"` for a `ColumnBreak` in a Flow's Region (it starts the
+   *  next Region; the Flow consumes it). An enclosing flow stops packing too - so this bubbles up
+   *  through nested `fragment()` calls. Absent/false for an ordinary height-driven break. */
+  forceBreak?: ForcedBreak;
 }
 
 /**
@@ -124,14 +127,14 @@ export function packChildren(
   width: number,
   ctx: LayoutContext,
   gap: number = 0,
-): { fitted: PDFElement[]; remainder: PDFElement[]; forceBreak: boolean } {
+): { fitted: PDFElement[]; remainder: PDFElement[]; forceBreak: ForcedBreak } {
   const fitted: PDFElement[] = [];
   const remainder: PDFElement[] = [];
   let usedHeight = 0;
 
   // Everything from index `from` onward spills to the next region; `broke` says whether the cut was
   // a FORCED page break (so an enclosing flow stops too) rather than the region filling up.
-  const spill = (from: number, broke: boolean) => {
+  const spill = (from: number, broke: ForcedBreak) => {
     for (let j = from; j < children.length; j++) remainder.push(children[j]);
     return { fitted, remainder, forceBreak: broke };
   };
@@ -142,6 +145,12 @@ export function packChildren(
     // A forced break: consume the marker (it draws nothing) and send everything after it to a fresh
     // page, regardless of how much room is left.
     if (child.isPageBreak()) return spill(i + 1, true);
+    // A column break cuts a Flow's Region; anywhere else it stays in place, draws nothing, and warns.
+    if (child.isColumnBreak()) {
+      if (ctx.inFlowRegion) return spill(i + 1, "column");
+      fitted.push(child);
+      continue;
+    }
 
     // break-before: this child wants a fresh page. Honour it only if something is already on this region
     // (CSS ignores break-before at the top of a page); that guard also prevents an empty page + a loop.
@@ -170,7 +179,7 @@ export function packChildren(
     // `child` straddles the boundary, or carries a forced break. Split it; otherwise place/defer whole.
     const remaining = maxHeight - usedHeight - lead;
     let placedPart = false;
-    let childBroke = false;
+    let childBroke: ForcedBreak = false;
     const below = ctx.belowContent || fitted.length > 0;
     if (isFragmentable(child)) {
       const childCtx = below && !ctx.belowContent ? { ...ctx, belowContent: true } : ctx;

@@ -194,10 +194,12 @@ export class FlowElement extends SizedPDFElement {
       const { width: w, height: h } = region.getProps();
       if (!w || !h || w <= 0 || h <= 0) continue;
       // Each Region is a fragmentation region of its own: a page break inside it is measured by it.
-      const split = rest.fragment(h, w, { ...ctx, pageBodyHeight: h });
+      const split = rest.fragment(h, w, { ...ctx, pageBodyHeight: h, inFlowRegion: true });
       region.hold(split.fitted);
       if (split.fitted) placed = true;
       rest = split.remainder as ContainerElement | null;
+      // A column break is this Flow's: on to the next Region (or the next page's first).
+      if (split.forceBreak === "column") continue;
       if (split.forceBreak) {
         forceBreak = true;
         break;

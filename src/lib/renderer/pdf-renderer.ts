@@ -57,6 +57,8 @@ import { PageBuilderRenderer } from "./page-builder-renderer.ts";
 import { FlowElement, FlowPieceElement } from "../elements/layout/flow-element.ts";
 import { RegionElement } from "../elements/layout/region-element.ts";
 import { FlowPieceRenderer, FlowRenderer, RegionRenderer } from "./flow-renderer.ts";
+import { ColumnBreakElement } from "../elements/layout/column-break-element.ts";
+import { ColumnBreakRenderer } from "./column-break-renderer.ts";
 import { RotatedElement } from "../elements/layout/rotated-element.ts";
 import { RotatedBoxElement } from "../elements/layout/rotated-box-element.ts";
 import { RotatedRenderer } from "./rotated-renderer.ts";
@@ -100,6 +102,7 @@ export class PDFRenderer {
     RendererRegistry.register(FlowElement, FlowRenderer.render);
     RendererRegistry.register(FlowPieceElement, FlowPieceRenderer.render);
     RendererRegistry.register(RegionElement, RegionRenderer.render);
+    RendererRegistry.register(ColumnBreakElement, ColumnBreakRenderer.render);
     RendererRegistry.register(RotatedElement, RotatedRenderer.render);
     RendererRegistry.register(RotatedBoxElement, RotatedRenderer.render);
 

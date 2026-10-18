@@ -75,6 +75,8 @@ export interface LayoutContext {
    *  means "move to the next page", never an overflow - only content at the top of a fresh page is
    *  forced on and reported. Set by `packChildren`; absent = top of the page. */
   belowContent?: boolean;
+  /** Packing into a Region of a `Flow`, where a `ColumnBreak` moves on to the next Region. */
+  inFlowRegion?: boolean;
   /** What a `Box`'s percentage padding resolves against (CSS: the containing block). A Row sets it for
    *  its children - it offers them no width, so the Box could not know it; otherwise the Box sets it
    *  from what it was offered. Consumed by the Box's own padding, so it never travels further down. */
@@ -286,6 +288,11 @@ export abstract class PDFElement {
    * at such a marker: everything before it stays, everything after starts a new page. Default: no.
    */
   isPageBreak(): boolean {
+    return false;
+  }
+
+  /** Whether this element IS a `ColumnBreak`: the packer of a Flow's Region cuts there. Default: no. */
+  isColumnBreak(): boolean {
     return false;
   }
 

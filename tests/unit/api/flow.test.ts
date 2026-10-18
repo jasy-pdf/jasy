@@ -7,6 +7,7 @@ import { Canvas } from "../../../src/lib/api/content.ts";
 import { Text } from "../../../src/lib/api/text.ts";
 import { Table } from "../../../src/lib/api/table.ts";
 import {
+  ColumnBreak,
   Flow,
   FlowUnboundedError,
   FlowWithoutRegionError,
@@ -150,6 +151,63 @@ describe("Flow", () => {
     );
     expect(pages.flat().map((r) => r.text)).toEqual(["L0", "L1", "L2"]);
     expect(seen.some((d) => d.code === "overflow-clipped")).toBe(true);
+  });
+});
+
+describe("ColumnBreak", () => {
+  it("continues in the next Region", async () => {
+    const pages = await render([
+      Flow({ template: twoColumns }, [...lines(0, 3), ColumnBreak(), ...lines(3, 5)]),
+    ]);
+    expect(find(pages[0]!, "L3").x).toBe(RIGHT);
+    expect(find(pages[0]!, "L3").y).toBe(find(pages[0]!, "L0").y);
+  });
+
+  it("from the last Region, continues in the next page's first; nested in the content too", async () => {
+    const pages = await render([
+      Flow({ template: twoColumns }, [
+        ...lines(0, 2),
+        ColumnBreak(),
+        Column([...lines(2, 4), ColumnBreak(), ...lines(4, 6)]),
+      ]),
+    ]);
+    expect(pages.length).toBe(2);
+    expect(find(pages[0]!, "L2").x).toBe(RIGHT);
+    expect(find(pages[1]!, "L4").x).toBe(LEFT);
+  });
+
+  it("several in a row skip several Regions", async () => {
+    const pages = await render([
+      Flow({ template: twoColumns }, [
+        ...lines(0, 2),
+        ColumnBreak(),
+        ColumnBreak(),
+        ...lines(2, 4),
+      ]),
+    ]);
+    expect(pages.length).toBe(2);
+    expect(find(pages[1]!, "L2").x).toBe(LEFT);
+  });
+
+  it("in a Flow inside a Flow, it belongs to the innermost one", async () => {
+    const halves = () => Row([Expanded(Region()), Expanded(Region())]);
+    const inner = Flow({ template: halves }, [Text("I0", mono), ColumnBreak(), Text("I1", mono)]);
+    const pages = await render([Flow({ template: twoColumns }, [inner, Text("after", mono)])]);
+    expect(pages.length).toBe(1);
+    // The inner Flow's second half (120 / 2), and the outer Flow is still in its first Region.
+    expect(find(pages[0]!, "I1").x).toBe(LEFT + 60);
+    expect(find(pages[0]!, "I1").y).toBe(find(pages[0]!, "I0").y);
+    expect(find(pages[0]!, "after").x).toBe(LEFT);
+  });
+
+  it("outside a Flow it has no effect, and says so", async () => {
+    const seen: Diagnostic[] = [];
+    const pages = await render([Column([...lines(0, 2), ColumnBreak(), ...lines(2, 4)])], (d) =>
+      seen.push(d),
+    );
+    expect(pages.length).toBe(1);
+    expect(find(pages[0]!, "L2").y - find(pages[0]!, "L1").y).toBeCloseTo(10.55, 1);
+    expect(seen.filter((d) => d.code === "column-break-ignored").length).toBe(1);
   });
 });
 
