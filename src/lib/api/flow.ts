@@ -20,6 +20,8 @@ export interface FlowOptions {
   template: FlowTemplate;
   /** Space between the content's elements, in points. */
   gap?: number;
+  /** On the last page, spread the content so the Regions come out about equally full (default false). */
+  balance?: boolean;
 }
 
 /**
@@ -32,6 +34,7 @@ export function Flow(opts: FlowOptions, content: PDFElement[]): FlowElement {
   return new FlowElement({
     content: new ContainerElement({ x: 0, y: 0, children: content, gap: opts.gap }),
     template: opts.template,
+    balance: opts.balance,
   });
 }
 
@@ -79,6 +82,8 @@ export interface SplitViewOptions {
   rowGap?: number;
   /** Gap between the columns (overrides `gap`). */
   colGap?: number;
+  /** On the last page, columns of about equal height, as CSS columns are (default true). */
+  balance?: boolean;
 }
 
 /**
@@ -106,6 +111,7 @@ export function SplitView(opts: SplitViewOptions, content: PDFElement[]): FlowEl
   return Flow(
     {
       gap: opts.rowGap ?? opts.gap,
+      balance: opts.balance ?? true,
       template: () =>
         Row(
           { gap: colGap },

@@ -381,6 +381,97 @@ describe("SplitView", () => {
     expect(pages[0]!.some((r) => r.x === RIGHT)).toBe(true);
   });
 
+  it("balances its last page: columns of about equal height, what follows right below", async () => {
+    const pages = await render([SplitView({ colGap: 20 }, lines(0, 30)), Text("after", mono)]);
+    expect(pages.length).toBe(1);
+    expect(find(pages[0]!, "L14").x).toBe(LEFT);
+    expect(find(pages[0]!, "L15").x).toBe(RIGHT);
+    expect(find(pages[0]!, "L15").y).toBe(find(pages[0]!, "L0").y);
+    expect(find(pages[0]!, "after").y - find(pages[0]!, "L14").y).toBeCloseTo(10.55, 1);
+  });
+
+  it("balances only the last page: the pages before it fill in turn", async () => {
+    const pages = await render([SplitView({ colGap: 20 }, lines(0, 60))]);
+    expect(pages.length).toBe(2);
+    expect(find(pages[0]!, "L24").x).toBe(RIGHT);
+    expect(find(pages[1]!, "L53").x).toBe(LEFT);
+    expect(find(pages[1]!, "L54").x).toBe(RIGHT);
+  });
+
+  it("balances around a ColumnBreak, and keeps a keepTogether whole", async () => {
+    // Three columns of 80 at x 20, 110, 200; after the break 20 lines share the last two.
+    const pages = await render([
+      SplitView({ columns: 3, colGap: 10 }, [
+        ...lines(0, 4),
+        ColumnBreak(),
+        ...lines(4, 12),
+        keepTogether(lines(12, 16, "K")),
+        ...lines(16, 24),
+      ]),
+      Text("after", mono),
+    ]);
+    expect(find(pages[0]!, "L4").x).toBe(110);
+    expect(find(pages[0]!, "L4").y).toBe(find(pages[0]!, "L0").y);
+    expect(find(pages[0]!, "K12").x).toBe(find(pages[0]!, "K15").x);
+    expect(find(pages[0]!, "L23").x).toBe(200);
+    const bottom = Math.max(...pages[0]!.filter((r) => r.text !== "after").map((r) => r.y));
+    expect(find(pages[0]!, "after").y - bottom).toBeCloseTo(10.55, 1);
+  });
+
+  it("draws every line once when the content needs fewer columns than there are", async () => {
+    const pages = await render([SplitView({ columns: 3, colGap: 10 }, lines(0, 4))]);
+    expect(pages.flat().map((r) => r.text)).toEqual(["L0", "L1", "L2", "L3"]);
+    expect(find(pages[0]!, "L2").x).toBe(110);
+  });
+
+  it("balances no lower than a keepTogether needs: the group stays whole", async () => {
+    const pages = await render([
+      SplitView({ colGap: 20 }, [
+        ...lines(0, 2),
+        keepTogether(lines(2, 16, "K")),
+        ...lines(16, 20),
+      ]),
+    ]);
+    expect(find(pages[0]!, "K2").x).toBe(find(pages[0]!, "K15").x);
+  });
+
+  it("balances no lower than a block that cannot break - nothing clipped, nothing reported", async () => {
+    const seen: Diagnostic[] = [];
+    const pages = await render(
+      [
+        SplitView({ colGap: 20 }, [Canvas({ height: 100 }, () => {}), ...lines(0, 4)]),
+        Text("after", mono),
+      ],
+      (d) => seen.push(d),
+    );
+    expect(seen).toEqual([]);
+    expect(find(pages[0]!, "after").y).toBeGreaterThan(20 + 100);
+  });
+
+  it("`balance: false` fills the columns in turn, as a Flow does by default", async () => {
+    for (const body of [
+      SplitView({ colGap: 20, balance: false }, lines(0, 30)),
+      Flow({ template: twoColumns }, lines(0, 30)),
+    ]) {
+      const pages = await render([body]);
+      expect(find(pages[0]!, "L23").x).toBe(LEFT);
+      expect(find(pages[0]!, "L24").x).toBe(RIGHT);
+    }
+  });
+
+  it("a Flow balances when asked", async () => {
+    const pages = await render([Flow({ template: twoColumns, balance: true }, lines(0, 30))]);
+    expect(find(pages[0]!, "L15").x).toBe(RIGHT);
+  });
+
+  it("one column has nothing to balance: drawn as a Flow with one Region", async () => {
+    const bytes = (body: PDFElement) =>
+      renderToBytes(Document([Page({ size: { width: 300, height: 300 }, margin: 20 }, [body])]));
+    const split = await bytes(SplitView({ columns: 1 }, lines(0, 30)));
+    const flow = await bytes(Flow({ template: () => Row([Expanded(Region())]) }, lines(0, 30)));
+    expect(Buffer.from(split).equals(Buffer.from(flow))).toBe(true);
+  });
+
   it("a column count that is not a whole number of 1 or more is refused", () => {
     expect(() => SplitView({ columns: 0 }, [])).toThrow(/columns 0/);
     expect(() => SplitView({ columns: 1.5 }, [])).toThrow(/columns 1.5/);

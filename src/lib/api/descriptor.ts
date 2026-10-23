@@ -24,6 +24,14 @@ import { Page, Document, DefaultTextStyle } from "./structure.ts";
 import { PageNumber, PageCount } from "./page-builder.ts";
 import { Table, Cell } from "./table.ts";
 import {
+  ColumnBreak,
+  Flow,
+  FlowWithoutRegionError,
+  Region,
+  SplitView,
+  type FlowPage,
+} from "./flow.ts";
+import {
   Checkbox,
   Dropdown,
   ListBox,
@@ -153,6 +161,23 @@ const REGISTRY: Record<string, ElementFactory> = {
     const body = rows.filter((r) => !r.props?.header);
     return Table({ ...props, header: header ? rowCells(header) : undefined }, body.map(rowCells));
   },
+  // A Flow's `page` is a function prop: the binding renders one page of the template per call.
+  flow: (props, children) =>
+    Flow(
+      {
+        gap: props.gap,
+        balance: props.balance,
+        template: (info: FlowPage) => {
+          const page: DescriptorChild[] = props.page?.(info) ?? [];
+          if (page.length === 0) throw new FlowWithoutRegionError();
+          return wrappedChild(page);
+        },
+      },
+      elementChildren(children),
+    ),
+  region: (props) => Region(props),
+  "column-break": () => ColumnBreak(),
+  "split-view": (props, children) => SplitView(props, elementChildren(children)),
   positioned: (props, children) => Positioned(props, elementChildren(children)[0]),
   "default-text-style": (props, children) => DefaultTextStyle(props, elementChildren(children)),
 

@@ -10,6 +10,7 @@ import Report from "./samples/Report.vue";
 import Transparency from "./samples/Transparency.vue";
 import Encrypted from "./samples/Encrypted.vue";
 import Form from "./samples/Form.vue";
+import Newspaper from "./samples/Newspaper.vue";
 import fontUrl from "./assets/GreatVibes-Regular.ttf?url";
 import imgUrl from "./assets/photo.jpg?url";
 import logoUrl from "./assets/logo.png?url";
@@ -23,6 +24,7 @@ const samples: { label: string; comp: any; assets?: AssetKey[]; encrypt?: boolea
   { label: "Showcase", comp: Showcase, assets: ["font", "image"] },
   { label: "Transparency", comp: Transparency, assets: ["logo"] },
   { label: "Form", comp: Form },
+  { label: "Newspaper", comp: Newspaper },
   { label: "Encrypted", comp: Encrypted, encrypt: true },
 ];
 

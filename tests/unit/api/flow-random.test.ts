@@ -7,7 +7,9 @@ import { faultsOf } from "../support/random-document.ts";
 
 const SEEDS = 40;
 // Seeds that once found a fault - kept, so the same document is checked again.
-const FOUND = [448, 758, 1432, 1638];
+const FOUND = [
+  448, 758, 1432, 1638, 49, 81, 170, 239, 267, 307, 412, 461, 525, 560, 568, 570, 576, 584,
+];
 
 describe("random documents around Flow", () => {
   it(`lose nothing, draw nothing twice or on top, and report only what cannot break (${SEEDS} seeds and ${FOUND.length} that once failed)`, async () => {

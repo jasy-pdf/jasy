@@ -9,7 +9,7 @@ import type { Descriptor, DescriptorChild } from "@jasy/pdf";
  * This module is browser-safe on purpose: it never imports the Node engine (only the `Descriptor` type,
  * which is erased). So a browser can turn a component into a descriptor and post it to a Node renderer.
  */
-interface JNode {
+export interface JNode {
   type: string;
   props: Record<string, any>;
   children: JNode[];
@@ -62,23 +62,45 @@ function toDescriptor(n: JNode): DescriptorChild {
     // (`v-for`) and templates leave whitespace between tags. As layout children each would become a
     // 0-height empty Text that still gets a stray `gap` in its parent Column/Row - which silently
     // inflates the height and can force a spurious extra page. Real text content is never whitespace.
-    children: n.children
-      .filter((c) => c.type !== "#comment" && !(c.type === "#text" && (c.text ?? "").trim() === ""))
-      .map(toDescriptor),
+    children: childDescriptors(n),
   };
+}
+
+/** A node's children as descriptors - also what a `<Flow>` reads its rendered #page from. */
+export function childDescriptors(n: JNode): DescriptorChild[] {
+  return n.children
+    .filter((c) => c.type !== "#comment" && !(c.type === "#text" && (c.text ?? "").trim() === ""))
+    .map(toDescriptor);
+}
+
+/**
+ * Mounts a component and returns the engine descriptor for its `<Document>` root, with the app still
+ * mounted: a `<Flow>` renders its #page for every page while the engine lays the document out.
+ */
+export function mountDocument(
+  root: Component,
+  props?: Record<string, any>,
+): { descriptor: Descriptor; unmount: () => void } {
+  const container = node("#root");
+  const app = createApp(root, props ?? null);
+  app.mount(container);
+  const doc = container.children.find((c) => c.type === "document");
+  if (!doc) {
+    app.unmount();
+    throw new Error("@jasy/vue: the root component must render a <Document>.");
+  }
+  return { descriptor: toDescriptor(doc) as Descriptor, unmount: () => app.unmount() };
 }
 
 /**
  * Mounts a component once (one-shot - a PDF is not interactive) and returns the engine descriptor for
  * its `<Document>` root. The descriptor is a plain serialisable object, so it can be posted to a Node
  * renderer from the browser, or handed straight to `renderToPdf` (from `@jasy/vue/node`) on the server.
+ * A `<Flow>`'s #page is rendered while the PDF is laid out, so a document with one goes through
+ * `renderToPdf` instead.
  */
 export function toDocumentDescriptor(root: Component, props?: Record<string, any>): Descriptor {
-  const container = node("#root");
-  const app = createApp(root, props ?? null);
-  app.mount(container);
-  const doc = container.children.find((c) => c.type === "document");
-  app.unmount();
-  if (!doc) throw new Error("@jasy/vue: the root component must render a <Document>.");
-  return toDescriptor(doc) as Descriptor;
+  const { descriptor, unmount } = mountDocument(root, props);
+  unmount();
+  return descriptor;
 }

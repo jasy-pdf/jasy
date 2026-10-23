@@ -18,7 +18,7 @@ export class RegionOutsideFlowError extends Error {
   constructor() {
     super(
       "@jasy/pdf: a Region only means something in a Flow's template - it marks where the content " +
-        "flows. Put it in the template, not in the content or anywhere else.",
+        "flows. Put it in the template (in @jasy/vue: the #page slot), not in the content or anywhere else.",
     );
     this.name = "RegionOutsideFlowError";
   }

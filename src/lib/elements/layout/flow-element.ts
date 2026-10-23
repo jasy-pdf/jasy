@@ -1,6 +1,6 @@
 import { BoxConstraints, Offset, Size } from "../../layout/box-constraints.ts";
 import type { FragmentResult } from "../../layout/fragmentation.ts";
-import { diagnose, pageOf } from "../../common/diagnostics.ts";
+import { Diagnostics, diagnose, pageOf } from "../../common/diagnostics.ts";
 import { ContainerElement } from "../container-element.ts";
 import { LayoutContext, PDFElement, SizedPDFElement } from "../pdf-element.ts";
 import { PageBuilderElement } from "./page-builder-element.ts";
@@ -19,7 +19,7 @@ export class FlowWithoutRegionError extends Error {
   constructor() {
     super(
       "@jasy/pdf: a Flow's template holds no Region, so the content has nowhere to go. Put at least " +
-        "one Region in the template.",
+        "one Region in the template (in @jasy/vue: the #page slot).",
     );
     this.name = "FlowWithoutRegionError";
   }
@@ -77,6 +77,8 @@ function regionsIn(root: PDFElement): RegionElement[] {
   return out;
 }
 
+const room = (r: RegionElement) => r.getProps().width! > 0 && r.getProps().height! > 0;
+
 const SLACK_EPSILON = 1e-6;
 // How close the last page's height gets to the tightest one that holds the content, in points.
 const SHRINK_PRECISION = 0.01;
@@ -128,21 +130,25 @@ export class FlowElement extends SizedPDFElement {
   private readonly content: ContainerElement;
   private readonly template: FlowTemplate;
   private readonly index: number;
+  private readonly balance: boolean;
   private piece?: FlowPieceElement;
 
   constructor({
     content,
     template,
     index = 0,
+    balance = false,
   }: {
     content: ContainerElement;
     template: FlowTemplate;
     index?: number;
+    balance?: boolean;
   }) {
     super({ x: 0, y: 0 });
     this.content = content;
     this.template = template;
     this.index = index;
+    this.balance = balance;
   }
 
   override needsRegion(): boolean {
@@ -167,7 +173,12 @@ export class FlowElement extends SizedPDFElement {
     return {
       fitted: filled.piece,
       remainder: filled.rest
-        ? new FlowElement({ content: filled.rest, template: this.template, index: this.index + 1 })
+        ? new FlowElement({
+            content: filled.rest,
+            template: this.template,
+            index: this.index + 1,
+            balance: this.balance,
+          })
         : null,
       forceBreak: filled.forceBreak,
     };
@@ -213,7 +224,7 @@ export class FlowElement extends SizedPDFElement {
   /**
    * The one place a page of the Flow is made: the template at `width` x `maxHeight`, the content
    * fragmented into its Regions in turn, and - when the content ends here - the template shrunk to
-   * what it used.
+   * what it used, or balanced.
    */
   private fill(maxHeight: number, width: number, ctx: LayoutContext, final: boolean) {
     const template = this.template({ index: this.index, pageNumber: pageOf(ctx) ?? 1 });
@@ -226,7 +237,6 @@ export class FlowElement extends SizedPDFElement {
     const size = layOut(maxHeight);
     const regions = regionsIn(template);
     if (regions.length === 0) throw new FlowWithoutRegionError();
-    const room = (r: RegionElement) => r.getProps().width! > 0 && r.getProps().height! > 0;
     // No room here: every Region is empty, or the rest of the template (its height with the Regions
     // empty) is taller than the space.
     const own = template.measure(BoxConstraints.loose(width, Infinity), ctx).height;
@@ -235,9 +245,28 @@ export class FlowElement extends SizedPDFElement {
       const piece = new FlowPieceElement(template, size, maxHeight, this);
       return { piece, rest: this.content, placed: false, forceBreak: false };
     }
+    const { rest, placed, forceBreak } = this.pour(regions, ctx);
+    const ends = !rest && placed;
+    const last = !ends
+      ? null
+      : this.balance && regions.filter(room).length > 1
+        ? this.balanced(regions, own, maxHeight, layOut, ctx)
+        : this.shrink(regions, own, maxHeight, layOut, ctx);
+    const piece = last
+      ? new FlowPieceElement(template, last.size, last.bound, this)
+      : new FlowPieceElement(template, size, maxHeight, this);
+    return { piece, rest, placed, forceBreak };
+  }
+
+  /**
+   * The content fragmented into the laid-out Regions in turn; each holds its piece. `fresh` is how tall
+   * each Region is on a full page - what a block that does not fit here may wait for.
+   */
+  private pour(regions: RegionElement[], ctx: LayoutContext, fresh?: Map<RegionElement, number>) {
     let rest: ContainerElement | null = this.content;
     let placed = false;
     let forceBreak = false;
+    for (const region of regions) region.hold(null);
     for (const region of regions) {
       if (!rest) break;
       if (!room(region)) continue;
@@ -245,7 +274,7 @@ export class FlowElement extends SizedPDFElement {
       // Each Region is a fragmentation region of its own: a page break inside it is measured by it.
       const split = rest.fragment(h, w, {
         ...ctx,
-        pageBodyHeight: h,
+        pageBodyHeight: fresh?.get(region) ?? h,
         inFlowRegion: true,
         flowPage: undefined,
       });
@@ -259,13 +288,45 @@ export class FlowElement extends SizedPDFElement {
         break;
       }
     }
+    return { rest, placed, forceBreak };
+  }
 
-    const last =
-      !rest && placed ? this.shrink(template, regions, size, own, maxHeight, layOut, ctx) : null;
-    const piece = last
-      ? new FlowPieceElement(template, last.size, last.bound, this)
-      : new FlowPieceElement(template, size, maxHeight, this);
-    return { piece, rest, placed, forceBreak };
+  /**
+   * The last page, balanced: the smallest height at which the content, poured again, still ends here,
+   * so the Regions come out about equally full. Every candidate is a real pour - breaks,
+   * `keepTogether` and orphans hold as on any page - and the last one poured is the one drawn. A
+   * candidate is silent, and one that had to clip a block it could not break is too low.
+   */
+  private balanced(
+    regions: RegionElement[],
+    own: number,
+    maxHeight: number,
+    layOut: (height: number) => Size,
+    ctx: LayoutContext,
+  ): { size: Size; bound: number } {
+    const fresh = new Map(regions.map((r) => [r, r.getProps().height!]));
+    const endsAt = (bound: number) => {
+      layOut(bound);
+      let clipped = false;
+      const trial = new Diagnostics();
+      trial.setHandler((d) => (clipped ||= d.code === "overflow-clipped"));
+      const poured = this.pour(
+        regions,
+        { ...ctx, onOverflow: "ignore", diagnostics: trial },
+        fresh,
+      );
+      return !poured.rest && poured.placed && !clipped;
+    };
+    let low = Math.min(maxHeight, own);
+    let high = maxHeight;
+    while (high - low > SHRINK_PRECISION) {
+      const mid = (low + high) / 2;
+      if (endsAt(mid)) high = mid;
+      else low = mid;
+    }
+    const size = layOut(high);
+    this.pour(regions, ctx, fresh);
+    return { size, bound: high };
   }
 
   /**
@@ -276,9 +337,7 @@ export class FlowElement extends SizedPDFElement {
    * Content that overflowed its Region at full height asks for no more than it had there.
    */
   private shrink(
-    template: PDFElement,
     regions: RegionElement[],
-    full: Size,
     own: number,
     maxHeight: number,
     layOut: (height: number) => Size,
