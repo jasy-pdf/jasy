@@ -227,6 +227,9 @@ shared state.
 | form fields (6 classes) | `elements/forms/*.ts`                      | `FormFieldRenderer`    | AcroForm widgets; reserve a rect, emit a widget annotation. Shared spec: `forms/field.ts` |
 | `SvgElement`            | `elements/svg-element.ts`                  | `SvgRenderer`          | an SVG drawing; parsed at construction, `svg/` turns it into `Path` IR                    |
 | `CanvasElement`         | `elements/canvas-element.ts`               | `CanvasRenderer`       | a box drawn by a callback; `canvas/painter.ts` records into `Path` IR                     |
+| `FlowElement`           | `elements/layout/flow-element.ts`          | `FlowRenderer`         | content poured through the Regions of a per-page template; `SplitView` is one             |
+| `RegionElement`         | `elements/layout/region-element.ts`        | `RegionRenderer`       | a place in a Flow's template the content flows into, in order                             |
+| `ColumnBreakElement`    | `elements/layout/column-break-element.ts`  | `ColumnBreakRenderer`  | continue in the next Region; zero-size, like `PageBreak`                                  |
 
 Every renderer's `render()` returns `Promise<IRNode[]>`. Adding an element =
 new element + renderer that returns IR + (if it draws something new) a primitive in `ir/display-list.ts`
@@ -490,7 +493,7 @@ enforces it (`skonto.ts` for "Skonto is not an allowance"), and everywhere else 
 ## Genuine remaining gaps
 
 1. **`z-index`** within a positioning frame (Stage 3 of absolute positioning).
-2. **`slice` border mode** at a page break (a split box left open) and true multi-column.
+2. **`slice` border mode** at a page break (a split box left open) and `column-span`.
 3. **OTF/CFF fonts** are not parsed (TTF, TrueType-flavoured OTF, WOFF1, WOFF2 are); a CFF font or a
    `.ttc` is refused by name in `TTFParser` (`FontFormatError`), on every path. Colour-emoji
    deferrals: COLR v1 rotate/skew, variable paints, sweep gradients, CFF/sbix/CBDT bitmap fonts (so no
