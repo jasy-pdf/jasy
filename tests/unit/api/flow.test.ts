@@ -1,6 +1,6 @@
 // A Flow pours its content through the Regions of a template, region after region, page after page.
 // Every Region boundary is a real break boundary; on its last page the Flow shrinks to what it used.
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { Document, Page, renderToBytes } from "../../../src/lib/api/index.ts";
 import { Box, Column, Expanded, Row, Spacer, keepTogether } from "../../../src/lib/api/layout.ts";
 import { Canvas } from "../../../src/lib/api/content.ts";
@@ -128,17 +128,33 @@ describe("Flow", () => {
     expect(pages[0]!.filter((r) => r.text === "Item").length).toBe(2);
   });
 
-  it("in a box with a height it fills that box; the rest is cut and reported", async () => {
-    const seen: Diagnostic[] = [];
-    const pages = await render(
-      [Box({ height: 60 }, [Flow({ template: twoColumns }, lines(0, 40))])],
-      (d) => seen.push(d),
+  it("in a box with a height it fills that box; the rest is cut, as onOverflow says", async () => {
+    const boxed = () =>
+      Document([
+        Page({ size: { width: 300, height: 300 }, margin: 20 }, [
+          Box({ height: 60 }, [Flow({ template: twoColumns }, lines(0, 40))]),
+        ]),
+      ]);
+    const clipped = async (onOverflow: "warn" | "ignore") => {
+      const seen: Diagnostic[] = [];
+      const pages = await drawnPages(() =>
+        renderToBytes(boxed(), { onOverflow, onDiagnostic: (d) => seen.push(d) }),
+      );
+      expect(pages.length).toBe(1);
+      const drawn = pages[0]!.map((r) => r.text);
+      expect(drawn.length).toBeGreaterThan(5);
+      expect(drawn.length).toBeLessThan(40);
+      expect(seen.filter((d) => d.code === "overflow-clipped").length).toBe(1);
+    };
+    await clipped("warn");
+    await clipped("ignore");
+    await expect(renderToBytes(boxed(), { onOverflow: "error" })).rejects.toThrow(
+      /a Flow has more/,
     );
-    expect(pages.length).toBe(1);
-    const drawn = pages[0]!.map((r) => r.text);
-    expect(drawn.length).toBeGreaterThan(5);
-    expect(drawn.length).toBeLessThan(40);
-    expect(seen.some((d) => d.code === "overflow-clipped")).toBe(true);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await renderToBytes(boxed(), { onOverflow: "ignore" });
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 
   it("content taller than every Region is placed, clipped, and the Flow still advances", async () => {
@@ -224,13 +240,15 @@ describe("Flow - wrapped", () => {
     ).rejects.toThrow(FlowUnboundedError);
   });
 
-  it("in a Row with a height it takes that height", async () => {
-    const pages = await render([
-      Row({ height: 50 }, [Expanded(Flow({ template: twoColumns }, lines(0, 8)))]),
-      Text("after", mono),
-    ]);
-    expect(texts(pages)).toEqual(all(8));
-    expect(find(pages[0]!, "L4").x).toBe(RIGHT);
+  it("in a Row with a height it takes that height - a wrapping Row too", async () => {
+    for (const wrap of [false, true]) {
+      const pages = await render([
+        Row({ height: 50, wrap }, [Expanded(Flow({ template: twoColumns }, lines(0, 8)))]),
+        Text("after", mono),
+      ]);
+      expect(texts(pages)).toEqual(all(8));
+      expect(find(pages[0]!, "L4").x).toBe(RIGHT);
+    }
   });
 });
 

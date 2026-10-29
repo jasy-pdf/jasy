@@ -238,7 +238,10 @@ export class RowElement extends SizedPDFElement {
     const mainAvail = boundedWidth ?? Infinity;
     const crossAvail = boundedHeight ?? Infinity;
 
-    let result = { mainUsed: 0, crossUsed: 0 };
+    let result: { mainUsed: number; crossUsed: number; widestLine?: number } = {
+      mainUsed: 0,
+      crossUsed: 0,
+    };
     if (this.children.length > 0) {
       result = FlexLayoutHelper.layout(
         this.children,
@@ -258,12 +261,13 @@ export class RowElement extends SizedPDFElement {
       );
     }
 
-    if (mode === "layout" && result.mainUsed > mainAvail + WIDE_EPSILON) {
+    const used = result.widestLine ?? result.mainUsed;
+    if (mode === "layout" && used > mainAvail + WIDE_EPSILON) {
       diagnose(ctx.diagnostics, {
         code: "overflow-wide",
         severity: "warning",
         message:
-          `A Row's children need ${Math.round(result.mainUsed)}pt but it is ` +
+          `A Row's children need ${Math.round(used)}pt but it is ` +
           `${Math.round(mainAvail)}pt wide; they are drawn past its edge. Let them wrap ` +
           '(`breakWord`, `wrap`), make room, or clip with a Box\'s `overflow: "hidden"`.',
         about: this,

@@ -115,14 +115,16 @@ export class SizeCache {
 }
 
 /**
- * A subtree an element builds from the context at layout time (`Deferred`: a table whose `auto`
- * columns are measured from its cells and fitted to its width). It is built again only when the
- * context key or the width changes - the size rules and the one constraint building reads. Whether the
- * page belongs to the key is decided by what was built: a subtree without a `PageBuilder` is the same
- * on every page.
+ * What an element builds from the context at layout time: a subtree (`Deferred`: a table whose `auto`
+ * columns are measured from its cells and fitted to its width), or a Text's lines. It is built again
+ * only when the context key or the width changes - the size rules and the one constraint building
+ * reads. Whether the page belongs to the key is decided by what was built (`onPage`): a subtree
+ * without a `PageBuilder` is the same on every page.
  */
-export class BuiltFromContext<T extends { dependsOnPage(): boolean }> {
+export class BuiltFromContext<T> {
   private last?: { key: ContextKey; width: number; value: T };
+
+  constructor(private readonly onPage: (value: T) => boolean) {}
 
   get(ctx: LayoutContext, width: number, build: () => T): T {
     const last = this.last;
@@ -130,11 +132,11 @@ export class BuiltFromContext<T extends { dependsOnPage(): boolean }> {
       layoutCache.enabled &&
       last &&
       last.width === width &&
-      sameContext(last.key, contextKeyOf(ctx, last.value.dependsOnPage()))
+      sameContext(last.key, contextKeyOf(ctx, this.onPage(last.value)))
     )
       return last.value;
     const value = build();
-    this.last = { key: contextKeyOf(ctx, value.dependsOnPage()), width, value };
+    this.last = { key: contextKeyOf(ctx, this.onPage(value)), width, value };
     return value;
   }
 }

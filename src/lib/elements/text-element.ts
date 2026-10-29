@@ -13,6 +13,7 @@ import {
   type RunStyle,
   runStyleOf,
   type SegmentDefaults,
+  type SegmentLine,
   singleLineWidth,
   MAX_SPACE_SHRINK,
   breakSegmentsIntoLines,
@@ -25,12 +26,13 @@ import {
   DEFAULT_WIDOWS,
   type OrphanWidowRule,
 } from "../text/orphans-widows.ts";
-import { lineBoxForSegmentLine, textHeight } from "../text/line-metrics.ts";
+import { lineBoxForSegmentLine, linesHeight } from "../text/line-metrics.ts";
 import { HorizontalAlignment, LayoutContext, SizedPDFElement } from "./pdf-element.ts";
 import { normalizeContent } from "../text/whitespace.ts";
 import { coverText } from "../text/glyph-coverage.ts";
 import type { Hyphenator } from "../text/word-splitting.ts";
 import { diagnose, pageOf } from "../common/diagnostics.ts";
+import { BuiltFromContext } from "../layout/layout-cache.ts";
 export interface TextSegment {
   content: string;
   fontStyle?: FontStyle;
@@ -179,6 +181,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
   // What the layout pass resolved the content to (transform applied, split by font). The render pass
   // has no metrics of its own, so it MUST read the same thing layout measured, not recompute it.
   private resolved?: TextSegment[];
+  private broken = new BuiltFromContext<SegmentLine[]>(() => false);
   private textTransform!: TextTransform;
   private wordSpacing!: number;
   private textIndent!: number;
@@ -421,14 +424,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     // would cut a paragraph at a line count it is never drawn with. Each line's height comes from
     // the fonts on it, so lines are packed by their cumulative height.
     const defaults = this.segmentDefaults();
-    const lines = breakSegmentsIntoLines(
-      content,
-      defaults,
-      width,
-      ctx.metrics,
-      this.maxLines,
-      this.overflow,
-    );
+    const lines = this.linesAt(width, ctx);
 
     let used = 0;
     let packed = 0;
@@ -526,12 +522,7 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
   }
 
   calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
-    // Bounded width (e.g. inside a Column) wraps to that width; an unbounded width
-    // (e.g. inside a Row) means the text takes its natural single-line width and does
-    // not wrap. Sized by `measure`, so a measured text and a laid-out one cannot differ. The style is
-    // resolved here too: a size from the cache skips `computeSize`, and drawing reads the style.
-    this.resolveStyle(ctx);
-    const size = this.measure(constraints, ctx);
+    const { size, lines } = this.sizeWith(constraints, ctx);
     this.x = offset.x;
     this.y = offset.y;
     this.resolved = this.display(ctx.metrics);
@@ -539,16 +530,16 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     if (lost.length > 0) ctx.metrics.reportMissingGlyph?.(lost, this, pageOf(ctx));
     this.width = size.width;
     this.height = size.height;
-    // A piece that cannot break and does not fit the width is drawn past it - say so.
-    const piece = constraints.hasBoundedWidth ? this.minIntrinsicMain(true, ctx) : 0;
-    if (piece > size.width + 0.01) {
+    // A line with a piece that could not break is drawn past the edge - say so.
+    const overrun = Math.max(0, ...lines.map((line) => line.overrun));
+    if (constraints.hasBoundedWidth && overrun > 0.01) {
       diagnose(ctx.diagnostics, {
         code: "overflow-wide",
         severity: "warning",
         message:
-          `A word in this Text is ${Math.round(piece)}pt wide but the text is ` +
-          `${Math.round(size.width)}pt; it is drawn past the edge. Let it break (\`breakWord\`, ` +
-          '`hyphenate`), make room, or clip with a Box\'s `overflow: "hidden"`.',
+          `A line of this Text runs ${Math.round(overrun)}pt past its ${Math.round(size.width)}pt; ` +
+          "a word in it cannot break. Let it break (`breakWord`, `hyphenate`), make room, or clip " +
+          'with a Box\'s `overflow: "hidden"`.',
         about: this,
         page: pageOf(ctx),
         fallback: "silent",
@@ -572,24 +563,42 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
   }
 
   protected override computeSize(constraints: BoxConstraints, ctx: LayoutContext): Size {
+    return this.sizeWith(constraints, ctx).size;
+  }
+
+  /**
+   * The one sizing path, for measuring and layout alike: a bounded width wraps to it (in a Column), an
+   * unbounded one takes the natural single-line width (in a Row). The lines are what layout checks.
+   * The style is resolved here, as drawing reads it.
+   */
+  /** The text broken at `width`: once per context and width, for measuring, layout and splitting. */
+  private linesAt(width: number, ctx: LayoutContext): SegmentLine[] {
+    return this.broken.get(ctx, width, () =>
+      breakSegmentsIntoLines(
+        this.display(ctx.metrics),
+        this.segmentDefaults(),
+        width,
+        ctx.metrics,
+        this.maxLines,
+        this.overflow,
+      ),
+    );
+  }
+
+  private sizeWith(
+    constraints: BoxConstraints,
+    ctx: LayoutContext,
+  ): { size: Size; lines: SegmentLine[] } {
     this.resolveStyle(ctx);
-    const content = this.display(ctx.metrics);
     const width = constraints.hasBoundedWidth
       ? constraints.maxWidth
       : this.naturalWidth(ctx.metrics);
-    return { width, height: this.measuredHeight(ctx.metrics, width, content) };
-  }
-
-  private measuredHeight(metrics: FontMetrics, width: number, content: TextSegment[]): number {
-    return textHeight(
-      content,
-      this.segmentDefaults(),
-      width,
-      metrics,
-      this.maxLines,
-      this.overflow,
-      this.lineHeight,
-    );
+    const defaults = this.segmentDefaults();
+    const lines = this.linesAt(width, ctx);
+    return {
+      size: { width, height: linesHeight(lines, defaults, ctx.metrics, this.lineHeight) },
+      lines,
+    };
   }
 
   /** The unwrapped single-line width of the content (used when width is unbounded, e.g. inside a Row).

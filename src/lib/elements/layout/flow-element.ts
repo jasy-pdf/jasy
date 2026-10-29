@@ -1,6 +1,6 @@
 import { BoxConstraints, Offset, Size } from "../../layout/box-constraints.ts";
-import type { FragmentResult } from "../../layout/fragmentation.ts";
-import { Diagnostics, diagnose, pageOf } from "../../common/diagnostics.ts";
+import { reportClipped, type FragmentResult } from "../../layout/fragmentation.ts";
+import { Diagnostics, pageOf } from "../../common/diagnostics.ts";
 import { ContainerElement } from "../container-element.ts";
 import { LayoutContext, PDFElement, SizedPDFElement } from "../pdf-element.ts";
 import { PageBuilderElement } from "./page-builder-element.ts";
@@ -193,15 +193,13 @@ export class FlowElement extends SizedPDFElement {
     const filled = this.fill(constraints.maxHeight, constraints.maxWidth, ctx, true);
     // Not paginated here (a box with a height): what does not fit is cut, as any overflow is.
     if (filled.rest) {
-      diagnose(ctx.diagnostics, {
-        code: "overflow-clipped",
-        severity: "warning",
-        message:
-          "A Flow has more content than its Regions hold here, and it cannot continue on a next " +
-          "page (it sits in a box with a height). The rest is cut off.",
-        about: this,
-        page: pageOf(ctx),
-      });
+      reportClipped(
+        this,
+        "a Flow has more content than its Regions hold here, and it cannot continue on a next " +
+          "page (it sits in a box with a height) - give the box more height, or let the Flow " +
+          "continue on the page.",
+        ctx,
+      );
     }
     this.piece = filled.piece;
     const size = this.piece.calculateLayout(constraints, { x: 0, y: 0 }, ctx);

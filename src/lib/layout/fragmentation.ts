@@ -71,18 +71,25 @@ export function reportOverflow(
   maxHeight: number,
   ctx: LayoutContext,
 ): void {
-  const policy = ctx.onOverflow ?? "ignore";
   const name = child.constructor.name.replace(/Element$/, "");
-  const detail =
+  reportClipped(
+    child,
     `${name} is ${Math.round(childHeight)}pt tall but the page region is only ` +
-    `${Math.round(maxHeight)}pt and it cannot be broken - reduce its size, give it a bounded ` +
-    `height, or let it split across pages.`;
+      `${Math.round(maxHeight)}pt and it cannot be broken - reduce its size, give it a bounded ` +
+      `height, or let it split across pages.`,
+    ctx,
+  );
+}
+
+/** Content cut off at the bottom, under the author's `onOverflow` policy. */
+export function reportClipped(about: PDFElement, detail: string, ctx: LayoutContext): void {
+  const policy = ctx.onOverflow ?? "ignore";
   if (policy === "error") throw new Error(`Layout overflow: ${detail}`);
   diagnose(ctx.diagnostics, {
     code: "overflow-clipped",
     severity: "warning",
     message: `Layout overflow (clipped): ${detail}`,
-    about: child,
+    about,
     page: pageOf(ctx),
     // `ignore` means "no console" - an `onDiagnostic` handler still hears of it.
     fallback: policy === "ignore" ? "silent" : "warn",

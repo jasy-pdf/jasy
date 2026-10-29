@@ -129,7 +129,7 @@ export class FlexLayoutHelper {
     options: FlexOptions,
     ctx: LayoutContext,
     mode: FlexMode = "layout",
-  ): { mainUsed: number; crossUsed: number } {
+  ): { mainUsed: number; crossUsed: number; widestLine?: number } {
     if (!options.wrap || children.length === 0 || !Number.isFinite(mainAvail)) {
       // An unbounded main axis has no edge to wrap at, so wrapping there is meaningless, not an error.
       return FlexLayoutHelper.layoutLine(
@@ -169,7 +169,7 @@ export class FlexLayoutHelper {
     options: FlexOptions,
     ctx: LayoutContext,
     mode: FlexMode,
-  ): { mainUsed: number; crossUsed: number } {
+  ): { mainUsed: number; crossUsed: number; widestLine: number } {
     const gap = options.gap ?? 0;
     const ordered = inLayoutOrder(children, options.reverse ?? false);
 
@@ -223,8 +223,9 @@ export class FlexLayoutHelper {
         mainAvail,
         // Across a Column a child gets the column's width, as a block does in CSS (a paragraph wraps
         // inside it); across a Row it is as tall as its content. Either way the line is only as big as
-        // what is on it, so `stretch` fills the line and not the container.
-        axis.mainHorizontal ? Infinity : crossAvail,
+        // what is on it, so `stretch` fills the line and not the container. A region-sized child (a
+        // Flow) has no content height: its line is as tall as the Row allows.
+        axis.mainHorizontal && !line.some((c) => c.needsRegion()) ? Infinity : crossAvail,
         0,
         lineOptions,
         ctx,
@@ -268,7 +269,12 @@ export class FlexLayoutHelper {
       if (i < lines.length - 1) cursor += between;
     });
 
-    return { mainUsed: mainAvail, crossUsed: Math.max(totalCross, cursor) };
+    return {
+      mainUsed: mainAvail,
+      crossUsed: Math.max(totalCross, cursor),
+      // A child wider than the line runs past it, in a line of its own.
+      widestLine: Math.max(...measure.map((m) => m.mainUsed)),
+    };
   }
 
   /**
