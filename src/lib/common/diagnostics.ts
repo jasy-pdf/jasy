@@ -10,12 +10,17 @@
 export type DiagnosticCode =
   /** A `PageBreak` outside a paginating flow (in a Row, in a PageBuilder) - drawn as nothing. */
   | "page-break-ignored"
+  /** A `ColumnBreak` outside a Region of a Flow - drawn as nothing. */
+  | "column-break-ignored"
   /** `breakBefore` / `breakAfter` on a child of a Row or a table row, which never breaks. */
   | "break-ignored"
   /** A `keepTogether` group contains a forced break; the break wins and the group is split. */
   | "keep-together-split"
   /** Content taller than its page region that cannot break, placed whole and clipped. */
   | "overflow-clipped"
+  /** Content wider than its box (a word that does not break, a Row whose children need more), drawn
+   *  past the box's edge - as CSS draws it; `overflow: "hidden"` on a Box clips it. */
+  | "overflow-wide"
   /** Characters no font could draw, removed (PDF/A forbids `.notdef`). */
   | "missing-glyphs";
 

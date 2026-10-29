@@ -19,6 +19,7 @@ import {
   childrenForceBreak,
   insetContext,
   packChildren,
+  packedUnchanged,
 } from "../layout/fragmentation.ts";
 import {
   LayoutContext,
@@ -156,7 +157,7 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
     // Fits with no forced cut: return the whole box unchanged. A trailing forced break is the
     // exception - fall through so the box is rebuilt from the packed children (without the consumed
     // break marker), rather than handing back the original that still holds it.
-    if (remainder.length === 0 && !forceBreak) {
+    if (remainder.length === 0 && !forceBreak && packedUnchanged(this.children, fitted)) {
       // The content fits, but a fixed height may not - such a box cannot shrink, so it moves on whole.
       const own = this.measure(BoxConstraints.loose(width, Infinity), ctx).height;
       return own <= maxHeight
@@ -179,14 +180,12 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
       // A trailing forced break leaves nothing to carry over: no remainder box, no extra page.
       // Only the CONTINUATION carries `breakAfter` (a box that splits still breaks after its LAST
       // fragment, not its first); `breakBefore` is dropped, already honoured before the split.
+      // It gets no height, as a Column's piece does: it is sized where it lands, which may be a
+      // narrower or wider region (a Flow's), or one that gives a region-sized rest its height.
       remainder:
         remainder.length === 0
           ? null
-          : this.cloneWithChildren(
-              remainder,
-              contentHeight(remainder) + 2 * this.borderWidth,
-              this.breakAfter,
-            ),
+          : this.cloneWithChildren(remainder, undefined, this.breakAfter),
       forceBreak,
     };
   }
@@ -197,7 +196,7 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
 
   private cloneWithChildren(
     children: PDFElement[],
-    height: number,
+    height: number | undefined,
     breakAfter = false,
   ): RectangleElement {
     return new RectangleElement({
@@ -236,6 +235,14 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
       : [this.sizeMemory.height, this.sizeMemory.heightFactor];
     if (requested.some((v) => v !== undefined)) return false;
     return this.children.some((c) => c.needsBoundedMain(horizontal));
+  }
+
+  /** As a Column: a height of its own is the region; without one, a region-sized child needs the page's. */
+  override needsRegion(): boolean {
+    if (this.sizeMemory.height !== undefined || this.sizeMemory.heightFactor !== undefined) {
+      return false;
+    }
+    return this.children.some((c) => c.needsRegion());
   }
 
   /** A Box's own padding resolves a percentage against its containing block, not against the inner

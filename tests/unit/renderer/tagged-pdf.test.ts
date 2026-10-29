@@ -81,7 +81,8 @@ describe("accessible tagging (PDF/UA foundation)", () => {
     expect((pdf.match(/\/Type \/Page\b/g) ?? []).length).toBeGreaterThan(1); // paginates
     expect((pdf.match(/\/S \/Table\b/g) ?? []).length).toBe(1); // ONE logical <Table>
     expect(pdf).toContain("/S /TR");
-    expect(pdf).toContain("/S /TH");
+    // The header repeats on every page, but it is ONE header row: two TH, not two per page.
+    expect((pdf.match(/\/S \/TH\b/g) ?? []).length).toBe(2);
     expect(pdf).toContain("/S /TD");
   });
 

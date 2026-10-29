@@ -76,8 +76,16 @@ export abstract class ProxyElement extends PDFElement implements Fragmentable {
     return this.child.minIntrinsicMain(horizontal, this.childContext(ctx));
   }
 
+  override needsRegion(): boolean {
+    return this.child.needsRegion();
+  }
+
   override isPageBreak(): boolean {
     return this.child.isPageBreak();
+  }
+
+  override isColumnBreak(): boolean {
+    return this.child.isColumnBreak();
   }
 
   override hasForcedBreak(): boolean {

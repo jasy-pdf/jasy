@@ -240,7 +240,7 @@ describe("the layout cache", () => {
 // A subtree built at layout time (a table's rows) is kept under the context half of the same key.
 describe("a subtree built from the context", () => {
   const building = (make: () => PDFElement) => {
-    const built = new BuiltFromContext<PDFElement>();
+    const built = new BuiltFromContext<PDFElement>((el) => el.dependsOnPage());
     let builds = 0;
     const get = (c: LayoutContext, width = 300) => built.get(c, width, () => (builds++, make()));
     return { get, builds: () => builds };

@@ -155,6 +155,17 @@ describe("breakWord on a word that runs across spans", () => {
     ]);
   });
 
+  it("a line with no room for one more glyph breaks at the boundary, never forces one past it", async () => {
+    const full = "aaaaaaaa";
+    const expected = ["aaaaaaaa", "bbbbbbbb", "bb"];
+    expect(await lines(Text([span(full), span(b)], { ...mono, breakWord: true }))).toEqual(
+      expected,
+    );
+    expect(
+      await lines(Text([span(full, { breakWord: true }), span(b, { breakWord: true })], mono)),
+    ).toEqual(expected);
+  });
+
   it("set nowhere: the word overflows whole", async () => {
     expect(await lines(Text([span(a), span(b)], mono))).toEqual(["aaaaaaaaaabbbbbbbbbb"]);
   });

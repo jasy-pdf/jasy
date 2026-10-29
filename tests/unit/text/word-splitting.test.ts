@@ -34,10 +34,9 @@ describe("when nothing applies", () => {
     expect(split("ab", 50, { breakWord: true })).toBeNull();
   });
 
-  it("returns null when not even one character fits, instead of looping forever", () => {
-    // A box narrower than a single glyph: splitting cannot help, and taking zero characters per pass
-    // would never terminate.
-    expect(split("Wort", 1, { breakWord: true })).toBeNull();
+  it("narrower than one character: one per line, as Chrome sets `overflow-wrap` - and it ends", () => {
+    expect(split("Wort", 1, { breakWord: true })).toEqual(["W", "o", "r", "t"]);
+    expect(split("W", 1, { breakWord: true })).toBeNull();
   });
 });
 

@@ -156,7 +156,8 @@ export class PDFDocumentRenderer {
       // restores their real positions (layout is deterministic). A consumed trailing `PageBreak`
       // (forceBreak with no remainder) is the exception: render the packed `fitted` instead, which no
       // longer holds the break marker, so the original with the break does not leak into the render pass.
-      if (isFirstRegion && remainder === null && !forceBreak) {
+      // So is a region that came back as a sized piece (a Flow): it is drawn as it was paginated.
+      if (isFirstRegion && remainder === null && !forceBreak && fitted === region) {
         pages.push({ kind: "whole", page });
         break;
       }

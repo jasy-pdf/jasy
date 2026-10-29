@@ -7,6 +7,14 @@ import {
 } from "../../layout/fragmentation.ts";
 import { LayoutContext, PDFElement } from "../pdf-element.ts";
 
+/** Gives every element of `fresh` the tagging identity of its twin in `from` (the same shape). */
+function adoptStructIds(fresh: PDFElement, from: PDFElement): void {
+  fresh.adoptStructId(from);
+  const a = fresh.layoutChildren();
+  const b = from.layoutChildren();
+  for (let i = 0; i < a.length && i < b.length; i++) adoptStructIds(a[i]!, b[i]!);
+}
+
 /**
  * Stacks a `header` above a `body` and, when it paginates, **repeats the header on every
  * fragment**. Used by `Table` so column headings reappear at the top of each page. Layout
@@ -25,6 +33,14 @@ export class RepeatingHeaderElement extends PDFElement implements Fragmentable {
     private gap: number = 0,
   ) {
     super();
+  }
+
+  /** The header for the next piece: a copy, since two pieces may share a page (two Regions of a Flow)
+   *  and one element has one position - that tags as the SAME header. */
+  private nextHeader(): PDFElement {
+    const copy = this.header.clone();
+    adoptStructIds(copy, this.header);
+    return copy;
   }
 
   calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
@@ -81,7 +97,7 @@ export class RepeatingHeaderElement extends PDFElement implements Fragmentable {
         ? new RepeatingHeaderElement(this.header, split.fitted, this.gap).asPieceOf(this)
         : null,
       remainder: split.remainder
-        ? new RepeatingHeaderElement(this.header, split.remainder, this.gap).asPieceOf(this)
+        ? new RepeatingHeaderElement(this.nextHeader(), split.remainder, this.gap).asPieceOf(this)
         : null,
       forceBreak: split.forceBreak,
     };

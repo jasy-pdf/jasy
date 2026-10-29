@@ -12,13 +12,16 @@ import { diagnose, pageOf } from "../common/diagnostics.ts";
  * rest, so no information flows back UP after a break. This one-way flow is what keeps
  * fragmentation terminating (no overflow-cascade fixpoint).
  */
+export type ForcedBreak = boolean | "column";
+
 export interface FragmentResult {
   fitted: PDFElement | null;
   remainder: PDFElement | null;
-  /** The split ended at a FORCED page break (a `PageBreak`), not because the region filled up. The
-   *  remainder must start a fresh page, and an enclosing flow must stop packing too - so this bubbles
-   *  up through nested `fragment()` calls. Absent/false for an ordinary height-driven break. */
-  forceBreak?: boolean;
+  /** The split ended at a FORCED break, not because the region filled up: `true` for a page break (the
+   *  remainder starts a fresh page), `"column"` for a `ColumnBreak` in a Flow's Region (it starts the
+   *  next Region; the Flow consumes it). An enclosing flow stops packing too - so this bubbles up
+   *  through nested `fragment()` calls. Absent/false for an ordinary height-driven break. */
+  forceBreak?: ForcedBreak;
 }
 
 /**
@@ -68,18 +71,25 @@ export function reportOverflow(
   maxHeight: number,
   ctx: LayoutContext,
 ): void {
-  const policy = ctx.onOverflow ?? "ignore";
   const name = child.constructor.name.replace(/Element$/, "");
-  const detail =
+  reportClipped(
+    child,
     `${name} is ${Math.round(childHeight)}pt tall but the page region is only ` +
-    `${Math.round(maxHeight)}pt and it cannot be broken - reduce its size, give it a bounded ` +
-    `height, or let it split across pages.`;
+      `${Math.round(maxHeight)}pt and it cannot be broken - reduce its size, give it a bounded ` +
+      `height, or let it split across pages.`,
+    ctx,
+  );
+}
+
+/** Content cut off at the bottom, under the author's `onOverflow` policy. */
+export function reportClipped(about: PDFElement, detail: string, ctx: LayoutContext): void {
+  const policy = ctx.onOverflow ?? "ignore";
   if (policy === "error") throw new Error(`Layout overflow: ${detail}`);
   diagnose(ctx.diagnostics, {
     code: "overflow-clipped",
     severity: "warning",
     message: `Layout overflow (clipped): ${detail}`,
-    about: child,
+    about,
     page: pageOf(ctx),
     // `ignore` means "no console" - an `onDiagnostic` handler still hears of it.
     fallback: policy === "ignore" ? "silent" : "warn",
@@ -97,6 +107,11 @@ export function childrenForceBreak(children: PDFElement[]): boolean {
   return children.some(
     (child, i) => child.hasForcedBreak() || (i > 0 && child.breaksBefore()) || child.breaksAfter(),
   );
+}
+
+/** The packer kept every child as it was - none came back as a piece of itself (a sized Flow). */
+export function packedUnchanged(children: PDFElement[], fitted: PDFElement[]): boolean {
+  return fitted.length === children.length && fitted.every((child, i) => child === children[i]);
 }
 
 /**
@@ -119,14 +134,14 @@ export function packChildren(
   width: number,
   ctx: LayoutContext,
   gap: number = 0,
-): { fitted: PDFElement[]; remainder: PDFElement[]; forceBreak: boolean } {
+): { fitted: PDFElement[]; remainder: PDFElement[]; forceBreak: ForcedBreak } {
   const fitted: PDFElement[] = [];
   const remainder: PDFElement[] = [];
   let usedHeight = 0;
 
   // Everything from index `from` onward spills to the next region; `broke` says whether the cut was
   // a FORCED page break (so an enclosing flow stops too) rather than the region filling up.
-  const spill = (from: number, broke: boolean) => {
+  const spill = (from: number, broke: ForcedBreak) => {
     for (let j = from; j < children.length; j++) remainder.push(children[j]);
     return { fitted, remainder, forceBreak: broke };
   };
@@ -137,6 +152,12 @@ export function packChildren(
     // A forced break: consume the marker (it draws nothing) and send everything after it to a fresh
     // page, regardless of how much room is left.
     if (child.isPageBreak()) return spill(i + 1, true);
+    // A column break cuts a Flow's Region; anywhere else it stays in place, draws nothing, and warns.
+    if (child.isColumnBreak()) {
+      if (ctx.inFlowRegion) return spill(i + 1, "column");
+      fitted.push(child);
+      continue;
+    }
 
     // break-before: this child wants a fresh page. Honour it only if something is already on this region
     // (CSS ignores break-before at the top of a page); that guard also prevents an empty page + a loop.
@@ -149,8 +170,12 @@ export function packChildren(
 
     // Place whole only if it fits AND holds no forced break: a child that fits by height but contains
     // a `PageBreak` (or a break-before/after) in its subtree must still be fragmented, or the break
-    // would be swallowed.
-    if (usedHeight + lead + childHeight <= maxHeight && !child.hasForcedBreak()) {
+    // would be swallowed. A region-sized child (a Flow) has no height of its own to fit by.
+    if (
+      usedHeight + lead + childHeight <= maxHeight &&
+      !child.hasForcedBreak() &&
+      !child.needsRegion()
+    ) {
       fitted.push(child);
       usedHeight += lead + childHeight;
       // break-after: everything after this child starts a fresh page.
@@ -161,7 +186,7 @@ export function packChildren(
     // `child` straddles the boundary, or carries a forced break. Split it; otherwise place/defer whole.
     const remaining = maxHeight - usedHeight - lead;
     let placedPart = false;
-    let childBroke = false;
+    let childBroke: ForcedBreak = false;
     const below = ctx.belowContent || fitted.length > 0;
     if (isFragmentable(child)) {
       const childCtx = below && !ctx.belowContent ? { ...ctx, belowContent: true } : ctx;
@@ -174,7 +199,12 @@ export function packChildren(
         // break-before at the top of the region, which CSS ignores. Keep packing the siblings after
         // it instead of spilling them, so break-before does not accidentally push later content away.
         if (!split.remainder && !childBroke) {
-          usedHeight += lead + childHeight;
+          // A region-sized child comes back as a different, sized piece: count what it holds.
+          const placed =
+            split.fitted === child
+              ? childHeight
+              : split.fitted.measure(BoxConstraints.loose(width, Infinity), ctx).height;
+          usedHeight += lead + placed;
           continue;
         }
         if (split.remainder) remainder.push(split.remainder);

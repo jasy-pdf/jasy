@@ -16,6 +16,7 @@ import { emojiImageNode } from "./emoji-image.ts";
 import {
   MAX_SPACE_SHRINK,
   breakSegmentsIntoLines,
+  lineGaps,
   runStyleOf,
   type SegmentDefaults,
   SegmentLine,
@@ -388,17 +389,7 @@ export class TextRenderer {
       indent = 0,
     ): number => {
       if (align !== HorizontalAlignment.justify) return 0;
-      // Each space as the breaker counts it: its own span's font and word-spacing.
-      let gaps = 0;
-      let gapWidth = 0;
-      for (const seg of segments) {
-        const spaces = [...seg.content].filter((c) => c === " ").length;
-        if (spaces === 0) continue;
-        const run = runStyleOf(seg, breaking);
-        gaps += spaces;
-        gapWidth +=
-          spaces * (runAdvance(objectManager, " ", run.font, run.letterSpacing) + run.wordSpacing);
-      }
+      const { gaps, width: gapWidth } = lineGaps(segments, breaking, objectManager);
       if (gaps === 0) return 0;
       const slack = maxWidth - indent - naturalWidth;
       // Negative slack is real now: the breaker keeps a word when the line can be SQUEEZED to hold

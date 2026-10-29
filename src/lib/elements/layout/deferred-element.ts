@@ -3,6 +3,8 @@ import { Fragmentable, FragmentResult, isFragmentable } from "../../layout/fragm
 import { LayoutContext, PDFElement } from "../pdf-element.ts";
 import { BuiltFromContext } from "../../layout/layout-cache.ts";
 
+const builtOnPage = (subtree: PDFElement) => subtree.dependsOnPage();
+
 /**
  * Builds its subtree at layout time via `resolve(ctx, width)`, so the tree can depend on font
  * metrics and on the width it gets (e.g. a Table fitting its `"auto"` and `fr` columns to the cell
@@ -11,10 +13,20 @@ import { BuiltFromContext } from "../../layout/layout-cache.ts";
 export class DeferredElement extends PDFElement implements Fragmentable {
   // The subtree that was laid out last, and so gets drawn. Measuring never replaces it.
   private composed?: PDFElement;
-  private built = new BuiltFromContext<PDFElement>();
+  private built = new BuiltFromContext<PDFElement>(builtOnPage);
 
   constructor(private resolve: (ctx: LayoutContext, width: number) => PDFElement) {
     super();
+  }
+
+  /** A copy builds a subtree of its own, from copies, so even element cells it holds are its own. */
+  override clone(): this {
+    const copy = super.clone();
+    const resolve = this.resolve;
+    copy.resolve = (ctx, width) => resolve(ctx, width).clone();
+    copy.built = new BuiltFromContext(builtOnPage);
+    copy.composed = undefined;
+    return copy;
   }
 
   /** The subtree for this context and width: built once, and again only when one of them changes. */

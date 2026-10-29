@@ -80,8 +80,8 @@ export function splitLongWord(
     const head =
       (hyphenate ? longestHyphenatedPrefix(rest, room, width, hyphenate) : null) ??
       (breakWord ? longestPrefix(rest, room, width) : null);
-    // Nothing fits - not even one character, or hyphenation found nothing and break-word is off.
-    // Leave the remainder whole and let it overflow, exactly as before.
+    // Hyphenation found nothing and break-word is off, or one character is all that is left: leave the
+    // remainder whole and let it overflow.
     if (head === null) break;
     // A hyphenator that returns text other than the word is not splitting it: leave it whole.
     const source = sourceLength(restSource, head.taken);
@@ -146,8 +146,13 @@ function longestPrefix(
     taken += char;
     count += 1;
   }
-  // Not even one character fits: the box is narrower than a single glyph. Splitting cannot help, and
-  // looping on it would never terminate.
-  if (count === 0 || count === chars.length) return null;
+  if (count === chars.length) return null;
+  // Not even one character fits - the box is narrower than a glyph: one character per line, as CSS
+  // `overflow-wrap` sets it. Each pass still takes one, so the loop ends.
+  if (count === 0) {
+    if (chars.length === 1) return null;
+    taken = chars[0]!;
+    count = 1;
+  }
   return { text: taken, taken, rest: chars.slice(count).join(""), hyphen: false };
 }

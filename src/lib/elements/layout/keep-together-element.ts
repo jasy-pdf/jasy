@@ -40,12 +40,24 @@ export class KeepTogetherElement extends ProxyElement {
         code: "keep-together-split",
         severity: "warning",
         message:
-          "keepTogether contains a forced page break (PageBreak / breakBefore / breakAfter). The break " +
-          "wins and the group is split. Remove the break, or the keepTogether, to resolve this.",
+          "keepTogether contains a forced break (PageBreak, ColumnBreak, breakBefore / breakAfter). " +
+          "The break wins and the group is split. Remove the break, or the keepTogether, to resolve this.",
         about: this,
         page: pageOf(ctx),
       });
       return this.splitChild(maxHeight, width, ctx);
+    }
+
+    // A region-sized child (a Flow) has no height of its own to compare, so the same three rules ask
+    // whether it ENDS here, or on a fresh page.
+    if (this.child.needsRegion()) {
+      const here = this.splitChild(maxHeight, width, ctx);
+      if (!here.remainder) return here;
+      const pageBody = ctx.pageBodyHeight ?? maxHeight;
+      if (maxHeight < pageBody && !this.splitChild(pageBody, width, ctx).remainder) {
+        return { fitted: null, remainder: this };
+      }
+      return here;
     }
 
     const natural = this.child.measure(BoxConstraints.loose(width, Infinity), ctx).height;

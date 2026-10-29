@@ -96,6 +96,42 @@ export interface SegmentLine {
   /** Where the line begins in the source: the span, and the offset in that span's content. */
   start: SegmentPosition;
   end: LineEnd;
+  /** How far the line, as drawn, runs past the room it was broken in: above 0 only for a piece that
+   *  could not break. */
+  overrun: number;
+}
+
+/**
+ * A line's spaces, each as wide as its own span makes it - what justification spreads the slack over,
+ * and squeezes by at most `shrink` of their width.
+ */
+export function lineGaps(
+  segments: TextSegment[],
+  defaults: SegmentDefaults,
+  metrics: FontMetrics,
+): { gaps: number; width: number } {
+  let gaps = 0;
+  let width = 0;
+  for (const seg of segments) {
+    const spaces = [...seg.content].filter((c) => c === " ").length;
+    if (spaces === 0) continue;
+    const run = runStyleOf(seg, defaults);
+    gaps += spaces;
+    width += spaces * (runAdvance(metrics, " ", run.font, run.letterSpacing) + run.wordSpacing);
+  }
+  return { gaps, width };
+}
+
+/** How far `line` runs past `room` once a justified line has been squeezed as far as it may be. */
+function overrunOf(
+  line: { segments: TextSegment[]; width: number },
+  room: number,
+  defaults: SegmentDefaults,
+  metrics: FontMetrics,
+): number {
+  const shrink = defaults.shrink ?? 0;
+  const squeeze = shrink > 0 ? lineGaps(line.segments, defaults, metrics).width * shrink : 0;
+  return line.width - squeeze - room;
 }
 
 export interface SegmentPosition {
@@ -281,11 +317,14 @@ export function breakSegmentsIntoLines(
         : seg,
     );
     const drawn = stripped.filter((seg) => seg.content !== "");
+    const kept = drawn.length > 0 ? drawn : stripped.slice(0, 1);
+    const room = lines.length === 0 ? maxWidth - indent : maxWidth;
     lines.push({
-      segments: drawn.length > 0 ? drawn : stripped.slice(0, 1),
+      segments: kept,
       width,
       start: lineStart,
       end: ends,
+      overrun: overrunOf({ segments: kept, width }, room, defaults, metrics),
     });
   };
 
@@ -442,7 +481,10 @@ export function breakSegmentsIntoLines(
           const split = splitLongWord(word, room - width, font, metrics, letterSpacing, {
             breakWord: true,
           });
-          if (split) head = split[0]!.source;
+          // A glyph forced on past the edge is the last resort, below a break at the span boundary.
+          const fits =
+            split && runAdvance(metrics, split[0]!.text, font, letterSpacing) <= room - width;
+          if (fits) head = split[0]!.source;
         }
         if (head === null && beforeMaySplit) {
           close(lineSegments, ink, "split");
@@ -670,7 +712,9 @@ export function breakSegmentsIntoLines(
     if (overflow === "ellipsis") {
       // The same room that line was broken against: the first one lost the indent to it.
       const room = kept.length === 1 ? maxWidth - indent : maxWidth;
-      ellipsizeLine(kept[kept.length - 1]!, defaults, room, metrics);
+      const last = kept[kept.length - 1]!;
+      ellipsizeLine(last, defaults, room, metrics);
+      last.overrun = overrunOf(last, room, defaults, metrics);
     }
   }
   // A piece of a paragraph split across pages draws only its own lines.

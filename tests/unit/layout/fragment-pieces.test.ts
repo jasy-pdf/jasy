@@ -5,6 +5,7 @@ import {
   Column,
   Box,
   Paragraph,
+  Spacer,
   Anchor,
   Text,
   span,
@@ -17,7 +18,7 @@ import type { Fragmentable } from "../../../src/lib/layout/fragmentation.ts";
 import type { IRNode } from "../../../src/lib/ir/display-list.ts";
 import { testMetrics } from "../support/metrics.ts";
 import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager.ts";
-import { drawnNodes } from "../support/drawn.ts";
+import { drawnNodes, drawnPages } from "../support/drawn.ts";
 
 // A piece of an element split across pages is the same element on the next page: it keeps every
 // property the original had - its text options, its width rules, its place in the flex line.
@@ -109,6 +110,26 @@ describe("a split Box or Column keeps its width rules", () => {
     ]);
     expect(pages.length).toBeGreaterThan(1);
     for (const page of pages) expect(rects(page).map((r) => r.x)).toEqual([20]);
+  });
+
+  it("the rest of a split Box is sized where it lands, as a Column's: a Spacer fills that page", async () => {
+    const mono = { font: "Courier", size: 10 } as const;
+    const body = (wrap: (kids: PDFElement[]) => PDFElement) => [
+      wrap([
+        ...Array.from({ length: 30 }, (_, i) => Text(`A${i}`, mono)),
+        Spacer(),
+        Text("end", mono),
+      ]),
+    ];
+    const endY = async (content: PDFElement[]) => {
+      const pages = await drawnPages(() =>
+        renderToBytes(Document([Page({ size: { width: 300, height: 300 }, margin: 20 }, content)])),
+      );
+      return pages[1]!.find((r) => r.text === "end")!.y;
+    };
+    const inBox = await endY(body((kids) => Box({ bg: "#eee" }, kids)));
+    expect(inBox).toBe(await endY(body((kids) => Column(kids))));
+    expect(inBox).toBeGreaterThan(250);
   });
 
   it("a keepTogether Box too tall for one page splits and keeps its alignSelf on every page", async () => {

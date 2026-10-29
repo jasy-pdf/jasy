@@ -201,12 +201,14 @@ export function Box(a: BoxOptions | PDFElement[], b?: PDFElement[]): PDFElement 
       ? [
           new PaddingElement({
             margin: toEdges(opts.padding),
-            child: children.length === 1 ? children[0] : Column(children),
+            child:
+              children.length === 1 && !flexibleOf(children[0]!) ? children[0]! : Column(children),
             ofBox: true,
           }),
         ]
-      : // A Spacer/Expanded - also one inside a transparent wrapper such as a Link - needs a flex parent.
-        children.length > 1 && children.some((child) => flexibleOf(child) !== undefined)
+      : // A Spacer/Expanded - also one inside a transparent wrapper such as a Link - needs a flex parent,
+        // alone as much as among siblings.
+        children.some((child) => flexibleOf(child) !== undefined)
         ? [Column(children)]
         : children;
 

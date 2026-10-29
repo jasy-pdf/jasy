@@ -1,4 +1,4 @@
-import { defineComponent, h, type PropType } from "vue";
+import { defineComponent, getCurrentInstance, h, onUnmounted, type PropType } from "vue";
 import type {
   ButtonActionInput,
   ColorInput,
@@ -11,11 +11,13 @@ import type {
   PageSizeInput,
   CanvasPaint,
   ColumnWidth,
+  FlowPage,
   TextOverflow,
   TextRole,
   TextTransform,
   VerticalTextAlign,
 } from "@jasy/pdf";
+import { childDescriptors, type JNode } from "./renderer.js";
 
 const colorProp = [String, Number, Object] as PropType<ColorInput>;
 const insetsProp = [Number, Object, Array] as PropType<Insets>;
@@ -321,6 +323,77 @@ export const TableCell = defineComponent({
   inheritAttrs: false,
   setup: fwd("table-cell"),
 });
+// --- Flow -------------------------------------------------------------------------------------------
+// The content (default slot) flows through the `<Region>`s of `#page="{ index, pageNumber }"`: the first
+// Region full, then the next, then the next page. `index` counts this Flow's pages.
+export const Flow = defineComponent({
+  name: "JasyFlow",
+  inheritAttrs: false,
+  props: {
+    gap: Number,
+    /** On the last page, spread the content so the Regions come out about equally full. */
+    balance: { type: Boolean, default: undefined },
+  },
+  setup(props, { slots, attrs }) {
+    const instance = getCurrentInstance()!;
+    let asked: FlowPage | undefined;
+    let mounted = true;
+    onUnmounted(() => (mounted = false));
+    // Called by the engine for every page: #page re-rendered in place, so it sees what the components
+    // around it provide, then read back from the tree.
+    const page = (info: FlowPage) => {
+      if (!mounted) {
+        throw new Error(
+          "@jasy/vue: a <Flow> renders its #page while the PDF is laid out - render the document " +
+            "with renderToPdf, which keeps it mounted until then.",
+        );
+      }
+      asked = info;
+      instance.update();
+      const marker = (instance.subTree.el as JNode).children.find((c) => c.type === "flow-page");
+      return marker ? childDescriptors(marker) : [];
+    };
+    return () => {
+      if (!slots.page) {
+        throw new Error("@jasy/vue: a <Flow> needs a #page slot with at least one <Region>.");
+      }
+      const kids: any[] = asked ? [h("flow-page", null, slots.page(asked))] : [];
+      return h("flow", { ...attrs, ...props, page }, [...kids, ...(slots.default?.() ?? [])]);
+    };
+  },
+});
+// A place in a `<Flow>`'s #page the content flows through, in tree order. Sized by the layout around
+// it (`<Expanded>`, `width`, `height`, a number or `"60%"`); with nothing given it fills what it is offered.
+export const Region = defineComponent({
+  name: "JasyRegion",
+  inheritAttrs: false,
+  props: {
+    width: [Number, String] as PropType<number | `${number}%`>,
+    height: [Number, String] as PropType<number | `${number}%`>,
+  },
+  setup: fwd("region"),
+});
+// Continue in the next `<Region>` of the Flow (from the last one, the next page's first).
+export const ColumnBreak = defineComponent({
+  name: "JasyColumnBreak",
+  inheritAttrs: false,
+  setup: fwd("column-break"),
+});
+// Newspaper columns: a `<Flow>` with a ready #page of `columns` equally wide Regions side by side.
+export const SplitView = defineComponent({
+  name: "JasySplitView",
+  inheritAttrs: false,
+  props: {
+    columns: Number,
+    gap: Number,
+    rowGap: Number,
+    colGap: Number,
+    /** Columns of about equal height on the last page (default true); `:balance="false"` fills in turn. */
+    balance: { type: Boolean, default: undefined },
+  },
+  setup: fwd("split-view"),
+});
+
 // Out-of-flow child, anchored to the nearest `<Box relative>` (or the page). Edges or `h`/`v` + `x`/`y`.
 export const Positioned = defineComponent({
   name: "JasyPositioned",

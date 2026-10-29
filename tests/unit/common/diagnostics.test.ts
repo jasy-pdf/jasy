@@ -84,8 +84,10 @@ describe("onDiagnostic - each finding, once", () => {
         ]),
       ]);
     const seen = await collect(tooTall(), { onOverflow: "warn" });
+    // 300pt type is too tall for the page AND too wide for it: both, each once.
     expect(seen).toEqual([
       expect.objectContaining({ code: "overflow-clipped", element: "Text", text: "X", page: 2 }),
+      expect.objectContaining({ code: "overflow-wide", element: "Text", text: "X", page: 2 }),
     ]);
     await expect(collect(tooTall())).rejects.toThrow(/overflow/i);
   });
@@ -107,8 +109,73 @@ describe("onDiagnostic - each finding, once", () => {
       Document([Page({ size: mm(50, 40), margin: 4 }, [Text("X", { size: 300 })])]),
       { onOverflow: "ignore" },
     );
-    expect(seen).toEqual([expect.objectContaining({ code: "overflow-clipped" })]);
+    expect(seen).toEqual([
+      expect.objectContaining({ code: "overflow-clipped" }),
+      expect.objectContaining({ code: "overflow-wide" }),
+    ]);
     expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("content wider than its box: a word that does not break, a Row whose children need more", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const seen = await collect(
+      Document([
+        Page([
+          Box({ width: 40 }, [Text("Verpflichtungserklaerung")]),
+          Box({ width: 60 }, [Row([Text("datasheets"), Text("datasheets")])]),
+          Box({ width: 60 }, [Row({ wrap: true }, [Box({ width: 80, height: 5, flexShrink: 0 })])]),
+          Box({ width: 40 }, [Text("Verpflichtungserklaerung", { breakWord: true })]),
+        ]),
+      ]),
+    );
+    expect(seen).toEqual([
+      expect.objectContaining({ code: "overflow-wide", element: "Text", page: 1 }),
+      expect.objectContaining({ code: "overflow-wide", element: "Row", page: 1 }),
+      expect.objectContaining({ code: "overflow-wide", element: "Row", page: 1 }),
+    ]);
+    // Silent before, silent without a handler now.
+    await renderToBytes(Document([Page([Box({ width: 40 }, [Text("Verpflichtungserklaerung")])])]));
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("content wider than its box is what is DRAWN: hyphenate finds no point, maxLines cuts it", async () => {
+    const seen = await collect(
+      Document([
+        Page([
+          // No hyphenation point: the word stays whole, past the edge.
+          Box({ width: 40 }, [Text("DE89370400440532013000", { hyphenate: (w) => [w] })]),
+          // The long word is on a line maxLines drops: nothing is drawn past the edge.
+          Box({ width: 40 }, [Text("short Verpflichtungserklaerung", { maxLines: 1 })]),
+        ]),
+      ]),
+    );
+    expect(seen).toEqual([
+      expect.objectContaining({
+        code: "overflow-wide",
+        element: "Text",
+        text: "DE89370400440532013000",
+      }),
+    ]);
+  });
+
+  it("a justified line squeezed to keep a word is not past the edge; an indented one may be", async () => {
+    const words = "The quick brown fox jumps over the lazy dog while the band plays on and on. ";
+    const widths = Array.from({ length: 40 }, (_, i) => 100 + i * 5);
+    const justified = await collect(
+      Document([
+        Page(widths.map((w) => Box({ width: w }, [Text(words.repeat(4), { align: "justify" })]))),
+      ]),
+    );
+    expect(justified).toEqual([]);
+    // Courier 12pt: 7 characters are 50.4pt, in 60pt - but the first line starts 20pt in.
+    const indented = await collect(
+      Document([
+        Page([
+          Box({ width: 60 }, [Text("aaaaaaa", { font: "Courier", size: 12, textIndent: 20 })]),
+        ]),
+      ]),
+    );
+    expect(indented).toEqual([expect.objectContaining({ code: "overflow-wide" })]);
   });
 
   it("an ignored PageBreak names its page", async () => {

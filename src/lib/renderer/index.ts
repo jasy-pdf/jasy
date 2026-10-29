@@ -10,3 +10,5 @@ export * from "./line-renderer.ts";
 export * from "./row-renderer.ts";
 export * from "./svg-renderer.ts";
 export * from "./canvas-renderer.ts";
+export * from "./flow-renderer.ts";
+export * from "./column-break-renderer.ts";

@@ -124,7 +124,22 @@ export function textHeight(
   overflow?: TextOverflow,
   lineHeight?: number,
 ): number {
-  return breakSegmentsIntoLines(spans, defaults, maxWidth, metrics, maxLines, overflow).reduce(
+  return linesHeight(
+    breakSegmentsIntoLines(spans, defaults, maxWidth, metrics, maxLines, overflow),
+    defaults,
+    metrics,
+    lineHeight,
+  );
+}
+
+/** How tall these lines stand, each in its own line box. */
+export function linesHeight(
+  lines: SegmentLine[],
+  defaults: SegmentDefaults,
+  metrics: FontMetrics,
+  lineHeight?: number,
+): number {
+  return lines.reduce(
     (total, line) => total + lineBoxForSegmentLine(line, defaults, metrics, lineHeight).height,
     0,
   );

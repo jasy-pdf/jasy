@@ -129,7 +129,7 @@ export class FlexLayoutHelper {
     options: FlexOptions,
     ctx: LayoutContext,
     mode: FlexMode = "layout",
-  ): { mainUsed: number; crossUsed: number } {
+  ): { mainUsed: number; crossUsed: number; widestLine?: number } {
     if (!options.wrap || children.length === 0 || !Number.isFinite(mainAvail)) {
       // An unbounded main axis has no edge to wrap at, so wrapping there is meaningless, not an error.
       return FlexLayoutHelper.layoutLine(
@@ -169,7 +169,7 @@ export class FlexLayoutHelper {
     options: FlexOptions,
     ctx: LayoutContext,
     mode: FlexMode,
-  ): { mainUsed: number; crossUsed: number } {
+  ): { mainUsed: number; crossUsed: number; widestLine: number } {
     const gap = options.gap ?? 0;
     const ordered = inLayoutOrder(children, options.reverse ?? false);
 
@@ -216,24 +216,39 @@ export class FlexLayoutHelper {
     // Each line keeps SOURCE order internally: the ordering was applied above, and applying it again
     // per line would reverse twice.
     const lineOptions = { ...options, wrap: false, reverse: false, main: mainAlignOf(options) };
-    const measure = lines.map((line) =>
+    const measureAt = (line: PDFElement[], cross: number) =>
       FlexLayoutHelper.layoutLine(
         line,
         axis,
         mainAvail,
-        // Across a Column a child gets the column's width, as a block does in CSS (a paragraph wraps
-        // inside it); across a Row it is as tall as its content. Either way the line is only as big as
-        // what is on it, so `stretch` fills the line and not the container.
-        axis.mainHorizontal ? Infinity : crossAvail,
+        cross,
         0,
         lineOptions,
         ctx,
         "measure",
         true,
-      ),
+      );
+    // Across a Column a child gets the column's width, as a block does in CSS (a paragraph wraps inside
+    // it); across a Row it is as tall as its content. Either way the line is only as big as what is on
+    // it, so `stretch` fills the line and not the container. A region-sized child (a Flow) has no
+    // content height: its line shares what the other lines leave of the Row's height.
+    const regionLine = (line: PDFElement[]) =>
+      axis.mainHorizontal && line.some((c) => c.needsRegion());
+    const measure = lines.map((line) =>
+      regionLine(line) ? null : measureAt(line, axis.mainHorizontal ? Infinity : crossAvail),
     );
+    const regionLines = lines.filter(regionLine).length;
+    if (regionLines > 0) {
+      const taken =
+        measure.reduce((n, m) => n + (m?.crossUsed ?? 0), 0) + Math.max(0, lines.length - 1) * gap;
+      const share = Math.max(0, crossAvail - taken) / regionLines;
+      lines.forEach((line, i) => {
+        if (regionLine(line)) measure[i] = measureAt(line, share);
+      });
+    }
+    const sized = measure as { mainUsed: number; crossUsed: number }[];
 
-    const heights = measure.map((m) => m.crossUsed);
+    const heights = sized.map((m) => m.crossUsed);
     const totalCross = heights.reduce((n, h) => n + h, 0) + Math.max(0, lines.length - 1) * gap;
 
     // `alignContent` distributes the BLOCK of lines across the axis, using the same vocabulary the main
@@ -268,7 +283,12 @@ export class FlexLayoutHelper {
       if (i < lines.length - 1) cursor += between;
     });
 
-    return { mainUsed: mainAvail, crossUsed: Math.max(totalCross, cursor) };
+    return {
+      mainUsed: mainAvail,
+      crossUsed: Math.max(totalCross, cursor),
+      // A child wider than the line runs past it, in a line of its own.
+      widestLine: Math.max(...sized.map((m) => m.mainUsed)),
+    };
   }
 
   /**
@@ -422,7 +442,14 @@ function measureLine(line: FlexLine): void {
       line.totalFlex += flexible.getFlex();
       line.totalBasis += flexible.getBasis(line.percentBase);
       if (Number.isFinite(line.mainAvail)) {
-        const floor = Math.max(0, child.minIntrinsicMain(axis.mainHorizontal, line.ctx));
+        // Down a column, a flex child keeps its content's height (CSS `min-height: auto`): squeezed
+        // below it, it would draw over the sibling that follows.
+        const content = axis.mainHorizontal
+          ? 0
+          : axis.mainOf(
+              child.measure(axis.measureConstraints(line.crossAvail, Infinity), line.ctx),
+            );
+        const floor = Math.max(0, child.minIntrinsicMain(axis.mainHorizontal, line.ctx), content);
         line.flexFloor.set(child, floor);
         // A max below the floor loses, as in CSS.
         line.flexCeil.set(child, Math.max(floor, child.maxExtent(axis.mainHorizontal)));
@@ -692,13 +719,18 @@ function placeLine(
   line.children.forEach((child, index) => {
     let mainExtent: number;
     const flexible = flexibleOf(child);
+    // A region-sized child (a Flow) takes the height the Row was given, never one its siblings make.
+    const regionSized = axis.mainHorizontal && child.needsRegion();
     if (flexible) {
       mainExtent = line.flexExtent.get(child)!;
       const align = alignSelfOf(child) ?? cross;
-      const own = align === "stretch" ? crossExtent : ownCross(line, child, mainExtent);
+      // Stretched, it is capped at the line; otherwise it may take what the line offers, and is
+      // aligned by what it takes.
+      const cap = align === "stretch" && !regionSized ? crossExtent : line.crossAvail;
+      const own = align === "stretch" || regionSized ? cap : ownCross(line, child, mainExtent);
       const size = place(
         child,
-        axis.flexConstraints(mainExtent, own),
+        axis.flexConstraints(mainExtent, cap),
         axis.offsetAt(mainPos, crossOrigin + crossOffset(align, crossExtent, own)),
       );
       placedCross = Math.max(placedCross, axis.crossOf(size));
@@ -708,7 +740,7 @@ function placeLine(
       const size = place(
         child,
         axis.measureConstraints(
-          align === "stretch" ? crossExtent : line.crossAvail,
+          align === "stretch" && !regionSized ? crossExtent : line.crossAvail,
           mainCapFor(line, child),
         ),
         axis.offsetAt(mainPos, crossOrigin + crossOffset(align, crossExtent, childCross)),

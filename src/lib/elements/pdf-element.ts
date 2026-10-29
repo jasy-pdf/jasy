@@ -75,6 +75,10 @@ export interface LayoutContext {
    *  means "move to the next page", never an overflow - only content at the top of a fresh page is
    *  forced on and reported. Set by `packChildren`; absent = top of the page. */
   belowContent?: boolean;
+  /** Packing into a Region of a `Flow`, where a `ColumnBreak` moves on to the next Region. */
+  inFlowRegion?: boolean;
+  /** Laying out a page of a `Flow`'s template: the page a `Region` laid out here belongs to. */
+  flowPage?: object;
   /** What a `Box`'s percentage padding resolves against (CSS: the containing block). A Row sets it for
    *  its children - it offers them no width, so the Box could not know it; otherwise the Box sets it
    *  from what it was offered. Consumed by the Box's own padding, so it never travels further down. */
@@ -181,6 +185,27 @@ export abstract class PDFElement {
    */
   protected abstract computeSize(constraints: BoxConstraints, ctx: LayoutContext): Size;
 
+  /**
+   * A copy of this element and of every element it holds, as it was built - to place one element
+   * twice, which a single instance cannot (it has one position). Everything else stays shared: an
+   * image's pixels, a callback. The copy tags as an element of its own.
+   */
+  clone(): this {
+    const copyOf = (value: unknown): unknown =>
+      value instanceof PDFElement
+        ? value.clone()
+        : Array.isArray(value)
+          ? value.map(copyOf)
+          : value;
+    const copy = Object.create(Object.getPrototypeOf(this)) as this;
+    for (const [key, value] of Object.entries(this)) {
+      (copy as Record<string, unknown>)[key] = copyOf(value);
+    }
+    copy.sizeCache = undefined;
+    copy._structId = _nextStructId++;
+    return copy;
+  }
+
   /** The elements this one lays out, for walks that must see the whole tree. Leaves have none. */
   layoutChildren(): readonly PDFElement[] {
     return [];
@@ -252,10 +277,24 @@ export abstract class PDFElement {
   }
 
   /**
+   * Whether this element takes its height from the REGION it is fragmented into (a `Flow`), anywhere
+   * in a subtree that has no height of its own. Such an element has no natural height to measure, so
+   * the packer fragments it into the space left instead of placing it whole. Default: no.
+   */
+  needsRegion(): boolean {
+    return false;
+  }
+
+  /**
    * Whether this element IS a forced page break (a `PageBreak`). The pagination packer cuts the flow
    * at such a marker: everything before it stays, everything after starts a new page. Default: no.
    */
   isPageBreak(): boolean {
+    return false;
+  }
+
+  /** Whether this element IS a `ColumnBreak`: the packer of a Flow's Region cuts there. Default: no. */
+  isColumnBreak(): boolean {
     return false;
   }
 

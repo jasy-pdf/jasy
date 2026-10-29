@@ -86,6 +86,10 @@ export class PaddingElement extends SizedPDFElement implements Fragmentable {
     return this.child.needsBoundedMain(horizontal);
   }
 
+  override needsRegion(): boolean {
+    return this.child.needsRegion();
+  }
+
   override hasForcedBreak(): boolean {
     return this.child.hasForcedBreak();
   }

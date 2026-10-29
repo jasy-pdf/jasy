@@ -76,3 +76,44 @@ describe("the child of an Expanded fills its share", () => {
     expect(widthOf(free)).toBe(400);
   });
 });
+
+describe("down a column, and in a sized box", () => {
+  const laidOut = (el: ReturnType<typeof Column>, width: number, height: number) =>
+    el.calculateLayout(BoxConstraints.loose(width, height), { x: 0, y: 0 }, ctx());
+  const lines = (n: number) => Array.from({ length: n }, (_, i) => Text(`line ${i}`, { size: 10 }));
+
+  it("an Expanded keeps its content's height: the one after it starts below, never on top", () => {
+    const a = Column(lines(16));
+    const b = Column(lines(2));
+    laidOut(Column([Expanded(a), Expanded(b)]), 200, 260);
+    const aEnd = (a.getProps().y as number) + (a.getProps().height as number);
+    expect(b.getProps().y).toBeGreaterThanOrEqual(aEnd);
+  });
+
+  it("a single Expanded in a Box with a height fills it - with a border and padding too", () => {
+    const cases = [
+      [{ height: 100 }, 100],
+      [{ height: 100, border: "black", borderWidth: 2 }, 96],
+      [{ height: 100, padding: 10 }, 80],
+    ] as const;
+    for (const [opts, expected] of cases) {
+      const inner = Box([]);
+      Box(opts, [Expanded(inner)]).calculateLayout(
+        BoxConstraints.loose(200, 300),
+        { x: 0, y: 0 },
+        ctx(),
+      );
+      expect(inner.getProps().height).toBe(expected);
+    }
+  });
+
+  it("a % height across the line resolves against the line once, not against itself again", () => {
+    const half = Box({ height: "50%" }, []);
+    Row({ height: 200 }, [Expanded(half), Expanded(Box([]))]).calculateLayout(
+      BoxConstraints.loose(260, 300),
+      { x: 0, y: 0 },
+      ctx(),
+    );
+    expect(half.getProps().height).toBe(100);
+  });
+});
