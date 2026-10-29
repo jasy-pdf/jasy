@@ -240,6 +240,54 @@ describe("Flow - wrapped", () => {
     ).rejects.toThrow(FlowUnboundedError);
   });
 
+  it("in a wrapping Row it takes what the lines before it leave of the height", async () => {
+    const seen: Diagnostic[] = [];
+    const pages = await drawnPages(() =>
+      renderToBytes(
+        Document([
+          Page({ size: { width: 300, height: 300 }, margin: 20 }, [
+            Row({ height: 100, wrap: true }, [
+              Box({ width: 260, height: 40 }),
+              Box({ width: 260 }, [Flow({ template: () => Region() }, lines(0, 12))]),
+            ]),
+            Text("after", mono),
+          ]),
+        ]),
+        { onOverflow: "warn", onDiagnostic: (d) => seen.push(d) },
+      ),
+    );
+    const after = find(pages[0]!, "after").y;
+    const flowed = pages[0]!.filter((r) => r.text.startsWith("L"));
+    expect(flowed.length).toBeGreaterThan(2);
+    expect(flowed.length).toBeLessThan(12);
+    expect(flowed.every((r) => r.y < after)).toBe(true);
+    expect(seen.map((d) => d.code)).toEqual(["overflow-clipped"]);
+  });
+
+  it("in a Row inside a wrapping Row it needs that inner Row to have a height", async () => {
+    const nested = (wrap: boolean, height?: number) =>
+      render([
+        Row({ height: 50, wrap }, [
+          Expanded(Row({ height }, [Expanded(Flow({ template: twoColumns }, lines(0, 8)))])),
+        ]),
+        Text("after", mono),
+      ]);
+    // A wrapped line is as tall as its content, so the inner Row is 0 tall - and the error says so.
+    await expect(nested(true)).rejects.toThrow(/In a wrapping Row a line is only as tall/);
+    for (const pages of [await nested(false), await nested(true, 50)]) {
+      expect(find(pages[0]!, "L4").x).toBe(RIGHT);
+    }
+  });
+
+  it("a Region with no room says nothing about wrapping Rows", async () => {
+    await expect(
+      render([Flow({ template: () => Region({ width: 0 }) }, lines(0, 3))]),
+    ).rejects.toThrow(FlowRegionsEmptyError);
+    await expect(
+      render([Flow({ template: () => Region({ width: 0 }) }, lines(0, 3))]),
+    ).rejects.not.toThrow(/wrapping Row/);
+  });
+
   it("in a Row with a height it takes that height - a wrapping Row too", async () => {
     for (const wrap of [false, true]) {
       const pages = await render([

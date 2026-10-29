@@ -31,7 +31,11 @@ export class FlowRegionsEmptyError extends Error {
     super(
       `@jasy/pdf: a Flow's template leaves its Regions no room in ${Math.round(width)} x ` +
         `${Math.round(height)}pt - every Region is 0 wide or 0 tall (too many columns or gaps for the ` +
-        "width, or the rest of the template is taller than the space). Give the Regions room.",
+        "width, or the rest of the template is taller than the space). Give the Regions room." +
+        (height <= 0
+          ? " In a wrapping Row a line is only as tall as its content - give the Row around the " +
+            "Flow a height."
+          : ""),
     );
     this.name = "FlowRegionsEmptyError";
   }

@@ -216,25 +216,39 @@ export class FlexLayoutHelper {
     // Each line keeps SOURCE order internally: the ordering was applied above, and applying it again
     // per line would reverse twice.
     const lineOptions = { ...options, wrap: false, reverse: false, main: mainAlignOf(options) };
-    const measure = lines.map((line) =>
+    const measureAt = (line: PDFElement[], cross: number) =>
       FlexLayoutHelper.layoutLine(
         line,
         axis,
         mainAvail,
-        // Across a Column a child gets the column's width, as a block does in CSS (a paragraph wraps
-        // inside it); across a Row it is as tall as its content. Either way the line is only as big as
-        // what is on it, so `stretch` fills the line and not the container. A region-sized child (a
-        // Flow) has no content height: its line is as tall as the Row allows.
-        axis.mainHorizontal && !line.some((c) => c.needsRegion()) ? Infinity : crossAvail,
+        cross,
         0,
         lineOptions,
         ctx,
         "measure",
         true,
-      ),
+      );
+    // Across a Column a child gets the column's width, as a block does in CSS (a paragraph wraps inside
+    // it); across a Row it is as tall as its content. Either way the line is only as big as what is on
+    // it, so `stretch` fills the line and not the container. A region-sized child (a Flow) has no
+    // content height: its line shares what the other lines leave of the Row's height.
+    const regionLine = (line: PDFElement[]) =>
+      axis.mainHorizontal && line.some((c) => c.needsRegion());
+    const measure = lines.map((line) =>
+      regionLine(line) ? null : measureAt(line, axis.mainHorizontal ? Infinity : crossAvail),
     );
+    const regionLines = lines.filter(regionLine).length;
+    if (regionLines > 0) {
+      const taken =
+        measure.reduce((n, m) => n + (m?.crossUsed ?? 0), 0) + Math.max(0, lines.length - 1) * gap;
+      const share = Math.max(0, crossAvail - taken) / regionLines;
+      lines.forEach((line, i) => {
+        if (regionLine(line)) measure[i] = measureAt(line, share);
+      });
+    }
+    const sized = measure as { mainUsed: number; crossUsed: number }[];
 
-    const heights = measure.map((m) => m.crossUsed);
+    const heights = sized.map((m) => m.crossUsed);
     const totalCross = heights.reduce((n, h) => n + h, 0) + Math.max(0, lines.length - 1) * gap;
 
     // `alignContent` distributes the BLOCK of lines across the axis, using the same vocabulary the main
@@ -273,7 +287,7 @@ export class FlexLayoutHelper {
       mainUsed: mainAvail,
       crossUsed: Math.max(totalCross, cursor),
       // A child wider than the line runs past it, in a line of its own.
-      widestLine: Math.max(...measure.map((m) => m.mainUsed)),
+      widestLine: Math.max(...sized.map((m) => m.mainUsed)),
     };
   }
 
