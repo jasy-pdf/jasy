@@ -17,12 +17,14 @@ export class PositionedRenderer {
     scope: RenderScope,
   ): Promise<IRNode[]> {
     const { child, zIndex } = positionedElement.getProps();
-    const nodes = await RendererRegistry.render(child, objectManager, {
-      ...scope,
-      origin: scope.frame,
-    });
-    if (zIndex === 0 || !scope.stacked) return nodes;
-    scope.stacked.push({ zIndex, nodes });
+    const render = () =>
+      RendererRegistry.render(child, objectManager, { ...scope, origin: scope.frame });
+    if (zIndex === 0 || !scope.stacked) return render();
+    // Its place in the stack is taken BEFORE its child renders: a nested Positioned with the same
+    // zIndex hands its drawing in during that, and must come after its outer one, in tree order.
+    const entry = { zIndex, nodes: [] as IRNode[] };
+    scope.stacked.push(entry);
+    entry.nodes = await render();
     return [];
   }
 

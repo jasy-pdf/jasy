@@ -454,6 +454,23 @@ describe("PositionedElement - zIndex", () => {
     expect(await paintOrder([outer, at(33, 3)])).toEqual([44, 33, 55]);
   });
 
+  it("paints an outer one before a nested one of the same zIndex, in tree order", async () => {
+    const outer = new PositionedElement({
+      top: 0,
+      left: 0,
+      zIndex: 2,
+      child: new RectangleElement({
+        x: 0,
+        y: 0,
+        width: 44,
+        height: 20,
+        borderWidth: 0,
+        children: [at(55, 2)],
+      }),
+    });
+    expect(await paintOrder([outer])).toEqual([44, 55]);
+  });
+
   it("keeps one inside a clipping Box in that clip", async () => {
     const clipped = new RectangleElement({
       x: 0,
