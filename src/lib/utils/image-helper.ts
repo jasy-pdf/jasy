@@ -50,7 +50,7 @@ function resolution(x: number, y: number): Resolution | undefined {
   return Number.isFinite(x) && Number.isFinite(y) && x > 0 && y > 0 ? { x, y } : undefined;
 }
 
-/** PNG `pHYs`: pixels per unit, and only unit 1 (metre) is a physical size - 0 is an aspect ratio. */
+/** PNG `pHYs`: pixels per unit, and only unit 1 (meter) is a physical size - 0 is an aspect ratio. */
 function pngResolution(view: DataView): Resolution | undefined {
   for (let offset = 8; offset + 8 <= view.byteLength; ) {
     const length = view.getUint32(offset);
@@ -65,7 +65,7 @@ function pngResolution(view: DataView): Resolution | undefined {
   return undefined;
 }
 
-/** JFIF `APP0`: units 1 = dots per inch, 2 = per centimetre, 0 = an aspect ratio only. */
+/** JFIF `APP0`: units 1 = dots per inch, 2 = per centimeter, 0 = an aspect ratio only. */
 function jfifResolution(view: DataView, data: number): Resolution | undefined {
   if (view.getUint32(data) !== 0x4a464946 || view.getUint8(data + 4) !== 0) return undefined; // "JFIF\0"
   const units = view.getUint8(data + 7);
@@ -114,33 +114,118 @@ function tryRead(read: () => Resolution | undefined): Resolution | undefined {
   }
 }
 
+/** What a JPEG's header says about it: its frame, how it is coded, and what it declares. */
+interface JpegHeader {
+  width: number;
+  height: number;
+  /** 1 = gray, 3 = RGB (YCbCr), 4 = CMYK (or YCCK). */
+  components: number;
+  /** The start-of-frame marker: how the image is coded. */
+  sof: number;
+  /** An Adobe `APP14` segment: Photoshop stores CMYK inverted. */
+  adobe: boolean;
+  dpi?: Resolution;
+}
+
+/** Start-of-frame markers; the rest of 0xFFC0..0xFFCF are tables (DHT C4, JPG C8, DAC CC). */
+const isSof = (marker: number) =>
+  marker >= 0xffc0 &&
+  marker <= 0xffcf &&
+  marker !== 0xffc4 &&
+  marker !== 0xffc8 &&
+  marker !== 0xffcc;
+
+/** Markers without a length: TEM and the restart markers. */
+const isStandalone = (marker: number) =>
+  marker === 0xff01 || (marker >= 0xffd0 && marker <= 0xffd7);
+
+function jpegHeader(view: DataView): JpegHeader {
+  // JFIF is the container's own declaration and wins; EXIF is what a camera writes.
+  let jfif: Resolution | undefined;
+  let exif: Resolution | undefined;
+  let adobe = false;
+  let offset = 2;
+  while (offset + 4 <= view.byteLength) {
+    if (view.getUint8(offset + 1) === 0xff) {
+      offset++; // a fill byte before the marker
+      continue;
+    }
+    const marker = view.getUint16(offset);
+    offset += 2;
+    if (isStandalone(marker)) continue;
+    if (isSof(marker)) {
+      const dpi = jfif ?? exif;
+      return {
+        height: view.getUint16(offset + 3),
+        width: view.getUint16(offset + 5),
+        components: view.getUint8(offset + 7),
+        sof: marker,
+        adobe,
+        ...(dpi ? { dpi } : {}),
+      };
+    }
+    if (marker === 0xffe0) jfif ??= tryRead(() => jfifResolution(view, offset + 2));
+    if (marker === 0xffe1) exif ??= tryRead(() => exifResolution(view, offset + 2));
+    // "Adobe"
+    if (
+      marker === 0xffee &&
+      view.getUint32(offset + 2) === 0x41646f62 &&
+      view.getUint8(offset + 6) === 0x65
+    )
+      adobe = true;
+    offset += view.getUint16(offset);
+  }
+  throw new Error("Unsupported image format");
+}
+
+/** Thrown for a JPEG we cannot embed as it is. Says what it is and what to do. */
+export class JpegFormatError extends Error {
+  constructor(message: string) {
+    super(`@jasy/pdf: ${message}`);
+  }
+}
+
+/** Baseline, extended sequential and progressive: the codings a PDF viewer's DCTDecode reads. */
+const DCT_CODINGS = new Set([0xffc0, 0xffc1, 0xffc2]);
+
+/** How a JPEG is embedded as it is (`DCTDecode`): its color space, and a `/Decode` for Adobe CMYK. */
+export interface JpegColor {
+  colorSpace: "DeviceGray" | "DeviceRGB" | "DeviceCMYK";
+  decode?: number[];
+}
+
+export function jpegColor(bytes: Uint8Array): JpegColor {
+  const header = jpegHeader(new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength));
+  if (!DCT_CODINGS.has(header.sof)) {
+    throw new JpegFormatError(
+      "this JPEG is lossless, hierarchical or arithmetic-coded, which PDF viewers cannot decode. " +
+        "Save it again as a baseline or progressive JPEG, or as a PNG.",
+    );
+  }
+  switch (header.components) {
+    case 1:
+      return { colorSpace: "DeviceGray" };
+    case 3:
+      return { colorSpace: "DeviceRGB" };
+    case 4:
+      return header.adobe
+        ? { colorSpace: "DeviceCMYK", decode: [1, 0, 1, 0, 1, 0, 1, 0] }
+        : { colorSpace: "DeviceCMYK" };
+    default:
+      throw new JpegFormatError(
+        `this JPEG has ${header.components} color channels; only gray, RGB and CMYK are embedded.`,
+      );
+  }
+}
+
 /** Read from the header alone, synchronously - layout can ask it. */
 export function getImageDimensions(buffer: Uint8Array): ImageDimensions {
   // The view's own window: a `Uint8Array` may be a slice of a larger buffer (a Node `Buffer` usually is).
   const dataView = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
 
-  // Check for JPEG (0xFFD8 is the start of JPEG file)
   if (dataView.getUint16(0) === 0xffd8) {
-    // JFIF is the container's own declaration and wins; EXIF is what a camera writes.
-    let jfif: Resolution | undefined;
-    let exif: Resolution | undefined;
-    let offset = 2;
-    while (offset < buffer.byteLength) {
-      const marker = dataView.getUint16(offset, false);
-      offset += 2;
-      if (marker === 0xffc0 || marker === 0xffc2) {
-        // SOF0 or SOF2
-        const dpi = jfif ?? exif;
-        return {
-          height: dataView.getUint16(offset + 3, false),
-          width: dataView.getUint16(offset + 5, false),
-          ...(dpi ? { dpi } : {}),
-        };
-      }
-      if (marker === 0xffe0) jfif ??= tryRead(() => jfifResolution(dataView, offset + 2));
-      if (marker === 0xffe1) exif ??= tryRead(() => exifResolution(dataView, offset + 2));
-      offset += dataView.getUint16(offset, false);
-    }
+    const { width, height, dpi } = jpegHeader(dataView);
+    return { width, height, ...(dpi ? { dpi } : {}) };
   }
 
   // Check for PNG (0x89504E47 is the PNG signature)

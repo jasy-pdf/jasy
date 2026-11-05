@@ -17,7 +17,7 @@ const chunk = (type: string, data: number[]) => {
   return [...u32(data.length), ...body, ...u32(crc32(body))];
 };
 
-/** `png` with a pHYs chunk after IHDR: pixels per unit, unit 1 = metre. */
+/** `png` with a pHYs chunk after IHDR: pixels per unit, unit 1 = meter. */
 const withPhys = (png: Uint8Array, ppuX: number, ppuY: number, unit = 1) => {
   const ihdrEnd = 8 + 12 + 13;
   return Uint8Array.from([
@@ -72,7 +72,7 @@ const greenPng = async (w: number, h: number) =>
   new Uint8Array(await new Jimp({ width: w, height: h, color: 0x00ff00ff }).getBuffer("image/png"));
 
 describe("the resolution an image file declares", () => {
-  it("PNG pHYs in pixels per metre", async () => {
+  it("PNG pHYs in pixels per meter", async () => {
     const dims = await getImageDimensions(withPhys(await greenPng(4, 2), 5669, 11811));
     expect(dims.dpi!.x).toBeCloseTo(144, 0);
     expect(dims.dpi!.y).toBeCloseTo(300, 0);
@@ -82,7 +82,7 @@ describe("the resolution an image file declares", () => {
     expect((await getImageDimensions(withPhys(await greenPng(4, 2), 3, 3, 0))).dpi).toBeUndefined();
   });
 
-  it("JFIF in dots per inch and per centimetre; units 0 declares none", async () => {
+  it("JFIF in dots per inch and per centimeter; units 0 declares none", async () => {
     expect((await getImageDimensions(jpeg(8, 8, jfif(1, 300, 150)))).dpi).toEqual({
       x: 300,
       y: 150,
@@ -94,7 +94,7 @@ describe("the resolution an image file declares", () => {
     expect((await getImageDimensions(jpeg(8, 8, jfif(0, 1, 1)))).dpi).toBeUndefined();
   });
 
-  it("EXIF when JFIF declares none - inch by default, or centimetres", async () => {
+  it("EXIF when JFIF declares none - inch by default, or centimeters", async () => {
     expect((await getImageDimensions(jpeg(8, 8, jfif(0, 1, 1), exif(72, 72)))).dpi).toEqual({
       x: 72,
       y: 72,

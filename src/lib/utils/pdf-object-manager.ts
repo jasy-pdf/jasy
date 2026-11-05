@@ -47,6 +47,7 @@ import { ColorMode, Orientation } from "../renderer/pdf-config.ts";
 import type { PDFConfig } from "../renderer/pdf-document-class.ts";
 import type { FontMetrics } from "./font-metrics.ts";
 import { Diagnostics } from "../common/diagnostics.ts";
+import { jpegColor, JpegFormatError, type JpegColor } from "./image-helper.ts";
 
 interface FontIndexes {
   fontIndex: number;
@@ -530,14 +531,25 @@ endstream`;
       smaskEntry = `    /SMask ${this.addObject(smaskObject)} 0 R\n`;
     }
 
-    const img = this.streamPayload(bytesFromLatin1(imageData));
+    const bytes = bytesFromLatin1(imageData);
+    // A JPEG is embedded as it is, so it keeps the color space it was saved in; a PNG arrives as RGB.
+    const color: JpegColor =
+      imageType === "DCTDecode" ? jpegColor(bytes) : { colorSpace: "DeviceRGB" };
+    if (color.colorSpace === "DeviceCMYK" && this.outputIntent !== undefined) {
+      throw new JpegFormatError(
+        "a CMYK JPEG in a PDF/A document: its sRGB output intent forbids DeviceCMYK. " +
+          "Convert the image to RGB first.",
+      );
+    }
+    const decode = color.decode ? `    /Decode [${color.decode.join(" ")}]\n` : "";
+    const img = this.streamPayload(bytes);
     const imageObject = `<< /Type /XObject
     /Subtype /Image
     /Width ${width}
     /Height ${height}
-    /ColorSpace /DeviceRGB
+    /ColorSpace /${color.colorSpace}
     /BitsPerComponent 8
-    /Filter /${imageType}
+${decode}    /Filter /${imageType}
 ${smaskEntry}    /Length ${img.length} >>
 stream
 ${img.body}
