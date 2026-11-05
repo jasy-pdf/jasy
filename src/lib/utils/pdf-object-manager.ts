@@ -1135,7 +1135,9 @@ endstream`;
     const all = ttf.glyphWidths();
     const w = [...used]
       .sort((a, b) => a - b)
-      .map((g) => `${g} [${all[g] ?? 1000}]`)
+      // Four decimals: a 2048-unit font's widths are not whole thousandths, and rounding them drew every
+      // line a fraction wider or narrower than it was measured. A 1000-unit font stays byte-identical.
+      .map((g) => `${g} [${Number((all[g] ?? 1000).toFixed(4))}]`)
       .join(" ");
     return (
       `<< /Type /Font /Subtype /CIDFontType2 /BaseFont /${pdfName(name)} ` +
@@ -1257,13 +1259,19 @@ endstream`;
    * `GPOS` tables are unparsed), so it returns zeros - never a wrong value, just no adjustment.
    */
   /** Kerning between adjacent GLYPHS - what a shaped run needs, and what the backend already holds.
-   *  Same lookup as the character path; `getKerning` is keyed by glyph id either way. */
+   *  Same lookup as the character path; `getKerning` is keyed by glyph id either way. A pair that
+   *  touches a space is never kerned, as on the character path: the line breaker measures words and
+   *  spaces apart, so a pair across a space would be drawn but never measured. */
   getGlyphKernPairs(glyphs: readonly number[], fontFamily: string, fontStyle: FontStyle): number[] {
     const ttf = this.getCustomFont(fontFamily, fontStyle);
     if (!ttf) return [];
+    const space = ttf.getGlyphIndex(0x20);
+    const noBreakSpace = ttf.getGlyphIndex(0xa0);
+    const isSpace = (g: number) => g !== 0 && (g === space || g === noBreakSpace); // 0 = no such glyph
     const pairs: number[] = [];
     for (let i = 0; i < glyphs.length - 1; i++) {
-      pairs.push(ttf.getKerning(glyphs[i]!, glyphs[i + 1]!));
+      const [a, b] = [glyphs[i]!, glyphs[i + 1]!];
+      pairs.push(isSpace(a) || isSpace(b) ? 0 : ttf.getKerning(a, b));
     }
     return pairs;
   }

@@ -549,7 +549,7 @@ function assembleTtf(tables: [string, Buffer][]): Buffer {
 // A font that SHAPES and KERNS: GSUB `latn`/`liga` merges A(1)+B(2) into glyph 4, and a `kern` table
 // kerns that ligature against the space (3). Both halves together, because kerning a shaped run reads
 // the pairs off the glyphs shaping produced, not off the characters.
-export function buildLigatureTtf(kernValue = -80): Buffer {
+export function buildLigatureTtf(kernValue = -80, kernRight = 3): Buffer {
   const gsub = Buffer.from(
     buildGsub(
       [{ tag: "liga", lookups: [0] }],
@@ -559,7 +559,7 @@ export function buildLigatureTtf(kernValue = -80): Buffer {
     ),
   );
 
-  // kern: one pair, the ligature (4) before the space (3).
+  // kern: one pair, the ligature (4) before `kernRight` - the space (3) by default, or A (1).
   const kern = Buffer.alloc(24);
   kern.writeUInt16BE(0, 0);
   kern.writeUInt16BE(1, 2);
@@ -568,7 +568,7 @@ export function buildLigatureTtf(kernValue = -80): Buffer {
   kern.writeUInt16BE(0x0001, 8);
   kern.writeUInt16BE(1, 10);
   kern.writeUInt16BE(4, 18);
-  kern.writeUInt16BE(3, 20);
+  kern.writeUInt16BE(kernRight, 20);
   kern.writeInt16BE(kernValue, 22);
 
   return assembleTtf([...baseTables([0, 500, 700, 250, 600]), ["GSUB", gsub], ["kern", kern]]);

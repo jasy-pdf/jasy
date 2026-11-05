@@ -11,18 +11,20 @@ import { BoxConstraints } from "../../../src/lib/layout/box-constraints.ts";
 import { TextRenderer } from "../../../src/lib/renderer/text-renderer.ts";
 import type { TextRun } from "../../../src/lib/ir/display-list.ts";
 import { PAGE_SCOPE } from "../support/scope.ts";
+import { Document, Page, Text, renderPdf } from "../../../src/lib/api/index.ts";
 
 // Latin ligatures are ON, like kerning: the font's designer drew them, every other renderer applies
 // them, and nobody should need the word to get text set properly. `ligatures: false` opts out - on a
 // Document, a DefaultTextStyle subtree or one Text, since it is an inheritable text style.
 //
-// The fixture font merges A+B into glyph 4 and kerns that ligature against the space by -80.
+// The fixture font merges A+B into glyph 4 and kerns that ligature by -80 - against the space by
+// default, against A when asked.
 
 const FONT = { fontFamily: "Lig", fontSize: 10, fontStyle: FontStyle.Normal };
 
-const om = (kerning = false) => {
+const om = (kerning = false, kernRight?: number) => {
   const m = new PDFObjectManager();
-  m.registerCustomFont("Lig", new Uint8Array(buildLigatureTtf()));
+  m.registerCustomFont("Lig", new Uint8Array(buildLigatureTtf(-80, kernRight)));
   m.setKerning(kerning);
   return m;
 };
@@ -50,9 +52,29 @@ describe("on by default", () => {
   });
 
   it("still kerns, over the SHAPED glyphs", () => {
-    // Why shaped-run kerning had to come first: this run would otherwise lose -80.
-    expect(om(true).getKernPairs("AB ", "Lig", FontStyle.Normal)).toEqual([-80]);
-    expect(runAdvance(om(true), "AB ", FONT, 0)).toBeCloseTo(7.7, 5);
+    // Why shaped-run kerning had to come first: this run would otherwise lose -80. Ligature 6 + A 5.
+    const kernsA = om(true, 1);
+    expect(kernsA.getKernPairs("ABA", "Lig", FontStyle.Normal)).toEqual([-80]);
+    expect(runAdvance(kernsA, "ABA", FONT, 0)).toBeCloseTo(10.2, 5);
+  });
+
+  it("draws no kerning against a space either - drawn as wide as measured", async () => {
+    const pdf = await renderPdf(Document([Page([Text("AB AB", { font: "Lig" })])]), {
+      compress: false,
+      fonts: { Lig: new Uint8Array(buildLigatureTtf()) },
+    });
+    expect(pdf).not.toMatch(/\] TJ/);
+  });
+
+  it("never kerns a pair that touches a space, as an unshaped run does not either", () => {
+    // The breaker measures words and spaces apart, so a pair across a space would be drawn but never
+    // measured - the line ran past its box. The font's -80 against the space is dropped.
+    const m = om(true);
+    expect(m.getKernPairs("AB ", "Lig", FontStyle.Normal)).toEqual([0]);
+    expect(runAdvance(m, "AB AB", FONT, 0)).toBeCloseTo(
+      runAdvance(m, "AB", FONT, 0) * 2 + runAdvance(m, " ", FONT, 0),
+      9,
+    );
   });
 });
 
