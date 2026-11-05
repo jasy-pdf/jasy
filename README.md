@@ -142,7 +142,7 @@ verify all of it:
 - **PDF/A-3, matched not approximated.** The conformance graph is hand-built and **passes veraPDF**, the
   official ISO 19005 validator.
 - **Byte-exact round-trips.** Generate and parse are inverses: `generate → parse → regenerate` reproduces
-  the identical XML. Over 1,600 tests hold the line across the workspace.
+  the identical XML. Over 2,400 tests hold the line across the workspace.
 - **Schematron, local.** The official EN-16931 + XRechnung rules run via saxon-js (the real XSLT, in pure
   JS) - no Java, no upload.
 - **Vectors, not bitmaps.** `Image("logo.svg")` keeps a logo a VECTOR - our own SVG reader and our own
@@ -166,13 +166,14 @@ verify all of it:
 | **[@jasy/cli](https://npmx.dev/@jasy/cli)**             | the `jasy` terminal: read · validate · export, headless **and** interactive                    |
 | **[@jasy/pdf](https://npmx.dev/@jasy/pdf)**             | the declarative, Flutter-style PDF layout engine that powers them                              |
 | **[@jasy/vue](https://npmx.dev/@jasy/vue)**             | author PDFs as Vue components - and render them in the browser                                 |
+| **[@jasy/react](https://npmx.dev/@jasy/react)**         | author PDFs as React components - and render them in the browser                               |
 | **[@jasy/nuxt](https://npmx.dev/@jasy/nuxt)**           | the Nuxt module: zero-config PDFs, client **or** server                                        |
 
 ---
 
 ## Why you can trust it
 
-- **Over 1,600 tests, green** across the workspace (1,190 in the engine alone). The generator and the parser
+- **Over 2,400 tests, green** across the workspace (over 1,700 in the engine alone). The generator and the parser
   are **byte-exact inverses**: `generate → parse → regenerate` reproduces the identical XML. Nothing is
   silently lost.
 - **The same rules the authorities use** - the official KoSIT EN-16931 + XRechnung Schematron, and the

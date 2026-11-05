@@ -44,6 +44,8 @@
     "cli": "pnpm --filter @jasy/cli dev",
     "cli:watch": "pnpm --filter @jasy/cli watch",
     "play": "pnpm --filter @jasy/playground play",
+    "play:vue": "pnpm --filter @jasy/vue play",
+    "play:react": "pnpm --filter @jasy/react play",
     "test": "vitest",
     "test:coverage": "vitest --coverage",
     "build": "tsc && node scripts/fix-dts-ext.mjs && pnpm run copy-assets",
