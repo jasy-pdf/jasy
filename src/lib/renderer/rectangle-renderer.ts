@@ -3,7 +3,7 @@ import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 import { RectangleElement, SideBorders } from "../elements/rectangle-element.ts";
 import { RendererRegistry, type RenderScope } from "../utils/renderer-registry.ts";
 import { IRNode, Rect, Line } from "../ir/display-list.ts";
-import { isGradientInput, resolveGradient } from "../api/gradient.ts";
+import { isGradientInput, resolveGradient } from "../common/gradient.ts";
 import { Color } from "../common/color.ts";
 
 export class RectangleRenderer {

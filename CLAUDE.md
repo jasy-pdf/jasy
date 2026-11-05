@@ -50,6 +50,30 @@ PDFDocument (abstract, user subclasses it, implements build())
 Nothing is laid out before pagination: each page is laid out once, right before it is drawn, with
 its real `PageInfo`. Don't confuse passes A/B with the **roadmap Phases** in `todo.md`.
 
+### The layers - each does its one job and only hands on
+
+Seven layers, in order, for GENERATING a PDF. Check every change against its layer's "never". A fix
+that is easier one layer over is a loan: the next reader looks for the logic in its layer and does not
+find it.
+
+| Layer                                                                    | Hands on                                                                                        | Never                                                                                 |
+| ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| 1 Build - `api/`, element constructors, Vue/Nuxt                         | the element tree; files named by path are read HERE                                             | lays out, draws, knows PDF syntax                                                     |
+| 2 Load - `layout/collect-images.ts`, font registration                   | the tree, every reachable image knowing its size                                                | lays out; the only async step before layout                                           |
+| 3 Layout + pagination - `elements/`, `layout/`, `text/`, the page driver | sizes and offsets relative to the parent                                                        | file or network I/O, `await`, PDF syntax, the writer other than through `FontMetrics` |
+| 4 Producers - `renderer/*-renderer.ts`                                   | `IRNode[]`, absolute, top-left; the facts of a source file (image type, color space)            | lays out again, reads privates, writes a PDF operator                                 |
+| 5 IR - `ir/display-list.ts`                                              | meaning: geometry, a `Color`, `{ space: "cmyk" }`                                               | PDF names, operators, font indices, object numbers                                    |
+| 6 Backend - `renderer/pdf-backend.ts`                                    | the content stream for the IR; the only content-operator writer besides the field faces (below) | reads `getProps()`, knows an element                                                  |
+| 7 Writer - `PDFObjectManager`, page/catalog assembly                     | the bytes; maps meaning to PDF names, enforces PDF/A                                            | knows elements or layout, parses a source format                                      |
+
+**The second pipeline: changing an existing PDF** (`edit/`, the lazy `@jasy/pdf/edit` entry). Read
+(lexer, objects, xref, decryption) → change (`fillForm`, `flattenForm`, readers) → incremental write
+(appended objects + xref; the original file stays a byte prefix). No element tree, no layout, no IR - the
+file already exists. **Field faces** (`forms/appearance.ts`) are the one builder both pipelines share: a
+field must look the same created or filled, and the same again after a viewer redraws it from `/DA`
+(unkerned `Tj`, the field's own coordinate space). It writes content operators because the edit pipeline
+has no IR to hand them to; a field face drawn anywhere else is the bug.
+
 ### Layout — `calculateLayout(constraints, offset, ctx)` and `measure`
 
 - Defined on every element (`PDFElement.calculateLayout`). Signature: `calculateLayout(constraints:
@@ -298,7 +322,7 @@ rendering. This is the standing visual check; prefer it over one-off `scripts/ru
 - Element constructors take a **single options object** (`new TextElement({ fontSize, content, … })`),
   Flutter-style. Sensible defaults in the destructure (e.g. `fontFamily = "Helvetica"`).
 - Elements expose state via `getProps()`; renderers consume `getProps()`, never reach into privates.
-- Renderers return `IRNode[]`, never PDF strings. PDF operators live **only** in `PdfBackend`.
+- Renderers return `IRNode[]`, never PDF strings. PDF content operators live **only** in `PdfBackend`, and for field faces in `forms/appearance.ts` (see the layers).
 - New element = new file in `elements/` implementing `calculateLayout` and `computeSize` from ONE sizing
   path (never override `measure` - the base class owns it). A wrapper that only MARKS its one child (a
   link, a role, inherited defaults) extends `ProxyElement` and adds `childContext`/`rewrap` - it then
@@ -490,7 +514,7 @@ enforces it (`skonto.ts` for "Skonto is not an allowance"), and everywhere else 
 - **Font URLs resolve at REGISTRATION**, like a file path - a dead link fails on the line that asked.
   15 s timeout, 32 MB ceiling enforced while the body arrives, `FontUrlError`.
 - **Element constructors take one options object; renderers read `getProps()`, never privates;
-  PDF operators live only in `PdfBackend`.**
+  content operators live only in `PdfBackend` and the field faces.**
 
 ## Genuine remaining gaps
 

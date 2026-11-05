@@ -1,5 +1,5 @@
 import { Color } from "../common/color.ts";
-import { toColor } from "../api/color.ts";
+import { toColor } from "../common/color-input.ts";
 import type { StrokeStyle } from "../ir/display-list.ts";
 import { SvgParseError, SvgUnsupportedError } from "./errors.ts";
 import { length, ratio } from "./units.ts";
