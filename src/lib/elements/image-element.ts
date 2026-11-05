@@ -1,6 +1,6 @@
 import type { Radii } from "../ir/display-list.ts";
 import {
-  getImageDimensions,
+  readImageDimensions,
   naturalSize,
   type FitAlign,
   type ImageDimensions,
@@ -55,7 +55,7 @@ export abstract class CustomImage {
 /** Dimensions read from bytes in hand; a format we cannot read is `undefined` here - the render names it. */
 function headerOf(bytes: Uint8Array): ImageDimensions | undefined {
   try {
-    return getImageDimensions(bytes);
+    return readImageDimensions(bytes);
   } catch {
     return undefined;
   }
@@ -114,7 +114,7 @@ export class CustomLocalImage extends CustomImage {
   }
 
   async getImageDimensions(): Promise<ImageDimensions> {
-    this.dims ??= getImageDimensions(this.fileBuffer); // reuse across layout + render
+    this.dims ??= readImageDimensions(this.fileBuffer); // reuse across layout + render
     return this.dims;
   }
 }
@@ -125,7 +125,7 @@ export class CustomLocalImage extends CustomImage {
  */
 export class CustomBytesImage extends CustomImage {
   private fileRawData: string;
-  private dims?: ImageDimensions; // memoized so the decode happens once
+  private dims?: ImageDimensions; // memoized so the header is read once
   constructor(private bytes: Uint8Array) {
     super();
     this.fileRawData = latin1FromBytes(bytes);
@@ -145,7 +145,7 @@ export class CustomBytesImage extends CustomImage {
   }
 
   async getImageDimensions(): Promise<ImageDimensions> {
-    this.dims ??= getImageDimensions(this.bytes); // reuse across layout + render
+    this.dims ??= readImageDimensions(this.bytes); // reuse across layout + render
     return this.dims;
   }
 

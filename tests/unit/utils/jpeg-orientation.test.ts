@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  getImageDimensions,
+  readImageDimensions,
   naturalSize,
   ORIENTATION_MATRIX,
   type Orientation,
@@ -57,13 +57,13 @@ const jpeg = (w: number, h: number, orientation: number, le = false) =>
 
 describe("the EXIF orientation of a JPEG", () => {
   it("is read in both byte orders", () => {
-    expect(getImageDimensions(jpeg(40, 20, 6)).orientation).toBe(6);
-    expect(getImageDimensions(jpeg(40, 20, 8, true)).orientation).toBe(8);
+    expect(readImageDimensions(jpeg(40, 20, 6)).orientation).toBe(6);
+    expect(readImageDimensions(jpeg(40, 20, 8, true)).orientation).toBe(8);
   });
 
   it("is absent when the pixels are already upright, or the value is not one", () => {
-    expect(getImageDimensions(jpeg(40, 20, 1)).orientation).toBeUndefined();
-    expect(getImageDimensions(jpeg(40, 20, 9)).orientation).toBeUndefined();
+    expect(readImageDimensions(jpeg(40, 20, 1)).orientation).toBeUndefined();
+    expect(readImageDimensions(jpeg(40, 20, 9)).orientation).toBeUndefined();
   });
 
   it("swaps width and height for 5-8, and only there", () => {

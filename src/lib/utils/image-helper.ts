@@ -265,7 +265,7 @@ export function jpegColor(bytes: Uint8Array): ImageColor {
 }
 
 /** Read from the header alone, synchronously - layout can ask it. */
-export function getImageDimensions(buffer: Uint8Array): ImageDimensions {
+export function readImageDimensions(buffer: Uint8Array): ImageDimensions {
   // The view's own window: a `Uint8Array` may be a slice of a larger buffer (a Node `Buffer` usually is).
   const dataView = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
 

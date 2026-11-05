@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getImageDimensions } from "../../../src/lib/utils/image-helper.ts";
+import { readImageDimensions } from "../../../src/lib/utils/image-helper.ts";
 
 // The image header is read through the VIEW's window. A `Uint8Array` handed in may be a slice of a
 // larger buffer - a Node `Buffer` from a pool usually is - and reading from the buffer's start then
@@ -25,17 +25,17 @@ const sliced = (bytes: Uint8Array, offset = 16) => {
   return pool.subarray(offset, offset + bytes.length);
 };
 
-describe("getImageDimensions - reads the view, not the buffer under it", () => {
+describe("readImageDimensions - reads the view, not the buffer under it", () => {
   it("a PNG at an offset", async () => {
-    expect(await getImageDimensions(sliced(png(40, 20)))).toEqual({ width: 40, height: 20 });
+    expect(readImageDimensions(sliced(png(40, 20)))).toEqual({ width: 40, height: 20 });
   });
 
   it("a JPEG at an offset", async () => {
-    expect(await getImageDimensions(sliced(jpeg(300, 200)))).toEqual({ width: 300, height: 200 });
+    expect(readImageDimensions(sliced(jpeg(300, 200)))).toEqual({ width: 300, height: 200 });
   });
 
   it("a pooled Node Buffer", async () => {
     const bytes = Buffer.from(png(7, 9)); // small Buffers come out of a shared pool, at an offset
-    expect(await getImageDimensions(bytes)).toEqual({ width: 7, height: 9 });
+    expect(readImageDimensions(bytes)).toEqual({ width: 7, height: 9 });
   });
 });

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { crc32 } from "node:zlib";
 import { Jimp } from "jimp";
-import { getImageDimensions, naturalSize } from "../../../src/lib/utils/image-helper.ts";
+import { readImageDimensions, naturalSize } from "../../../src/lib/utils/image-helper.ts";
 import { Document, Image, Page, renderToBytes } from "../../../src/lib/api/index.ts";
 import { drawnNodes } from "../support/drawn.ts";
 
@@ -73,49 +73,49 @@ const greenPng = async (w: number, h: number) =>
 
 describe("the resolution an image file declares", () => {
   it("PNG pHYs in pixels per meter", async () => {
-    const dims = await getImageDimensions(withPhys(await greenPng(4, 2), 5669, 11811));
+    const dims = readImageDimensions(withPhys(await greenPng(4, 2), 5669, 11811));
     expect(dims.dpi!.x).toBeCloseTo(144, 0);
     expect(dims.dpi!.y).toBeCloseTo(300, 0);
   });
 
   it("PNG pHYs with unit 0 is an aspect ratio, not a resolution", async () => {
-    expect((await getImageDimensions(withPhys(await greenPng(4, 2), 3, 3, 0))).dpi).toBeUndefined();
+    expect(readImageDimensions(withPhys(await greenPng(4, 2), 3, 3, 0)).dpi).toBeUndefined();
   });
 
   it("JFIF in dots per inch and per centimeter; units 0 declares none", async () => {
-    expect((await getImageDimensions(jpeg(8, 8, jfif(1, 300, 150)))).dpi).toEqual({
+    expect(readImageDimensions(jpeg(8, 8, jfif(1, 300, 150))).dpi).toEqual({
       x: 300,
       y: 150,
     });
-    expect((await getImageDimensions(jpeg(8, 8, jfif(2, 100, 100)))).dpi).toEqual({
+    expect(readImageDimensions(jpeg(8, 8, jfif(2, 100, 100))).dpi).toEqual({
       x: 254,
       y: 254,
     });
-    expect((await getImageDimensions(jpeg(8, 8, jfif(0, 1, 1)))).dpi).toBeUndefined();
+    expect(readImageDimensions(jpeg(8, 8, jfif(0, 1, 1))).dpi).toBeUndefined();
   });
 
   it("EXIF when JFIF declares none - inch by default, or centimeters", async () => {
-    expect((await getImageDimensions(jpeg(8, 8, jfif(0, 1, 1), exif(72, 72)))).dpi).toEqual({
+    expect(readImageDimensions(jpeg(8, 8, jfif(0, 1, 1), exif(72, 72))).dpi).toEqual({
       x: 72,
       y: 72,
     });
-    expect((await getImageDimensions(jpeg(8, 8, exif(100, 100, 3)))).dpi).toEqual({
+    expect(readImageDimensions(jpeg(8, 8, exif(100, 100, 3))).dpi).toEqual({
       x: 254,
       y: 254,
     });
   });
 
   it("JFIF wins over EXIF", async () => {
-    expect((await getImageDimensions(jpeg(8, 8, exif(72, 72), jfif(1, 300, 300)))).dpi).toEqual({
+    expect(readImageDimensions(jpeg(8, 8, exif(72, 72), jfif(1, 300, 300))).dpi).toEqual({
       x: 300,
       y: 300,
     });
   });
 
   it("a zero or truncated declaration is none, and the size still reads", async () => {
-    expect(await getImageDimensions(jpeg(8, 4, jfif(1, 0, 300)))).toEqual({ width: 8, height: 4 });
+    expect(readImageDimensions(jpeg(8, 4, jfif(1, 0, 300)))).toEqual({ width: 8, height: 4 });
     const truncated = segment(0xe1, [...ascii("Exif"), 0, 0, ...ascii("MM"), 0, 42, 0, 0, 0xff, 0]);
-    expect(await getImageDimensions(jpeg(8, 4, truncated))).toEqual({ width: 8, height: 4 });
+    expect(readImageDimensions(jpeg(8, 4, truncated))).toEqual({ width: 8, height: 4 });
   });
 });
 
