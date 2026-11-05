@@ -493,6 +493,31 @@ describe("PositionedElement - zIndex", () => {
     expect(nodes).toEqual(["transform-push", 44, 55, "transform-pop", 22]);
   });
 
+  it("refuses a zIndex that is not a number", () => {
+    expect(() => new PositionedElement({ child: fixed(1, 1), zIndex: NaN })).toThrow(/zIndex/);
+    expect(() => new PositionedElement({ child: fixed(1, 1), zIndex: Infinity })).toThrow(/zIndex/);
+  });
+
+  it("keeps its tag where it is written: zIndex moves the paint, not the structure", async () => {
+    // A Positioned in a table cell paints in the page's order, but its text stays tagged inside the cell.
+    const structure = async (zIndex?: number) => {
+      const pdf = await api.renderPdf(
+        api.Document([
+          api.Page([
+            api.Table({ columns: ["auto"] }, [
+              [api.Text("cell"), api.Positioned({ top: 0, left: 0, zIndex }, api.Text("badge"))],
+            ]),
+          ]),
+        ]),
+        { accessible: true, compress: false },
+      );
+      return [...pdf.matchAll(/<< \/Type \/StructElem \/S \/(\w+) \/P (\d+) 0 R/g)].map((m) =>
+        m.slice(1),
+      );
+    };
+    expect(await structure(1)).toEqual(await structure());
+  });
+
   it("is the page's to order when there is no relative Box", async () => {
     const order = (
       await drawnNodes(() =>

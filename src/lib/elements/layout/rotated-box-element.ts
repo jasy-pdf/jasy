@@ -71,11 +71,6 @@ export class RotatedBoxElement extends PDFElement {
   }
 
   /** Same shape as `RotatedElement` (angle + box), so both share `RotatedRenderer`. */
-  /** A turn is a context: a `zIndex` below it sorts inside the turn, never out of it. */
-  override isStackingContext(): boolean {
-    return true;
-  }
-
   override layoutChildren(): readonly PDFElement[] {
     return [this.child];
   }

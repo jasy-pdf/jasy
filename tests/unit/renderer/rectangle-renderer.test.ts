@@ -6,7 +6,7 @@ import { RectangleElement } from "../../../src/lib/elements/rectangle-element.ts
 import { Color } from "../../../src/lib/common/color.ts";
 import { PdfBackend } from "../../../src/lib/renderer/pdf-backend.ts";
 import type { IRNode } from "../../../src/lib/ir/display-list.ts";
-import { PAGE_SCOPE, LEAF } from "../support/scope.ts";
+import { PAGE_SCOPE } from "../support/scope.ts";
 
 describe("RectangleRenderer", () => {
   let mockObjectManager: PDFObjectManager;
@@ -87,7 +87,6 @@ describe("RectangleRenderer", () => {
 
   it("should render a rectangle and its children", async () => {
     const mockChildElement = {
-      ...LEAF,
       getProps: vi.fn().mockReturnValue({
         x: 10,
         y: 20,
@@ -147,7 +146,7 @@ describe("RectangleRenderer", () => {
   });
 
   it("makes a relative box the frame for its subtree", async () => {
-    const child = { getProps: vi.fn(), ...LEAF };
+    const child = { getProps: vi.fn() };
     const childRenderer = vi.fn(async (): Promise<IRNode[]> => []);
     vi.spyOn(RendererRegistry, "getRenderer").mockReturnValue(childRenderer);
     const box = {
@@ -169,9 +168,10 @@ describe("RectangleRenderer", () => {
 
     // Its absolute top-left (origin + own offset) is both its children's origin and the frame its
     // `Positioned` descendants draw from.
-    expect(childRenderer).toHaveBeenCalledWith(child, mockObjectManager, {
-      origin: { x: 15, y: 27 },
-      frame: { x: 15, y: 27 },
-    });
+    expect(childRenderer).toHaveBeenCalledWith(
+      child,
+      mockObjectManager,
+      expect.objectContaining({ origin: { x: 15, y: 27 }, frame: { x: 15, y: 27 } }),
+    );
   });
 });

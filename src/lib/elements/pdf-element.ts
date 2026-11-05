@@ -235,12 +235,6 @@ export abstract class PDFElement {
     return false;
   }
 
-  /** Paints its own `Positioned` descendants that have a `zIndex` (a frame, a clip, a rotation); a walk
-   *  for them stops here. */
-  isStackingContext(): boolean {
-    return this.isPositioningFrame();
-  }
-
   /**
    * The relative-size fraction (0..1) this element asked for on the given axis, if any (`horizontal` =
    * width). A flex parent reads it to resolve a percentage child against its OWN main size - e.g. a

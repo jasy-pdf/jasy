@@ -74,7 +74,11 @@ export class RectangleRenderer {
     }
     // Its children are placed relative to its own top-left; a `relative` box is also the frame its
     // `Positioned` descendants were placed against.
-    const childScope: RenderScope = { origin: { x, y }, frame: relative ? { x, y } : scope.frame };
+    const childScope: RenderScope = {
+      ...scope,
+      origin: { x, y },
+      frame: relative ? { x, y } : scope.frame,
+    };
     // A frame or a clip paints its own `zIndex` order; any other box draws its children as they come.
     if (children)
       nodes.push(

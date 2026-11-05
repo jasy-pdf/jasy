@@ -410,8 +410,9 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
     return this.relative;
   }
 
-  /** A clip is a context too: what it crops stays cropped, whatever its `zIndex`. */
-  override isStackingContext(): boolean {
+  /** Sorts the `zIndex` of the `Positioned` below it: a frame does, and so does a clip - what it crops
+   *  stays cropped, whatever its `zIndex`. */
+  isStackingContext(): boolean {
     return this.relative || this.overflow === "hidden";
   }
 

@@ -50,13 +50,16 @@ export class PositionedElement extends PDFElement {
 
   constructor({ child, top, right, bottom, left, h, v, x, y, zIndex }: PositionedElementParams) {
     super();
+    if (zIndex !== undefined && !Number.isFinite(zIndex)) {
+      throw new Error(`Invalid zIndex ${zIndex}: it must be a number.`);
+    }
     this.child = child;
     this.insets = { top, right, bottom, left, h, v, x, y };
     this.zIndex = zIndex ?? 0;
   }
 
-  /** Its paint order; 0 paints where it stands in the tree, anything else is painted by its context. */
-  readonly zIndex: number;
+  /** Its paint order; 0 paints where it stands in the tree, anything else is sorted by its context. */
+  private readonly zIndex: number;
 
   calculateLayout(_constraints: BoxConstraints, _offset: Offset, ctx: LayoutContext): Size {
     if (!ctx.frame) {
@@ -147,22 +150,6 @@ export function positionedIn(roots: readonly (PDFElement | undefined)[]): Positi
   const walk = (el: PDFElement): void => {
     if (el instanceof PositionedElement) found.push(el);
     if (el.isPositioningFrame()) return;
-    for (const child of el.layoutChildren()) walk(child);
-  };
-  for (const root of roots) if (root) walk(root);
-  return found;
-}
-
-/**
- * The `Positioned` elements with a `zIndex` that a stacking context paints itself, in tree order: every
- * one below `roots`, including those inside another `Positioned`, but none below a nested context - a
- * frame, a clipping Box or a rotation paints its own, so nothing is pulled out of a clip or a turn.
- */
-export function stackedIn(roots: readonly (PDFElement | undefined)[]): PositionedElement[] {
-  const found: PositionedElement[] = [];
-  const walk = (el: PDFElement): void => {
-    if (el instanceof PositionedElement && el.zIndex !== 0) found.push(el);
-    if (el.isStackingContext()) return;
     for (const child of el.layoutChildren()) walk(child);
   };
   for (const root of roots) if (root) walk(root);
