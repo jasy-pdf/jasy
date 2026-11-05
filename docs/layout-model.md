@@ -145,15 +145,17 @@ New rule:
   to the frame owner**. The list depends only on the immutable tree, so it is computed once.
 - **Paint order is tree order** (as Flutter's `Stack`): a `Positioned` is drawn where it sits in the
   tree, so one early in a header lies UNDER the body (a watermark) and one as a last child lies on
-  top (a badge). The author picks the layer by the position in the tree. This is the behaviour
-  before the rebuild and it stays until `z-index` exists; `z-index` comes later on top of it.
+  top (a badge). The author picks the layer by the position in the tree. That stays the default;
+  `zIndex` (beta.5) sorts on top of it.
 - At render, positioned content is drawn at `frameOrigin + offset`. Renderers take a
   `RenderScope { origin, frame }`: a frame owner sets `frame` for its subtree, and a `Positioned`
   draws its child with `origin = frame` at its own place in the tree (no render-time state in the
   elements).
-- `z-index` later: the frame owner already finds its `Positioned` descendants structurally
-  (`positionedIn`). A layer other than the default is then painted by the frame owner, below or
-  above its flow content; the default stays tree order.
+- `zIndex` (beta.5): a `Positioned` still RENDERS at its own place in the tree, so what it registers
+  there (its tag's parent) is right, and hands its drawing to the nearest stacking context - the page,
+  a `relative` Box, a Box with `overflow: "hidden"`, a `Rotated` - which paints the negative ones under
+  its flow content and the positive ones over it (`PositionedRenderer.paintStacked`). Nothing leaves
+  the clip or the turn it was written in; the default stays tree order.
 - Measured why not CSS order without `z-index`: gallery `18-watermark` put "CONFIDENTIAL" over the
   body text instead of under it.
 
@@ -189,7 +191,7 @@ Wrappers forward pagination signals inconsistently today. `StructGroup`, `Expand
 and `RepeatingHeader` drop `forceBreak` from `fragment()`. Most forward neither `hasForcedBreak` nor
 `needsBoundedMain`, and `Anchor`, `Bookmark`, `Link`, `Rotated`, `RotatedBox`, `PageBuilder` and
 `Deferred` forward nothing. They get one shared base that forwards everything. **This changes
-behaviour** (a `PageBreak` inside a `Link` starts to work), so it is its own visible stage, not hidden
+behavior** (a `PageBreak` inside a `Link` starts to work), so it is its own visible stage, not hidden
 inside the refactor.
 
 Built (6b): `ProxyElement` (`elements/layout/proxy-element.ts`, Flutter's `RenderProxyBox`) is the base
@@ -239,7 +241,7 @@ byte-identical unless it says otherwise (section 4 for last digits). All stages,
 are part of this rebuild. **No release in between:** after the last stage we test, talk, show the
 results, and then decide.
 
-| Stage | What                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Behaviour change                                                 |
+| Stage | What                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Behavior change                                                  |
 | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
 | 0     | This document, approved                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | -                                                                |
 | 1     | Pre-work: `Expanded` reuses the previous call's width on an unbounded axis (history-dependent, `expanded-element.ts:156`); `SizedContainerElement` is dead code; the page config merge moves out of layout                                                                                                                                                                                                                                                                                                                       | `Expanded` only where it was wrong                               |
@@ -267,7 +269,7 @@ constant per leaf, independent of depth.
 ## 8. Decisions (Flo, 2026-10-15)
 
 1. **Positioned paint order = tree order** (section 3.4). Revised 2026-10-16 after the watermark
-   render: CSS order without `z-index` puts every watermark on top. `z-index` is a later goal.
+   render: CSS order without `z-index` puts every watermark on top. `zIndex` came in beta.5, on top.
 2. **Floating point:** the rebuild is new and faster; it does not reproduce the old addition order.
    Last-digit differences are re-pinned with a listed diff (section 4).
 3. **Stages 6 and 7** are part of the rebuild. It is carried through, not split.
