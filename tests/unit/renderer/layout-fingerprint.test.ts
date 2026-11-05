@@ -204,7 +204,7 @@ const EXPECTED: Record<string, string> = {
   "inherited text styles": "7156d960178eb6c5",
   "bands on every page": "965fba41b58298ff",
   "text options": "bd72f6c715864607",
-  "fonts, fallback and direction": "548533f2338052bf",
+  "fonts, fallback and direction": "c198fd9903059732",
   "a measured table across pages": "d6d10f1917879e0f",
   "many boxes": "89d9730dea6f0d0c",
   "many paragraphs": "22f6801b2554d620",

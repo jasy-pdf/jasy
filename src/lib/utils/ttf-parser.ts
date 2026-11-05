@@ -236,11 +236,12 @@ export class TTFParser {
     return this.numGlyphs;
   }
 
-  // Advance width of every glyph in PDF glyph space (the /W array of the CIDFont).
+  // Advance width of every glyph in PDF glyph space (the /W array of the CIDFont), NOT rounded: layout
+  // measures the exact width, so the drawn one must be the same number.
   glyphWidths(): number[] {
     const out: number[] = [];
     for (let g = 0; g < this.numGlyphs; g++) {
-      out.push(this.toGlyphSpace(this.getAdvanceWidth(g)));
+      out.push((this.getAdvanceWidth(g) * 1000) / this.unitsPerEm);
     }
     return out;
   }
