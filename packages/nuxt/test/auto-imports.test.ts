@@ -15,6 +15,15 @@ describe("what the module claims to auto-import", () => {
     expect(missing).toEqual([]);
   });
 
+  it("registers every component @jasy/vue exports", () => {
+    // The other direction: a new component in @jasy/vue that this list does not name is simply not
+    // there in a Nuxt template, with no error anywhere - how the form fields went missing once.
+    const components = Object.entries(vue)
+      .filter(([, v]) => typeof v === "object" && v !== null && "setup" in v)
+      .map(([name]) => name);
+    expect(components.filter((n) => !COMPONENTS.includes(n))).toEqual([]);
+  });
+
   it("names only factories @jasy/pdf really exports", () => {
     const missing = [...SERVER_FACTORIES, ...SERVER_UTILS].filter((n) => !(n in pdf));
     expect(missing).toEqual([]);

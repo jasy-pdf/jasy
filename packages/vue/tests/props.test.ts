@@ -63,6 +63,8 @@ const cases: Case[] = [
   ["DefaultTextStyle", "TextDefaults", [], []],
   ["PageNumber", "PageNumberOptions", [], []],
   ["PageCount", "PageNumberOptions", [], []],
+  ["SubPageNumber", "PageNumberOptions", [], []],
+  ["SubPageCount", "PageNumberOptions", [], []],
   // The header row is a <TableRow header>, not a prop.
   ["Table", "TableOptions", [], ["header"]],
   // The template is the #page slot.

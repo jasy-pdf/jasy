@@ -54,6 +54,9 @@ export const COMPONENTS = [
   "RotatedBox",
   "PageNumber",
   "PageCount",
+  "SubPageNumber",
+  "SubPageCount",
+  "PageBuilder",
   // Form fields.
   "TextField",
   "Checkbox",
@@ -97,7 +100,8 @@ export const SERVER_FACTORIES = [
   "RotatedBox",
   "PageNumber",
   "PageCount",
-  // Server code is plain JS, so the closure primitive is usable here (unlike in a client template).
+  "SubPageNumber",
+  "SubPageCount",
   "PageBuilder",
   // Form fields. Deliberately the SAME seven as the components above, not every export: `Select` is an
   // alias of `Dropdown` and `Radio` is a single button that only makes sense inside a group, so

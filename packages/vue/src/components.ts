@@ -1,4 +1,4 @@
-import { defineComponent, getCurrentInstance, h, onUnmounted, type PropType } from "vue";
+import { defineComponent, getCurrentInstance, h, onUnmounted, type PropType, type Slot } from "vue";
 import type {
   BoundsInput,
   BoxOptions,
@@ -22,6 +22,7 @@ import type {
   CanvasPaint,
   ColumnWidth,
   FlowPage,
+  PageInfo,
   TextOverflow,
   TextRole,
   TextTransform,
@@ -367,6 +368,36 @@ export const TableCell = defineComponent({
   inheritAttrs: false,
   setup: fwd("table-cell"),
 });
+/**
+ * A slot the engine asks for while it lays the document out (a Flow's #page, a PageBuilder's content):
+ * re-rendered in place, so it sees what the components around it provide, then read back from the tree.
+ * Each request carries the slot of the render that made it, so a callback the engine kept from an
+ * earlier page still draws what that page rendered.
+ */
+function renderedOnRequest<T>(component: string, what: string) {
+  const instance = getCurrentInstance()!;
+  let asked: { info: T; slot: Slot | undefined } | undefined;
+  let mounted = true;
+  onUnmounted(() => (mounted = false));
+  const request = (slot: Slot | undefined) => (info: T) => {
+    if (!mounted) {
+      throw new Error(
+        `@jasy/vue: a <${component}> renders its ${what} while the PDF is laid out - render the ` +
+          "document with renderToPdf, which keeps it mounted until then.",
+      );
+    }
+    asked = { info, slot };
+    instance.update();
+    const marker = (instance.subTree.el as JNode).children.find(
+      (c) => c.type === "rendered-on-request",
+    );
+    return marker ? childDescriptors(marker) : [];
+  };
+  const rendered = () =>
+    asked ? [h("rendered-on-request", null, asked.slot?.(asked.info as any))] : [];
+  return { request, rendered };
+}
+
 // --- Flow -------------------------------------------------------------------------------------------
 // The content (default slot) flows through the `<Region>`s of `#page="{ index, pageNumber }"`: the first
 // Region full, then the next, then the next page. `index` counts this Flow's pages.
@@ -379,30 +410,15 @@ export const Flow = defineComponent({
     balance: { type: Boolean, default: undefined },
   },
   setup(props, { slots, attrs }) {
-    const instance = getCurrentInstance()!;
-    let asked: FlowPage | undefined;
-    let mounted = true;
-    onUnmounted(() => (mounted = false));
-    // Called by the engine for every page: #page re-rendered in place, so it sees what the components
-    // around it provide, then read back from the tree.
-    const page = (info: FlowPage) => {
-      if (!mounted) {
-        throw new Error(
-          "@jasy/vue: a <Flow> renders its #page while the PDF is laid out - render the document " +
-            "with renderToPdf, which keeps it mounted until then.",
-        );
-      }
-      asked = info;
-      instance.update();
-      const marker = (instance.subTree.el as JNode).children.find((c) => c.type === "flow-page");
-      return marker ? childDescriptors(marker) : [];
-    };
+    const { request, rendered } = renderedOnRequest<FlowPage>("Flow", "#page");
     return () => {
       if (!slots.page) {
         throw new Error("@jasy/vue: a <Flow> needs a #page slot with at least one <Region>.");
       }
-      const kids: any[] = asked ? [h("flow-page", null, slots.page(asked))] : [];
-      return h("flow", { ...attrs, ...props, page }, [...kids, ...(slots.default?.() ?? [])]);
+      return h("flow", { ...attrs, ...props, page: request(slots.page) }, [
+        ...rendered(),
+        ...(slots.default?.() ?? []),
+      ]);
     };
   },
 });
@@ -495,7 +511,7 @@ export const RotatedBox = defineComponent({
 // --- Page numbers -----------------------------------------------------------------------------------
 // The current page / the document total, as text. Usable anywhere, not just in a `#footer`. `offset` is
 // added to the number - use `-1` when a cover page should not count.
-// (`PageBuilder` from the core is not exposed: it takes a closure, which a template cannot express.)
+// For anything else that depends on the page, `<PageBuilder>` below.
 const pageNumberProps = { ...textProps, offset: Number };
 export const PageNumber = defineComponent({
   name: "JasyPageNumber",
@@ -508,6 +524,29 @@ export const PageCount = defineComponent({
   inheritAttrs: false,
   props: pageNumberProps,
   setup: fwd("page-count"),
+});
+// The page number / page count WITHIN its `<Page>`, for a document made of sections.
+export const SubPageNumber = defineComponent({
+  name: "JasySubPageNumber",
+  inheritAttrs: false,
+  props: pageNumberProps,
+  setup: fwd("sub-page-number"),
+});
+export const SubPageCount = defineComponent({
+  name: "JasySubPageCount",
+  inheritAttrs: false,
+  props: pageNumberProps,
+  setup: fwd("sub-page-count"),
+});
+// Content built from the page it lands on: `#default="{ pageNumber, pageCount }"`, rendered for every
+// page. Build nothing (a `v-if` that is false) to show it on some pages only.
+export const PageBuilder = defineComponent({
+  name: "JasyPageBuilder",
+  inheritAttrs: false,
+  setup(_props, { slots }) {
+    const { request, rendered } = renderedOnRequest<PageInfo>("PageBuilder", "slot");
+    return () => h("page-builder", { build: request(slots.default) }, rendered());
+  },
 });
 
 // ---------------------------------------------------------------------------------------------
