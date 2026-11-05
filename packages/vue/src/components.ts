@@ -1,7 +1,17 @@
 import { defineComponent, getCurrentInstance, h, onUnmounted, type PropType } from "vue";
 import type {
+  BoundsInput,
+  BoxOptions,
   ButtonActionInput,
   ColorInput,
+  DropdownOptions,
+  EmojiSource,
+  GradientInput,
+  ImageOptions,
+  ListBoxOptions,
+  RadiusInput,
+  SizeInput,
+  StackOptions,
   Direction,
   Hyphenator,
   Insets,
@@ -20,6 +30,9 @@ import type {
 import { childDescriptors, type JNode } from "./renderer.js";
 
 const colorProp = [String, Number, Object] as PropType<ColorInput>;
+// Points, or a percentage string like "50%".
+const sizeProp = [Number, String] as PropType<SizeInput>;
+const radiusProp = [Number, Object, Array] as PropType<RadiusInput>;
 const insetsProp = [Number, Object, Array] as PropType<Insets>;
 // A family name, or a STACK: each code point is drawn by the first family that has a glyph for it.
 const fontProp = [String, Array] as PropType<string | string[]>;
@@ -86,10 +99,31 @@ const textProps = {
   /** Accessibility role for the tagged structure tree: `"h1"`..`"h6"` or `"p"`. Semantic only. */
   role: String as PropType<TextRole>,
 };
-const stackProps = {
+// How a child sits in its Column / Row - every sized element takes these (the engine's `BoundsInput`).
+const boundsProps = {
+  alignSelf: String as PropType<BoundsInput["alignSelf"]>,
+  order: Number,
+  flexShrink: Number,
+  minWidth: sizeProp,
+  maxWidth: sizeProp,
+  minHeight: sizeProp,
+  maxHeight: sizeProp,
+  aspectRatio: Number,
+};
+// What `<Page>` passes to its body column. The full stack options below are for `<Column>`/`<Row>`.
+const pageStackProps = {
   gap: Number,
-  justify: String as PropType<"start" | "center" | "end" | "between" | "around">,
-  align: String as PropType<"start" | "center" | "end" | "stretch">,
+  justify: String as PropType<StackOptions["justify"]>,
+  align: String as PropType<StackOptions["align"]>,
+};
+const stackProps = {
+  ...boundsProps,
+  ...pageStackProps,
+  width: sizeProp,
+  height: sizeProp,
+  reverse: { type: Boolean, default: undefined },
+  wrap: { type: Boolean, default: undefined },
+  alignContent: String as PropType<StackOptions["alignContent"]>,
 };
 // Page-break control shared by `<Box>`/`<Column>`/`<Row>` (CSS break-before/after: page +
 // break-inside: avoid). NOT on `<Page>` (the top level cannot break before itself), so it is spread in
@@ -100,7 +134,8 @@ const breakProps = {
   keepTogether: { type: Boolean, default: undefined },
 };
 const boxProps = {
-  bg: colorProp,
+  ...boundsProps,
+  bg: [String, Number, Object] as PropType<ColorInput | GradientInput>,
   border: colorProp,
   borderTop: colorProp,
   borderRight: colorProp,
@@ -108,37 +143,42 @@ const boxProps = {
   borderLeft: colorProp,
   borderWidth: Number,
   padding: insetsProp,
-  width: Number,
-  height: Number,
-  radius: Number,
+  width: sizeProp,
+  height: sizeProp,
+  radius: radiusProp,
   relative: { type: Boolean, default: undefined },
-  overflow: String as PropType<"hidden" | "visible">,
+  overflow: String as PropType<BoxOptions["overflow"]>,
   ...breakProps,
 };
 const imageProps = {
+  ...boundsProps,
   src: [String, Object] as PropType<ImageSource>,
-  width: Number,
-  height: Number,
-  fit: String as PropType<"none" | "contain" | "cover" | "fill">,
+  width: sizeProp,
+  height: sizeProp,
+  fit: String as PropType<ImageOptions["fit"]>,
   align: String as PropType<ImageAlign>,
-  radius: Number,
+  radius: radiusProp,
+  /** Alternate text (tagged PDF). With it the image is a `Figure`; without it, decoration. */
+  alt: String,
 };
 // `<JasySvg>` takes the same three source shapes as the factory: markup, a file path (Node only) or
 // the file's bytes. `fit` and `radius` are deliberately absent - an SVG is always drawn contained,
 // which is its own default, and asking for anything else is a named error in the engine.
 const svgProps = {
+  ...boundsProps,
   src: [String, Object] as PropType<string | Uint8Array>,
-  width: Number,
-  height: Number,
+  width: sizeProp,
+  height: sizeProp,
   /** Alternate text (tagged PDF). With it the drawing is a `Figure`; without it, decoration. */
   alt: String,
 };
 // `<JasyCanvas :paint="fn">` - a function is a prop like any other value. With no size the canvas
 // FILLS the box it is offered, and the callback is handed that resolved size.
 const canvasProps = {
+  ...boundsProps,
   paint: { type: Function as PropType<CanvasPaint>, required: true as const },
-  width: Number,
-  height: Number,
+  width: sizeProp,
+  height: sizeProp,
   /** Alternate text (tagged PDF). With it the drawing is a `Figure`; without it, decoration. */
   alt: String,
 };
@@ -147,7 +187,7 @@ const pageProps = {
   size: [String, Object] as PropType<PageSizeInput>,
   orientation: String as PropType<"portrait" | "landscape">,
   margin: insetsProp,
-  ...stackProps,
+  ...pageStackProps,
 };
 const documentProps = {
   ...textStyleProps,
@@ -155,6 +195,8 @@ const documentProps = {
   align: alignProp,
   lineHeight: Number,
   meta: Object as PropType<{ title?: string; author?: string }>,
+  /** Where color emoji come from when the text font has none: a font name, `{ font }` or `{ url }`. */
+  emoji: [String, Object] as PropType<EmojiSource>,
   fonts: Object as PropType<Record<string, FontSource>>,
 };
 
@@ -369,10 +411,7 @@ export const Flow = defineComponent({
 export const Region = defineComponent({
   name: "JasyRegion",
   inheritAttrs: false,
-  props: {
-    width: [Number, String] as PropType<number | `${number}%`>,
-    height: [Number, String] as PropType<number | `${number}%`>,
-  },
+  props: { ...boundsProps, width: sizeProp, height: sizeProp },
   setup: fwd("region"),
 });
 // Continue in the next `<Region>` of the Flow (from the last one, the next page's first).
@@ -457,13 +496,7 @@ export const RotatedBox = defineComponent({
 // The current page / the document total, as text. Usable anywhere, not just in a `#footer`. `offset` is
 // added to the number - use `-1` when a cover page should not count.
 // (`PageBuilder` from the core is not exposed: it takes a closure, which a template cannot express.)
-const pageNumberProps = {
-  ...textStyleProps,
-  ...paragraphProps,
-  align: alignProp,
-  lineHeight: Number,
-  offset: Number,
-};
+const pageNumberProps = { ...textProps, offset: Number };
 export const PageNumber = defineComponent({
   name: "JasyPageNumber",
   inheritAttrs: false,
@@ -490,27 +523,33 @@ export const PageCount = defineComponent({
 // There is deliberately no `v-model`. It would promise two-way binding, and a generated PDF writes
 // nothing back - `:value` says exactly what happens.
 
-/** Shared by every field: what the PDF format lets you say about one, regardless of its kind. */
-const fieldProps = {
+/** Shared by every field, a radio group included. */
+const fieldBaseProps = {
   /** The field name - unique in the document; you read the value back by it. */
   name: { type: String, required: true as const },
-  /** Tooltip / accessible name shown on hover. */
-  tooltip: String,
-  /** Show the value but do not let the reader change it. */
-  readOnly: { type: Boolean, default: undefined },
   /** Must be filled in before the form is submitted. */
   required: { type: Boolean, default: undefined },
   /** Hide the widget entirely - neither on screen nor in print. */
   hidden: { type: Boolean, default: undefined },
   /** Include the widget when printing (default true). */
   print: { type: Boolean, default: undefined },
-  width: Number,
-  height: Number,
   color: colorProp,
   border: colorProp,
   background: colorProp,
+};
+/** Every single widget: a radio group is several, so it has none of these. */
+const fieldProps = {
+  ...fieldBaseProps,
+  /** Tooltip / accessible name shown on hover. */
+  tooltip: String,
+  /** Show the value but do not let the reader change it. */
+  readOnly: { type: Boolean, default: undefined },
   borderWidth: Number,
 };
+/** A field drawn as a box of its own size; a check box takes `size` instead. */
+const boxedFieldProps = { ...fieldProps, width: Number, height: Number };
+// How the value sits in the box.
+const fieldAlignProp = String as PropType<DropdownOptions["align"]>;
 
 /**
  * The label a field draws beside itself. Usually the default slot; the prop is there for the cases a slot
@@ -561,7 +600,7 @@ export const TextField = defineComponent({
   name: "JasyTextField",
   inheritAttrs: false,
   props: {
-    ...fieldProps,
+    ...boxedFieldProps,
     /** Initial value written into the document. */
     value: String,
     /** Accept several lines (give it a `height` to match). */
@@ -569,7 +608,7 @@ export const TextField = defineComponent({
     /** Mask the characters - a password field. */
     password: { type: Boolean, default: undefined },
     /** How the value sits in the box. */
-    align: String as PropType<"left" | "center" | "right">,
+    align: fieldAlignProp,
     maxLength: Number,
     fontSize: Number,
   },
@@ -596,7 +635,7 @@ export const RadioGroup = defineComponent({
   name: "JasyRadioGroup",
   inheritAttrs: false,
   props: {
-    ...fieldProps,
+    ...fieldBaseProps,
     ...choiceLabelProps,
     ...optionsProp,
     /** Which option starts selected, by its value. */
@@ -613,9 +652,10 @@ export const Dropdown = defineComponent({
   name: "JasyDropdown",
   inheritAttrs: false,
   props: {
-    ...fieldProps,
+    ...boxedFieldProps,
     ...optionsProp,
     value: String,
+    align: fieldAlignProp,
     /** Let the reader type a value that is not in the list. */
     editable: { type: Boolean, default: undefined },
     fontSize: Number,
@@ -627,9 +667,13 @@ export const ListBox = defineComponent({
   name: "JasyListBox",
   inheritAttrs: false,
   props: {
-    ...fieldProps,
+    ...boxedFieldProps,
     ...optionsProp,
+    /** The selected value (single-select). */
     value: String,
+    /** The selected values (with `multi-select`). */
+    values: Array as PropType<ListBoxOptions["values"]>,
+    align: fieldAlignProp,
     /** Several values selectable at once. */
     multiSelect: { type: Boolean, default: undefined },
     fontSize: Number,
@@ -641,7 +685,7 @@ export const PushButton = defineComponent({
   name: "JasyPushButton",
   inheritAttrs: false,
   props: {
-    ...fieldProps,
+    ...boxedFieldProps,
     ...labelOnly,
     /**
      * What pressing it does: `"reset"` clears the form, `{ submit: url }` posts it, `{ open: url }`
@@ -658,8 +702,10 @@ export const SignatureField = defineComponent({
   name: "JasySignatureField",
   inheritAttrs: false,
   props: {
-    ...fieldProps,
+    ...boxedFieldProps,
     ...labelOnly,
+    /** Hint font size (default 9). */
+    fontSize: Number,
   },
   setup: fwdLabelled("signature-field"),
 });
