@@ -22,7 +22,10 @@ export type DiagnosticCode =
    *  past the box's edge - as CSS draws it; `overflow: "hidden"` on a Box clips it. */
   | "overflow-wide"
   /** Characters no font could draw, removed (PDF/A forbids `.notdef`). */
-  | "missing-glyphs";
+  | "missing-glyphs"
+  /** An image whose own size was not known at layout (a URL first built in a `PageBuilder`), so the
+   *  axis it would have derived fills what it is offered instead. */
+  | "image-unsized";
 
 export interface Diagnostic {
   code: DiagnosticCode;

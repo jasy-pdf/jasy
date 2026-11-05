@@ -15,7 +15,14 @@ export class DeferredElement extends PDFElement implements Fragmentable {
   private composed?: PDFElement;
   private built = new BuiltFromContext<PDFElement>(builtOnPage);
 
-  constructor(private resolve: (ctx: LayoutContext, width: number) => PDFElement) {
+  /**
+   * `sources`: the elements the subtree will be built from (a table's cells), so the async pass before
+   * layout can reach what is not built yet - an image from a URL in a cell.
+   */
+  constructor(
+    private resolve: (ctx: LayoutContext, width: number) => PDFElement,
+    private readonly sources: readonly PDFElement[] = [],
+  ) {
     super();
   }
 
@@ -65,6 +72,6 @@ export class DeferredElement extends PDFElement implements Fragmentable {
   }
 
   override getProps() {
-    return { composed: this.composed };
+    return { composed: this.composed, sources: this.sources };
   }
 }

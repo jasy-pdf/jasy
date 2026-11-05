@@ -253,8 +253,11 @@ export function Table(opts: TableOptions, rows: Cell[][]): PDFElement {
     }
   }
   if (opts.columns.some((c) => typeof c !== "number")) {
-    return new DeferredElement((ctx, width) =>
-      composeTable(opts, rows, resolveColumns(opts, rows, ctx, width)),
+    return new DeferredElement(
+      (ctx, width) => composeTable(opts, rows, resolveColumns(opts, rows, ctx, width)),
+      [opts.header ?? [], ...rows]
+        .flat()
+        .filter((cell): cell is PDFElement => typeof cell !== "string"),
     );
   }
   return composeTable(opts, rows, opts.columns);

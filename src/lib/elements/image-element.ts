@@ -6,7 +6,7 @@ import {
   type ImageDimensions,
 } from "../utils/image-helper.ts";
 import { latin1FromBytes } from "../utils/bytes.ts";
-import { readFileBytesAsync } from "../platform/node-fs.ts";
+import { readFileBytes, readFileBytesAsync } from "../platform/node-fs.ts";
 import { fetchBytes } from "../utils/fetch-bytes.ts";
 import {
   BoxConstraints,
@@ -18,6 +18,7 @@ import {
   sizeAtOwnRatio,
 } from "../layout/box-constraints.ts";
 import { LayoutContext, SizedPDFElement } from "./pdf-element.ts";
+import { diagnose, pageOf } from "../common/diagnostics.ts";
 
 // path.extname without node:path (browser-safe): the substring from the last dot, if it sits after the
 // last slash (so a dot in a directory name does not count). Enough for image file extensions.
@@ -40,6 +41,24 @@ export abstract class CustomImage {
   abstract getImageType(): string | Promise<string>;
   abstract getFileData(): string | Promise<string>;
   abstract getImageDimensions(): Promise<ImageDimensions>;
+
+  /**
+   * Its dimensions if they can be had without waiting (bytes in hand, a local file), else `undefined` -
+   * then the async pass before layout fetches them. Layout asks this, so an image built during layout
+   * (in a `PageBuilder`, a table cell) knows its size as well.
+   */
+  dimensionsNow(): ImageDimensions | undefined {
+    return undefined;
+  }
+}
+
+/** Dimensions read from bytes; a file we cannot read is `undefined` here - the render names the failure. */
+function headerOf(bytes: Uint8Array): ImageDimensions | undefined {
+  try {
+    return getImageDimensions(bytes);
+  } catch {
+    return undefined;
+  }
 }
 
 export class CustomLocalImage extends CustomImage {
@@ -47,6 +66,7 @@ export class CustomLocalImage extends CustomImage {
   private fileBuffer!: Uint8Array;
   private fileRawData!: string;
   private dims?: ImageDimensions; // memoized so the decode happens once
+  private unreadable = false;
 
   constructor(imagePath: string) {
     super();
@@ -83,12 +103,27 @@ export class CustomLocalImage extends CustomImage {
   }
 
   private async loadImage(imagePath: string): Promise<Uint8Array> {
-    const result = await readFileBytesAsync(imagePath);
-    //const result = await convertImageToGrayscaleBuffer(imagePath);
-    this.fileBuffer = result;
-    this.fileRawData = latin1FromBytes(result);
+    return this.adopt(await readFileBytesAsync(imagePath));
+  }
 
-    return result;
+  private adopt(bytes: Uint8Array): Uint8Array {
+    this.fileBuffer = bytes;
+    this.fileRawData = latin1FromBytes(bytes);
+    return bytes;
+  }
+
+  override dimensionsNow(): ImageDimensions | undefined {
+    if (!this.dims && !this.fileBuffer) {
+      if (this.unreadable) return undefined;
+      try {
+        this.adopt(readFileBytes(this.imagePath));
+      } catch {
+        this.unreadable = true; // layout asks often; the render reads again and names the failure
+        return undefined;
+      }
+    }
+    this.dims ??= headerOf(this.fileBuffer);
+    return this.dims;
   }
 
   getFileData(): string {
@@ -98,7 +133,7 @@ export class CustomLocalImage extends CustomImage {
   async getImageDimensions(): Promise<ImageDimensions> {
     if (this.dims) return this.dims; // reuse: the pre-layout size pass and the renderer both ask
     if (!this.fileBuffer) throw new Error("@jasy/pdf: an image was measured before it was loaded");
-    this.dims = await getImageDimensions(this.fileBuffer);
+    this.dims = getImageDimensions(this.fileBuffer);
     return this.dims;
   }
 }
@@ -129,7 +164,12 @@ export class CustomBytesImage extends CustomImage {
   }
 
   async getImageDimensions(): Promise<ImageDimensions> {
-    if (!this.dims) this.dims = await getImageDimensions(this.bytes); // reuse across pre-pass + render
+    this.dims ??= getImageDimensions(this.bytes); // reuse across layout + render
+    return this.dims;
+  }
+
+  override dimensionsNow(): ImageDimensions | undefined {
+    this.dims ??= headerOf(this.bytes);
     return this.dims;
   }
 }
@@ -205,6 +245,10 @@ export class CustomUrlImage extends CustomImage {
 
   getImageDimensions(): Promise<ImageDimensions> {
     return this.image().getImageDimensions();
+  }
+
+  override dimensionsNow(): ImageDimensions | undefined {
+    return this.loaded?.dimensionsNow();
   }
 }
 
@@ -298,12 +342,22 @@ export class ImageElement extends SizedPDFElement {
     }
   }
 
+  /** Its own size in points: known now, or resolved by the pass before layout; `undefined` if neither. */
+  private ownSize(): { width: number; height: number } | undefined {
+    if (!this.intrinsic) {
+      const dims = this.image.dimensionsNow();
+      if (dims) this.intrinsic = naturalSize(dims);
+    }
+    return this.intrinsic;
+  }
+
   override relativeSizeFactor(horizontal: boolean): number | undefined {
     return horizontal ? this.widthFactor : this.heightFactor;
   }
 
-  calculateLayout(constraints: BoxConstraints, offset: Offset, _ctx: LayoutContext): Size {
+  calculateLayout(constraints: BoxConstraints, offset: Offset, ctx: LayoutContext): Size {
     const size = this.sizeFor(constraints);
+    if (size.guessed) this.reportUnsized(ctx);
     this.x = offset.x;
     this.y = offset.y;
     // Kept as resolved, `undefined` included: the renderer reads an unset axis differently from 0.
@@ -317,8 +371,27 @@ export class ImageElement extends SizedPDFElement {
     return { width: size.width ?? 0, height: size.height ?? 0 };
   }
 
-  /** Its size under these constraints - the one computation both `measure` and layout use. */
-  private sizeFor(constraints: BoxConstraints): { width?: number; height?: number } {
+  /** Its size was needed from the file and the file had not been read: say so, rather than draw it wrong. */
+  private reportUnsized(ctx: LayoutContext): void {
+    diagnose(ctx.diagnostics, {
+      code: "image-unsized",
+      severity: "warning",
+      message:
+        "An image's own size was not known when it was laid out - an image from a URL that is first " +
+        "built in a PageBuilder cannot be fetched before layout. Its open side fills what it is " +
+        "offered. Give it a width and a height, or create it outside the PageBuilder.",
+      about: this,
+      page: pageOf(ctx),
+    });
+  }
+
+  /** Its size under these constraints - the one computation both `measure` and layout use. `guessed`:
+   *  a side that would have followed the file's own size did not, because that size was unknown. */
+  private sizeFor(constraints: BoxConstraints): {
+    width?: number;
+    height?: number;
+    guessed?: boolean;
+  } {
     // Relative sizing: a fixed size or a fraction of the offered box (fraction only in a bounded axis).
     // Read from `requested` (not this.width/height, which we overwrite below) so every pass re-resolves.
     const specs = extentSpecs({
@@ -335,14 +408,11 @@ export class ImageElement extends SizedPDFElement {
     const bounds = resolved.constraints;
 
     // Its own ratio fills an open axis, once the pre-pass resolved its own size.
-    if (
-      this.sizing.aspectRatio === undefined &&
-      this.intrinsic &&
-      this.intrinsic.width > 0 &&
-      this.intrinsic.height > 0
-    ) {
-      ({ width: w, height: h } = sizeAtOwnRatio(w, h, this.intrinsic, bounds));
+    const own = this.ownSize();
+    if (this.sizing.aspectRatio === undefined && own && own.width > 0 && own.height > 0) {
+      ({ width: w, height: h } = sizeAtOwnRatio(w, h, own, bounds));
     }
+    const guessed = own === undefined && (w === undefined || h === undefined);
 
     // Still unpinned (no intrinsic size known): a bounded axis fills; an unbounded one takes the image's
     // own extent (`naturalSize`). Read from `requested`, never the mutated this.width/height.
@@ -358,12 +428,12 @@ export class ImageElement extends SizedPDFElement {
         : (this.requested.height ?? this.ownExtent(bounds, "height")));
 
     // Top-left coordinates; the fit logic (renderer) and the Y-flip (seam) run later.
-    return { width, height };
+    return { width, height, guessed };
   }
 
   /** The image's own extent on one axis, clamped by its min/max; unknown before the pre-pass. */
   private ownExtent(bounds: BoxConstraints, axis: "width" | "height"): number | undefined {
-    const own = this.intrinsic?.[axis];
+    const own = this.ownSize()?.[axis];
     if (own === undefined) return undefined;
     return axis === "width" ? bounds.constrainWidth(own) : bounds.constrainHeight(own);
   }
