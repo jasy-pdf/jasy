@@ -42,7 +42,7 @@ export interface SideBorders {
 
 interface RectangleElementParams extends SizedElement, WithChildren {
   color?: Color;
-  /** Solid colour, or a box-relative gradient the renderer resolves against this box. */
+  /** Solid color, or a box-relative gradient the renderer resolves against this box. */
   backgroundColor?: Color | GradientInput;
   borderWidth?: number;
   /** Corner radius in points - one number for all four corners, or per corner. 0 = sharp (default). */
@@ -179,7 +179,7 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
       fitted: this.cloneWithChildren(fitted, contentHeight(fitted) + 2 * this.borderWidth),
       // A trailing forced break leaves nothing to carry over: no remainder box, no extra page.
       // Only the CONTINUATION carries `breakAfter` (a box that splits still breaks after its LAST
-      // fragment, not its first); `breakBefore` is dropped, already honoured before the split.
+      // fragment, not its first); `breakBefore` is dropped, already honored before the split.
       // It gets no height, as a Column's piece does: it is sized where it lands, which may be a
       // narrower or wider region (a Flow's), or one that gives a region-sized rest its height.
       remainder:
@@ -408,6 +408,11 @@ export class RectangleElement extends SizedPDFElement implements Fragmentable {
 
   override isPositioningFrame(): boolean {
     return this.relative;
+  }
+
+  /** A clip is a context too: what it crops stays cropped, whatever its `zIndex`. */
+  override isStackingContext(): boolean {
+    return this.relative || this.overflow === "hidden";
   }
 
   override layoutChildren(): readonly PDFElement[] {

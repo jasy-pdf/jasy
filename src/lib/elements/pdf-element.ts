@@ -235,6 +235,12 @@ export abstract class PDFElement {
     return false;
   }
 
+  /** Paints its own `Positioned` descendants that have a `zIndex` (a frame, a clip, a rotation); a walk
+   *  for them stops here. */
+  isStackingContext(): boolean {
+    return this.isPositioningFrame();
+  }
+
   /**
    * The relative-size fraction (0..1) this element asked for on the given axis, if any (`horizontal` =
    * width). A flex parent reads it to resolve a percentage child against its OWN main size - e.g. a
@@ -301,7 +307,7 @@ export abstract class PDFElement {
   /**
    * Whether this element is, or CONTAINS anywhere in its subtree, a forced page break. A container
    * that merely fits by height must still be fragmented when this is true, so a break nested inside
-   * it is honoured rather than swallowed. Containers override this to recurse into their children.
+   * it is honored rather than swallowed. Containers override this to recurse into their children.
    * Default: no.
    */
   hasForcedBreak(): boolean {

@@ -4,6 +4,7 @@ import { PageElement } from "../../../src/lib/elements/page-element.ts";
 import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager.ts";
 import { RendererRegistry } from "../../../src/lib/utils/renderer-registry.ts";
 import { PageSize } from "../../../src/lib/constants/page-sizes.ts";
+import { LEAF } from "../support/scope.ts";
 
 // Mock RendererRegistry.getRenderer method. Renderers now return an IRNode[]; these
 // tests only check page structure (object count, references), so an empty list is fine.
@@ -26,7 +27,7 @@ describe("PageRenderer", () => {
       getProps: vi.fn().mockReturnValue({
         config: { pageSize: PageSize.A4, margin: { top: 0, right: 0, bottom: 0, left: 0 } },
         children: [
-          { getProps: vi.fn() }, // Child element
+          { getProps: vi.fn(), ...LEAF }, // Child element
         ],
       }),
     } as unknown as PageElement;
@@ -104,8 +105,8 @@ describe("PageRenderer", () => {
       getProps: vi.fn().mockReturnValue({
         config: { pageSize: PageSize.A4, margin: { top: 0, right: 0, bottom: 0, left: 0 } },
         children: [
-          { getProps: vi.fn() },
-          { getProps: vi.fn() }, // Multiple children
+          { getProps: vi.fn(), ...LEAF },
+          { getProps: vi.fn(), ...LEAF }, // Multiple children
         ],
       }),
     } as unknown as PageElement;

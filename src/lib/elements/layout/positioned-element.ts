@@ -13,6 +13,9 @@ export type PositionAnchor = "start" | "center" | "end";
  * An edge wins over an anchor on the same axis. With nothing set the child sits at the top-left.
  */
 export interface PositionedInsets {
+  /** Paint order within its stacking context: negative under the flow content, positive over it,
+   *  higher over lower; 0 or unset paints in tree order where it stands (CSS `z-index`). */
+  zIndex?: number;
   top?: number;
   right?: number;
   bottom?: number;
@@ -45,11 +48,15 @@ export class PositionedElement extends PDFElement {
   // from there, not from the frame owner that places it.
   private placeCtx?: LayoutContext;
 
-  constructor({ child, top, right, bottom, left, h, v, x, y }: PositionedElementParams) {
+  constructor({ child, top, right, bottom, left, h, v, x, y, zIndex }: PositionedElementParams) {
     super();
     this.child = child;
     this.insets = { top, right, bottom, left, h, v, x, y };
+    this.zIndex = zIndex ?? 0;
   }
+
+  /** Its paint order; 0 paints where it stands in the tree, anything else is painted by its context. */
+  readonly zIndex: number;
 
   calculateLayout(_constraints: BoxConstraints, _offset: Offset, ctx: LayoutContext): Size {
     if (!ctx.frame) {
@@ -126,8 +133,8 @@ export class PositionedElement extends PDFElement {
     this.child.calculateLayout(constraints, { x, y }, ctx);
   }
 
-  override getProps(): WithChild {
-    return { child: this.child };
+  override getProps(): WithChild & { zIndex: number } {
+    return { child: this.child, zIndex: this.zIndex };
   }
 }
 
@@ -140,6 +147,22 @@ export function positionedIn(roots: readonly (PDFElement | undefined)[]): Positi
   const walk = (el: PDFElement): void => {
     if (el instanceof PositionedElement) found.push(el);
     if (el.isPositioningFrame()) return;
+    for (const child of el.layoutChildren()) walk(child);
+  };
+  for (const root of roots) if (root) walk(root);
+  return found;
+}
+
+/**
+ * The `Positioned` elements with a `zIndex` that a stacking context paints itself, in tree order: every
+ * one below `roots`, including those inside another `Positioned`, but none below a nested context - a
+ * frame, a clipping Box or a rotation paints its own, so nothing is pulled out of a clip or a turn.
+ */
+export function stackedIn(roots: readonly (PDFElement | undefined)[]): PositionedElement[] {
+  const found: PositionedElement[] = [];
+  const walk = (el: PDFElement): void => {
+    if (el instanceof PositionedElement && el.zIndex !== 0) found.push(el);
+    if (el.isStackingContext()) return;
     for (const child of el.layoutChildren()) walk(child);
   };
   for (const root of roots) if (root) walk(root);

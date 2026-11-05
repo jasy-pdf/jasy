@@ -4,7 +4,7 @@ import { RectangleElement } from "../../../src/lib/elements/rectangle-element.ts
 import { ContainerElement } from "../../../src/lib/elements/container-element.ts";
 import { PageElement } from "../../../src/lib/elements/page-element.ts";
 import { RectangleRenderer } from "../../../src/lib/renderer/rectangle-renderer.ts";
-import { LayoutContext } from "../../../src/lib/elements/pdf-element.ts";
+import { LayoutContext, PDFElement } from "../../../src/lib/elements/pdf-element.ts";
 import { BoxConstraints } from "../../../src/lib/layout/box-constraints.ts";
 import { Orientation } from "../../../src/lib/renderer/pdf-config.ts";
 import { PageSize } from "../../../src/lib/constants/page-sizes.ts";
@@ -13,7 +13,7 @@ import { testMetrics } from "../support/metrics.ts";
 import { RendererRegistry } from "../../../src/lib/utils/renderer-registry.ts";
 import { PositionedRenderer } from "../../../src/lib/renderer/positioned-renderer.ts";
 import { PAGE_SCOPE } from "../support/scope.ts";
-import { drawnTextRuns } from "../support/drawn.ts";
+import { drawnNodes, drawnTextRuns } from "../support/drawn.ts";
 import * as api from "../../../src/lib/index.ts";
 
 // Rendering a frame on its own: its renderers are registered here, as `PDFRenderer.render` would.
@@ -390,5 +390,125 @@ describe("PositionedElement - inherits from where it sits", () => {
       ]),
     );
     expect(sizes).toEqual({ flow: 30, POS: 30 });
+  });
+});
+
+// zIndex orders the Positioned of one stacking context: negative under the flow content, positive over
+// it, lower under higher, ties in tree order; 0 is where it stands. A clip or a rotation is a context of
+// its own, so nothing leaves the clip or the turn it was written in.
+describe("PositionedElement - zIndex", () => {
+  const at = (w: number, zIndex?: number) =>
+    new PositionedElement({ child: fixed(w, 10), top: 0, left: 0, zIndex });
+  const frameOf = (children: PDFElement[]) => {
+    const f = new RectangleElement({
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 60,
+      borderWidth: 0,
+      relative: true,
+      children,
+    });
+    f.calculateLayout(BoxConstraints.loose(100, 60), { x: 0, y: 0 }, ctx);
+    return f;
+  };
+  const paintOrder = async (children: PDFElement[]) => {
+    const nodes = await RectangleRenderer.render(
+      frameOf(children),
+      {} as PDFObjectManager,
+      PAGE_SCOPE,
+    );
+    return nodes.flatMap((n) =>
+      n.type === "rect" && n.width !== 100 ? [n.width] : n.type === "clip-push" ? ["clip"] : [],
+    );
+  };
+
+  it("puts a positive one over flow content that comes after it", async () => {
+    expect(await paintOrder([at(11, 1), fixed(22, 10)])).toEqual([22, 11]);
+  });
+
+  it("puts a negative one under flow content that comes before it", async () => {
+    expect(await paintOrder([fixed(22, 10), at(11, -1)])).toEqual([11, 22]);
+  });
+
+  it("orders lower under higher, ties in tree order, and 0 where it stands", async () => {
+    expect(
+      await paintOrder([at(33, 3), at(11, 1), at(22, 2), at(12, 1), fixed(44, 10), at(55, 0)]),
+    ).toEqual([44, 55, 11, 12, 22, 33]);
+  });
+
+  it("sorts a Positioned inside another one with its frame's others", async () => {
+    const outer = new PositionedElement({
+      top: 0,
+      left: 0,
+      zIndex: 1,
+      child: new RectangleElement({
+        x: 0,
+        y: 0,
+        width: 44,
+        height: 20,
+        borderWidth: 0,
+        children: [at(55, 5)],
+      }),
+    });
+    expect(await paintOrder([outer, at(33, 3)])).toEqual([44, 33, 55]);
+  });
+
+  it("keeps one inside a clipping Box in that clip", async () => {
+    const clipped = new RectangleElement({
+      x: 0,
+      y: 0,
+      width: 44,
+      height: 20,
+      borderWidth: 0,
+      overflow: "hidden",
+      children: [at(55, 5)],
+    });
+    expect(await paintOrder([clipped, fixed(22, 10)])).toEqual([44, "clip", 55, 22]);
+  });
+
+  it("keeps one inside a rotation in that turn", async () => {
+    const nodes = (
+      await drawnNodes(() =>
+        api.renderToBytes(
+          api.Document([
+            api.Page([
+              api.Rotated(
+                { angle: 30 },
+                api.Box({ width: 44, height: 20 }, [
+                  api.Positioned(
+                    { top: 0, left: 0, zIndex: 5 },
+                    api.Box({ width: 55, height: 10, bg: "blue" }, []),
+                  ),
+                ]),
+              ),
+              api.Box({ width: 22, height: 10, bg: "red" }, []),
+            ]),
+          ]),
+        ),
+      )
+    )[0]!.flatMap((n) =>
+      n.type === "rect" ? [n.width] : n.type.startsWith("transform") ? [n.type] : [],
+    );
+    expect(nodes).toEqual(["transform-push", 44, 55, "transform-pop", 22]);
+  });
+
+  it("is the page's to order when there is no relative Box", async () => {
+    const order = (
+      await drawnNodes(() =>
+        api.renderToBytes(
+          api.Document([
+            api.Page([
+              api.Box({ width: 22, height: 10, bg: "red" }, []),
+              api.Positioned(
+                { top: 0, left: 0, zIndex: -1 },
+                api.Box({ width: 11, height: 10, bg: "blue" }, []),
+              ),
+            ]),
+          ]),
+        ),
+      )
+    )[0]!.flatMap((n) => (n.type === "rect" ? [n.width] : []));
+    expect(order).toEqual([11, 22]);
   });
 });

@@ -4,10 +4,11 @@ import { RendererRegistry } from "../../../src/lib/utils/renderer-registry.ts";
 import type { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager.ts";
 import type { RotatedElement } from "../../../src/lib/elements/layout/rotated-element.ts";
 import type { IRNode } from "../../../src/lib/ir/display-list.ts";
+import { LEAF } from "../support/scope.ts";
 
 describe("RotatedRenderer", () => {
-  it("draws the child relative to the box, rotated around the box centre", async () => {
-    const child = { getProps: vi.fn() };
+  it("draws the child relative to the box, rotated around the box center", async () => {
+    const child = { getProps: vi.fn(), ...LEAF };
     const renderer = vi.fn(async (): Promise<IRNode[]> => []);
     vi.spyOn(RendererRegistry, "getRenderer").mockReturnValue(renderer);
     const element = {
@@ -24,7 +25,7 @@ describe("RotatedRenderer", () => {
       origin: { x: 110, y: 220 },
       frame: { x: 0, y: 0 },
     });
-    // The centre (110 + 20, 220 + 10) is the fixed point of the rotation.
+    // The center (110 + 20, 220 + 10) is the fixed point of the rotation.
     const push = nodes[0];
     expect(push?.type).toBe("transform-push");
     if (push?.type !== "transform-push") return;

@@ -39,6 +39,11 @@ export class RotatedElement extends PDFElement {
     return this.child.measure(constraints, ctx);
   }
 
+  /** A turn is a context: a `zIndex` below it sorts inside the turn, never out of it. */
+  override isStackingContext(): boolean {
+    return true;
+  }
+
   override layoutChildren(): readonly PDFElement[] {
     return [this.child];
   }
