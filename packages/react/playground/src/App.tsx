@@ -52,10 +52,18 @@ export function App() {
     };
   }, []);
 
+  // The hash is the selection, so back/forward and an edited URL switch the sample too.
+  useEffect(() => {
+    const follow = () => {
+      const next = SAMPLES.find((s) => s.id === location.hash.slice(1)) ?? SAMPLES[0];
+      setId(next.id);
+      setValues(initialValues(next));
+    };
+    addEventListener("hashchange", follow);
+    return () => removeEventListener("hashchange", follow);
+  }, []);
   const select = (s: Sample) => {
     location.hash = s.id;
-    setId(s.id);
-    setValues(initialValues(s));
   };
 
   // Render on every change, debounced for typing and sliders; a stale render never overwrites a newer one.

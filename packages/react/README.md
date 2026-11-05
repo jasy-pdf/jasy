@@ -43,6 +43,10 @@ function Invoice({ items }: { items: { desc: string; amount: string }[] }) {
   );
 }
 
+const items = [
+  { desc: "Design work", amount: "1,200.00" },
+  { desc: "Development", amount: "3,400.00" },
+];
 const bytes = await renderToPdf(<Invoice items={items} />); // in the browser or in Node
 ```
 
@@ -128,9 +132,10 @@ Both load as bytes, so the same code runs in the browser and in Node:
 - `renderToPdfString(element, options?) => Promise<string>` - the raw PDF string.
 - `options` are the `@jasy/pdf` `RenderOptions`, e.g. `{ encrypt: { userPassword: "secret" } }` for
   AES-256, `{ accessible: true }` for a tagged PDF, `onDiagnostic` for what the engine has to say.
-- `toDocumentDescriptor(element)` - the plain, serializable descriptor of the document, e.g. to post
-  to a server. A `Flow` and a `PageBuilder` render during the PDF render, so a document with one goes
-  through `renderToPdf`.
+- `toDocumentDescriptor(element)` - the engine descriptor of the document, a plain object. Before
+  posting it as JSON, encode font and image bytes yourself (JSON has no `Uint8Array`) and decode them on
+  the other side. Functions do not survive JSON at all, so a document with a `Canvas`, a `Flow` or a
+  `PageBuilder` goes through `renderToPdf`.
 
 ## Try it
 

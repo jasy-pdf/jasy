@@ -40,9 +40,9 @@ export function renderToPdfString(element: ReactNode, options?: RenderOptions): 
 }
 
 /**
- * The engine descriptor for an element's `<Document>`: a plain, serializable object, e.g. to post to a
- * server. A `Flow` and a `PageBuilder` render during the PDF render, so a document with one goes through
- * `renderToPdf` instead.
+ * The engine descriptor for an element's `<Document>`, a plain object. As JSON it loses what JSON cannot
+ * hold: bytes (encode fonts and images yourself) and functions - a `Canvas`'s paint, and a `Flow` or
+ * `PageBuilder`, which render during the PDF render. Those documents go through `renderToPdf`.
  */
 export function toDocumentDescriptor(element: ReactNode): Descriptor {
   const { descriptor, unmount } = mountDocument(element);
