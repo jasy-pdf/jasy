@@ -4,6 +4,7 @@ import type { Affine } from "../utils/ttf-parser.ts";
 import { SvgParseError, SvgUnsupportedError } from "./errors.ts";
 import { IDENTITY, isIdentity, multiply, parseTransform } from "./transform.ts";
 import { shapeOf } from "./shapes.ts";
+import { length } from "./units.ts";
 import { transformCommands } from "../vector/path.ts";
 import type { PathCommand } from "../ir/display-list.ts";
 import { declarationsFor, parseStylesheet, type CssRule } from "./css.ts";
@@ -28,7 +29,7 @@ export interface SvgTarget {
   height: number;
 }
 
-/** The intrinsic size of an SVG: its `width`/`height`, else its `viewBox`. */
+/** The intrinsic size of an SVG in points: its `width`/`height`, else its `viewBox`, else 300 x 150 px. */
 export interface SvgSize {
   width: number;
   height: number;
@@ -102,6 +103,23 @@ const elements = (node: XmlNode): XmlElement[] =>
     ? node.children.filter((child): child is XmlElement => child.type === "element")
     : [];
 
+/** SVG's user unit is the CSS px: 1/96 inch, so 0.75pt - the resolution an image without one gets too. */
+const PT_PER_USER_UNIT = 72 / 96;
+
+/** The size of a replaced element that declares none (CSS). */
+const DEFAULT_VIEWPORT = { width: 300, height: 150 };
+
+/**
+ * A root `width`/`height` in user units, or `undefined` when it gives none. A percentage sizes against a
+ * container, which a drawing on its own does not have - a browser treats it as not given, and so do we.
+ */
+function rootLength(value: string | undefined, name: string): number | undefined {
+  const text = value?.trim() ?? "";
+  if (text === "" || text.endsWith("%")) return undefined;
+  const n = length(text, `the root <svg> ${name}`, NaN);
+  return n > 0 ? n : undefined;
+}
+
 /**
  * Reads the root `<svg>` and returns the matrix that maps its user space onto `target`, plus the
  * intrinsic size. The `viewBox` scales UNIFORMLY and centres - SVG's default `preserveAspectRatio`
@@ -117,13 +135,18 @@ function rootMapping(root: XmlElement, target: SvgTarget): { matrix: Affine; siz
   const hasBox =
     box.length === 4 && box.every((n) => Number.isFinite(n)) && box[2]! > 0 && box[3]! > 0;
 
-  const declaredW = Number(attributes["width"]);
-  const declaredH = Number(attributes["height"]);
+  // The viewport in user units. One side given and a viewBox: the other follows its ratio, as in a
+  // browser. Nothing to go on: CSS's 300 x 150 for a replaced element without a size.
+  const w = rootLength(attributes["width"], "width");
+  const h = rootLength(attributes["height"], "height");
+  const ratio = hasBox ? box[2]! / box[3]! : undefined;
+  const userWidth =
+    w ?? (h !== undefined && ratio ? h * ratio : hasBox ? box[2]! : DEFAULT_VIEWPORT.width);
+  const userHeight =
+    h ?? (w !== undefined && ratio ? w / ratio : hasBox ? box[3]! : DEFAULT_VIEWPORT.height);
   const size: SvgSize = {
-    width:
-      Number.isFinite(declaredW) && declaredW > 0 ? declaredW : hasBox ? box[2]! : target.width,
-    height:
-      Number.isFinite(declaredH) && declaredH > 0 ? declaredH : hasBox ? box[3]! : target.height,
+    width: userWidth * PT_PER_USER_UNIT,
+    height: userHeight * PT_PER_USER_UNIT,
   };
 
   // We always scale uniformly and centre, which is SVG's default "xMidYMid meet". Any other value
@@ -136,7 +159,7 @@ function rootMapping(root: XmlElement, target: SvgTarget): { matrix: Affine; siz
     );
   }
 
-  const [vx, vy, vw, vh] = hasBox ? box : [0, 0, size.width, size.height];
+  const [vx, vy, vw, vh] = hasBox ? box : [0, 0, userWidth, userHeight];
   const scale = Math.min(target.width / vw!, target.height / vh!);
   const dx = target.x + (target.width - vw! * scale) / 2;
   const dy = target.y + (target.height - vh! * scale) / 2;

@@ -154,11 +154,49 @@ describe("the edge of the subset is a named error, never a silent skip", () => {
 });
 
 describe("svgSize", () => {
+  // In points. The user unit is the CSS px, 1/96 inch: 0.75pt.
+  const size = (attrs: string) => svgSize(`<svg ${attrs}></svg>`);
+
   it("prefers the declared width/height, then the viewBox", () => {
-    expect(svgSize(`<svg width="40" height="20" viewBox="0 0 100 100"></svg>`)).toEqual({
-      width: 40,
-      height: 20,
+    expect(size(`width="40" height="20" viewBox="0 0 100 100"`)).toEqual({ width: 30, height: 15 });
+    expect(size(`viewBox="0 0 100 50"`)).toEqual({ width: 75, height: 37.5 });
+  });
+
+  it("converts units: px is the user unit, mm and in are physical", () => {
+    expect(size(`width="100px" height="50px"`)).toEqual({ width: 75, height: 37.5 });
+    const mm = size(`width="100mm" height="50mm" viewBox="0 0 10 5"`);
+    expect(mm.width).toBeCloseTo((100 * 72) / 25.4, 9);
+    expect(mm.height).toBeCloseTo((50 * 72) / 25.4, 9);
+    expect(size(`width="1in" height="2pt"`)).toEqual({ width: 72, height: 2 });
+  });
+
+  it("takes the other side from the viewBox ratio when only one is given", () => {
+    expect(size(`width="200" viewBox="0 0 10 5"`)).toEqual({ width: 150, height: 75 });
+    expect(size(`height="1in" viewBox="0 0 10 5"`)).toEqual({ width: 144, height: 72 });
+  });
+
+  it("falls back to 300 x 150 px like a browser when nothing gives a size", () => {
+    expect(size(``)).toEqual({ width: 225, height: 112.5 });
+    expect(size(`width="100%" height="100%"`)).toEqual({ width: 225, height: 112.5 });
+    expect(size(`width="40"`)).toEqual({ width: 30, height: 112.5 });
+  });
+
+  it("names a unit it cannot resolve", () => {
+    expect(() => size(`width="10em" height="5em"`)).toThrow(SvgUnsupportedError);
+  });
+});
+
+describe("the root viewport without a viewBox", () => {
+  it("maps the declared size in user units onto the target", () => {
+    // 100mm is 377.95 user units; drawn into a 283.46pt target that is a scale of 0.75.
+    const nodes = svgToIr(`<svg width="100mm" height="50mm"><rect width="10" height="10"/></svg>`, {
+      x: 0,
+      y: 0,
+      width: (100 * 72) / 25.4,
+      height: (50 * 72) / 25.4,
     });
-    expect(svgSize(`<svg viewBox="0 0 100 50"></svg>`)).toEqual({ width: 100, height: 50 });
+    const transform = nodes.find((n) => n.type === "transform-push") as { matrix: number[] };
+    expect(transform.matrix[0]).toBeCloseTo(0.75, 9);
+    expect(transform.matrix[3]).toBeCloseTo(0.75, 9);
   });
 });
