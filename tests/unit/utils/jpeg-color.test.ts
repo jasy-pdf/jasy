@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { jpegColor, JpegFormatError } from "../../../src/lib/utils/image-helper.ts";
 import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager.ts";
 import { latin1FromBytes } from "../../../src/lib/utils/bytes.ts";
+import * as api from "../../../src/lib/api/index.ts";
 
 // A JPEG is embedded as it is, so its color space is the one it was saved in: gray, RGB or CMYK.
 // Photoshop stores CMYK inverted and says so with an Adobe APP14 segment.
@@ -78,5 +79,11 @@ describe("an embedded JPEG", () => {
     om.setOutputIntent(new Uint8Array(16));
     expect(() => embedded(jpeg(4, 0xc0, ADOBE), om)).toThrow(/CMYK JPEG in a PDF\/A document/);
     expect(embedded(jpeg(1), om)).toContain("/ColorSpace /DeviceGray");
+  });
+});
+
+describe("JpegFormatError", () => {
+  it("is public, so a caller can catch it by type", () => {
+    expect(api.JpegFormatError).toBe(JpegFormatError);
   });
 });
