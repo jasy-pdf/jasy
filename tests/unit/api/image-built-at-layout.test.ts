@@ -73,6 +73,19 @@ describe("an image built during layout keeps its ratio", () => {
       100, 50,
     ]);
   });
+
+  it("from a URL, in a copy of a table that is the only one in the document", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ok(await png(40, 20))),
+    );
+    const table = Table({ columns: ["auto"] }, [
+      [Image("https://x.example/wide.png", { width: 100 })],
+    ]);
+    const seen: Diagnostic[] = [];
+    expect(await drawnImage(table.clone(), seen)).toEqual([100, 50]);
+    expect(seen.filter((d) => d.code === "image-unsized")).toEqual([]);
+  });
 });
 
 describe("an image whose size cannot be known at layout", () => {
