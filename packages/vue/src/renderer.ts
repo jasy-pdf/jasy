@@ -96,10 +96,10 @@ export function mountDocument(
 
 /**
  * Mounts a component once (one-shot - a PDF is not interactive) and returns the engine descriptor for
- * its `<Document>` root. The descriptor is a plain serialisable object, so it can be posted to a Node
- * renderer from the browser, or handed straight to `renderToPdf` (from `@jasy/vue/node`) on the server.
- * A `<Flow>`'s #page is rendered while the PDF is laid out, so a document with one goes through
- * `renderToPdf` instead.
+ * its `<Document>` root, a plain object that `buildDocument` turns into the document. As JSON it loses
+ * what JSON cannot hold: bytes (encode fonts and images yourself) and functions - a `<Canvas>`'s paint,
+ * and a `<Flow>` or `<PageBuilder>`, which render during the PDF render. Those documents go through
+ * `renderToPdf`.
  */
 export function toDocumentDescriptor(root: Component, props?: Record<string, any>): Descriptor {
   const { descriptor, unmount } = mountDocument(root, props);
