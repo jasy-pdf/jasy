@@ -1,4 +1,14 @@
-import { Box, Column, Document, Padding, Page, Positioned, Row, Text } from "@jasy/react";
+import {
+  Box,
+  Column,
+  Document,
+  Padding,
+  Page,
+  PageBuilder,
+  Positioned,
+  Row,
+  Text,
+} from "@jasy/react";
 
 const TOPICS = [
   [
@@ -42,9 +52,15 @@ export default function Report({ sections }: { sections: number }) {
             <Text size={12} bold color="#0a2348">
               ACME Analytics
             </Text>
-            <Text size={12} color="#64748b">
-              Quarterly Report · Q2 2026
-            </Text>
+            <PageBuilder>
+              {({ pageNumber, pageCount }) => (
+                <Text size={12} color="#64748b">
+                  {pageNumber === 1
+                    ? "Quarterly Report · Q2 2026"
+                    : `continued · page ${pageNumber} of ${pageCount}`}
+                </Text>
+              )}
+            </PageBuilder>
           </Row>
         }
         footer={

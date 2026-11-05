@@ -73,7 +73,7 @@ export const SAMPLES: Sample[] = [
     id: "report",
     group: "Documents",
     title: "Report",
-    look: "Header and footer repeat on every page; the badge sits on the corner.",
+    look: "Header and footer repeat; from page 2 the header says so.",
     source: reportSource,
     controls: [{ key: "sections", label: "Sections", type: "range", initial: 7, min: 1, max: 40 }],
     element: (v) => <Report sections={v.sections} />,

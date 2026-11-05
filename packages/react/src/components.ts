@@ -17,6 +17,7 @@ import type {
   Insets,
   ListBoxOptions,
   PageNumberOptions,
+  PageInfo,
   PageOptions,
   PositionedInsets,
   PushButtonOptions,
@@ -88,6 +89,10 @@ export type BookmarkProps = WithChildren & { title: string; level?: number };
 export type RotatedProps = WithChildren & { angle: number };
 export type RotatedBoxProps = WithChildren & { turns: number };
 export type PageNumberProps = PageNumberOptions;
+export type PageBuilderProps = {
+  /** What to show, built from the page it lands on. */
+  children: (info: PageInfo) => ReactNode;
+};
 export type TextFieldProps = TextFieldOptions;
 export type CheckboxProps = CheckboxOptions & { children?: LabelText };
 export type RadioGroupProps = RadioGroupOptions & {
@@ -167,6 +172,10 @@ export const Rotated = host<RotatedProps>("rotated", "Rotated");
 export const RotatedBox = host<RotatedBoxProps>("rotated-box", "RotatedBox");
 export const PageNumber = host<PageNumberProps>("page-number", "PageNumber");
 export const PageCount = host<PageNumberProps>("page-count", "PageCount");
+/** The page number within its `Page` (a section of the document), as text. */
+export const SubPageNumber = host<PageNumberProps>("sub-page-number", "SubPageNumber");
+/** How many pages its `Page` (a section of the document) produced, as text. */
+export const SubPageCount = host<PageNumberProps>("sub-page-count", "SubPageCount");
 export const TextField = host<TextFieldProps>("text-field", "TextField");
 export const Checkbox = labelled<CheckboxProps>("checkbox", "Checkbox");
 export const RadioGroup = host<RadioGroupProps>("radio-group", "RadioGroup");
@@ -176,30 +185,45 @@ export const PushButton = labelled<PushButtonProps>("push-button", "PushButton")
 export const SignatureField = labelled<SignatureFieldProps>("signature-field", "SignatureField");
 
 /**
- * Content flowing through the `Region`s of `page`: the first Region full, then the next, then the next
- * page. The engine asks for every page while it lays the document out; `page` is rendered right here,
- * in the tree, so hooks and context work in it as anywhere else.
+ * Renders `render(info)` in place, in the tree, whenever the engine asks during layout - so hooks and
+ * context work in it as anywhere else. Each request carries the `render` of the render that made it, so
+ * a callback the engine kept from an earlier page still draws what that page rendered.
  */
-export function Flow({ page, children, ...props }: FlowProps): ReactNode {
-  const [asked, setAsked] = useState<FlowPage>();
+function useRenderedOnRequest<T>(component: string, render: (info: T) => ReactNode) {
+  const [asked, setAsked] = useState<{ info: T; render: (info: T) => ReactNode }>();
   const self = useRef<JNode>(null);
   const sink = useContext(RenderSinkContext);
-  const renderPage = (info: FlowPage) => {
+  const request = (info: T) => {
     if (!self.current || !sink) {
       throw new Error(
-        "@jasy/react: a <Flow> renders its page while the PDF is laid out - render the document " +
+        `@jasy/react: a <${component}> renders while the PDF is laid out - render the document ` +
           "with renderToPdf, which keeps it mounted until then.",
       );
     }
-    flushNow(() => setAsked(info));
+    flushNow(() => setAsked({ info, render }));
     if (sink.failure) throw sink.failure;
-    const marker = self.current.children.find((c) => c.type === "flow-page");
+    const marker = self.current.children.find((c) => c.type === "rendered-on-request");
     return marker ? childDescriptors(marker) : [];
   };
-  return h(
-    "flow",
-    { ...props, page: renderPage, ref: self },
-    asked && h("flow-page", null, page(asked)),
-    children,
-  );
+  const rendered = asked && h("rendered-on-request", null, asked.render(asked.info));
+  return { ref: self, request, rendered };
+}
+
+/**
+ * Content flowing through the `Region`s of `page`: the first Region full, then the next, then the next
+ * page. `page` is rendered for every page while the engine lays the document out.
+ */
+export function Flow({ page, children, ...props }: FlowProps): ReactNode {
+  const { ref, request, rendered } = useRenderedOnRequest("Flow", page);
+  return h("flow", { ...props, page: request, ref }, rendered, children);
+}
+
+/**
+ * Content built from the page it lands on: `{({ pageNumber, pageCount }) => ...}` as its child. Place
+ * it anywhere - a header, a footer, the body, a table cell. What it builds is placed whole on its page;
+ * build nothing (`null`) to show it on some pages only.
+ */
+export function PageBuilder({ children }: PageBuilderProps): ReactNode {
+  const { ref, request, rendered } = useRenderedOnRequest("PageBuilder", children);
+  return h("page-builder", { build: request, ref }, rendered);
 }

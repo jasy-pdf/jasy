@@ -71,9 +71,9 @@ React 19.
 
 | Group      | Components                                                                                             |
 | ---------- | ------------------------------------------------------------------------------------------------------ |
-| Structure  | `Document` · `Page` · `PageBreak` · `KeepTogether` · `DefaultTextStyle`                                |
+| Structure  | `Document` · `Page` · `PageBreak` · `KeepTogether` · `DefaultTextStyle` · `PageBuilder`                |
 | Layout     | `Column` · `Row` · `Box` · `Padding` · `Expanded` · `Spacer` · `Positioned` · `Rotated` · `RotatedBox` |
-| Text       | `Text` · `Paragraph` · `Span` · `PageNumber` · `PageCount`                                             |
+| Text       | `Text` · `Paragraph` · `Span` · `PageNumber` · `PageCount` · `SubPageNumber` · `SubPageCount`          |
 | Content    | `Image` · `Svg` · `Canvas` · `Divider` · `Table` · `TableRow` · `TableCell`                            |
 | Flow       | `Flow` · `Region` · `ColumnBreak` · `SplitView`                                                        |
 | Navigation | `Link` · `Anchor` · `Bookmark`                                                                         |
@@ -86,6 +86,8 @@ Where React has its own way, it is used:
 - **A form field's label is its children.** `<Checkbox name="agree">I agree</Checkbox>`.
 - **Repeating areas are props.** `<Page header={<Logo />} footer={<PageNumber />}>`: laid out once and
   repeated on every page the content flows onto, with the space they need reserved.
+- **What depends on the page is a function child**, built for every page it lands on:
+  `<PageBuilder>{({ pageNumber, pageCount }) => <Text>Page {pageNumber} of {pageCount}</Text>}</PageBuilder>`.
 - **A Flow's page is a render prop**, rendered in place, so hooks and context work in it:
 
 ```tsx

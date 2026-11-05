@@ -23,6 +23,7 @@ import {
   Padding,
   Page,
   PageBreak,
+  PageBuilder,
   PageCount,
   PageNumber,
   Paragraph,
@@ -37,6 +38,8 @@ import {
   Spacer,
   Span,
   SplitView,
+  SubPageCount,
+  SubPageNumber,
   Svg,
   Table,
   TableCell,
@@ -478,5 +481,143 @@ describe("<Flow page={...}>", () => {
     );
     const flow = (descriptor.children![0] as pdf.Descriptor).children![0] as pdf.Descriptor;
     expect(() => flow.props!.page({ index: 0 })).toThrow("render the document with renderToPdf");
+  });
+});
+
+describe("<PageBuilder>{(info) => ...}</PageBuilder>", () => {
+  const body = (n: number) => Array.from({ length: n }, (_, i) => `Line ${i + 1} of the body.`);
+
+  it("builds each page's footer like the TypeScript PageBuilder", async () => {
+    await same(
+      tsDoc(
+        body(40).map((l) => pdf.Text(l)),
+        {
+          footer: pdf.PageBuilder(({ pageNumber, pageCount }) =>
+            pdf.Text(`Page ${pageNumber} of ${pageCount}`, { size: 8 }),
+          ),
+        },
+      ),
+      jsxDoc(
+        body(40).map((l) => <Text key={l}>{l}</Text>),
+        {
+          footer: (
+            <PageBuilder>
+              {({ pageNumber, pageCount }) => (
+                <Text size={8}>
+                  Page {pageNumber} of {pageCount}
+                </Text>
+              )}
+            </PageBuilder>
+          ),
+        },
+      ),
+    );
+  });
+
+  it("builds nothing where it returns null, and sees the context around it", async () => {
+    const Accent = createContext("#000");
+    await same(
+      tsDoc(
+        body(40).map((l) => pdf.Text(l)),
+        {
+          header: pdf.PageBuilder(({ pageNumber }) =>
+            pageNumber === 1 ? pdf.Column([]) : pdf.Text("continued", { color: "#1450aa" }),
+          ),
+        },
+      ),
+      <Accent.Provider value="#1450aa">
+        {jsxDoc(
+          body(40).map((l) => <Text key={l}>{l}</Text>),
+          {
+            header: (
+              <PageBuilder>
+                {({ pageNumber }) =>
+                  pageNumber === 1 ? null : (
+                    <Accent.Consumer>
+                      {(color) => <Text color={color}>continued</Text>}
+                    </Accent.Consumer>
+                  )
+                }
+              </PageBuilder>
+            ),
+          },
+        )}
+      </Accent.Provider>,
+    );
+  });
+
+  it("counts within each Page with SubPageNumber and SubPageCount", async () => {
+    const tsFooter = pdf.Row([
+      pdf.SubPageNumber({ size: 8 }),
+      pdf.Text("/"),
+      pdf.SubPageCount({ size: 8 }),
+    ]);
+    const jsxFooter = (
+      <Row>
+        <SubPageNumber size={8} />
+        <Text>/</Text>
+        <SubPageCount size={8} />
+      </Row>
+    );
+    const opts = { size: SIZE, margin: 20 };
+    await same(
+      pdf.Document([
+        pdf.Page(
+          { ...opts, footer: tsFooter },
+          body(30).map((l) => pdf.Text(l)),
+        ),
+        pdf.Page(
+          { ...opts, footer: tsFooter },
+          body(10).map((l) => pdf.Text(l)),
+        ),
+      ]),
+      <Document>
+        <Page {...opts} footer={jsxFooter}>
+          {body(30).map((l) => (
+            <Text key={l}>{l}</Text>
+          ))}
+        </Page>
+        <Page {...opts} footer={jsxFooter}>
+          {body(10).map((l) => (
+            <Text key={l}>{l}</Text>
+          ))}
+        </Page>
+      </Document>,
+    );
+  });
+
+  it("inside a Flow's page, draws what that page rendered", async () => {
+    await same(
+      tsDoc([
+        pdf.Flow(
+          {
+            template: ({ index }) =>
+              pdf.Column({ gap: 4 }, [
+                pdf.PageBuilder(({ pageNumber }) =>
+                  pdf.Text(`part ${index + 1}, sheet ${pageNumber}`),
+                ),
+                pdf.Region(),
+              ]),
+          },
+          body(40).map((l) => pdf.Text(l)),
+        ),
+      ]),
+      jsxDoc(
+        <Flow
+          page={({ index }) => (
+            <Column gap={4}>
+              <PageBuilder>
+                {({ pageNumber }) => <Text>{`part ${index + 1}, sheet ${pageNumber}`}</Text>}
+              </PageBuilder>
+              <Region />
+            </Column>
+          )}
+        >
+          {body(40).map((l) => (
+            <Text key={l}>{l}</Text>
+          ))}
+        </Flow>,
+      ),
+    );
   });
 });
