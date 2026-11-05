@@ -5,4 +5,4 @@ contact_links:
     about: Questions, ideas or general feedback? Start a discussion.
   - name: Documentation
     url: https://jasy.dev/docs
-    about: Guides for @jasy/pdf, Vue, Nuxt and e-invoicing.
+    about: Guides for @jasy/pdf, Vue, React, Nuxt and e-invoicing.

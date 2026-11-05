@@ -46,7 +46,7 @@ type LabelText = string | number | Array<string | number>;
 
 export type DocumentProps = DocumentOptions &
   WithChildren & {
-    /** Fonts by family name: a file path (Node), the file's bytes, a URL or a family of styles. */
+    /** Fonts by family name: the file's bytes, a path (Node) or a family of styles. */
     fonts?: Record<string, FontSource>;
   };
 export type PageProps = Omit<PageOptions, "header" | "footer"> &
