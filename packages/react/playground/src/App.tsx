@@ -21,6 +21,7 @@ async function loadAssets(): Promise<Assets> {
 }
 
 interface Result {
+  sampleId: string;
   url: string;
   ms: number;
   pages: number;
@@ -42,9 +43,13 @@ export function App() {
   const [result, setResult] = useState<Result>();
   const [error, setError] = useState<string>();
   const run = useRef(0);
+  const url = useRef<string>(undefined);
 
   useEffect(() => {
     loadAssets().then(setAssets, (e) => setError(String(e)));
+    return () => {
+      if (url.current) URL.revokeObjectURL(url.current);
+    };
   }, []);
 
   const select = (s: Sample) => {
@@ -68,16 +73,16 @@ export function App() {
         });
         const ms = performance.now() - started;
         if (ticket !== run.current) return;
+        if (url.current) URL.revokeObjectURL(url.current);
+        url.current = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
         setError(undefined);
-        setResult((old) => {
-          if (old) URL.revokeObjectURL(old.url);
-          return {
-            url: URL.createObjectURL(new Blob([bytes], { type: "application/pdf" })),
-            ms,
-            pages: countPages(bytes),
-            kb: bytes.length / 1024,
-            diagnostics,
-          };
+        setResult({
+          sampleId: sample.id,
+          url: url.current,
+          ms,
+          pages: countPages(bytes),
+          kb: bytes.length / 1024,
+          diagnostics,
         });
       } catch (e: any) {
         if (ticket === run.current) setError(String(e?.stack ?? e));
@@ -85,6 +90,9 @@ export function App() {
     }, 150);
     return () => clearTimeout(timer);
   }, [sample, values, tagged, assets]);
+
+  // Only a successful render of the sample on screen is shown or offered for download.
+  const current = !error && result?.sampleId === sample.id ? result : undefined;
 
   const groups = useMemo(
     () => GROUPS.map((g) => ({ name: g, samples: SAMPLES.filter((s) => s.group === g) })),
@@ -160,25 +168,25 @@ export function App() {
           <button className="toggle" onClick={() => setShowCode(!showCode)}>
             {showCode ? "Hide code" : "Show code"}
           </button>
-          {result && (
+          {current && (
             <span className="stats">
-              <b>{result.ms.toFixed(0)} ms</b> · {result.pages}{" "}
-              {result.pages === 1 ? "page" : "pages"} · {result.kb.toFixed(1)} KB
+              <b>{current.ms.toFixed(0)} ms</b> · {current.pages}{" "}
+              {current.pages === 1 ? "page" : "pages"} · {current.kb.toFixed(1)} KB
             </span>
           )}
           <label className="tagged" title="A structure tree for screen readers (PDF/UA)">
             <input type="checkbox" checked={tagged} onChange={(e) => setTagged(e.target.checked)} />
             Tagged PDF
           </label>
-          {result && (
-            <a className="download" href={result.url} download={`${sample.id}.pdf`}>
+          {current && (
+            <a className="download" href={current.url} download={`${sample.id}.pdf`}>
               Download
             </a>
           )}
         </header>
-        {result && result.diagnostics.length > 0 && (
+        {current && current.diagnostics.length > 0 && (
           <ul className="diagnostics">
-            {result.diagnostics.map((d, i) => (
+            {current.diagnostics.map((d, i) => (
               <li key={i}>
                 <code>{d.code}</code> {d.message}
               </li>
@@ -188,7 +196,7 @@ export function App() {
         {error ? (
           <pre className="error">{error}</pre>
         ) : (
-          result && <iframe key={result.url} src={`${result.url}#view=FitH`} title="PDF" />
+          current && <iframe key={current.url} src={`${current.url}#view=FitH`} title="PDF" />
         )}
       </section>
     </div>

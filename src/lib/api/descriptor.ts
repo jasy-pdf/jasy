@@ -200,11 +200,18 @@ const REGISTRY: Record<string, ElementFactory> = {
 
   // Page numbers. A binding renders `build` per page, like a Flow's `page`; nothing built is an empty
   // Column, so a builder can show something on some pages only.
-  "page-builder": (props) =>
-    PageBuilder((info: PageInfo) => {
+  "page-builder": (props) => {
+    // A descriptor posted as JSON loses its functions; say so here, not mid-layout.
+    if (typeof props.build !== "function") {
+      throw new Error(
+        "A page-builder needs a `build` function prop (lost if the descriptor went through JSON).",
+      );
+    }
+    return PageBuilder((info: PageInfo) => {
       const built: DescriptorChild[] = props.build(info) ?? [];
       return built.length === 0 ? Column([]) : wrappedChild(built);
-    }),
+    });
+  },
   "page-number": (props) => PageNumber(props),
   "page-count": (props) => PageCount(props),
   "sub-page-number": (props) => SubPageNumber(props),

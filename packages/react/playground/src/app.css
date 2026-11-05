@@ -20,7 +20,8 @@ body {
   height: 100%;
 }
 .app.no-code {
-  grid-template-columns: 260px 0 minmax(0, 1fr);
+  /* The hidden code panel leaves the grid, so the viewer takes the second track. */
+  grid-template-columns: 260px minmax(0, 1fr);
 }
 .app.no-code .code {
   display: none;

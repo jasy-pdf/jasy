@@ -19,7 +19,7 @@ export default function Invitation() {
               </Text>
               <Divider color="#f3dc29" />
               <Text size={12} color="#ffffff" align="center">
-                Saturday, 12 July 2026 · 19:00
+                Saturday, 11 July 2026 · 19:00
               </Text>
               <Text size={12} color="#ffffff" align="center">
                 The Old Warehouse, Berlin

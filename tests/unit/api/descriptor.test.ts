@@ -73,6 +73,12 @@ describe("page-builder - a binding renders `build` per page", () => {
   });
 });
 
+describe("page-builder without its build function", () => {
+  it("is refused by name, as a descriptor that went through JSON would be", () => {
+    expect(() => build({ type: "page-builder", props: {} })).toThrow("needs a `build` function");
+  });
+});
+
 describe("registerElement - custom component types", () => {
   it("lets a custom tag resolve through the same seam", () => {
     // A user/binding component: a 'badge' = a small filled Box.
