@@ -430,10 +430,12 @@ enforces it (`skonto.ts` for "Skonto is not an allowance"), and everywhere else 
   Chrome is a reference where the model is silent, never a reason to rebuild it. Where a browser needs an
   EXTRA prop for the behaviour a user obviously wants (`max-width: 100%`, `min-width: 0`) and defaulting
   to it breaks nothing (the other behaviour stays one prop away), that is the default.
-- **An unsized `Image` is its own size (1px = 1pt), scaled down to the cap, never up** (an SVG too: one
-  rule, `sizeAtOwnRatio`), and placed by `align` like any smaller child; `fit` defaults to `fill` (the box is derived from the image). The
-  image's own `align` says where it sits in its box (`cover` keeps a portrait's `"top"`), as a Text's
-  `align` does for its lines.
+- **An unsized `Image` is its own size, scaled down to the cap, never up** (an SVG too: one rule,
+  `sizeAtOwnRatio`), and placed by `align` like any smaller child; `fit` defaults to `fill` (the box is
+  derived from the image). Its own size is its pixels at the resolution the FILE declares (PNG `pHYs`,
+  JPEG JFIF, else EXIF), else 96 dpi - CSS's px, as Word and InDesign do (`naturalSize`). The image's own
+  `align` says where it sits in its box (`cover` keeps a portrait's `"top"`), as a Text's `align` does
+  for its lines.
 - **Kerning, ligatures ON by default**; `flexShrink: 1` (the CSS default) with a `min-content` floor
   (`minIntrinsicMain`), where the gate for a behaviour change is "every changed case is BETTER", not
   "nothing changes" - four gallery cases were overflowing the page margin unseen.

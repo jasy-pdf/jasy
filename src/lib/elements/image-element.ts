@@ -1,5 +1,10 @@
 import type { Radii } from "../ir/display-list.ts";
-import { getImageDimensions, type FitAlign } from "../utils/image-helper.ts";
+import {
+  getImageDimensions,
+  naturalSize,
+  type FitAlign,
+  type ImageDimensions,
+} from "../utils/image-helper.ts";
 import { latin1FromBytes } from "../utils/bytes.ts";
 import { readFileBytesAsync } from "../platform/node-fs.ts";
 import { fetchBytes } from "../utils/fetch-bytes.ts";
@@ -34,14 +39,14 @@ export abstract class CustomImage {
   abstract init(fresh?: boolean): void | Promise<void>;
   abstract getImageType(): string | Promise<string>;
   abstract getFileData(): string | Promise<string>;
-  abstract getImageDimensions(): Promise<{ width: number; height: number }>;
+  abstract getImageDimensions(): Promise<ImageDimensions>;
 }
 
 export class CustomLocalImage extends CustomImage {
   private imagePath: string;
   private fileBuffer!: Uint8Array;
   private fileRawData!: string;
-  private dims?: { width: number; height: number }; // memoized so the decode happens once
+  private dims?: ImageDimensions; // memoized so the decode happens once
 
   constructor(imagePath: string) {
     super();
@@ -90,7 +95,7 @@ export class CustomLocalImage extends CustomImage {
     return this.fileRawData;
   }
 
-  async getImageDimensions(): Promise<{ width: number; height: number }> {
+  async getImageDimensions(): Promise<ImageDimensions> {
     if (this.dims) return this.dims; // reuse: the pre-layout size pass and the renderer both ask
     if (!this.fileBuffer) throw new Error("@jasy/pdf: an image was measured before it was loaded");
     this.dims = await getImageDimensions(this.fileBuffer);
@@ -104,7 +109,7 @@ export class CustomLocalImage extends CustomImage {
  */
 export class CustomBytesImage extends CustomImage {
   private fileRawData: string;
-  private dims?: { width: number; height: number }; // memoized so the decode happens once
+  private dims?: ImageDimensions; // memoized so the decode happens once
   constructor(private bytes: Uint8Array) {
     super();
     this.fileRawData = latin1FromBytes(bytes);
@@ -123,7 +128,7 @@ export class CustomBytesImage extends CustomImage {
     return this.fileRawData;
   }
 
-  async getImageDimensions(): Promise<{ width: number; height: number }> {
+  async getImageDimensions(): Promise<ImageDimensions> {
     if (!this.dims) this.dims = await getImageDimensions(this.bytes); // reuse across pre-pass + render
     return this.dims;
   }
@@ -198,7 +203,7 @@ export class CustomUrlImage extends CustomImage {
     return this.image().getFileData();
   }
 
-  getImageDimensions(): Promise<{ width: number; height: number }> {
+  getImageDimensions(): Promise<ImageDimensions> {
     return this.image().getImageDimensions();
   }
 }
@@ -246,7 +251,7 @@ export class ImageElement extends SizedPDFElement {
   private requested: { width?: number; height?: number };
   /** min/max/aspectRatio, kept as given so every layout pass re-resolves them. */
   private sizing: SizingParams;
-  // Intrinsic pixel size, resolved asynchronously before layout (see resolveIntrinsicSize). Layout
+  // Its own size in points (`naturalSize`), resolved asynchronously before layout (see resolveIntrinsicSize). Layout
   // reads it to derive a proportional height for a width-only image (and vice versa).
   private intrinsic?: { width: number; height: number };
 
@@ -279,7 +284,7 @@ export class ImageElement extends SizedPDFElement {
   }
 
   /**
-   * Loads the image and records its intrinsic pixel size. Runs in the async pre-layout pass (layout
+   * Loads the image and records its own size. Runs in the async pre-layout pass (layout
    * itself is synchronous and cannot await jimp) so `calculateLayout` can turn a width-only image
    * into a proportional box. Best-effort: a load failure leaves the size unresolved (the renderer
    * surfaces the real error) and the image just keeps whatever explicit size it was given.
@@ -287,7 +292,7 @@ export class ImageElement extends SizedPDFElement {
   async resolveIntrinsicSize(): Promise<void> {
     try {
       await this.image.init(true); // a render begins here
-      this.intrinsic = await this.image.getImageDimensions();
+      this.intrinsic = naturalSize(await this.image.getImageDimensions());
     } catch {
       // leave intrinsic undefined - aspect derivation simply doesn't fire
     }
@@ -329,7 +334,7 @@ export class ImageElement extends SizedPDFElement {
     let h = resolved.height;
     const bounds = resolved.constraints;
 
-    // Its own ratio fills an open axis, once the pre-pass resolved the pixel size.
+    // Its own ratio fills an open axis, once the pre-pass resolved its own size.
     if (
       this.sizing.aspectRatio === undefined &&
       this.intrinsic &&
@@ -340,7 +345,7 @@ export class ImageElement extends SizedPDFElement {
     }
 
     // Still unpinned (no intrinsic size known): a bounded axis fills; an unbounded one takes the image's
-    // own extent (1px = 1pt). Read from `requested`, never the mutated this.width/height.
+    // own extent (`naturalSize`). Read from `requested`, never the mutated this.width/height.
     const width =
       w ??
       (bounds.hasBoundedWidth
@@ -356,7 +361,7 @@ export class ImageElement extends SizedPDFElement {
     return { width, height };
   }
 
-  /** The image's own pixel extent on one axis, clamped by its min/max; unknown before the pre-pass. */
+  /** The image's own extent on one axis, clamped by its min/max; unknown before the pre-pass. */
   private ownExtent(bounds: BoxConstraints, axis: "width" | "height"): number | undefined {
     const own = this.intrinsic?.[axis];
     if (own === undefined) return undefined;

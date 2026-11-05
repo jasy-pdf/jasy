@@ -11,7 +11,7 @@ import {
 } from "../../../src/lib/api/index.ts";
 import { drawnNodes } from "../support/drawn.ts";
 
-// An image given no size is drawn at its own pixel size (1px = 1pt), scaled down to what it is offered
+// An image given no size is drawn at its own size (its pixels at the file's dpi, else 96), scaled down to what it is offered
 // and never up, so it cannot run off the page. Smaller than its slot, it is placed by `align` like any
 // other child. Either way the box it reserves is the one it is drawn in.
 
@@ -42,7 +42,7 @@ const box = (i: { x: number; y: number; width: number; height: number }) => [
 describe("an unsized image", () => {
   it("in a Column keeps its own size; a wider one is scaled down to the column, ratio kept", async () => {
     const { images, text } = await drawn(
-      Column([Image(await png(60, 30)), Image(await png(400, 30)), Text("after")]),
+      Column([Image(await png(80, 40)), Image(await png(400, 30)), Text("after")]),
     );
     expect(images.map(box)).toEqual([
       [30, 30, 60, 30],
@@ -53,15 +53,15 @@ describe("an unsized image", () => {
   });
 
   it("is placed by the Column's align, as any child smaller than its slot", async () => {
-    const { images } = await drawn(Column({ align: "center" }, [Image(await png(60, 30))]));
+    const { images } = await drawn(Column({ align: "center" }, [Image(await png(80, 40))]));
     expect(images.map(box)).toEqual([[70, 30, 60, 30]]);
   });
 
   it("in a Row keeps its own size, and a Row of fixed height scales it down to fit", async () => {
     const { images, text } = await drawn(
       Column([
-        Row([Image(await png(60, 30)), Text("after")]),
-        Row({ height: 20 }, [Image(await png(60, 30))]),
+        Row([Image(await png(80, 40)), Text("after")]),
+        Row({ height: 20 }, [Image(await png(80, 40))]),
       ]),
     );
     expect(images.map(box)).toEqual([

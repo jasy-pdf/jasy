@@ -20,9 +20,98 @@ DataView.prototype.getUint24 = function (
   return littleEndian ? (b3 << 16) | (b2 << 8) | b1 : (b1 << 16) | (b2 << 8) | b3;
 };
 
-interface ImageDimensions {
+/** Dots per inch, per axis. */
+export interface Resolution {
+  x: number;
+  y: number;
+}
+
+export interface ImageDimensions {
+  /** In pixels - what the XObject declares. */
   width: number;
   height: number;
+  /** The resolution the file declares; absent when it declares none. */
+  dpi?: Resolution;
+}
+
+/** The resolution of a file that declares none: CSS's reference pixel, 1/96 inch. */
+export const DEFAULT_DPI = 96;
+
+/** An image's own size in points: its pixels at the resolution the file declares, else 96 dpi. */
+export function naturalSize(dims: ImageDimensions): { width: number; height: number } {
+  return {
+    width: (dims.width * 72) / (dims.dpi?.x ?? DEFAULT_DPI),
+    height: (dims.height * 72) / (dims.dpi?.y ?? DEFAULT_DPI),
+  };
+}
+
+/** A resolution only counts if both axes are real numbers above zero; anything else is no declaration. */
+function resolution(x: number, y: number): Resolution | undefined {
+  return Number.isFinite(x) && Number.isFinite(y) && x > 0 && y > 0 ? { x, y } : undefined;
+}
+
+/** PNG `pHYs`: pixels per unit, and only unit 1 (metre) is a physical size - 0 is an aspect ratio. */
+function pngResolution(view: DataView): Resolution | undefined {
+  for (let offset = 8; offset + 8 <= view.byteLength; ) {
+    const length = view.getUint32(offset);
+    const type = view.getUint32(offset + 4);
+    if (type === 0x49444154) return undefined; // IDAT: pHYs must come before it
+    if (type === 0x70485973 && length >= 9 && offset + 17 <= view.byteLength) {
+      if (view.getUint8(offset + 16) !== 1) return undefined;
+      return resolution(view.getUint32(offset + 8) * 0.0254, view.getUint32(offset + 12) * 0.0254);
+    }
+    offset += 12 + length;
+  }
+  return undefined;
+}
+
+/** JFIF `APP0`: units 1 = dots per inch, 2 = per centimetre, 0 = an aspect ratio only. */
+function jfifResolution(view: DataView, data: number): Resolution | undefined {
+  if (view.getUint32(data) !== 0x4a464946 || view.getUint8(data + 4) !== 0) return undefined; // "JFIF\0"
+  const units = view.getUint8(data + 7);
+  const scale = units === 1 ? 1 : units === 2 ? 2.54 : 0;
+  if (scale === 0) return undefined;
+  return resolution(view.getUint16(data + 8) * scale, view.getUint16(data + 10) * scale);
+}
+
+/** The first IFD of a TIFF block (EXIF), as tag → the entry's offset in `view`. */
+function tiffEntries(view: DataView, tiff: number): { entries: Map<number, number>; le: boolean } {
+  const le = view.getUint16(tiff) === 0x4949; // "II"
+  const ifd = tiff + view.getUint32(tiff + 4, le);
+  const entries = new Map<number, number>();
+  const count = view.getUint16(ifd, le);
+  for (let i = 0; i < count; i++) {
+    const entry = ifd + 2 + i * 12;
+    entries.set(view.getUint16(entry, le), entry);
+  }
+  return { entries, le };
+}
+
+/** EXIF `APP1`: XResolution / YResolution (rationals) in ResolutionUnit, 2 = inch (the default), 3 = cm. */
+function exifResolution(view: DataView, data: number): Resolution | undefined {
+  if (view.getUint32(data) !== 0x45786966 || view.getUint16(data + 4) !== 0) return undefined; // "Exif\0\0"
+  const tiff = data + 6;
+  const { entries, le } = tiffEntries(view, tiff);
+  const rational = (tag: number): number => {
+    const entry = entries.get(tag);
+    if (entry === undefined) return NaN;
+    const at = tiff + view.getUint32(entry + 8, le);
+    return view.getUint32(at, le) / view.getUint32(at + 4, le);
+  };
+  const unitEntry = entries.get(0x0128);
+  const unit = unitEntry === undefined ? 2 : view.getUint16(unitEntry + 8, le);
+  const scale = unit === 2 ? 1 : unit === 3 ? 2.54 : 0;
+  if (scale === 0) return undefined;
+  return resolution(rational(0x011a) * scale, rational(0x011b) * scale);
+}
+
+/** A declared resolution is metadata: a malformed one is no declaration, never a failed image. */
+function tryRead(read: () => Resolution | undefined): Resolution | undefined {
+  try {
+    return read();
+  } catch {
+    return undefined;
+  }
 }
 
 export async function getImageDimensions(buffer: Uint8Array): Promise<ImageDimensions> {
@@ -31,27 +120,35 @@ export async function getImageDimensions(buffer: Uint8Array): Promise<ImageDimen
 
   // Check for JPEG (0xFFD8 is the start of JPEG file)
   if (dataView.getUint16(0) === 0xffd8) {
+    // JFIF is the container's own declaration and wins; EXIF is what a camera writes.
+    let jfif: Resolution | undefined;
+    let exif: Resolution | undefined;
     let offset = 2;
     while (offset < buffer.byteLength) {
       const marker = dataView.getUint16(offset, false);
       offset += 2;
       if (marker === 0xffc0 || marker === 0xffc2) {
         // SOF0 or SOF2
+        const dpi = jfif ?? exif;
         return {
           height: dataView.getUint16(offset + 3, false),
           width: dataView.getUint16(offset + 5, false),
+          ...(dpi ? { dpi } : {}),
         };
-      } else {
-        offset += dataView.getUint16(offset, false);
       }
+      if (marker === 0xffe0) jfif ??= tryRead(() => jfifResolution(dataView, offset + 2));
+      if (marker === 0xffe1) exif ??= tryRead(() => exifResolution(dataView, offset + 2));
+      offset += dataView.getUint16(offset, false);
     }
   }
 
   // Check for PNG (0x89504E47 is the PNG signature)
   if (dataView.getUint32(0) === 0x89504e47) {
+    const dpi = tryRead(() => pngResolution(dataView));
     return {
       width: dataView.getUint32(16, false),
       height: dataView.getUint32(20, false),
+      ...(dpi ? { dpi } : {}),
     };
   }
 
@@ -227,7 +324,7 @@ export function applyFillFit(containerWidth: number, containerHeight: number): F
   return { width: containerWidth, height: containerHeight, offsetX: 0, offsetY: 0 };
 }
 
-/** At its own size (1px = 1pt), the overhang cut off. */
+/** At its own size (`naturalSize`), the overhang cut off. */
 export function applyFitNone(
   imageWidth: number,
   imageHeight: number,
