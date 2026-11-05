@@ -161,7 +161,7 @@ Two different kinds of number live in a font, and mixing them up cost us ISSUE-5
 answers from `hhea` for an embedded face and from the bbox for a standard-14 one (memoised per face).
 
 **Why a line box built this way looks right:** the surplus above the capitals (`0.931 − 0.718 = 0.213`) is
-about the same as the descent below the baseline (`0.225`). So an all-caps word lands optically centred in a
+about the same as the descent below the baseline (`0.225`). So an all-caps word lands optically centered in a
 box with equal padding. Seat the baseline at `Ascender` instead and every capital sits ~0.2 em too high —
 invisible on `Hxg` (the `g` hides it), glaring on `PAID` in a bordered box. **Always test with an all-caps
 word in a box with equal padding.** The reference is `google-chrome --headless --print-to-pdf` on the
@@ -405,7 +405,7 @@ did registering attachments before the handler was set. It also ENCODES the text
 (`text/pdf-text-string.ts`): PDFDocEncoding or UTF-16BE, never the Windows-1252 page encoding, where "–"
 reads back as "Œ" and "€" as "•". A URI is `pdfUri()`: ASCII, the rest percent-encoded.
 
-**`sh` floods the current clip.** PDF has no gradient FILL colour, so a gradient box becomes the clip,
+**`sh` floods the current clip.** PDF has no gradient FILL color, so a gradient box becomes the clip,
 the shading paints inside it, and the border is stroked afterwards on its own.
 
 **A stale appearance is a self-contradicting document.** Producers that DRAW their form fields leave a
@@ -452,8 +452,8 @@ enforces it (`skonto.ts` for "Skonto is not an allowance"), and everywhere else 
 - **jasy's own model comes first: Flutter-style flex** (`docs/api-design.md` §5). Box and Text FILL the
   cross cap like a block; `align` places what is smaller; the cap guarantees nothing runs off the page.
   Chrome is a reference where the model is silent, never a reason to rebuild it. Where a browser needs an
-  EXTRA prop for the behaviour a user obviously wants (`max-width: 100%`, `min-width: 0`) and defaulting
-  to it breaks nothing (the other behaviour stays one prop away), that is the default.
+  EXTRA prop for the behavior a user obviously wants (`max-width: 100%`, `min-width: 0`) and defaulting
+  to it breaks nothing (the other behavior stays one prop away), that is the default.
 - **An unsized `Image` is its own size, scaled down to the cap, never up** (an SVG too: one rule,
   `sizeAtOwnRatio`), and placed by `align` like any smaller child; `fit` defaults to `fill` (the box is
   derived from the image). Its own size is its pixels at the resolution the FILE declares (PNG `pHYs`,
@@ -461,7 +461,7 @@ enforces it (`skonto.ts` for "Skonto is not an allowance"), and everywhere else 
   `align` says where it sits in its box (`cover` keeps a portrait's `"top"`), as a Text's `align` does
   for its lines.
 - **Kerning, ligatures ON by default**; `flexShrink: 1` (the CSS default) with a `min-content` floor
-  (`minIntrinsicMain`), where the gate for a behaviour change is "every changed case is BETTER", not
+  (`minIntrinsicMain`), where the gate for a behavior change is "every changed case is BETTER", not
   "nothing changes" - four gallery cases were overflowing the page margin unseen.
 - **`breakWord` and `hyphenate` OFF by default**, as CSS. Hyphenation is a **hook**, not bundled data
   (German patterns alone are 732 KB); the `hyphen` adapter is one line and is EXECUTED by a test. No
@@ -499,7 +499,7 @@ enforces it (`skonto.ts` for "Skonto is not an allowance"), and everywhere else 
   stable `code`, element by factory name, first text, page); without a handler, what warned before still
   goes to `console.warn`. Unknown props stay ignored - they do nothing. `keepTogether` vetoes a
   split, defers whole, and DEGRADES if taller than a page.
-- **Colour emoji: pure-TS vectors, no CDN by default**; an IMAGE fallback source is opt-in. Single code
+- **Color emoji: pure-TS vectors, no CDN by default**; an IMAGE fallback source is opt-in. Single code
   points only (~95%); flags/ZWJ/skin tones deferred.
 - **SVG and Canvas: the edge of the subset is a NAMED error, never a silent skip.** Supporting
   something new turns an error into a picture, which cannot break a document that worked. Canvas has
@@ -509,6 +509,10 @@ enforces it (`skonto.ts` for "Skonto is not an allowance"), and everywhere else 
 - **`bidi-js` sits behind `text/bidi.ts` and nothing else knows it exists** - replacing it is a
   one-file change. GSUB executes lookup types 1, 4, 7 and REPORTS the rest; `fontFeatureSettings` is
   not exposed because we would be promising types we do not run.
+- **`Positioned` only places; its child keeps its own size.** One edge per axis is a point, so a long
+  text does not wrap; both edges span it. `zIndex` orders the Positioned of one stacking context (a
+  frame, a clipping Box, a rotation, the page): negative under the flow, positive over it, 0 where it
+  stands - so nothing is ever pulled out of the clip or the turn it was written in.
 - **A `Positioned` with no frame THROWS** (it used to draw in the page corner). The page's frame is
   its content box, threaded into header, footer and body alike.
 - **Font URLs resolve at REGISTRATION**, like a file path - a dead link fails on the line that asked.
@@ -518,29 +522,28 @@ enforces it (`skonto.ts` for "Skonto is not an allowance"), and everywhere else 
 
 ## Genuine remaining gaps
 
-1. **`z-index`** within a positioning frame (Stage 3 of absolute positioning).
-2. **`slice` border mode** at a page break (a split box left open) and `column-span`.
-3. **OTF/CFF fonts** are not parsed (TTF, TrueType-flavoured OTF, WOFF1, WOFF2 are); a CFF font or a
-   `.ttc` is refused by name in `TTFParser` (`FontFormatError`), on every path. Colour-emoji
+1. **`slice` border mode** at a page break (a split box left open) and `column-span`.
+2. **OTF/CFF fonts** are not parsed (TTF, TrueType-flavoured OTF, WOFF1, WOFF2 are); a CFF font or a
+   `.ttc` is refused by name in `TTFParser` (`FontFormatError`), on every path. Color-emoji
    deferrals: COLR v1 rotate/skew, variable paints, sweep gradients, CFF/sbix/CBDT bitmap fonts (so no
    Apple Color Emoji).
-4. **A transform does not carry its side channels** - `Link`/`Anchor`/`Outline` are page `/Annots` and
+3. **A transform does not carry its side channels** - `Link`/`Anchor`/`Outline` are page `/Annots` and
    never see the `cm` matrix, so a rotated link keeps an un-rotated hit area. react-pdf gets it WRONG
    rather than missing (measured); a matrix stack at the `flipY` seam → `/QuadPoints` would make us
    the only one right. LOW.
-5. **XMP stays unencrypted** (`/EncryptMetadata false`, the industry norm), so the title is readable
+4. **XMP stays unencrypted** (`/EncryptMetadata false`, the industry norm), so the title is readable
    without the password in accessible mode.
-6. **The test tree is not type-checked** (ISSUE-6): `tsc` covers `src/**` only; tests that import
+5. **The test tree is not type-checked** (ISSUE-6): `tsc` covers `src/**` only; tests that import
    without the `.ts` extension resolve to `any`. New tests follow the convention above; the backlog
    does not.
-7. **Bidi mirroring SUBSTITUTES the character** (as react-pdf does) where Chrome mirrors the glyph, so
+6. **Bidi mirroring SUBSTITUTES the character** (as react-pdf does) where Chrome mirrors the glyph, so
    extracted text has swapped brackets. **GPOS mark positioning** and GSUB type 6 are not built;
    react-pdf does neither either (measured).
-8. **`hyphenate` sees only a span's piece of a word** that runs across spans (#113): with
+7. **`hyphenate` sees only a span's piece of a word** that runs across spans (#113): with
    `span("Rech")` and `span("nung")` it is asked for each piece, where Chrome hyphenates the whole
    word. `breakWord` across spans matches Chrome: a break after a character is allowed by THAT
    character's span, and the line is filled first.
-9. `manual-test` has machine-specific paths.
+8. `manual-test` has machine-specific paths.
 
 ## Roadmap, packages, repo
 
