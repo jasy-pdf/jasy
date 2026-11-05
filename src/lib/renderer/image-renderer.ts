@@ -85,6 +85,7 @@ export class ImageRenderer {
       intrinsicHeight: dimensions.height,
       data: embedData,
       imageType,
+      ...(dimensions.orientation ? { orientation: dimensions.orientation } : {}),
       ...(smask ? { smask } : {}),
       ...(radius ? { radius } : {}),
       ...(wantsClip ? { clip: box } : {}),

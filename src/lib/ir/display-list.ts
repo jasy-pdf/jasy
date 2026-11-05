@@ -1,3 +1,4 @@
+import type { Orientation } from "../utils/image-helper.ts";
 import { Color } from "../common/color.ts";
 import { FontStyle } from "../utils/pdf-object-manager.ts";
 import type { FormFieldSpec, FieldStyle } from "../forms/field.ts";
@@ -74,7 +75,7 @@ export interface Rect {
   y: number;
   width: number;
   height: number;
-  /** Solid colour, or a gradient whose anchor points are in absolute page coordinates. */
+  /** Solid color, or a gradient whose anchor points are in absolute page coordinates. */
   fill?: Color | Gradient;
   stroke?: Color;
   strokeWidth: number;
@@ -108,6 +109,8 @@ export interface Image {
   imageType: string; // PDF filter name, e.g. "DCTDecode" (JPEG) or "FlateDecode" (PNG)
   /** Flate-compressed DeviceGray alpha channel for a transparent PNG, embedded as the XObject's /SMask. */
   smask?: string;
+  /** How the stored pixels turn upright inside the placement box (EXIF); absent = as stored. */
+  orientation?: Orientation;
   /** cover/contain fits clip the placement to the element's original frame. */
   clip?: { x: number; y: number; width: number; height: number };
   /** Corner radius in points for the image box - one number or per corner; absent/0 = sharp. */
