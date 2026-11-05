@@ -20,15 +20,21 @@ const source = [
 
 /**
  * The options one `interface X { ... }` offers: its own properties plus those of the interface it
- * extends, minus anything an `extends Omit<..., "a" | "b">` takes back off. Doc comments are ignored.
+ * extends - minus what an `extends Omit<B, "a">` takes off, or only what an `extends Pick<B, "a">`
+ * keeps. Doc comments are ignored.
  */
 function optionsOf(name: string): string[] {
   const decl = new RegExp(`(?:export )?interface ${name}([^{]*)\\{([\\s\\S]*?)\\n\\}`).exec(source);
   if (!decl) throw new Error(`interface ${name} not found - did src/lib/api move?`);
-  const base = /extends\s+(?:Omit<\s*)?(\w+)/.exec(decl[1]!)?.[1];
-  const omitted = [...decl[1]!.matchAll(/"(\w+)"/g)].map((m) => m[1]!);
+  const ext = /extends\s+(?:(Omit|Pick)<\s*)?(\w+)/.exec(decl[1]!);
+  const listed = [...decl[1]!.matchAll(/"(\w+)"/g)].map((m) => m[1]!);
+  const inherited = ext ? optionsOf(ext[2]!) : [];
+  const kept =
+    ext?.[1] === "Pick"
+      ? inherited.filter((k) => listed.includes(k))
+      : inherited.filter((k) => !listed.includes(k));
   const own = [...decl[2]!.matchAll(/^ {2}(\w+)\??:/gm)].map((m) => m[1]!);
-  return [...(base ? optionsOf(base) : []), ...own].filter((key) => !omitted.includes(key));
+  return [...kept, ...own];
 }
 
 const declared = (component: unknown) => Object.keys((component as { props?: object }).props ?? {});
@@ -40,16 +46,8 @@ type Case = [name: string, options: string, extra: string[], notOffered: string[
 const cases: Case[] = [
   // `fonts` registers fonts on the document; it is not a text option.
   ["Document", "DocumentOptions", ["fonts"], []],
-  // `header`/`footer` are the #header/#footer slots. `Page()` reads only gap/justify/align of the stack
-  // options its type inherits - the rest would be dead props.
-  [
-    "Page",
-    "PageOptions",
-    [],
-    ["header", "footer", "alignSelf", "order", "flexShrink", "minWidth", "maxWidth", "minHeight"]
-      .concat(["maxHeight", "aspectRatio", "width", "height", "breakBefore", "breakAfter"])
-      .concat(["keepTogether", "reverse", "wrap", "alignContent"]),
-  ],
+  // `header`/`footer` are the #header/#footer slots.
+  ["Page", "PageOptions", [], ["header", "footer"]],
   ["Column", "StackOptions", [], []],
   ["Row", "StackOptions", [], []],
   ["Box", "BoxOptions", [], []],
@@ -91,6 +89,8 @@ describe("every engine option is a declared prop, and nothing else is", () => {
     expect(optionsOf("TextOptions")).not.toContain("verticalAlign");
     expect(optionsOf("BoxOptions")).toEqual(expect.arrayContaining(["alignSelf", "radius"]));
     expect(optionsOf("ListBoxOptions")).toEqual(expect.arrayContaining(["values", "fontSize"]));
+    expect(optionsOf("PageOptions")).toEqual(expect.arrayContaining(["gap", "margin", "footer"]));
+    expect(optionsOf("PageOptions")).not.toContain("wrap");
   });
 
   it.each(cases)("%s", (name, options, extra, notOffered) => {

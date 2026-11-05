@@ -61,7 +61,8 @@ function resolveSize(
 /** Default page margin (all sides, points) when a `Page` doesn't set one. */
 const DEFAULT_MARGIN = 56;
 
-export interface PageOptions extends StackOptions {
+// A Page passes only these three to the Column its children sit in; the other stack options would do nothing.
+export interface PageOptions extends Pick<StackOptions, "gap" | "justify" | "align"> {
   /** Page size (default A4). */
   size?: PageSizeInput;
   orientation?: "portrait" | "landscape";
@@ -71,7 +72,6 @@ export interface PageOptions extends StackOptions {
   header?: PDFElement;
   /** Laid out at the bottom, repeated on every physical page. */
   footer?: PDFElement;
-  // `gap` / `main` / `cross` (from StackOptions) tune the body Column the children sit in.
 }
 
 /**
