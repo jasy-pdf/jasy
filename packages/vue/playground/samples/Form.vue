@@ -1,13 +1,10 @@
 <script setup lang="ts">
 // Namespace import - sidesteps a UI lib's own Row/Text/Box without per-name aliasing.
 import * as Pdf from "@jasy/vue";
-import { ref, computed } from "vue";
+import { computed } from "vue";
 
-// The point of the sample: the PDF is built from ordinary reactive state. Type in the boxes on the left
-// and the form fields IN THE GENERATED PDF change with them - rendered in this browser, no server.
-const name = ref("Ada Lovelace");
-const notes = ref("jasyPDF is great!");
-const plan = ref("pro");
+// The values come from props: change the name and the fields IN THE GENERATED PDF change with it.
+const props = defineProps<{ name: string }>();
 
 // Options come from data, in the short spelling where the stored value IS the visible text ...
 const sizes = ["S", "M", "L"];
@@ -18,7 +15,7 @@ const currencies = [
   { value: "GBP", label: "Pound sterling" },
 ];
 
-const label = computed(() => `I agree to the terms, ${name.value.split(" ")[0]}`);
+const label = computed(() => `I agree to the terms, ${props.name.split(" ")[0]}`);
 </script>
 
 <template>
@@ -34,13 +31,13 @@ const label = computed(() => `I agree to the terms, ${name.value.split(" ")[0]}`
       <Pdf.TextField name="full_name" :value="name" :height="24" border="#94a3b8" />
 
       <Pdf.Text :size="9" :color="'#64748b'">Notes (multiline)</Pdf.Text>
-      <Pdf.TextField name="notes" :value="notes" multiline :height="52" border="#94a3b8" />
+      <Pdf.TextField name="notes" value="jasy is great!" multiline :height="52" border="#94a3b8" />
 
       <!-- The label is the default slot: no Row to assemble by hand. -->
       <Pdf.Checkbox name="agree" checked :size="14">{{ label }}</Pdf.Checkbox>
 
       <Pdf.Text :size="9" :color="'#64748b'">Plan</Pdf.Text>
-      <Pdf.RadioGroup name="plan" :value="plan" :size="14" :options="['basic', 'pro']" />
+      <Pdf.RadioGroup name="plan" value="pro" :size="14" :options="['basic', 'pro']" />
 
       <Pdf.Text :size="9" :color="'#64748b'">Size - options as plain strings</Pdf.Text>
       <Pdf.ListBox
