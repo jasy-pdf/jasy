@@ -1,8 +1,9 @@
 import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 import { RotatedElement } from "../elements/layout/rotated-element.ts";
 import { RotatedBoxElement } from "../elements/layout/rotated-box-element.ts";
-import { RendererRegistry, within, type RenderScope } from "../utils/renderer-registry.ts";
+import { within, type RenderScope } from "../utils/renderer-registry.ts";
 import { IRNode } from "../ir/display-list.ts";
+import { PositionedRenderer } from "./positioned-renderer.ts";
 
 export class RotatedRenderer {
   // Both `Rotated` (paint-only) and `RotatedBox` (layout-aware quarter-turns) expose the same
@@ -36,8 +37,8 @@ export class RotatedRenderer {
     ];
 
     // The child is placed relative to the box top-left.
-    const childNodes = await RendererRegistry.render(
-      child,
+    const childNodes = await PositionedRenderer.paintStacked(
+      [child],
       objectManager,
       within(scope, { x: ownX, y: ownY }),
     );

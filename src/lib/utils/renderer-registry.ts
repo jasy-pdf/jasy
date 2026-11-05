@@ -12,6 +12,9 @@ import type { PDFObjectManager } from "./pdf-object-manager.ts";
 export interface RenderScope {
   origin: Offset;
   frame: Offset;
+  /** Where a `Positioned` with a `zIndex` hands its drawing, for the nearest stacking context to sort.
+   *  It still RENDERS at its own place, so everything it registers there (its tag's parent) is right. */
+  stacked?: { zIndex: number; nodes: IRNode[] }[];
 }
 
 /** The scope for the children of an element at `offset` (relative to `scope.origin`). */

@@ -301,7 +301,7 @@ export abstract class PDFElement {
   /**
    * Whether this element is, or CONTAINS anywhere in its subtree, a forced page break. A container
    * that merely fits by height must still be fragmented when this is true, so a break nested inside
-   * it is honoured rather than swallowed. Containers override this to recurse into their children.
+   * it is honored rather than swallowed. Containers override this to recurse into their children.
    * Default: no.
    */
   hasForcedBreak(): boolean {

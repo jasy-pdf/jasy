@@ -13,6 +13,9 @@ export type PositionAnchor = "start" | "center" | "end";
  * An edge wins over an anchor on the same axis. With nothing set the child sits at the top-left.
  */
 export interface PositionedInsets {
+  /** Paint order within its stacking context: negative under the flow content, positive over it,
+   *  higher over lower; 0 or unset paints in tree order where it stands (CSS `z-index`). */
+  zIndex?: number;
   top?: number;
   right?: number;
   bottom?: number;
@@ -45,11 +48,18 @@ export class PositionedElement extends PDFElement {
   // from there, not from the frame owner that places it.
   private placeCtx?: LayoutContext;
 
-  constructor({ child, top, right, bottom, left, h, v, x, y }: PositionedElementParams) {
+  constructor({ child, top, right, bottom, left, h, v, x, y, zIndex }: PositionedElementParams) {
     super();
+    if (zIndex !== undefined && !Number.isFinite(zIndex)) {
+      throw new Error(`Invalid zIndex ${zIndex}: it must be a number.`);
+    }
     this.child = child;
     this.insets = { top, right, bottom, left, h, v, x, y };
+    this.zIndex = zIndex ?? 0;
   }
+
+  /** Its paint order; 0 paints where it stands in the tree, anything else is sorted by its context. */
+  private readonly zIndex: number;
 
   calculateLayout(_constraints: BoxConstraints, _offset: Offset, ctx: LayoutContext): Size {
     if (!ctx.frame) {
@@ -126,8 +136,8 @@ export class PositionedElement extends PDFElement {
     this.child.calculateLayout(constraints, { x, y }, ctx);
   }
 
-  override getProps(): WithChild {
-    return { child: this.child };
+  override getProps(): WithChild & { zIndex: number } {
+    return { child: this.child, zIndex: this.zIndex };
   }
 }
 

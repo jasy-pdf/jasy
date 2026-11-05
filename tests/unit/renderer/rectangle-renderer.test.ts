@@ -18,6 +18,7 @@ describe("RectangleRenderer", () => {
 
   it("should render a rectangle with default black stroke and no background", async () => {
     const mockRectangleElement = {
+      isStackingContext: () => false,
       getProps: vi.fn().mockReturnValue({
         x: 10,
         y: 20,
@@ -40,6 +41,7 @@ describe("RectangleRenderer", () => {
 
   it("should render a rectangle with a custom border color and no background", async () => {
     const mockRectangleElement = {
+      isStackingContext: () => false,
       getProps: vi.fn().mockReturnValue({
         x: 10,
         y: 20,
@@ -62,6 +64,7 @@ describe("RectangleRenderer", () => {
 
   it("should render a rectangle with a custom background color", async () => {
     const mockRectangleElement = {
+      isStackingContext: () => false,
       getProps: vi.fn().mockReturnValue({
         x: 10,
         y: 20,
@@ -106,6 +109,7 @@ describe("RectangleRenderer", () => {
     vi.spyOn(RendererRegistry, "getRenderer").mockReturnValue(childRenderer);
 
     const mockRectangleElement = {
+      isStackingContext: () => false,
       getProps: vi.fn().mockReturnValue({
         x: 10,
         y: 20,
@@ -146,6 +150,7 @@ describe("RectangleRenderer", () => {
     const childRenderer = vi.fn(async (): Promise<IRNode[]> => []);
     vi.spyOn(RendererRegistry, "getRenderer").mockReturnValue(childRenderer);
     const box = {
+      isStackingContext: () => true,
       getProps: vi.fn().mockReturnValue({
         x: 10,
         y: 20,
@@ -163,9 +168,10 @@ describe("RectangleRenderer", () => {
 
     // Its absolute top-left (origin + own offset) is both its children's origin and the frame its
     // `Positioned` descendants draw from.
-    expect(childRenderer).toHaveBeenCalledWith(child, mockObjectManager, {
-      origin: { x: 15, y: 27 },
-      frame: { x: 15, y: 27 },
-    });
+    expect(childRenderer).toHaveBeenCalledWith(
+      child,
+      mockObjectManager,
+      expect.objectContaining({ origin: { x: 15, y: 27 }, frame: { x: 15, y: 27 } }),
+    );
   });
 });

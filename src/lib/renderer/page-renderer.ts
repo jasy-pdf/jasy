@@ -5,6 +5,7 @@ import { RendererRegistry, type RenderScope } from "../utils/renderer-registry.t
 import { Orientation } from "./pdf-config.ts";
 import { IRNode } from "../ir/display-list.ts";
 import { PdfBackend } from "./pdf-backend.ts";
+import { PositionedRenderer } from "./positioned-renderer.ts";
 
 export class PageRenderer {
   static async render(page: PageElement, objectManager: PDFObjectManager): Promise<number> {
@@ -32,10 +33,12 @@ export class PageRenderer {
     // Collect the whole page as a display list (top-left coordinates), flip it to PDF
     // coordinates at this one seam, then serialize once. Serializing registers the
     // fonts/images used below, so it must run before the resource section.
-    const nodes: IRNode[] = [];
-    for (const element of renderables) {
-      nodes.push(...(await RendererRegistry.render(element, objectManager, scope)));
-    }
+    // The page is the outermost stacking context: header, body and footer share one paint order.
+    const nodes: IRNode[] = await PositionedRenderer.paintStacked(
+      renderables,
+      objectManager,
+      scope,
+    );
     // Accessible tagging: one struct context per page (allocates its StructParents index), threaded into
     // serialize so each drawable node is wrapped in marked content. Undefined = tagging off (byte-identical).
     const structCtx = objectManager.struct.enabled ? objectManager.struct.beginPage() : undefined;

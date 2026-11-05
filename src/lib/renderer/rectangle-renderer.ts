@@ -1,8 +1,9 @@
 import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 
 import { RectangleElement, SideBorders } from "../elements/rectangle-element.ts";
-import { RendererRegistry, type RenderScope } from "../utils/renderer-registry.ts";
+import type { RenderScope } from "../utils/renderer-registry.ts";
 import { IRNode, Rect, Line } from "../ir/display-list.ts";
+import { PositionedRenderer } from "./positioned-renderer.ts";
 import { isGradientInput, resolveGradient } from "../common/gradient.ts";
 import { Color } from "../common/color.ts";
 
@@ -73,11 +74,18 @@ export class RectangleRenderer {
     }
     // Its children are placed relative to its own top-left; a `relative` box is also the frame its
     // `Positioned` descendants were placed against.
-    const childScope: RenderScope = { origin: { x, y }, frame: relative ? { x, y } : scope.frame };
+    const childScope: RenderScope = {
+      ...scope,
+      origin: { x, y },
+      frame: relative ? { x, y } : scope.frame,
+    };
+    // A frame or a clip paints its own `zIndex` order; any other box draws its children as they come.
     if (children)
-      for (const child of children) {
-        nodes.push(...(await RendererRegistry.render(child, objectManager, childScope)));
-      }
+      nodes.push(
+        ...(rectangleElement.isStackingContext()
+          ? await PositionedRenderer.paintStacked(children, objectManager, childScope)
+          : await PositionedRenderer.paintInOrder(children, objectManager, childScope)),
+      );
     if (clip) nodes.push({ type: "clip-pop" });
 
     return nodes;

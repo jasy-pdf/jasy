@@ -167,6 +167,8 @@ const positionedProps = {
   v: String as PropType<"start" | "center" | "end">,
   x: Number,
   y: Number,
+  /** Paint order within its frame: negative under the flow content, positive over it. */
+  zIndex: Number,
 };
 const defaultTextStyleProps = {
   ...textStyleProps,
