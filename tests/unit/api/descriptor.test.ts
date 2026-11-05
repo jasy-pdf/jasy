@@ -43,6 +43,42 @@ describe("build - descriptor node → engine element via the shared factories", 
   });
 });
 
+describe("page-builder - a binding renders `build` per page", () => {
+  it("builds what `build` returns for the page, and an empty Column for nothing", async () => {
+    const seen: number[] = [];
+    const doc = buildDocument({
+      type: "document",
+      children: [
+        {
+          type: "page",
+          children: [
+            {
+              type: "page-builder",
+              props: {
+                build: ({ pageNumber }: { pageNumber: number }) => {
+                  seen.push(pageNumber);
+                  return pageNumber === 1 ? [`sheet ${pageNumber}`] : [];
+                },
+              },
+            },
+            { type: "sub-page-number" },
+            { type: "sub-page-count" },
+          ],
+        },
+      ],
+    });
+    const pdf = await renderPdf(doc, { compress: false });
+    expect(seen).toContain(1);
+    expect(pdf).toContain("(sheet 1)");
+  });
+});
+
+describe("page-builder without its build function", () => {
+  it("is refused by name, as a descriptor that went through JSON would be", () => {
+    expect(() => build({ type: "page-builder", props: {} })).toThrow("needs a `build` function");
+  });
+});
+
 describe("registerElement - custom component types", () => {
   it("lets a custom tag resolve through the same seam", () => {
     // A user/binding component: a 'badge' = a small filled Box.

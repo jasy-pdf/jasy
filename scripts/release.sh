@@ -5,11 +5,11 @@ set -e
 # "Release" workflow, which builds (the package + its workspace deps) and publishes to npm.
 #
 # Usage:   ./scripts/release.sh <package> <version>
-#   package = pdf | e-invoice | cli | vue | nuxt   (pdf is the workspace ROOT)
+#   package = pdf | e-invoice | cli | vue | nuxt | react   (pdf is the workspace ROOT)
 #   version = semver, e.g. 0.1.0 or 0.1.0-alpha.1
 #
 # Release order matters (dependency chain): release pdf first, then its dependents - e-invoice -> cli, vue,
-# and nuxt (which needs pdf AND vue) - so their `workspace:*` deps resolve to the versions just released.
+# react, and nuxt (which needs pdf AND vue) - so their `workspace:*` deps resolve to the versions just released.
 
 # After the release just run in the console (!!! change the versions !!!):
 # OTP=<6-digit OTP code
@@ -19,10 +19,11 @@ set -e
 # npm dist-tag add @jasy/cli@1.0.0-alpha.8       latest --otp=$OTP
 # npm dist-tag add @jasy/vue@1.0.0-alpha.9       latest --otp=$OTP
 # npm dist-tag add @jasy/nuxt@1.0.0-alpha.8      latest --otp=$OTP
+# npm dist-tag add @jasy/react@1.0.0-beta.1      latest --otp=$OTP
 
 usage() {
   echo "Usage: ./scripts/release.sh <package> <version>"
-  echo "  package: pdf | e-invoice | cli | vue | nuxt"
+  echo "  package: pdf | e-invoice | cli | vue | nuxt | react"
   echo "  example: ./scripts/release.sh pdf 0.1.0"
   exit 1
 }
@@ -38,13 +39,14 @@ case "$PACKAGE" in
   cli)     DIR="packages/cli" ;;
   vue)     DIR="packages/vue" ;;
   nuxt)    DIR="packages/nuxt" ;;
+  react)   DIR="packages/react" ;;
   # The old key still works so a habit does not become an error. PACKAGE is normalised here because the
   # TAG is built from it further down - leaving it as "zugferd" would push a tag no workflow listens to,
   # and the release would silently never happen.
   zugferd)
     echo "Note: '@jasy/zugferd' is now '@jasy/e-invoice'; releasing as e-invoice."
     PACKAGE="e-invoice"; DIR="packages/e-invoice" ;;
-  *) echo "Error: unknown package '$PACKAGE' (use: pdf, e-invoice, cli, vue, nuxt)"; exit 1 ;;
+  *) echo "Error: unknown package '$PACKAGE' (use: pdf, e-invoice, cli, vue, nuxt, react)"; exit 1 ;;
 esac
 
 # semver: 1.2.3 or 1.2.3-alpha.1

@@ -21,7 +21,14 @@ import {
 } from "./layout.ts";
 import { Canvas, Divider, Image, Svg } from "./content.ts";
 import { Page, Document, DefaultTextStyle } from "./structure.ts";
-import { PageNumber, PageCount } from "./page-builder.ts";
+import {
+  PageBuilder,
+  PageCount,
+  PageNumber,
+  SubPageCount,
+  SubPageNumber,
+  type PageInfo,
+} from "./page-builder.ts";
 import { Table, Cell } from "./table.ts";
 import {
   ColumnBreak,
@@ -191,10 +198,24 @@ const REGISTRY: Record<string, ElementFactory> = {
   rotated: (props, children) => Rotated(props, wrappedChild(children)),
   "rotated-box": (props, children) => RotatedBox(props, wrappedChild(children)),
 
-  // Page numbers. `PageBuilder` itself is deliberately NOT exposed: it takes a closure, which a template
-  // cannot express. These two cover what the closure exists for.
+  // Page numbers. A binding renders `build` per page, like a Flow's `page`; nothing built is an empty
+  // Column, so a builder can show something on some pages only.
+  "page-builder": (props) => {
+    // A descriptor posted as JSON loses its functions; say so here, not mid-layout.
+    if (typeof props.build !== "function") {
+      throw new Error(
+        "A page-builder needs a `build` function prop (lost if the descriptor went through JSON).",
+      );
+    }
+    return PageBuilder((info: PageInfo) => {
+      const built: DescriptorChild[] = props.build(info) ?? [];
+      return built.length === 0 ? Column([]) : wrappedChild(built);
+    });
+  },
   "page-number": (props) => PageNumber(props),
   "page-count": (props) => PageCount(props),
+  "sub-page-number": (props) => SubPageNumber(props),
+  "sub-page-count": (props) => SubPageCount(props),
 
   // Form fields. The three list-like ones take their choices as a SECOND argument in TypeScript; a
   // template has no second argument, so here they arrive as an `options` prop. `choiceList` accepts both
