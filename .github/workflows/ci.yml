@@ -58,5 +58,26 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # Full suite (engine + @jasy/e-invoice + @jasy/vue; @jasy/nuxt e2e excluded by the root vitest config).
+      # Full suite (engine + @jasy/e-invoice + @jasy/vue + @jasy/react; @jasy/nuxt e2e excluded by the root
+      # vitest config).
       - run: pnpm exec vitest run
+
+  react:
+    name: React ${{ matrix.react }}
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        react: ["19.0", "19.1", "19.2", "19.3"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # @jasy/react promises every React 19 minor with one reconciler: pin each one and run its suite.
+      - run: pnpm --filter @jasy/react add -D react@~${{ matrix.react }}.0 react-dom@~${{ matrix.react }}.0
+      - run: pnpm exec vitest run packages/react
