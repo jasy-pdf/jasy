@@ -1,5 +1,5 @@
 import { CustomBytesImage } from "../elements/image-element.ts";
-import { decodePngToRgbFlate } from "../utils/image-helper.ts";
+import { decodePngToRgbFlate, jpegColor } from "../utils/image-helper.ts";
 import { bytesFromLatin1 } from "../utils/bytes.ts";
 import { Image } from "../ir/display-list.ts";
 
@@ -58,6 +58,7 @@ export async function emojiImageNode(
   // JPEG embeds raw; PNG is decoded to DeviceRGB + an /SMask alpha channel (transparency).
   let data = fileData;
   let smask: string | undefined;
+  const color = imageType === "DCTDecode" ? jpegColor(bytesFromLatin1(fileData)) : undefined;
   if (imageType === "FlateDecode") {
     const decoded = await decodePngToRgbFlate(bytesFromLatin1(fileData));
     data = decoded.data;
@@ -74,6 +75,7 @@ export async function emojiImageNode(
     intrinsicHeight: dims.height,
     data,
     imageType,
+    ...(color ? { color } : {}),
     ...(smask ? { smask } : {}),
   };
 }

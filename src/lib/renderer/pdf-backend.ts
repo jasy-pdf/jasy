@@ -475,6 +475,7 @@ export class PdfBackend {
           node.imageType,
           node.data,
           node.smask,
+          node.color,
         );
         // The placement scales the unit square to the box; an orientation turns the pixels inside it.
         const upright = node.orientation

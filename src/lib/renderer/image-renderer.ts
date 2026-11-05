@@ -7,6 +7,7 @@ import {
   applyFillFit,
   applyFitNone,
   decodePngToRgbFlate,
+  jpegColor,
   naturalSize,
 } from "../utils/image-helper.ts";
 import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
@@ -48,6 +49,8 @@ export class ImageRenderer {
     // so decode it to raw DeviceRGB samples that the FlateDecode XObject path expects.
     let embedData = fileData;
     let smask: string | undefined;
+    // A JPEG is embedded as it is, so it keeps the color space it was saved in; a PNG becomes RGB.
+    const color = imageType === "DCTDecode" ? jpegColor(bytesFromLatin1(fileData)) : undefined;
     if (imageType === "FlateDecode") {
       const decoded = await decodePngToRgbFlate(bytesFromLatin1(fileData));
       embedData = decoded.data;
@@ -85,6 +88,7 @@ export class ImageRenderer {
       intrinsicHeight: dimensions.height,
       data: embedData,
       imageType,
+      ...(color ? { color } : {}),
       ...(dimensions.orientation ? { orientation: dimensions.orientation } : {}),
       ...(smask ? { smask } : {}),
       ...(radius ? { radius } : {}),

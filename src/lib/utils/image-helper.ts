@@ -231,13 +231,18 @@ export class JpegFormatError extends Error {
 /** Baseline, extended sequential and progressive: the codings a PDF viewer's DCTDecode reads. */
 const DCT_CODINGS = new Set([0xffc0, 0xffc1, 0xffc2]);
 
-/** How a JPEG is embedded as it is (`DCTDecode`): its color space, and a `/Decode` for Adobe CMYK. */
-export interface JpegColor {
-  colorSpace: "DeviceGray" | "DeviceRGB" | "DeviceCMYK";
-  decode?: number[];
+/** The colors an image's samples are in. */
+export type ImageColorSpace = "gray" | "rgb" | "cmyk";
+
+/** What an image's samples mean: their color space, and whether they are stored inverted. */
+export interface ImageColor {
+  space: ImageColorSpace;
+  /** Photoshop stores CMYK inverted (an Adobe `APP14` segment). */
+  inverted?: boolean;
 }
 
-export function jpegColor(bytes: Uint8Array): JpegColor {
+/** The color of a JPEG as it is embedded (`DCTDecode`): the space it was saved in. */
+export function jpegColor(bytes: Uint8Array): ImageColor {
   const header = jpegHeader(new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength));
   if (!DCT_CODINGS.has(header.sof)) {
     throw new JpegFormatError(
@@ -247,13 +252,11 @@ export function jpegColor(bytes: Uint8Array): JpegColor {
   }
   switch (header.components) {
     case 1:
-      return { colorSpace: "DeviceGray" };
+      return { space: "gray" };
     case 3:
-      return { colorSpace: "DeviceRGB" };
+      return { space: "rgb" };
     case 4:
-      return header.adobe
-        ? { colorSpace: "DeviceCMYK", decode: [1, 0, 1, 0, 1, 0, 1, 0] }
-        : { colorSpace: "DeviceCMYK" };
+      return header.adobe ? { space: "cmyk", inverted: true } : { space: "cmyk" };
     default:
       throw new JpegFormatError(
         `this JPEG has ${header.components} color channels; only gray, RGB and CMYK are embedded.`,

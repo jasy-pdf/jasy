@@ -47,7 +47,14 @@ import { ColorMode, Orientation } from "../renderer/pdf-config.ts";
 import type { PDFConfig } from "../renderer/pdf-document-class.ts";
 import type { FontMetrics } from "./font-metrics.ts";
 import { Diagnostics } from "../common/diagnostics.ts";
-import { jpegColor, JpegFormatError, type JpegColor } from "./image-helper.ts";
+import { JpegFormatError, type ImageColor } from "./image-helper.ts";
+
+/** The PDF color space of each image color space, and its channel count (for `/Decode`). */
+const IMAGE_COLOR_SPACE = {
+  gray: { name: "DeviceGray", channels: 1 },
+  rgb: { name: "DeviceRGB", channels: 3 },
+  cmyk: { name: "DeviceCMYK", channels: 4 },
+} as const;
 
 interface FontIndexes {
   fontIndex: number;
@@ -512,6 +519,7 @@ export class PDFObjectManager implements FontMetrics {
     imageType: string,
     imageData: string,
     smaskData?: string,
+    color: ImageColor = { space: "rgb" },
   ) {
     // A transparent PNG carries its alpha as a separate DeviceGray /SMask image the viewer composites with.
     let smaskEntry = "";
@@ -531,23 +539,23 @@ endstream`;
       smaskEntry = `    /SMask ${this.addObject(smaskObject)} 0 R\n`;
     }
 
-    const bytes = bytesFromLatin1(imageData);
-    // A JPEG is embedded as it is, so it keeps the color space it was saved in; a PNG arrives as RGB.
-    const color: JpegColor =
-      imageType === "DCTDecode" ? jpegColor(bytes) : { colorSpace: "DeviceRGB" };
-    if (color.colorSpace === "DeviceCMYK" && this.outputIntent !== undefined) {
+    // PDF/A: the sRGB output intent forbids DeviceCMYK.
+    if (color.space === "cmyk" && this.outputIntent !== undefined) {
       throw new JpegFormatError(
         "a CMYK JPEG in a PDF/A document: its sRGB output intent forbids DeviceCMYK. " +
           "Convert the image to RGB first.",
       );
     }
-    const decode = color.decode ? `    /Decode [${color.decode.join(" ")}]\n` : "";
-    const img = this.streamPayload(bytes);
+    const space = IMAGE_COLOR_SPACE[color.space];
+    const decode = color.inverted
+      ? `    /Decode [${Array.from({ length: space.channels }, () => "1 0").join(" ")}]\n`
+      : "";
+    const img = this.streamPayload(bytesFromLatin1(imageData));
     const imageObject = `<< /Type /XObject
     /Subtype /Image
     /Width ${width}
     /Height ${height}
-    /ColorSpace /${color.colorSpace}
+    /ColorSpace /${space.name}
     /BitsPerComponent 8
 ${decode}    /Filter /${imageType}
 ${smaskEntry}    /Length ${img.length} >>
@@ -962,7 +970,7 @@ endstream`;
   }
 
   /**
-   * Whether the document draws this code point through the colour-emoji path instead of the text
+   * Whether the document draws this code point through the color-emoji path instead of the text
    * font - a fallback emoji FONT, or an image source (`Document({ emoji })`). Such a code point is
    * missing from the text font ON PURPOSE, so glyph coverage must leave it alone. Mirrors exactly
    * what `getCharWidth` measures it as, or a dropped emoji would have been measured and not drawn.

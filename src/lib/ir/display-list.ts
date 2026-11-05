@@ -1,4 +1,4 @@
-import type { Orientation } from "../utils/image-helper.ts";
+import type { ImageColor, Orientation } from "../utils/image-helper.ts";
 import { Color } from "../common/color.ts";
 import { FontStyle } from "../utils/pdf-object-manager.ts";
 import type { FormFieldSpec, FieldStyle } from "../forms/field.ts";
@@ -109,6 +109,8 @@ export interface Image {
   imageType: string; // PDF filter name, e.g. "DCTDecode" (JPEG) or "FlateDecode" (PNG)
   /** Flate-compressed DeviceGray alpha channel for a transparent PNG, embedded as the XObject's /SMask. */
   smask?: string;
+  /** What the samples mean (a JPEG keeps the space it was saved in); absent = RGB. */
+  color?: ImageColor;
   /** How the stored pixels turn upright inside the placement box (EXIF); absent = as stored. */
   orientation?: Orientation;
   /** cover/contain fits clip the placement to the element's original frame. */
