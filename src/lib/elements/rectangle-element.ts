@@ -1,6 +1,6 @@
 import { widthRules } from "../layout/box-constraints.ts";
 import type { Radii } from "../ir/display-list.ts";
-import type { GradientInput } from "../api/gradient.ts";
+import type { GradientInput } from "../common/gradient.ts";
 import { Color } from "../common/color.ts";
 import {
   BoxConstraints,

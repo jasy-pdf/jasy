@@ -1,6 +1,6 @@
 import { Color } from "../common/color.ts";
-import { toColor, type ColorInput } from "../api/color.ts";
-import { isGradientInput, resolveGradient, type GradientInput } from "../api/gradient.ts";
+import { toColor, type ColorInput } from "../common/color-input.ts";
+import { isGradientInput, resolveGradient, type GradientInput } from "../common/gradient.ts";
 import type { Gradient, IRNode, PathCommand, StrokeStyle } from "../ir/display-list.ts";
 import { pathData } from "../svg/shapes.ts";
 import { boundsOf, quadToCubic } from "../vector/path.ts";
