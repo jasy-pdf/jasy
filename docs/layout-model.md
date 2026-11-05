@@ -231,7 +231,7 @@ from "default"; the defaults 0 and 1 live in `flex-item.ts`.
   custom element today. The break hits our own tests: 33 test files call `calculateLayout` directly
   (118 call sites), and about 19 assert absolute positions. Those move to rendered output or to
   `origin + offset`.
-- Vue, Nuxt, e-invoice and the CLI read no positions after layout. They are not affected.
+- Vue, React, Nuxt, e-invoice and the CLI read no positions after layout. They are not affected.
 - Release notes say it. It is a beta.
 
 ## 6. Stages

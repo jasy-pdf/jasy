@@ -10,6 +10,7 @@ body:
       options:
         - "@jasy/pdf"
         - "@jasy/vue"
+        - "@jasy/react"
         - "@jasy/nuxt"
         - "@jasy/e-invoice"
         - "@jasy/cli"

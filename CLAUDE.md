@@ -58,7 +58,7 @@ find it.
 
 | Layer                                                                    | Hands on                                                                                        | Never                                                                                 |
 | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| 1 Build - `api/`, element constructors, Vue/Nuxt                         | the element tree; files named by path are read HERE                                             | lays out, draws, knows PDF syntax                                                     |
+| 1 Build - `api/`, element constructors, Vue/React/Nuxt                   | the element tree; files named by path are read HERE                                             | lays out, draws, knows PDF syntax                                                     |
 | 2 Load - `layout/collect-images.ts`, font registration                   | the tree, every reachable image knowing its size                                                | lays out; the only async step before layout                                           |
 | 3 Layout + pagination - `elements/`, `layout/`, `text/`, the page driver | sizes and offsets relative to the parent                                                        | file or network I/O, `await`, PDF syntax, the writer other than through `FontMetrics` |
 | 4 Producers - `renderer/*-renderer.ts`                                   | `IRNode[]`, absolute, top-left; the facts of a source file (image type, color space)            | lays out again, reads privates, writes a PDF operator                                 |
@@ -267,8 +267,10 @@ A curated **factory layer ON TOP of the engine** — what users write — export
 elements; the engine classes stay untouched and exported for power users. Input normalizers:
 `toColor` (`color.ts`: named CSS / hex / ARGB / `rgb()`), `toEdges` (`insets.ts`). Render entry:
 `renderPdf(doc) → string` / `renderToBytes(doc) → Uint8Array` (`structure.ts`). The **firewall** for
-future Vue/React bindings is `descriptor.ts`: `Descriptor {type,props,children}` + `build()` resolves
-each node through the SAME factories (`registerElement` adds custom types). Design is locked in
+the Vue and React bindings is `descriptor.ts`: `Descriptor {type,props,children}` + `build()` resolves
+each node through the SAME factories (`registerElement` adds custom types). What the engine calls back
+during layout (a Flow's `page`, a `page-builder`'s `build`) is a function prop the binding renders in
+place, in its live tree. Design is locked in
 `docs/api-design.md`; the 6-page `tests/manual/showcase.ts` is the canonical example + DX check.
 ⚠️ An element module must NOT import the `"../renderer"` barrel (it duplicates element classes under
 ESM and breaks the constructor-keyed `RendererRegistry` → blank PDFs); import the specific renderer.
@@ -297,7 +299,7 @@ rendering. This is the standing visual check; prefer it over one-off `scripts/ru
   `pnpm run test:coverage` for coverage. Unit tests live in **`tests/unit/`**, mirroring the `src/lib/`
   structure (`tests/unit/{common,elements,renderer,utils}/…`). `src/` is pure production code — the
   build (`tsconfig.json` includes only `src/**`) therefore keeps `dist/` test-free. The root run covers
-  the core plus `@jasy/cli`, `@jasy/vue` and `@jasy/e-invoice`; `@jasy/nuxt` is excluded
+  the core plus `@jasy/cli`, `@jasy/vue`, `@jasy/react` and `@jasy/e-invoice`; `@jasy/nuxt` is excluded
   (`vitest.config.ts`) and runs on its own. The count is whatever `pnpm exec vitest run` prints, not
   a number written here.
 - `pnpm run build` — `tsc` → `dist/`. **The sibling packages import `@jasy/pdf` and `@jasy/e-invoice`
@@ -373,7 +375,7 @@ how `BASELINE_RATIO = 683/1000` happened. Test with an ALL-CAPS word in a border
 **Two copies of the library** - see the registry section above. A package that injects names into a
 consumer's code must be a PEER dependency. Exact version pins fix VERSIONS, not module IDENTITY.
 
-**Packages read the engine from `dist`.** `packages/vue`, `packages/cli` and the e-invoice types all
+**Packages read the engine from `dist`.** `packages/vue`, `packages/react`, `packages/cli` and the e-invoice types all
 resolve `@jasy/pdf` / `@jasy/e-invoice` from the built output. **Build first or you measure the old
 engine** - a whole wrong diagnosis was once built on a debug line that never printed.
 
@@ -553,20 +555,23 @@ English and short, do not break the font math.**
 
 - **pnpm monorepo.** `@jasy/pdf` is the root (`src/lib/`); `packages/`: `e-invoice` (ZUGFeRD /
   XRechnung, **own CLAUDE.md there**), `cli` (the `jasy` TUI: validate, read, export), `vue` (PDFs
-  as Vue components, PURE PDF, renders in the browser), `nuxt` (zero-config, client or server),
+  as Vue components, PURE PDF, renders in the browser), `react` (the same as React components, React 19,
+  one `react-reconciler` 0.31 for every 19.x - CI pins each minor), `nuxt` (zero-config, client or server),
   `playground`. GitHub org `jasy-pdf`, repo `jasy-pdf/jasy`, public, locked to the maintainer
   (rulesets); CodeRabbit reviews PRs, Renovate opens weekly dependency PRs.
 - **Release**: `scripts/release.sh <pkg> <version>` bumps, commits, tags `<pkg>-v*`; CI publishes and
   writes the GitHub Release (`scripts/gh-release.mjs`). Siblings depend by RANGE (`workspace:^`) and
-  `@jasy/pdf` is a PEER of `vue` and `nuxt`, so an engine patch needs one release, not five - and a
-  consumer cannot end up with two copies. Current versions: npm, not this file.
+  `@jasy/pdf` is a PEER of `vue`, `react` and `nuxt`, so an engine patch needs one release, not five - and a
+  consumer cannot end up with two copies. Current versions: npm, not this file. A package's FIRST
+  release whose `package.json` already holds the version stops at the empty bump commit: tag by hand.
 - **Docs carry version badges from beta.4 on** (only NEW: "since beta.4", or BREAKING: "changed in beta.4"; maintained on superseded/2.0) - the
   rule lives in the landing's CLAUDE.md; a new feature or a breaking change built here gets one.
 - **The landing is a separate repo**, `~/projects/jasy-landing` → jasy.dev (Nuxt 4). Own CLAUDE.md,
   HARD RULES: its dev server (3001) is Flo's - restart only via the takeover flag the Nuxt CLI names, never pattern-kill; only Flo commits. Package links use npmx.dev.
 - **`@jasy/vue`'s typed props are held to the engine by a test** (`packages/vue/tests/text-props.test.ts`
   reads the option names out of `src/lib/api/text.ts`); the components forward `{ ...attrs, ...props }`,
-  so an undeclared prop still WORKS, which is how eight options once drifted in unnoticed. A
-  `style`-object CSS layer and `@media` are won't-do.
+  so an undeclared prop still WORKS, which is how eight options once drifted in unnoticed. `@jasy/react`
+  cannot drift: its prop types ARE the engine's option types. A `style`-object CSS layer and `@media`
+  are won't-do.
 - License MIT, author Florian Heuberger. Runtime deps: `jimp`, `fflate`, `svgpath`, `bidi-js`,
   `brotli` (lazy). The SVG XML reader is ours.
