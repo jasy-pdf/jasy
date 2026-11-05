@@ -6,7 +6,7 @@ import {
   type ImageDimensions,
 } from "../utils/image-helper.ts";
 import { latin1FromBytes } from "../utils/bytes.ts";
-import { readFileBytes, readFileBytesAsync } from "../platform/node-fs.ts";
+import { readFileBytes } from "../platform/node-fs.ts";
 import { fetchBytes } from "../utils/fetch-bytes.ts";
 import {
   BoxConstraints,
@@ -43,16 +43,16 @@ export abstract class CustomImage {
   abstract getImageDimensions(): Promise<ImageDimensions>;
 
   /**
-   * Its dimensions if they can be had without waiting (bytes in hand, a local file), else `undefined` -
-   * then the async pass before layout fetches them. Layout asks this, so an image built during layout
-   * (in a `PageBuilder`, a table cell) knows its size as well.
+   * Its dimensions if its bytes are already in hand (bytes, a local file), else `undefined` - then the
+   * async pass before layout fetches them. Reading a header from memory is all this may do: layout
+   * asks it, so an image built during layout (in a `PageBuilder`, a table cell) knows its size too.
    */
   dimensionsNow(): ImageDimensions | undefined {
     return undefined;
   }
 }
 
-/** Dimensions read from bytes; a file we cannot read is `undefined` here - the render names the failure. */
+/** Dimensions read from bytes in hand; a format we cannot read is `undefined` here - the render names it. */
 function headerOf(bytes: Uint8Array): ImageDimensions | undefined {
   try {
     return getImageDimensions(bytes);
@@ -61,28 +61,30 @@ function headerOf(bytes: Uint8Array): ImageDimensions | undefined {
   }
 }
 
+/**
+ * An image from a file path (Node). The file is read HERE, when the image is named - like an SVG or a
+ * font file - so a wrong path fails on the line that named it, and layout never waits on a disk.
+ */
 export class CustomLocalImage extends CustomImage {
   private imagePath: string;
-  private fileBuffer!: Uint8Array;
-  private fileRawData!: string;
-  private dims?: ImageDimensions; // memoized so the decode happens once
-  private unreadable = false;
+  private fileBuffer: Uint8Array;
+  private fileRawData: string;
+  private dims?: ImageDimensions; // memoized so the header is read once
 
   constructor(imagePath: string) {
     super();
     this.imagePath = imagePath;
-  }
-
-  async init(): Promise<void> {
-    if (this.fileBuffer) return; // idempotent: the pre-layout size pass and the renderer both call init()
     try {
-      await this.loadImage(this.imagePath);
+      this.fileBuffer = readFileBytes(imagePath);
     } catch (e) {
       throw new Error(
-        `@jasy/pdf: could not read the image at ${this.imagePath}: ${String((e as Error)?.message ?? e)}`,
+        `@jasy/pdf: could not read the image at ${imagePath}: ${String((e as Error)?.message ?? e)}`,
       );
     }
+    this.fileRawData = latin1FromBytes(this.fileBuffer);
   }
+
+  init(): void {}
 
   async getImageType(): Promise<string> {
     const ext = extname(this.imagePath).toLowerCase();
@@ -102,26 +104,7 @@ export class CustomLocalImage extends CustomImage {
     }
   }
 
-  private async loadImage(imagePath: string): Promise<Uint8Array> {
-    return this.adopt(await readFileBytesAsync(imagePath));
-  }
-
-  private adopt(bytes: Uint8Array): Uint8Array {
-    this.fileBuffer = bytes;
-    this.fileRawData = latin1FromBytes(bytes);
-    return bytes;
-  }
-
   override dimensionsNow(): ImageDimensions | undefined {
-    if (!this.dims && !this.fileBuffer) {
-      if (this.unreadable) return undefined;
-      try {
-        this.adopt(readFileBytes(this.imagePath));
-      } catch {
-        this.unreadable = true; // layout asks often; the render reads again and names the failure
-        return undefined;
-      }
-    }
     this.dims ??= headerOf(this.fileBuffer);
     return this.dims;
   }
@@ -131,9 +114,7 @@ export class CustomLocalImage extends CustomImage {
   }
 
   async getImageDimensions(): Promise<ImageDimensions> {
-    if (this.dims) return this.dims; // reuse: the pre-layout size pass and the renderer both ask
-    if (!this.fileBuffer) throw new Error("@jasy/pdf: an image was measured before it was loaded");
-    this.dims = getImageDimensions(this.fileBuffer);
+    this.dims ??= getImageDimensions(this.fileBuffer); // reuse across layout + render
     return this.dims;
   }
 }
@@ -328,12 +309,13 @@ export class ImageElement extends SizedPDFElement {
   }
 
   /**
-   * Loads the image and records its own size. Runs in the async pre-layout pass (layout
-   * itself is synchronous and cannot await jimp) so `calculateLayout` can turn a width-only image
-   * into a proportional box. Best-effort: a load failure leaves the size unresolved (the renderer
-   * surfaces the real error) and the image just keeps whatever explicit size it was given.
+   * Fetches what layout cannot wait for (an image from a URL) and records its own size. Runs in the
+   * async pass before layout; an image whose bytes are in hand has nothing to fetch. Best-effort: a
+   * failed fetch leaves the size unresolved (the renderer surfaces the real error) and the image keeps
+   * whatever explicit size it was given.
    */
   async resolveIntrinsicSize(): Promise<void> {
+    if (this.ownSize()) return;
     try {
       await this.image.init(true); // a render begins here
       this.intrinsic = naturalSize(await this.image.getImageDimensions());

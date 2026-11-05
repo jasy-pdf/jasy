@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Jimp } from "jimp";
@@ -45,6 +45,14 @@ describe("an image built during layout keeps its ratio", () => {
     const path = join(mkdtempSync(join(tmpdir(), "jasy-")), "wide.png");
     writeFileSync(path, await png(40, 20));
     expect(await drawnImage(PageBuilder(() => Image(path, { width: 100 })))).toEqual([100, 50]);
+  });
+
+  it("from a local file that is read when it is named - layout and render never touch the disk", async () => {
+    const path = join(mkdtempSync(join(tmpdir(), "jasy-")), "gone.png");
+    writeFileSync(path, await png(40, 20));
+    const image = Image(path, { width: 100 });
+    rmSync(path);
+    expect(await drawnImage(image)).toEqual([100, 50]);
   });
 
   it("from bytes, in an auto table column", async () => {

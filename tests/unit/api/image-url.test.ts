@@ -81,8 +81,8 @@ describe("a broken image link stops the render, naming the URL", () => {
 });
 
 describe("an image file that cannot be read", () => {
-  it("says which file, instead of a later 'call loadAndConvertImage first'", async () => {
-    await expect(pdfOf(Image("/nonexistent/jasy-test.png"))).rejects.toThrow(
+  it("fails on the line that names it, and says which file", () => {
+    expect(() => Image("/nonexistent/jasy-test.png")).toThrow(
       /could not read the image at \/nonexistent\/jasy-test\.png/,
     );
   });
