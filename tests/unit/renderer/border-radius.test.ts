@@ -24,7 +24,7 @@ const image = (extra: Partial<Image> = {}): Image => ({
   intrinsicWidth: 100,
   intrinsicHeight: 80,
   data: "x",
-  imageType: "DCTDecode",
+  imageType: "FlateDecode",
   ...extra,
 });
 

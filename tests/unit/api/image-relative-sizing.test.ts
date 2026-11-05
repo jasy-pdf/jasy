@@ -66,7 +66,7 @@ describe("Image relative sizing + aspect auto-height", () => {
   });
 
   it("an image given NO size keeps its own size, scaled down to what it is offered, never up", async () => {
-    const img = Image(new FakeImage(400, 200));
+    const img = Image(new FakeImage(800, 400));
     await img.resolveIntrinsicSize();
     expect(img.getProps().fit).toBe(BoxFit.fill);
     expect(img.calculateLayout(BoxConstraints.loose(300, Infinity), { x: 0, y: 0 }, ctx)).toEqual({
@@ -85,15 +85,15 @@ describe("Image relative sizing + aspect auto-height", () => {
     });
     // More than enough offered: its own size, not stretched.
     expect(img.calculateLayout(BoxConstraints.loose(1000, 1000), { x: 0, y: 0 }, ctx)).toEqual({
-      width: 400,
-      height: 200,
+      width: 600,
+      height: 300,
     });
-    // Nothing offered: its own size (1px = 1pt).
+    // Nothing offered: its own size: 800 x 400 px at 96 dpi.
     expect(
       img.calculateLayout(new BoxConstraints(0, Infinity, 0, Infinity), { x: 0, y: 0 }, ctx),
     ).toEqual({
-      width: 400,
-      height: 200,
+      width: 600,
+      height: 300,
     });
   });
 

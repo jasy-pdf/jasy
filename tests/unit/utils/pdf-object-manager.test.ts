@@ -63,14 +63,14 @@ describe("PDFObjectManager - Fonts", () => {
 describe("PDFObjectManager - Images", () => {
   it("should register an image and return the correct object number", () => {
     const manager = new PDFObjectManager();
-    const imageObjectNumber = manager.registerImage(100, 200, "DCTDecode", "imageData");
+    const imageObjectNumber = manager.registerImage(100, 200, "FlateDecode", "imageData");
 
     expect(imageObjectNumber).toBe(1);
   });
 
   it("should return all registered images", () => {
     const manager = new PDFObjectManager();
-    manager.registerImage(100, 200, "DCTDecode", "imageData");
+    manager.registerImage(100, 200, "FlateDecode", "imageData");
 
     const images = manager.getAllImagesRaw();
     expect(images.size).toBe(1);
@@ -105,7 +105,7 @@ describe("PDFObjectManager - Images", () => {
 
     const imageWidth = 100;
     const imageHeight = 100;
-    const imageType = "DCTDecode";
+    const imageType = "FlateDecode";
     const imageData = "some-image-data";
 
     const imageObjectNumber = manager.registerImage(imageWidth, imageHeight, imageType, imageData);

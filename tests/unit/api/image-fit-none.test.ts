@@ -12,7 +12,7 @@ describe('Image fit: "none"', () => {
     { name: "matches the box", width: 60, height: 30, x: 45, y: 40 },
   ])("keeps its natural size and centres when it $name", async ({ width, height, x, y }) => {
     const png = new Uint8Array(
-      await new Jimp({ width: 60, height: 30, color: 0x00ff00ff }).getBuffer("image/png"),
+      await new Jimp({ width: 80, height: 40, color: 0x00ff00ff }).getBuffer("image/png"),
     );
     const [nodes] = await drawnNodes(() =>
       renderPdf(
@@ -37,7 +37,7 @@ describe('Image fit: "none"', () => {
     "clips %s output to the box and restores graphics state before the next sibling",
     async (mime) => {
       const bytes = new Uint8Array(
-        await new Jimp({ width: 60, height: 30, color: 0x00ff00ff }).getBuffer(mime),
+        await new Jimp({ width: 80, height: 40, color: 0x00ff00ff }).getBuffer(mime),
       );
       const pdf = await renderPdf(
         Document([

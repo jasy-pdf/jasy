@@ -8,6 +8,7 @@ import {
 import { Color } from "../common/color.ts";
 import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 import type { PageStructContext } from "../utils/struct-tree.ts";
+import { ORIENTATION_MATRIX } from "../utils/image-helper.ts";
 
 /**
  * PDF backend - turns display-list primitives into content-stream operators.
@@ -474,9 +475,16 @@ export class PdfBackend {
           node.imageType,
           node.data,
           node.smask,
+          node.color,
         );
+        // The placement scales the unit square to the box; an orientation turns the pixels inside it.
+        const upright = node.orientation
+          ? `${ORIENTATION_MATRIX[node.orientation].join(" ")} cm\n`
+          : "";
         const draw =
-          `q\n${node.width} 0 0 ${node.height} ${node.x} ${node.y} cm\n` + `/IM${ref} Do\nQ\n`;
+          `q\n${node.width} 0 0 ${node.height} ${node.x} ${node.y} cm\n` +
+          upright +
+          `/IM${ref} Do\nQ\n`;
         if (!node.clip) return draw;
         // Clip to the frame (re … W n); rounded when a radius is set. The rectangular
         // path is byte-identical to before.

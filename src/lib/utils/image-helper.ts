@@ -20,38 +20,267 @@ DataView.prototype.getUint24 = function (
   return littleEndian ? (b3 << 16) | (b2 << 8) | b1 : (b1 << 16) | (b2 << 8) | b3;
 };
 
-interface ImageDimensions {
-  width: number;
-  height: number;
+/** Dots per inch, per axis. */
+export interface Resolution {
+  x: number;
+  y: number;
 }
 
-export async function getImageDimensions(buffer: Uint8Array): Promise<ImageDimensions> {
+export interface ImageDimensions {
+  /** In pixels - what the XObject declares. */
+  width: number;
+  height: number;
+  /** The resolution the file declares; absent when it declares none. */
+  dpi?: Resolution;
+  /** How the stored pixels turn upright (EXIF, a JPEG only); absent when they already are. */
+  orientation?: Orientation;
+}
+
+/**
+ * EXIF orientation: 2 mirrored, 3 turned half, 4 flipped, 5 transposed, 6 turned a quarter clockwise,
+ * 7 transversed, 8 turned a quarter counterclockwise. 5-8 swap width and height.
+ */
+export type Orientation = 2 | 3 | 4 | 5 | 6 | 7 | 8;
+
+/**
+ * The matrix that turns the image's unit square upright, inside it - PDF's image space, y up, the first
+ * stored row at the top. Applied before the placement scales it, so the box stays the box.
+ */
+export const ORIENTATION_MATRIX: Record<Orientation, readonly number[]> = {
+  2: [-1, 0, 0, 1, 1, 0],
+  3: [-1, 0, 0, -1, 1, 1],
+  4: [1, 0, 0, -1, 0, 1],
+  5: [0, -1, -1, 0, 1, 1],
+  6: [0, -1, 1, 0, 0, 1],
+  7: [0, 1, 1, 0, 0, 0],
+  8: [0, 1, -1, 0, 1, 0],
+};
+
+/** The resolution of a file that declares none: CSS's reference pixel, 1/96 inch. */
+export const DEFAULT_DPI = 96;
+
+/**
+ * An image's own size in points, upright: its pixels at the resolution the file declares, else 96 dpi,
+ * turned by its orientation.
+ */
+export function naturalSize(dims: ImageDimensions): { width: number; height: number } {
+  const width = (dims.width * 72) / (dims.dpi?.x ?? DEFAULT_DPI);
+  const height = (dims.height * 72) / (dims.dpi?.y ?? DEFAULT_DPI);
+  return (dims.orientation ?? 1) >= 5 ? { width: height, height: width } : { width, height };
+}
+
+/** A resolution only counts if both axes are real numbers above zero; anything else is no declaration. */
+function resolution(x: number, y: number): Resolution | undefined {
+  return Number.isFinite(x) && Number.isFinite(y) && x > 0 && y > 0 ? { x, y } : undefined;
+}
+
+/** PNG `pHYs`: pixels per unit, and only unit 1 (meter) is a physical size - 0 is an aspect ratio. */
+function pngResolution(view: DataView): Resolution | undefined {
+  for (let offset = 8; offset + 8 <= view.byteLength; ) {
+    const length = view.getUint32(offset);
+    const type = view.getUint32(offset + 4);
+    if (type === 0x49444154) return undefined; // IDAT: pHYs must come before it
+    if (type === 0x70485973 && length >= 9 && offset + 17 <= view.byteLength) {
+      if (view.getUint8(offset + 16) !== 1) return undefined;
+      return resolution(view.getUint32(offset + 8) * 0.0254, view.getUint32(offset + 12) * 0.0254);
+    }
+    offset += 12 + length;
+  }
+  return undefined;
+}
+
+/** JFIF `APP0`: units 1 = dots per inch, 2 = per centimeter, 0 = an aspect ratio only. */
+function jfifResolution(view: DataView, data: number): Resolution | undefined {
+  if (view.getUint32(data) !== 0x4a464946 || view.getUint8(data + 4) !== 0) return undefined; // "JFIF\0"
+  const units = view.getUint8(data + 7);
+  const scale = units === 1 ? 1 : units === 2 ? 2.54 : 0;
+  if (scale === 0) return undefined;
+  return resolution(view.getUint16(data + 8) * scale, view.getUint16(data + 10) * scale);
+}
+
+/** The first IFD of a TIFF block (EXIF), as tag → the entry's offset in `view`. */
+function tiffEntries(view: DataView, tiff: number): { entries: Map<number, number>; le: boolean } {
+  const le = view.getUint16(tiff) === 0x4949; // "II"
+  const ifd = tiff + view.getUint32(tiff + 4, le);
+  const entries = new Map<number, number>();
+  const count = view.getUint16(ifd, le);
+  for (let i = 0; i < count; i++) {
+    const entry = ifd + 2 + i * 12;
+    entries.set(view.getUint16(entry, le), entry);
+  }
+  return { entries, le };
+}
+
+/** What EXIF declares: the resolution, and how the stored pixels turn upright. */
+interface ExifInfo {
+  dpi?: Resolution;
+  orientation?: Orientation;
+}
+
+/**
+ * EXIF `APP1`: XResolution / YResolution (rationals) in ResolutionUnit, 2 = inch (the default), 3 = cm;
+ * Orientation 1-8.
+ */
+function exifInfo(view: DataView, data: number): ExifInfo | undefined {
+  if (view.getUint32(data) !== 0x45786966 || view.getUint16(data + 4) !== 0) return undefined; // "Exif\0\0"
+  const tiff = data + 6;
+  const { entries, le } = tiffEntries(view, tiff);
+  const rational = (tag: number): number => {
+    const entry = entries.get(tag);
+    if (entry === undefined) return NaN;
+    const at = tiff + view.getUint32(entry + 8, le);
+    return view.getUint32(at, le) / view.getUint32(at + 4, le);
+  };
+  const short = (tag: number): number | undefined => {
+    const entry = entries.get(tag);
+    return entry === undefined ? undefined : view.getUint16(entry + 8, le);
+  };
+  const unit = short(0x0128) ?? 2;
+  const scale = unit === 2 ? 1 : unit === 3 ? 2.54 : 0;
+  const dpi =
+    scale === 0 ? undefined : resolution(rational(0x011a) * scale, rational(0x011b) * scale);
+  const turn = short(0x0112);
+  const orientation =
+    turn !== undefined && turn >= 2 && turn <= 8 ? (turn as Orientation) : undefined;
+  return { ...(dpi ? { dpi } : {}), ...(orientation ? { orientation } : {}) };
+}
+
+/** What a header declares is metadata: a malformed declaration is none, never a failed image. */
+function tryRead<T>(read: () => T | undefined): T | undefined {
+  try {
+    return read();
+  } catch {
+    return undefined;
+  }
+}
+
+/** What a JPEG's header says about it: its frame, how it is coded, and what it declares. */
+interface JpegHeader {
+  width: number;
+  height: number;
+  /** 1 = gray, 3 = RGB (YCbCr), 4 = CMYK (or YCCK). */
+  components: number;
+  /** The start-of-frame marker: how the image is coded. */
+  sof: number;
+  /** An Adobe `APP14` segment: Photoshop stores CMYK inverted. */
+  adobe: boolean;
+  dpi?: Resolution;
+  orientation?: Orientation;
+}
+
+/** Start-of-frame markers; the rest of 0xFFC0..0xFFCF are tables (DHT C4, JPG C8, DAC CC). */
+const isSof = (marker: number) =>
+  marker >= 0xffc0 &&
+  marker <= 0xffcf &&
+  marker !== 0xffc4 &&
+  marker !== 0xffc8 &&
+  marker !== 0xffcc;
+
+/** Markers without a length: TEM and the restart markers. */
+const isStandalone = (marker: number) =>
+  marker === 0xff01 || (marker >= 0xffd0 && marker <= 0xffd7);
+
+function jpegHeader(view: DataView): JpegHeader {
+  // JFIF is the container's own declaration and wins; EXIF is what a camera writes.
+  let jfif: Resolution | undefined;
+  let exif: ExifInfo | undefined;
+  let adobe = false;
+  let offset = 2;
+  while (offset + 4 <= view.byteLength) {
+    if (view.getUint8(offset + 1) === 0xff) {
+      offset++; // a fill byte before the marker
+      continue;
+    }
+    const marker = view.getUint16(offset);
+    offset += 2;
+    if (isStandalone(marker)) continue;
+    if (isSof(marker)) {
+      const dpi = jfif ?? exif?.dpi;
+      const orientation = exif?.orientation;
+      return {
+        height: view.getUint16(offset + 3),
+        width: view.getUint16(offset + 5),
+        components: view.getUint8(offset + 7),
+        sof: marker,
+        adobe,
+        ...(dpi ? { dpi } : {}),
+        ...(orientation ? { orientation } : {}),
+      };
+    }
+    if (marker === 0xffe0) jfif ??= tryRead(() => jfifResolution(view, offset + 2));
+    if (marker === 0xffe1) exif ??= tryRead(() => exifInfo(view, offset + 2));
+    // "Adobe"
+    if (
+      marker === 0xffee &&
+      view.getUint32(offset + 2) === 0x41646f62 &&
+      view.getUint8(offset + 6) === 0x65
+    )
+      adobe = true;
+    offset += view.getUint16(offset);
+  }
+  throw new Error("Unsupported image format");
+}
+
+/** Thrown for a JPEG we cannot embed as it is. Says what it is and what to do. */
+export class JpegFormatError extends Error {
+  constructor(message: string) {
+    super(`@jasy/pdf: ${message}`);
+  }
+}
+
+/** Baseline, extended sequential and progressive: the codings a PDF viewer's DCTDecode reads. */
+const DCT_CODINGS = new Set([0xffc0, 0xffc1, 0xffc2]);
+
+/** The colors an image's samples are in. */
+export type ImageColorSpace = "gray" | "rgb" | "cmyk";
+
+/** What an image's samples mean: their color space, and whether they are stored inverted. */
+export interface ImageColor {
+  space: ImageColorSpace;
+  /** Photoshop stores CMYK inverted (an Adobe `APP14` segment). */
+  inverted?: boolean;
+}
+
+/** The color of a JPEG as it is embedded (`DCTDecode`): the space it was saved in. */
+export function jpegColor(bytes: Uint8Array): ImageColor {
+  const header = jpegHeader(new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength));
+  if (!DCT_CODINGS.has(header.sof)) {
+    throw new JpegFormatError(
+      "this JPEG is lossless, hierarchical or arithmetic-coded, which PDF viewers cannot decode. " +
+        "Save it again as a baseline or progressive JPEG, or as a PNG.",
+    );
+  }
+  switch (header.components) {
+    case 1:
+      return { space: "gray" };
+    case 3:
+      return { space: "rgb" };
+    case 4:
+      return header.adobe ? { space: "cmyk", inverted: true } : { space: "cmyk" };
+    default:
+      throw new JpegFormatError(
+        `this JPEG has ${header.components} color channels; only gray, RGB and CMYK are embedded.`,
+      );
+  }
+}
+
+/** Read from the header alone, synchronously - layout can ask it. */
+export function readImageDimensions(buffer: Uint8Array): ImageDimensions {
   // The view's own window: a `Uint8Array` may be a slice of a larger buffer (a Node `Buffer` usually is).
   const dataView = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
 
-  // Check for JPEG (0xFFD8 is the start of JPEG file)
   if (dataView.getUint16(0) === 0xffd8) {
-    let offset = 2;
-    while (offset < buffer.byteLength) {
-      const marker = dataView.getUint16(offset, false);
-      offset += 2;
-      if (marker === 0xffc0 || marker === 0xffc2) {
-        // SOF0 or SOF2
-        return {
-          height: dataView.getUint16(offset + 3, false),
-          width: dataView.getUint16(offset + 5, false),
-        };
-      } else {
-        offset += dataView.getUint16(offset, false);
-      }
-    }
+    const { width, height, dpi, orientation } = jpegHeader(dataView);
+    return { width, height, ...(dpi ? { dpi } : {}), ...(orientation ? { orientation } : {}) };
   }
 
   // Check for PNG (0x89504E47 is the PNG signature)
   if (dataView.getUint32(0) === 0x89504e47) {
+    const dpi = tryRead(() => pngResolution(dataView));
     return {
       width: dataView.getUint32(16, false),
       height: dataView.getUint32(20, false),
+      ...(dpi ? { dpi } : {}),
     };
   }
 
@@ -161,13 +390,13 @@ export interface FitResult {
   offsetY: number;
 }
 
-/** Where an image smaller or larger than its box sits in it, per axis: 0 = start, 0.5 = centre, 1 = end. */
+/** Where an image smaller or larger than its box sits in it, per axis: 0 = start, 0.5 = center, 1 = end. */
 export interface FitAlign {
   x: number;
   y: number;
 }
 
-const CENTRE: FitAlign = { x: 0.5, y: 0.5 };
+const CENTER: FitAlign = { x: 0.5, y: 0.5 };
 
 /** The one place a fitted image is positioned: what is left over (or overhangs) is split by `align`. */
 function placed(
@@ -207,7 +436,7 @@ export function applyContainFit(
   imageHeight: number,
   containerWidth: number,
   containerHeight: number,
-  align: FitAlign = CENTRE,
+  align: FitAlign = CENTER,
 ): FitResult {
   return scaled(imageWidth, imageHeight, containerWidth, containerHeight, align, (w, h) => w < h);
 }
@@ -218,7 +447,7 @@ export function applyCoverFit(
   imageHeight: number,
   containerWidth: number,
   containerHeight: number,
-  align: FitAlign = CENTRE,
+  align: FitAlign = CENTER,
 ): FitResult {
   return scaled(imageWidth, imageHeight, containerWidth, containerHeight, align, (w, h) => w >= h);
 }
@@ -227,13 +456,13 @@ export function applyFillFit(containerWidth: number, containerHeight: number): F
   return { width: containerWidth, height: containerHeight, offsetX: 0, offsetY: 0 };
 }
 
-/** At its own size (1px = 1pt), the overhang cut off. */
+/** At its own size (`naturalSize`), the overhang cut off. */
 export function applyFitNone(
   imageWidth: number,
   imageHeight: number,
   containerWidth: number,
   containerHeight: number,
-  align: FitAlign = CENTRE,
+  align: FitAlign = CENTER,
 ): FitResult {
   return placed(imageWidth, imageHeight, containerWidth, containerHeight, align);
 }

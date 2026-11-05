@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { Box, Column, Row } from "../../../src/lib/api/layout.ts";
 import { Image } from "../../../src/lib/api/content.ts";
+import { pngFile } from "../support/image-file.ts";
 import { BoxConstraints } from "../../../src/lib/layout/box-constraints.ts";
 import { LayoutContext } from "../../../src/lib/elements/pdf-element.ts";
 
@@ -32,7 +33,7 @@ describe("aspectRatio reaches every sized factory", () => {
   it("Image: an explicit ratio overrides the image's own", () => {
     // No intrinsic size is resolved here (that needs the async pre-pass), so this also proves the
     // explicit ratio does not depend on it.
-    expect(lay(Image("x.png", { width: 240, aspectRatio: 3 })).height).toBe(80);
+    expect(lay(Image(pngFile(), { width: 240, aspectRatio: 3 })).height).toBe(80);
   });
 
   it("rejects a ratio that is not a positive number", () => {

@@ -7,6 +7,8 @@ import {
   applyFillFit,
   applyFitNone,
   decodePngToRgbFlate,
+  jpegColor,
+  naturalSize,
 } from "../utils/image-helper.ts";
 import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 import { IRNode, Image, isRounded } from "../ir/display-list.ts";
@@ -36,6 +38,8 @@ export class ImageRenderer {
     const imageType = await image.getImageType(); // For the moment we can handle `png` and `jpg/jpeg` files
     const fileData = await image.getFileData();
     const dimensions = await image.getImageDimensions();
+    // Laid out at its own size in points; the pixels only describe the XObject.
+    const own = naturalSize(dimensions);
 
     if (!fileData) {
       throw new Error("File data cannot be `null`");
@@ -45,6 +49,8 @@ export class ImageRenderer {
     // so decode it to raw DeviceRGB samples that the FlateDecode XObject path expects.
     let embedData = fileData;
     let smask: string | undefined;
+    // A JPEG is embedded as it is, so it keeps the color space it was saved in; a PNG becomes RGB.
+    const color = imageType === "DCTDecode" ? jpegColor(bytesFromLatin1(fileData)) : undefined;
     if (imageType === "FlateDecode") {
       const decoded = await decodePngToRgbFlate(bytesFromLatin1(fileData));
       embedData = decoded.data;
@@ -55,16 +61,16 @@ export class ImageRenderer {
     const box = {
       x,
       y,
-      width: width ?? dimensions.width,
-      height: height ?? dimensions.height,
+      width: width ?? own.width,
+      height: height ?? own.height,
     };
     const fitted =
       fit === BoxFit.cover
-        ? applyCoverFit(dimensions.width, dimensions.height, box.width, box.height, align)
+        ? applyCoverFit(own.width, own.height, box.width, box.height, align)
         : fit === BoxFit.contain
-          ? applyContainFit(dimensions.width, dimensions.height, box.width, box.height, align)
+          ? applyContainFit(own.width, own.height, box.width, box.height, align)
           : fit === BoxFit.none
-            ? applyFitNone(dimensions.width, dimensions.height, box.width, box.height, align)
+            ? applyFitNone(own.width, own.height, box.width, box.height, align)
             : applyFillFit(box.width, box.height);
 
     // Anything but `fill` may leave the box, so it is clipped to it; a radius rounds the box too.
@@ -82,6 +88,8 @@ export class ImageRenderer {
       intrinsicHeight: dimensions.height,
       data: embedData,
       imageType,
+      ...(color ? { color } : {}),
+      ...(dimensions.orientation ? { orientation: dimensions.orientation } : {}),
       ...(smask ? { smask } : {}),
       ...(radius ? { radius } : {}),
       ...(wantsClip ? { clip: box } : {}),

@@ -50,12 +50,13 @@ describe("ImageRenderer", () => {
     );
 
     expect(mockImageElement.getProps).toHaveBeenCalled();
-    // JPEG carries no alpha, so the 5th arg (smask) is undefined.
+    // No alpha (smask) and no color of its own: the mock is no real JPEG, so RGB.
     expect(mockObjectManager.registerImage).toHaveBeenCalledWith(
       200,
       200,
       "jpeg",
       "mockImageData",
+      undefined,
       undefined,
     );
 
@@ -106,12 +107,13 @@ describe("ImageRenderer", () => {
     );
 
     expect(mockImageElement.getProps).toHaveBeenCalled();
-    // JPEG carries no alpha, so the 5th arg (smask) is undefined.
+    // No alpha (smask) and no color of its own: the mock is no real JPEG, so RGB.
     expect(mockObjectManager.registerImage).toHaveBeenCalledWith(
       200,
       200,
       "jpeg",
       "mockImageData",
+      undefined,
       undefined,
     );
 
@@ -191,12 +193,13 @@ describe("ImageRenderer", () => {
     );
 
     expect(mockImageElement.getProps).toHaveBeenCalled();
-    // JPEG carries no alpha, so the 5th arg (smask) is undefined.
+    // No alpha (smask) and no color of its own: the mock is no real JPEG, so RGB.
     expect(mockObjectManager.registerImage).toHaveBeenCalledWith(
       200,
       200,
       "jpeg",
       "mockImageData",
+      undefined,
       undefined,
     );
 
@@ -247,12 +250,13 @@ describe("ImageRenderer", () => {
     );
 
     expect(mockImageElement.getProps).toHaveBeenCalled();
-    // JPEG carries no alpha, so the 5th arg (smask) is undefined.
+    // No alpha (smask) and no color of its own: the mock is no real JPEG, so RGB.
     expect(mockObjectManager.registerImage).toHaveBeenCalledWith(
       200,
       200,
       "jpeg",
       "mockImageData",
+      undefined,
       undefined,
     );
 

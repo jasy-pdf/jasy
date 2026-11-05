@@ -6,6 +6,7 @@ export * from "./insets.ts";
 export * from "./gradient.ts";
 export * from "./font-url.ts";
 export { FontFormatError } from "../utils/ttf-parser.ts";
+export { JpegFormatError } from "../utils/image-helper.ts";
 export * from "./dimension.ts";
 export * from "./text.ts";
 export * from "./layout.ts";

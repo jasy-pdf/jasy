@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { Column, Document, Image, Page, renderToBytes } from "../../../src/lib/api/index.ts";
 import { drawnNodes } from "../support/drawn.ts";
 
-// An SVG through `Image` sizes by the image contract: its own size, scaled down to what it is offered
+// An SVG through `Image` sizes by the image contract: its own size (px = 1/96 inch), scaled down to what it is offered
 // and never up, the open axis following its ratio. Its box is what it clips to.
 
 const svg = (w: number, h: number) =>
@@ -24,7 +24,7 @@ const boxOf = async (body: ReturnType<typeof Column>) => {
 
 describe("an SVG through Image", () => {
   it("unsized, keeps its own size", async () => {
-    expect(await boxOf(Column([Image(svg(60, 30))]))).toEqual([30, 30, 60, 30]);
+    expect(await boxOf(Column([Image(svg(80, 40))]))).toEqual([30, 30, 60, 30]);
   });
 
   it("unsized and wider than the column, is scaled down at its ratio - no empty band below", async () => {
@@ -32,7 +32,7 @@ describe("an SVG through Image", () => {
   });
 
   it("is placed by the Column's align", async () => {
-    expect(await boxOf(Column({ align: "center" }, [Image(svg(60, 30))]))).toEqual([
+    expect(await boxOf(Column({ align: "center" }, [Image(svg(80, 40))]))).toEqual([
       70, 30, 60, 30,
     ]);
   });
