@@ -87,7 +87,7 @@ export default function Report({ sections }: { sections: number }) {
         {Array.from({ length: sections }, (_, i) => {
           const [title, body] = TOPICS[i % TOPICS.length];
           return (
-            <Column key={i} gap={3}>
+            <Column key={i} gap={3} keepTogether>
               <Text size={13} bold color="#0a2348" role="h2">
                 {`${i + 1}. ${title}`}
               </Text>
