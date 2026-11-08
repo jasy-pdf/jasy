@@ -19,7 +19,7 @@ export class FlowWithoutRegionError extends Error {
   constructor() {
     super(
       "@jasy/pdf: a Flow's template holds no Region, so the content has nowhere to go. Put at least " +
-        "one Region in the template (in @jasy/vue: the #page slot).",
+        "one Region in the template (in @jasy/vue: the #page slot; in @jasy/react: the page prop).",
     );
     this.name = "FlowWithoutRegionError";
   }

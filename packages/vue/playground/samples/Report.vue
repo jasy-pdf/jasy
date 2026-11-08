@@ -1,37 +1,53 @@
 <script setup lang="ts">
-import { Document, Page, Row, Column, Box, Text, Positioned, Padding } from "@jasy/vue";
+import { computed } from "vue";
+import {
+  Document,
+  Page,
+  Row,
+  Column,
+  Box,
+  Text,
+  Positioned,
+  Padding,
+  PageBuilder,
+} from "@jasy/vue";
 
-// Enough sections to flow onto a second page - so the #header / #footer repeat is visible.
-const sections = [
+const props = defineProps<{ sections: number }>();
+
+const TOPICS = [
   {
-    h: "1. Executive summary",
+    h: "Executive summary",
     p: "Revenue grew 18% quarter over quarter, driven by the new self-serve tier. Churn held steady at 2.1%, and gross margin improved by three points after the infrastructure migration.",
   },
   {
-    h: "2. Acquisition",
+    h: "Acquisition",
     p: "Organic signups outpaced paid for the first time. The documentation rewrite and the in-browser playground are the two largest referrers, together accounting for 41% of new accounts.",
   },
   {
-    h: "3. Activation",
+    h: "Activation",
     p: "Time-to-first-render dropped from 9 minutes to under 2 after the quick-start template shipped. Teams that render a document in week one retain at nearly double the rate of those that do not.",
   },
   {
-    h: "4. Retention",
+    h: "Retention",
     p: "Cohort curves flattened earlier than in any prior quarter. The invoice and report templates are the stickiest surfaces; accounts that adopt them rarely lapse.",
   },
   {
-    h: "5. Infrastructure",
+    h: "Infrastructure",
     p: "The move to fully client-side rendering removed an entire service tier. Median render latency is now bound only by the client, and the egress bill fell accordingly.",
   },
   {
-    h: "6. Risks",
+    h: "Risks",
     p: "Single-format dependence remains the chief risk. Broadening the e-invoice profile coverage and shipping the framework bindings are the two mitigations on deck.",
   },
   {
-    h: "7. Outlook",
+    h: "Outlook",
     p: "We expect the framework bindings to compound the acquisition gains. Conservative guidance holds the current growth rate; the upside case assumes the Nuxt module lands on schedule.",
   },
 ];
+// As many sections as the slider asks for - the header and footer repeat on every page they flow onto.
+const shown = computed(() =>
+  Array.from({ length: props.sections }, (_, i) => ({ n: i + 1, ...TOPICS[i % TOPICS.length] })),
+);
 </script>
 
 <template>
@@ -40,7 +56,13 @@ const sections = [
       <template #header>
         <Row :justify="'between'">
           <Text :size="12" bold color="#0a2348">ACME Analytics</Text>
-          <Text :size="12" color="#64748b">Quarterly Report &middot; Q2 2026</Text>
+          <PageBuilder #default="{ pageNumber, pageCount }">
+            <Text :size="12" color="#64748b">{{
+              pageNumber === 1
+                ? "Quarterly Report · Q2 2026"
+                : `continued · page ${pageNumber} of ${pageCount}`
+            }}</Text>
+          </PageBuilder>
         </Row>
       </template>
       <template #footer>
@@ -60,9 +82,9 @@ const sections = [
         </Box>
       </Padding>
 
-      <Column v-for="s in sections" :key="s.h" :gap="3">
-        <Text :size="13" bold color="#0a2348">{{ s.h }}</Text>
-        <Text>{{ s.p }}</Text>
+      <Column v-for="s in shown" :key="s.n" :gap="3" keep-together>
+        <Text :size="13" bold color="#0a2348" role="h2">{{ s.n }}. {{ s.h }}</Text>
+        <Text align="justify">{{ s.p }}</Text>
       </Column>
     </Page>
   </Document>

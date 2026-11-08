@@ -568,8 +568,9 @@ English and short, do not break the font math.**
   rule lives in the landing's CLAUDE.md; a new feature or a breaking change built here gets one.
 - **The landing is a separate repo**, `~/projects/jasy-landing` → jasy.dev (Nuxt 4). Own CLAUDE.md,
   HARD RULES: its dev server (3001) is Flo's - restart only via the takeover flag the Nuxt CLI names, never pattern-kill; only Flo commits. Package links use npmx.dev.
-- **`@jasy/vue`'s typed props are held to the engine by a test** (`packages/vue/tests/text-props.test.ts`
-  reads the option names out of `src/lib/api/text.ts`); the components forward `{ ...attrs, ...props }`,
+- **`@jasy/vue`'s typed props are held to the engine by a test** (`packages/vue/tests/props.test.ts`
+  reads every component's option names out of `src/lib/api/`, and names each extra or skipped prop with
+  its reason); the components forward `{ ...attrs, ...props }`,
   so an undeclared prop still WORKS, which is how eight options once drifted in unnoticed. `@jasy/react`
   cannot drift: its prop types ARE the engine's option types. A `style`-object CSS layer and `@media`
   are won't-do.

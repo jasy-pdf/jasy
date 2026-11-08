@@ -17,6 +17,4 @@ export default defineConfig({
       },
     ],
   },
-  // vue-pdf-embed bundles pdf.js + its worker; excluding it from pre-bundling keeps that worker happy.
-  optimizeDeps: { exclude: ["vue-pdf-embed"] },
 });

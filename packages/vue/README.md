@@ -8,33 +8,31 @@
   <b>Author PDFs as Vue components - and render them right in the browser.</b>
 </p>
 
-React has [`@react-pdf/renderer`](https://react-pdf.org). Vue had nothing. This is it: a thin Vue custom
-renderer over the [`@jasy/pdf`](https://npmx.dev/@jasy/pdf) engine. You write a component
-tree, you get a real PDF - no headless browser, no server round-trip, no Java.
+A thin Vue custom renderer over the [`@jasy/pdf`](https://npmx.dev/@jasy/pdf) engine. You write a
+component tree, you get a real PDF: no headless browser, no server round-trip, no Java.
 
 ```vue
 <script setup lang="ts">
-import { Document, Page, Text, Box, renderToPdf } from "@jasy/vue";
+import { renderToPdf } from "@jasy/vue";
 import Invoice from "./Invoice.vue";
 
 async function download() {
-  const bytes = await renderToPdf(Invoice); // 100% in the browser
-  const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
-  window.open(url);
+  const bytes = await renderToPdf(Invoice, { customer: "ACME GmbH" }); // in the browser or in Node
+  window.open(URL.createObjectURL(new Blob([bytes], { type: "application/pdf" })));
 }
 </script>
 ```
 
 ## Why
 
-- **Runs in the browser.** The engine is ESM + isomorphic, so `renderToPdf` produces the PDF bytes
-  client-side. No `/api/render`, no Node on the request path. (It works in Node too - same call.)
-- **Real layout, real pagination.** Flexbox-style `Row`/`Column`, a fragmenting layout engine, repeating
-  table headers - not a drawing API you hand absolute coordinates.
-- **Typed props.** `<Text :size :color bold>` autocompletes and type-checks; pass a wrong `fit` and it
-  goes red. Boolean shorthands (`<Text bold>`, `<Box relative>`) just work.
-- **Extensible.** A custom element type is one `registerElement(type, factory)` away - react-pdf's
-  primitive set is closed.
+- **Runs in the browser.** `renderToPdf` produces the PDF bytes client-side. No `/api/render`, no Node
+  on the request path. The same call works in Node.
+- **Real layout, real pagination.** `Row`/`Column` flex, wrapping, `%` sizes, a table whose header row
+  repeats on every page, newspaper columns. Not a drawing API you hand absolute coordinates.
+- **Vue, all of it.** Props, slots, `v-for`, `v-if`, `computed`, `provide`/`inject` - the renderer walks
+  the tree Vue builds.
+- **Typed props.** Every engine option is a declared prop, held to the engine by a test: it
+  autocompletes and type-checks, and a wrong value goes red in your editor.
 
 ## Install
 
@@ -42,145 +40,118 @@ async function download() {
 pnpm add @jasy/vue @jasy/pdf vue
 ```
 
+Vue 3.4 or newer.
+
 ## Components
 
-`Document` · `Page` · `Column` · `Row` · `Box` · `Padding` · `Expanded` · `Spacer` · `Divider` ·
-`Image` · `Svg` · `Canvas` · `Text` · `Paragraph` · `Span` · `Table` / `TableRow` / `TableCell`.
+| Group      | Components                                                                                             |
+| ---------- | ------------------------------------------------------------------------------------------------------ |
+| Structure  | `Document` · `Page` · `PageBreak` · `KeepTogether` · `DefaultTextStyle` · `PageBuilder`                |
+| Layout     | `Column` · `Row` · `Box` · `Padding` · `Expanded` · `Spacer` · `Positioned` · `Rotated` · `RotatedBox` |
+| Text       | `Text` · `Paragraph` · `Span` · `PageNumber` · `PageCount` · `SubPageNumber` · `SubPageCount`          |
+| Content    | `Image` · `Svg` · `Canvas` · `Divider` · `Table` · `TableRow` · `TableCell`                            |
+| Flow       | `Flow` · `Region` · `ColumnBreak` · `SplitView`                                                        |
+| Navigation | `Link` · `Anchor` · `Bookmark`                                                                         |
+| Forms      | `TextField` · `Checkbox` · `RadioGroup` · `Dropdown` · `ListBox` · `PushButton` · `SignatureField`     |
+
+The props are the options of the matching `@jasy/pdf` function, documented at [jasy.dev](https://jasy.dev).
+Where a template has its own way, it is used:
+
+- **Repeating areas are slots.** `<Page>` takes `#header` and `#footer`: laid out once and repeated on
+  every page the content flows onto, with the space they need reserved.
+- **What depends on the page is a scoped slot**, built for every page it lands on:
+  `<PageBuilder #default="{ pageNumber, pageCount }">`.
+- **A Flow's page is the `#page` slot**, rendered in place, so `inject` works in it.
+- **A form field's label is its default slot**: `<Checkbox name="agree">I agree</Checkbox>`.
+- **Choices are a prop**, since a template has no second argument: `<Dropdown :options="['DE', 'AT']">`.
 
 ```vue
 <template>
-  <Document :size="12" color="#1a1a1a">
-    <Page :size="'A4'" :gap="16">
-      <Row :justify="'between'">
-        <Text :size="22" bold color="#0a2348">Acme GmbH</Text>
-        <Text :size="22" bold color="#1450aa">INVOICE</Text>
-      </Row>
+  <Document :size="11">
+    <Page size="A4" :gap="16">
+      <template #header>
+        <Text :size="9" color="#94a3b8">Acme GmbH</Text>
+      </template>
 
-      <Table :columns="['1fr', 120]" cell-border="#e2e8f0" :cell-padding="9">
+      <Table :columns="['1fr', 120]" cell-border="#e2e8f0" :cell-padding="8">
         <TableRow header>
-          <TableCell><Text bold>Description</Text></TableCell>
-          <TableCell><Text bold align="right">Amount (EUR)</Text></TableCell>
+          <TableCell>Description</TableCell>
+          <TableCell>Amount (EUR)</TableCell>
         </TableRow>
         <TableRow v-for="item in items" :key="item.desc">
           <TableCell>{{ item.desc }}</TableCell>
-          <TableCell
-            ><Text align="right">{{ item.amount }}</Text></TableCell
-          >
+          <TableCell>{{ item.amount }}</TableCell>
         </TableRow>
       </Table>
+
+      <template #footer>
+        <PageBuilder #default="{ pageNumber, pageCount }">
+          <Text :size="9" align="center">Page {{ pageNumber }} of {{ pageCount }}</Text>
+        </PageBuilder>
+      </template>
     </Page>
   </Document>
 </template>
 ```
 
-A `<TableCell>` holds a plain string **or** any components - a `Box` with a `Text`, an `Image`, a whole
-subtree. `:columns` takes points (`120`), fractions (`"1fr"`) or `"auto"` (sized to the widest cell). A
-row marked `header` repeats at the top of every page the table flows onto.
-
-## Three ways to import (clash-safe)
+## Two ways to import
 
 Vue UI libraries often export their own `Row` / `Text` / `Box`. Pick whichever avoids a collision:
 
 ```ts
-// 1. Direct - aliasing is fine: `import { Row as PdfRow } from "@jasy/vue"`
+// Direct - alias where needed: `import { Row as PdfRow } from "@jasy/vue"`
 import { Document, Page, Text } from "@jasy/vue";
 
-// 2. Namespace - no collisions at all
-import * as Pdf from "@jasy/vue"; // <Pdf.Document> <Pdf.Text>
+// Namespace - no collisions at all: <Pdf.Document> <Pdf.Text>
+import * as Pdf from "@jasy/vue";
 ```
 
 A prefix without per-file imports is [`@jasy/nuxt`](https://npmx.dev/@jasy/nuxt), which auto-imports
-every component under one (`<JasyDocument>`, `<JasyText>`, …).
+every component under one (`<JasyDocument>`, `<JasyText>`, ...).
 
-## Custom fonts and images (bytes)
+## Fonts and images
 
-Both load as `Uint8Array`, so the same code runs in the browser and in Node:
+Both load as bytes, so the same code runs in the browser and in Node:
 
 ```vue
 <script setup lang="ts">
-const props = defineProps<{ font: Uint8Array; logo: Uint8Array }>();
+const props = defineProps<{ font: Uint8Array; photo: Uint8Array }>();
 </script>
 
 <template>
   <Document :fonts="{ GreatVibes: props.font }">
     <Page>
-      <Text :font="'GreatVibes'" :size="44">Jasy Atelier</Text>
-      <Image :src="props.logo" :width="84" :height="84" :fit="'cover'" :radius="42" />
+      <Text font="GreatVibes" :size="44">Jasy Atelier</Text>
+      <Image :src="props.photo" :width="84" :height="84" fit="cover" :radius="42" />
     </Page>
   </Document>
 </template>
 ```
 
-## Vector drawings
-
-`<Svg>` takes markup, a file path (Node) or the file's bytes, and keeps a logo a VECTOR - sharp at any
-zoom, and a fraction of a bitmap's size. `<Image>` recognises an SVG source by itself, so either works:
-
-```vue
-<template>
-  <Document>
-    <Page>
-      <Svg :src="logoMarkup" :width="120" alt="Acme" />
-      <Image src="./logo.svg" :width="120" />
-    </Page>
-  </Document>
-</template>
-```
-
-With no size it draws at its intrinsic size; pin one axis and the other follows the `viewBox`. What the
-engine cannot express (`<text>`, filters, masks) is a NAMED error with a fix - never a silently wrong
-logo. See the [`@jasy/pdf` docs](https://jasy.dev) for the supported subset.
-
-## Drawing by hand
-
-`<Canvas :paint>` is the escape hatch for what no component covers - a sparkline, a seal, a chart.
-The callback is handed the size the layout resolved, so the same drawing works at any width:
-
-```vue
-<script setup lang="ts">
-import type { CanvasPainter } from "@jasy/pdf";
-
-const months = [12, 19, 14, 27, 22, 31];
-function sparkline(c: CanvasPainter, { width, height }: { width: number; height: number }) {
-  const max = Math.max(...months);
-  c.move(0, height - (months[0] / max) * height);
-  months
-    .slice(1)
-    .forEach((v, i) =>
-      c.line(((i + 1) / (months.length - 1)) * width, height - (v / max) * height),
-    );
-  c.stroke("#1450aa", { width: 1.5, cap: "round" });
-}
-</script>
-
-<template>
-  <Canvas :height="46" :paint="sparkline" />
-</template>
-```
-
-Typed to the value (`cap: "round"` autocompletes), no hidden state to reset, and one coordinate
-system - top-left, like every other element. A canvas is a block IN the layout, not a way around it:
-text still belongs in `<Text>`.
+`<Svg>` takes markup, a file path (Node) or the file's bytes and keeps a logo a vector; `<Image>`
+recognizes an SVG source by itself. `<Canvas :paint>` hands your function a typed pen and the size the
+layout resolved, for a chart or a seal.
 
 ## API
 
 - `renderToPdf(root, props?, options?) => Promise<Uint8Array>` - the PDF bytes. Browser or Node.
 - `renderToPdfString(root, props?, options?) => Promise<string>` - the raw PDF string.
-- `options` are the `@jasy/pdf` `RenderOptions` and flow straight through - e.g.
-  `renderToPdf(Doc, props, { encrypt: { userPassword: "secret" } })` for AES-256 password protection (also
-  `fonts`, `compress`, `onOverflow`, …).
-- `toDocumentDescriptor(root, props?)` - the framework-agnostic descriptor (the seam a Node service can
-  receive from the browser).
+- `options` are the `@jasy/pdf` `RenderOptions`, e.g. `{ encrypt: { userPassword: "secret" } }` for
+  AES-256, `{ accessible: true }` for a tagged PDF, `onDiagnostic` for what the engine has to say.
+- `toDocumentDescriptor(root, props?)` - the engine descriptor of the document, a plain object. Before
+  posting it as JSON, encode font and image bytes yourself (JSON has no `Uint8Array`) and decode them on
+  the other side. Functions do not survive JSON at all, so a document with a `<Canvas>`, a `<Flow>` or a
+  `<PageBuilder>` goes through `renderToPdf`.
 
 ## Try it
 
 ```bash
-git clone https://github.com/jasy-pdf/jasy && cd jasy && pnpm install
-cd packages/vue && pnpm play
+git clone https://github.com/jasy-pdf/jasy && cd jasy && pnpm install && pnpm run build
+pnpm --filter @jasy/vue play
 ```
 
-The playground renders four samples in the browser, including a `Showcase` with a custom `.ttf`, a JPEG,
-`v-for` and computed totals - all client-side.
+The playground renders twelve documents in the browser, side by side with their source: an invoice
+that grows across pages, a newspaper, layout, typography, drawing, fonts, form fields, encryption.
 
 ---
 

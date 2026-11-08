@@ -57,7 +57,9 @@ function toDescriptor(n: JNode): DescriptorChild {
   if (n.type === "#text") return n.text ?? "";
   return {
     type: n.type,
-    props: n.props,
+    // A copy: Vue patches a node's props in place on every re-render, and a descriptor read for one page
+    // must keep that page's props when the engine calls back into it later.
+    props: { ...n.props },
     // Drop comments AND whitespace-only text nodes: Vue inserts empty `#text` anchors around lists
     // (`v-for`) and templates leave whitespace between tags. As layout children each would become a
     // 0-height empty Text that still gets a stray `gap` in its parent Column/Row - which silently
@@ -94,10 +96,10 @@ export function mountDocument(
 
 /**
  * Mounts a component once (one-shot - a PDF is not interactive) and returns the engine descriptor for
- * its `<Document>` root. The descriptor is a plain serialisable object, so it can be posted to a Node
- * renderer from the browser, or handed straight to `renderToPdf` (from `@jasy/vue/node`) on the server.
- * A `<Flow>`'s #page is rendered while the PDF is laid out, so a document with one goes through
- * `renderToPdf` instead.
+ * its `<Document>` root, a plain object that `buildDocument` turns into the document. As JSON it loses
+ * what JSON cannot hold: bytes (encode fonts and images yourself) and functions - a `<Canvas>`'s paint,
+ * and a `<Flow>` or `<PageBuilder>`, which render during the PDF render. Those documents go through
+ * `renderToPdf`.
  */
 export function toDocumentDescriptor(root: Component, props?: Record<string, any>): Descriptor {
   const { descriptor, unmount } = mountDocument(root, props);

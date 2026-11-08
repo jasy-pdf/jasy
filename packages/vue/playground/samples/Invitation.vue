@@ -16,7 +16,7 @@ import { Document, Page, Column, Box, Text, Expanded, Divider } from "@jasy/vue"
             >
             <Divider />
             <Text :size="12" :color="'#ffffff'" :align="'center'"
-              >Saturday, 12 July 2026 · 19:00</Text
+              >Saturday, 11 July 2026 · 19:00</Text
             >
             <Text :size="12" :color="'#ffffff'" :align="'center'">The Old Warehouse, Berlin</Text>
           </Column>
