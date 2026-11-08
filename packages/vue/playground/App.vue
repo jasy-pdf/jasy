@@ -12,13 +12,28 @@ const initialValues = (s: Sample) =>
   Object.fromEntries((s.controls ?? []).map((c) => [c.key, c.initial]));
 const fromHash = () => SAMPLES.find((s) => s.id === location.hash.slice(1)) ?? SAMPLES[0];
 
-async function loadAssets(): Promise<Assets> {
-  const grab = (url: string) =>
-    fetch(url)
-      .then((r) => r.arrayBuffer())
-      .then((b) => new Uint8Array(b));
-  const [font, photo, logo] = await Promise.all([grab(fontUrl), grab(photoUrl), grab(logoUrl)]);
-  return { font, photo, logo };
+const ASSET_URLS: Record<keyof Assets, string> = { font: fontUrl, photo: photoUrl, logo: logoUrl };
+const loaded = new Map<keyof Assets, Promise<Uint8Array>>();
+
+/** One fetch per file, shared by every sample; a failed one is forgotten, so the next render retries. */
+function asset(key: keyof Assets): Promise<Uint8Array> {
+  let bytes = loaded.get(key);
+  if (!bytes) {
+    bytes = fetch(ASSET_URLS[key]).then(async (r) => {
+      if (!r.ok) throw new Error(`${ASSET_URLS[key]}: HTTP ${r.status}`);
+      return new Uint8Array(await r.arrayBuffer());
+    });
+    bytes.catch(() => loaded.delete(key));
+    loaded.set(key, bytes);
+  }
+  return bytes;
+}
+
+/** Only the files `s` asks for, so a sample without assets never waits for (or fails on) one. */
+async function assetsFor(s: Sample): Promise<Assets> {
+  const keys = s.assets ?? [];
+  const bytes = await Promise.all(keys.map(asset));
+  return Object.fromEntries(keys.map((k, i) => [k, bytes[i]])) as unknown as Assets;
 }
 
 interface Result {
@@ -38,7 +53,6 @@ const sample = shallowRef(fromHash());
 const values = ref<Record<string, any>>(initialValues(sample.value));
 const tagged = ref(false);
 const showCode = ref(true);
-const assets = shallowRef<Assets>();
 const result = shallowRef<Result>();
 const error = ref<string>();
 let run = 0;
@@ -50,13 +64,7 @@ function follow() {
   values.value = initialValues(sample.value);
 }
 const select = (s: Sample) => (location.hash = s.id);
-onMounted(() => {
-  addEventListener("hashchange", follow);
-  loadAssets().then(
-    (a) => (assets.value = a),
-    (e) => (error.value = String(e)),
-  );
-});
+onMounted(() => addEventListener("hashchange", follow));
 onUnmounted(() => {
   removeEventListener("hashchange", follow);
   if (url) URL.revokeObjectURL(url);
@@ -65,17 +73,18 @@ onUnmounted(() => {
 // Render on every change, debounced for typing and sliders; a stale render never overwrites a newer one.
 let timer: ReturnType<typeof setTimeout> | undefined;
 watch(
-  [sample, values, tagged, assets],
+  [sample, values, tagged],
   () => {
-    if (!assets.value) return;
     const ticket = ++run;
     clearTimeout(timer);
     timer = setTimeout(async () => {
       const s = sample.value;
       const diagnostics: Diagnostic[] = [];
-      const started = performance.now();
       try {
-        const bytes = await renderToPdf(s.component, s.props?.(values.value, assets.value!), {
+        const assets = await assetsFor(s);
+        if (ticket !== run) return;
+        const started = performance.now();
+        const bytes = await renderToPdf(s.component, s.props?.(values.value, assets), {
           ...s.options?.(values.value),
           accessible: tagged.value,
           onDiagnostic: (d) => diagnostics.push(d),

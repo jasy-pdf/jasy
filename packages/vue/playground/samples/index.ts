@@ -45,7 +45,9 @@ export interface Sample {
   source: string;
   component: Component;
   controls?: Control[];
-  /** The props the component gets: the control values, plus assets it asks for. */
+  /** The asset files this sample needs; only these are loaded for it, and only these are in `assets`. */
+  assets?: (keyof Assets)[];
+  /** The props the component gets: the control values, plus the assets it asked for. */
   props?: (values: Values, assets: Assets) => Record<string, unknown>;
   options?: (values: Values) => RenderOptions;
 }
@@ -140,6 +142,7 @@ export const SAMPLES: Sample[] = [
     file: "Showcase.vue",
     source: showcaseSource,
     component: Showcase,
+    assets: ["font", "photo"],
     props: (_, a) => ({ font: a.font, image: a.photo }),
   },
   {
@@ -150,6 +153,7 @@ export const SAMPLES: Sample[] = [
     file: "Transparency.vue",
     source: transparencySource,
     component: Transparency,
+    assets: ["logo"],
     props: (_, a) => ({ logo: a.logo }),
   },
   {
