@@ -1,6 +1,6 @@
 {
   "name": "@jasy/cli",
-  "version": "1.0.0-beta.2",
+  "version": "1.0.0-beta.3",
   "description": "Validate, read and export ZUGFeRD and XRechnung e-invoices in the terminal: KoSIT EN 16931 rules and veraPDF, and nothing leaves your machine.",
   "keywords": [
     "cli",
