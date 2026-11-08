@@ -1,14 +1,22 @@
 {
   "name": "@jasy/e-invoice",
   "version": "1.0.0-beta.3",
-  "description": "ZUGFeRD / Factur-X / XRechnung (EN-16931) for @jasy/pdf - invoice data model, CII XML, PDF/A-3.",
+  "description": "ZUGFeRD, XRechnung and Factur-X e-invoices in TypeScript / Node.js: EN 16931 CII or UBL XML and PDF/A-3 from one typed invoice object, tested against the KoSIT rules and veraPDF.",
   "keywords": [
+    "cii",
     "e-invoice",
+    "e-rechnung",
     "einvoice",
     "en16931",
+    "erechnung",
     "factur-x",
     "invoice",
+    "invoice-generator",
+    "kosit",
+    "nodejs",
     "pdf-a",
+    "typescript",
+    "ubl",
     "xrechnung",
     "zugferd"
   ],
