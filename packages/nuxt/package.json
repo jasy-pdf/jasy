@@ -1,6 +1,6 @@
 {
   "name": "@jasy/nuxt",
-  "version": "1.0.0-beta.1",
+  "version": "1.0.0-beta.2",
   "description": "PDFs in Nuxt, zero config: author them as Vue components and render on the client or in a server route, with @jasy/pdf underneath.",
   "keywords": [
     "jasy",
