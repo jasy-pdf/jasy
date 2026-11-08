@@ -1,6 +1,6 @@
 {
   "name": "@jasy/vue",
-  "version": "1.0.0-beta.1",
+  "version": "1.0.0-beta.2",
   "description": "Author PDFs as Vue components - layout, pagination, fonts, forms - rendered in the browser or on a server. A thin Vue renderer over @jasy/pdf.",
   "keywords": [
     "browser",
