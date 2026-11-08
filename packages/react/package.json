@@ -1,13 +1,16 @@
 {
   "name": "@jasy/react",
   "version": "1.0.0-beta.1",
-  "description": "Author PDFs as React components - a thin React renderer over @jasy/pdf.",
+  "description": "Author PDFs as React components - layout, pagination, fonts, forms - rendered in the browser or on a server. A thin React renderer over @jasy/pdf.",
   "keywords": [
+    "browser",
     "declarative",
     "invoice",
     "jasy",
+    "jsx",
     "pdf",
     "pdf-generation",
+    "pdf-generator",
     "react",
     "renderer"
   ],
