@@ -1,11 +1,11 @@
-import type { PdfDocument } from "@jasy/angular";
+import type { PdfDocumentFn } from "@jasy/angular";
 import { Column, Document, Expanded, Page, Row, Text, span } from "@jasy/pdf";
 
 const LOREM =
   "Good typography is invisible. The words sit evenly on the line, the spaces stay calm, and the eye moves on without noticing any of it. jasy measures every glyph with the font's own metrics and kerns each pair, so what is measured is exactly what is drawn.";
 const caption = (text: string) => Text(text, { size: 9, bold: true, color: "#64748b" });
 
-export const typographyPdf: PdfDocument = () =>
+export const typographyPdf: PdfDocumentFn = () =>
   Document({ size: 11, color: "#1f2937" }, [
     Page({ size: "A4", gap: 16 }, [
       Text("Typography", {

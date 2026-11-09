@@ -1,4 +1,4 @@
-import type { PdfDocument } from "@jasy/angular";
+import type { PdfDocumentFn } from "@jasy/angular";
 import {
   Box,
   Column,
@@ -50,7 +50,7 @@ const footer = Row([
 const headline = (text: string) => Text(text, { size: 13, bold: true, color: "#1450aa" });
 const small = (text: string) => Text(text, { size: 8 });
 
-export const newspaperPdf: PdfDocument = () =>
+export const newspaperPdf: PdfDocumentFn = () =>
   Document({ size: 9, lineHeight: 1.4, color: "#1f2937" }, [
     Page({ size: "A4", margin: 36, gap: 10, footer }, [
       // Newspaper columns: no layout to write.

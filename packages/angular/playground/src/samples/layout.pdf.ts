@@ -1,4 +1,4 @@
-import type { PdfDocument } from "@jasy/angular";
+import type { PdfDocumentFn } from "@jasy/angular";
 import {
   Box,
   Column,
@@ -31,7 +31,7 @@ const tile = (label: string, box: BoxOptions = {}) =>
     Text(label, { size: 10, color: BLUE, align: "center" }),
   ]);
 
-export const layoutPdf: PdfDocument = () =>
+export const layoutPdf: PdfDocumentFn = () =>
   Document({ size: 11, color: "#1f2937" }, [
     Page({ size: "A4", gap: 18 }, [
       Text("Layout, the way you know it", { size: 24, bold: true, color: "#0a2348" }),

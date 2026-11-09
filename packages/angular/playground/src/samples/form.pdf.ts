@@ -1,4 +1,4 @@
-import type { PdfDocument } from "@jasy/angular";
+import type { PdfDocumentFn } from "@jasy/angular";
 import {
   Checkbox,
   Document,
@@ -18,7 +18,7 @@ const label = (text: string) => Text(text, { size: 9, color: "#64748b" });
 const border = "#94a3b8";
 
 // Every field is a real AcroForm widget: open the PDF and type into it.
-export const formPdf: PdfDocument<{ name: string }> = ({ name }) =>
+export const formPdf: PdfDocumentFn<{ name: string }> = ({ name }) =>
   Document({ size: 11 }, [
     Page({ size: "A4", margin: 48, gap: 6 }, [
       Text("Membership form", { size: 24, bold: true, color: "#0a2348" }),

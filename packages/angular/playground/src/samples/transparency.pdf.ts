@@ -1,12 +1,12 @@
 import { DOCUMENT } from "@angular/common";
 import { inject } from "@angular/core";
-import type { PdfDocument } from "@jasy/angular";
+import type { PdfDocumentFn } from "@jasy/angular";
 import { Box, Document, Image, Page, Row, Text } from "@jasy/pdf";
 
 const PANELS = ["#0a2348", "#0d9488", "#fb7185"];
 
 // A PNG with an alpha channel, decoded in the browser and embedded with a real /SMask.
-export const transparencyPdf: PdfDocument = () => {
+export const transparencyPdf: PdfDocumentFn = () => {
   const logo = new URL("logo.png", inject(DOCUMENT).baseURI).href;
   return Document({ size: 12, color: "#1f2937" }, [
     Page({ size: "A4", gap: 20 }, [

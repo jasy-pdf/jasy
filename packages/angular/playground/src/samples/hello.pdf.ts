@@ -1,7 +1,7 @@
-import type { PdfDocument } from "@jasy/angular";
+import type { PdfDocumentFn } from "@jasy/angular";
 import { Box, Document, Page, Text } from "@jasy/pdf";
 
-export const helloPdf: PdfDocument<{ name: string }> = ({ name }) =>
+export const helloPdf: PdfDocumentFn<{ name: string }> = ({ name }) =>
   Document([
     Page({ size: "A4", gap: 14 }, [
       Text(`Hello, ${name}`, { size: 30, bold: true, color: "#1450aa" }),

@@ -1,4 +1,4 @@
-import type { PdfDocument } from "@jasy/angular";
+import type { PdfDocumentFn } from "@jasy/angular";
 import type { RenderOptions } from "@jasy/pdf";
 import { drawingPdf } from "./drawing.pdf";
 import { encryptedPdf } from "./encrypted.pdf";
@@ -28,7 +28,7 @@ export interface Sample {
   file: string;
   controls?: Control[];
   /** The controls' values are the document's data. */
-  document: PdfDocument<any>;
+  document: PdfDocumentFn<any>;
   options?: (values: Values) => RenderOptions;
 }
 

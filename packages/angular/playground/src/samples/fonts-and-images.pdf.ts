@@ -1,6 +1,6 @@
 import { DOCUMENT } from "@angular/common";
 import { inject } from "@angular/core";
-import type { PdfDocument } from "@jasy/angular";
+import type { PdfDocumentFn } from "@jasy/angular";
 import { Box, Column, Divider, Document, Image, Page, Row, Text } from "@jasy/pdf";
 
 const PRODUCTS = [
@@ -11,7 +11,7 @@ const PRODUCTS = [
 
 // "GreatVibes" is registered once for the whole app, in provideJasy() - see app.config.ts.
 // The photo is a URL: jasy fetches it before the layout, in the browser.
-export const fontsAndImagesPdf: PdfDocument = () => {
+export const fontsAndImagesPdf: PdfDocumentFn = () => {
   const photo = new URL("photo.jpg", inject(DOCUMENT).baseURI).href;
   const total = PRODUCTS.reduce((sum, p) => sum + p.qty * p.price, 0);
 

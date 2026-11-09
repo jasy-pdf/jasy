@@ -8,23 +8,23 @@ import {
 } from "@angular/core";
 import { renderToBytes, type FontFamily, type RenderOptions } from "@jasy/pdf";
 import { JASY_CONFIG, type FontFile, type FontInput } from "./config.js";
-import type { PdfDocument } from "./document.js";
+import type { PdfDocumentFn } from "./document.js";
 
 /** Turns your documents into PDFs. `inject(JasyPdf)` anywhere in an injection context. */
 export interface JasyPdf {
   /** The PDF bytes. Works in the browser and on the server. */
-  render<T>(document: PdfDocument<T>, data: T, options?: RenderOptions): Promise<Uint8Array>;
+  render<T>(document: PdfDocumentFn<T>, data: T, options?: RenderOptions): Promise<Uint8Array>;
   /** The PDF as a `Blob`, ready for an upload or `URL.createObjectURL`. */
-  blob<T>(document: PdfDocument<T>, data: T, options?: RenderOptions): Promise<Blob>;
+  blob<T>(document: PdfDocumentFn<T>, data: T, options?: RenderOptions): Promise<Blob>;
   /** Saves the PDF in the browser under `filename`. */
   download<T>(
-    document: PdfDocument<T>,
+    document: PdfDocumentFn<T>,
     data: T,
     filename?: string,
     options?: RenderOptions,
   ): Promise<void>;
   /** Opens the PDF in a new tab. Call it from a click handler, or the browser blocks the tab. */
-  open<T>(document: PdfDocument<T>, data: T, options?: RenderOptions): Promise<void>;
+  open<T>(document: PdfDocumentFn<T>, data: T, options?: RenderOptions): Promise<void>;
 }
 
 /** Thrown by `download()` and `open()` outside a browser, where there is no tab to save into. */
@@ -82,7 +82,7 @@ function createJasyPdf(): JasyPdf {
       throw e;
     }));
 
-  async function render<T>(document: PdfDocument<T>, data: T, options?: RenderOptions) {
+  async function render<T>(document: PdfDocumentFn<T>, data: T, options?: RenderOptions) {
     const doc = await runInInjectionContext(injector, () => document(data));
     return renderToBytes(doc, {
       lang: locale,
@@ -91,7 +91,7 @@ function createJasyPdf(): JasyPdf {
       fonts: { ...(await configuredFonts()), ...options?.fonts },
     });
   }
-  const blob = async <T>(document: PdfDocument<T>, data: T, options?: RenderOptions) =>
+  const blob = async <T>(document: PdfDocumentFn<T>, data: T, options?: RenderOptions) =>
     new Blob([(await render(document, data, options)) as Uint8Array<ArrayBuffer>], { type: PDF });
 
   return {

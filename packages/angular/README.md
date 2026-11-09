@@ -17,7 +17,7 @@ and no Java.
 // invoice.pdf.ts - a document is a function, and it may inject() like a functional guard
 import { formatCurrency } from "@angular/common";
 import { LOCALE_ID, inject } from "@angular/core";
-import type { PdfDocument } from "@jasy/angular";
+import type { PdfDocumentFn } from "@jasy/angular";
 import { Document, Page, Row, Table, Text } from "@jasy/pdf";
 
 export interface Invoice {
@@ -25,7 +25,7 @@ export interface Invoice {
   items: { desc: string; amount: number }[];
 }
 
-export const invoicePdf: PdfDocument<Invoice> = (invoice) => {
+export const invoicePdf: PdfDocumentFn<Invoice> = (invoice) => {
   const locale = inject(LOCALE_ID);
   const eur = (n: number) => formatCurrency(n, locale, "€", "EUR");
 
@@ -162,9 +162,9 @@ An Angular `ResourceRef`: `value()`, `isLoading()`, `error()`, `reload()`. The v
 - `options` can be a function, and it is tracked like `data`. A signal in it renders the PDF again.
 - On the server it stays idle, since a preview there has nobody to look at it.
 
-### `PdfDocument<T>`
+### `PdfDocumentFn<T>`
 
-The type of a document: `(data: T) => Document(...)`, sync or async. `PdfDocument` without a type
+The type of a document: `(data: T) => Document(...)`, sync or async. `PdfDocumentFn` without a type
 argument is a document that takes no data.
 
 ## Testing

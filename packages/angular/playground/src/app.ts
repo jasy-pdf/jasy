@@ -1,6 +1,6 @@
 import { httpResource } from "@angular/common/http";
 import { Component, DestroyRef, computed, inject, linkedSignal, signal } from "@angular/core";
-import { JasyPdf, pdfResource, type PdfDocument } from "@jasy/angular";
+import { JasyPdf, pdfResource, type PdfDocumentFn } from "@jasy/angular";
 import type { Diagnostic, RenderOptions } from "@jasy/pdf";
 import { GROUPS, SAMPLES, type Sample, type Values } from "./samples";
 
@@ -32,7 +32,7 @@ export class App {
 
   // The one document the preview shows: whichever sample is selected, with the controls as its data.
   private started = 0;
-  private readonly selected: PdfDocument<{ sample: Sample; values: Values }> = ({
+  private readonly selected: PdfDocumentFn<{ sample: Sample; values: Values }> = ({
     sample,
     values,
   }) => {

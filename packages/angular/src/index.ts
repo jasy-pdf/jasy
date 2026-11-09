@@ -8,6 +8,6 @@ export {
   type FontFile,
   type FontInput,
 } from "./config.js";
-export type { PdfDocument } from "./document.js";
+export type { PdfDocumentFn } from "./document.js";
 export { JasyPdf, JasyBrowserOnlyError } from "./service.js";
 export { pdfResource, type PdfFile, type PdfResourceOptions } from "./resource.js";

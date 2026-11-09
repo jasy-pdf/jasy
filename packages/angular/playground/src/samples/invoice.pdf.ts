@@ -1,6 +1,6 @@
 import { formatCurrency, formatDate } from "@angular/common";
 import { LOCALE_ID, inject } from "@angular/core";
-import type { PdfDocument } from "@jasy/angular";
+import type { PdfDocumentFn } from "@jasy/angular";
 import { Divider, Document, Page, PageCount, PageNumber, Row, Table, Text } from "@jasy/pdf";
 
 const CATALOG = [
@@ -17,7 +17,7 @@ export interface Invoice {
 }
 
 // A document runs in an injection context, like a functional guard: inject() works right here.
-export const invoicePdf: PdfDocument<Invoice> = ({ customer, lines }) => {
+export const invoicePdf: PdfDocumentFn<Invoice> = ({ customer, lines }) => {
   const locale = inject(LOCALE_ID);
   const eur = (n: number) => formatCurrency(n, locale, "€", "EUR");
   const muted = { size: 9, color: "#94a3b8" };

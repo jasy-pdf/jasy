@@ -1,4 +1,4 @@
-import type { PdfDocument } from "@jasy/angular";
+import type { PdfDocumentFn } from "@jasy/angular";
 import {
   Box,
   Column,
@@ -42,7 +42,7 @@ const TOPICS = [
   ],
 ];
 
-export const reportPdf: PdfDocument<{ sections: number }> = ({ sections }) => {
+export const reportPdf: PdfDocumentFn<{ sections: number }> = ({ sections }) => {
   // PageBuilder is called per page, once the page count is known.
   const header = Row({ justify: "between" }, [
     Text("ACME Analytics", { size: 12, bold: true, color: "#0a2348" }),

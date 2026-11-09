@@ -1,4 +1,4 @@
-import type { PdfDocument } from "@jasy/angular";
+import type { PdfDocumentFn } from "@jasy/angular";
 import {
   Box,
   Canvas,
@@ -51,7 +51,7 @@ const CRANE = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
 
 const heading = (text: string) => Text(text, { size: 12, bold: true, color: "#0a2348" });
 
-export const drawingPdf: PdfDocument = () =>
+export const drawingPdf: PdfDocumentFn = () =>
   Document({ size: 11, color: "#1f2937" }, [
     Page({ size: "A4", gap: 18 }, [
       Text("Drawing", { size: 24, bold: true, color: "#0a2348" }),

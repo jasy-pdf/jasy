@@ -1,9 +1,9 @@
-import type { PdfDocument } from "@jasy/angular";
+import type { PdfDocumentFn } from "@jasy/angular";
 import { Box, Document, Page, Text } from "@jasy/pdf";
 
 // The password is a render option, not part of the document:
 // inject(JasyPdf).download(encryptedPdf, undefined, "secret.pdf", { encrypt: { userPassword } })
-export const encryptedPdf: PdfDocument = () =>
+export const encryptedPdf: PdfDocumentFn = () =>
   Document([
     Page({ size: "A4", gap: 16 }, [
       Text("Confidential", { size: 28, bold: true, color: "#0a2348" }),

@@ -9,7 +9,7 @@ import {
 } from "@angular/core";
 import { DomSanitizer, type SafeResourceUrl } from "@angular/platform-browser";
 import type { RenderOptions } from "@jasy/pdf";
-import type { PdfDocument } from "./document.js";
+import type { PdfDocumentFn } from "./document.js";
 import { JasyPdf } from "./service.js";
 
 /** A rendered PDF, ready for a preview or a link. */
@@ -42,7 +42,7 @@ export interface PdfResourceOptions {
  * ```
  */
 export function pdfResource<T>(
-  document: PdfDocument<T>,
+  document: PdfDocumentFn<T>,
   data?: () => T | undefined,
   { options, injector }: PdfResourceOptions = {},
 ): ResourceRef<PdfFile | undefined> {

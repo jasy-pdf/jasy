@@ -18,7 +18,7 @@ import {
   JasyPdf,
   pdfResource,
   provideJasy,
-  type PdfDocument,
+  type PdfDocumentFn,
 } from "../src/index.ts";
 
 const FONT = readFileSync(
@@ -44,7 +44,7 @@ const settle = async () => {
   }
 };
 
-const hello: PdfDocument<string> = (name) => Document([Page([Text(`Hello ${name}`)])]);
+const hello: PdfDocumentFn<string> = (name) => Document([Page([Text(`Hello ${name}`)])]);
 
 describe("JasyPdf", () => {
   it("renders a document to PDF bytes", async () => {
@@ -55,7 +55,7 @@ describe("JasyPdf", () => {
 
   it("runs the document in an injection context, and takes the language from LOCALE_ID", async () => {
     setup({ provide: LOCALE_ID, useValue: "de-DE" });
-    const localized: PdfDocument = () => Document([Page([Text(`Sprache ${inject(LOCALE_ID)}`)])]);
+    const localized: PdfDocumentFn = () => Document([Page([Text(`Sprache ${inject(LOCALE_ID)}`)])]);
     const bytes = await TestBed.inject(JasyPdf).render(localized, undefined, {
       accessible: true,
       compress: false,
@@ -74,7 +74,7 @@ describe("JasyPdf", () => {
 
   it("embeds a font configured by name", async () => {
     setup(provideJasy({ fonts: { Liberation: FONT } }));
-    const doc: PdfDocument = () => Document([Page([Text("Serif", { font: "Liberation" })])]);
+    const doc: PdfDocumentFn = () => Document([Page([Text("Serif", { font: "Liberation" })])]);
     expect(latin1(await TestBed.inject(JasyPdf).render(doc, undefined))).toContain("/FontFile2");
   });
 
@@ -91,7 +91,7 @@ describe("JasyPdf", () => {
     );
     setup(provideJasy({ fonts: { Liberation: "https://example.com/serif.ttf" } }));
     const pdf = TestBed.inject(JasyPdf);
-    const doc: PdfDocument = () => Document([Page([Text("Serif", { font: "Liberation" })])]);
+    const doc: PdfDocumentFn = () => Document([Page([Text("Serif", { font: "Liberation" })])]);
 
     await expect(pdf.render(doc, undefined)).rejects.toThrow(/serif\.ttf: HTTP 404/);
     fail = false;
@@ -141,7 +141,7 @@ describe("pdfResource", () => {
   it("renders a document without data, and re-renders when its options change", async () => {
     setup({ provide: PLATFORM_ID, useValue: "browser" });
     const tagged = signal(false);
-    const page: PdfDocument = () => Document([Page([Text("Hi")])]);
+    const page: PdfDocumentFn = () => Document([Page([Text("Hi")])]);
     const preview = TestBed.runInInjectionContext(() =>
       pdfResource(page, undefined, { options: () => ({ accessible: tagged(), compress: false }) }),
     );

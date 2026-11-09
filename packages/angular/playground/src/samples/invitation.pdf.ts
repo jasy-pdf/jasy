@@ -1,9 +1,9 @@
-import type { PdfDocument } from "@jasy/angular";
+import type { PdfDocumentFn } from "@jasy/angular";
 import { Box, Column, Divider, Document, Expanded, Page, Text } from "@jasy/pdf";
 
 const center = { align: "center", color: "#ffffff", size: 12 } as const;
 
-export const invitationPdf: PdfDocument = () =>
+export const invitationPdf: PdfDocumentFn = () =>
   Document([
     Page({ size: "A5", margin: 0 }, [
       // Expanded fills the whole page height; the Box (full width by default) makes it full-bleed.
