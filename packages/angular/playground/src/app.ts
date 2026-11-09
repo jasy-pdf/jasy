@@ -74,7 +74,8 @@ export class App {
     return {
       ms: performance.now() - this.started,
       label: `${pages} ${pages === 1 ? "page" : "pages"} · ${(file.bytes.length / 1024).toFixed(1)} KB`,
-      diagnostics: this.reported,
+      // Only a rendered document reports; a filled form has nothing to say.
+      diagnostics: this.sample().fill ? [] : this.reported,
     };
   });
 
