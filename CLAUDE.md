@@ -567,8 +567,10 @@ English and short, do not break the font math.**
   one `react-reconciler` 0.31 for every 19.x - CI pins each minor), `nuxt` (zero-config, client or server),
   `playground`. GitHub org `jasy-pdf`, repo `jasy-pdf/jasy`, public, locked to the maintainer
   (rulesets); CodeRabbit reviews PRs, Renovate opens weekly dependency PRs.
-- **Release**: `scripts/release.sh <pkg> <version>` bumps, commits, tags `<pkg>-v*`; CI publishes and
-  writes the GitHub Release (`scripts/gh-release.mjs`). Siblings depend by RANGE (`workspace:^`) and
+- **Release**: `scripts/release.sh <pkg> <version> [<pkg> <version> ...]` - one command: checks the `gh` +
+  npm logins first, then per package (in dependency order) bumps, commits, tags `<pkg>-v*`, pushes, watches the
+  CI publish run and waits for npm; at the end ONE npm OTP moves `latest` to the prereleases. CI writes the
+  GitHub Release (`scripts/gh-release.mjs`). Siblings depend by RANGE (`workspace:^`) and
   `@jasy/pdf` is a PEER of `vue`, `react` and `nuxt`, so an engine patch needs one release, not five - and a
   consumer cannot end up with two copies. Current versions: npm, not this file. A package's FIRST
   release whose `package.json` already holds the version stops at the empty bump commit: tag by hand.
