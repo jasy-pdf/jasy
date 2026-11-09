@@ -1,142 +1,113 @@
-import { AGL } from "../assets/font-data.ts";
-
-/** The Adobe Glyph List: code point -> glyph name. Constant, so it is parsed once per process and
- *  shared by every face rather than rebuilt per `AFMParser`. */
-let sharedGlyphMap: Record<string, string> | undefined;
-function glyphList(): Record<string, string> {
-  if (sharedGlyphMap) return sharedGlyphMap;
-  const map: Record<string, string> = {};
-  for (const line of AGL.split("\n")) {
-    const parts = line.trim().split(";");
-    if (parts.length >= 2) map[String.fromCharCode(parseInt(parts[0]!, 16))] = parts[1]!;
-  }
-  // Windows-1252 characters the AGLFN leaves out, by the glyph WinAnsiEncoding draws them with
-  // (ISO 32000-1, Annex D). Unnamed, they were measured as "?" while the viewer drew the real glyph.
-  map["\u00a0"] = "space";
-  map["\u00ad"] = "hyphen";
-  map["\u00b2"] = "twosuperior";
-  map["\u00b3"] = "threesuperior";
-  map["\u00b9"] = "onesuperior";
-  return (sharedGlyphMap = map);
-}
 import type { FontVerticals } from "../text/line-metrics.ts";
 import type { FontDecoration } from "../text/text-decoration.ts";
 
-/** One parser per standard-14 face for the whole process: the AFM data is a constant and a parsed
+/** One standard font's metrics, pre-parsed from its AFM file by scripts/gen-font-data.mjs. */
+export interface StandardFontData {
+  /** FontBBox, in glyph units (1000 / em). */
+  bbox: number[];
+  /** UnderlinePosition (negative: below the baseline), UnderlineThickness. */
+  underline: number[];
+  capHeight: number;
+  xHeight: number;
+  /** The advance of every glyph by index; 0 where the font has none. */
+  widths: number[];
+  /** [first, count, second - previous second, value, ...] */
+  kerning: number[];
+}
+
+/** The 14 names, known without their data: registering a font must not wait for it. */
+export const STANDARD_FONT_NAMES: ReadonlySet<string> = new Set([
+  "Courier",
+  "Courier-Bold",
+  "Courier-BoldOblique",
+  "Courier-Oblique",
+  "Helvetica",
+  "Helvetica-Bold",
+  "Helvetica-BoldOblique",
+  "Helvetica-Oblique",
+  "Symbol",
+  "Times-Bold",
+  "Times-BoldItalic",
+  "Times-Italic",
+  "Times-Roman",
+  "ZapfDingbats",
+]);
+
+// The metrics are 155 KB of numbers that only a render needs, so they are loaded then, and an app
+// that ships jasy does not carry them in its start bundle. Layout is synchronous: everything that
+// measures awaits this first (PDFRenderer.render, fillForm, flattenForm).
+let metrics: typeof import("../assets/standard-fonts.ts") | undefined;
+let loading: Promise<void> | undefined;
+let glyphOf: Map<string, number> | undefined;
+
+/**
+ * Loads the metrics of the 14 standard fonts. Every render does this itself; call it ahead of time to
+ * have the first PDF without the wait, or to measure outside a render. Once per process.
+ */
+export function preloadStandardFonts(): Promise<void> {
+  // ".js", not ".ts": tsc rewrites the extension of a static import, not of a dynamic one.
+  return (loading ??= import("../assets/standard-fonts.js").then(
+    (m) => {
+      metrics = m;
+      glyphOf = new Map();
+      for (let i = 0; i < m.CHARS.length; i += 2) {
+        glyphOf.set(String.fromCharCode(m.CHARS[i]!), m.CHARS[i + 1]!);
+      }
+    },
+    (e) => {
+      loading = undefined; // a chunk lost to a deploy: the next render tries again
+      throw e;
+    },
+  ));
+}
+
+/** One parser per standard-14 face for the whole process: the metrics are constants and a parsed
  *  face is read-only, so every document can share one. */
 const STANDARD_PARSERS = new Map<string, AFMParser>();
-export function standardParser(fullName: string, data: string): AFMParser {
+export function standardParser(fullName: string): AFMParser {
   let parser = STANDARD_PARSERS.get(fullName);
-  if (!parser) STANDARD_PARSERS.set(fullName, (parser = new AFMParser(data)));
+  if (!parser) STANDARD_PARSERS.set(fullName, (parser = new AFMParser(fullName)));
   return parser;
 }
 
+/** A standard font's metrics, read on first use - by then a render has loaded them. */
 export class AFMParser {
-  private advanceWidths: Record<string, number> = {};
-  private kerningPairs: Record<string, Record<string, number>> = {};
-  private glyphMap: Record<string, string> = glyphList();
-
-  // The font's bounding box in glyph space (1000 units / em), from the AFM header. This - not the
-  // `Ascender` line - is what a line box is built from; see `verticals()`.
-  private bbox: [number, number, number, number] = [0, 0, 0, 0];
+  private font?: {
+    widths: number[];
+    kerning: Map<number, Map<number, number>>;
+    bbox: number[];
+    underline: number[];
+    capHeight: number;
+    xHeight: number;
+  };
   private cachedVerticals?: FontVerticals; // never changes for a face; asked once per line
-
-  // Glyph metrics from the AFM header, for underline / strikethrough. All 14 standard fonts carry
-  // the underline pair; Symbol and ZapfDingbats have no CapHeight/XHeight (they have no lowercase).
-  private underlinePosition = 0; // negative, as the AFM writes it: below the baseline
-  private underlineThickness = 0;
-  private capHeight = 0;
-  private xHeight = 0;
   private cachedDecoration?: FontDecoration;
 
-  constructor(afmData: string) {
-    this.parseAFMData(afmData);
-  }
+  constructor(private readonly fullName: string) {}
 
-  private getGlyphName(char: string): string {
-    return this.glyphMap[char] || char;
-  }
-
-  private parseAFMData(afmData: string): void {
-    const lines = afmData.split("\n");
-    let inCharMetrics = false;
-
-    for (let line of lines) {
-      line = line.trim();
-
-      if (line.startsWith("StartCharMetrics")) {
-        inCharMetrics = true;
-        continue;
-      }
-
-      if (line.startsWith("EndCharMetrics")) {
-        inCharMetrics = false;
-        continue;
-      }
-
-      if (inCharMetrics) {
-        const charData = this.parseCharMetrics(line);
-        if (charData) {
-          const { charName, wx } = charData;
-          this.advanceWidths[charName] = wx;
-        }
-      }
-
-      if (line.startsWith("UnderlinePosition ")) {
-        this.underlinePosition = parseFloat(line.slice(18));
-      }
-
-      if (line.startsWith("UnderlineThickness ")) {
-        this.underlineThickness = parseFloat(line.slice(19));
-      }
-
-      if (line.startsWith("CapHeight ")) {
-        this.capHeight = parseFloat(line.slice(10));
-      }
-
-      if (line.startsWith("XHeight ")) {
-        this.xHeight = parseFloat(line.slice(8));
-      }
-
-      if (line.startsWith("FontBBox ")) {
-        const [x0, y0, x1, y1] = line.slice(9).trim().split(/\s+/).map(parseFloat);
-        this.bbox = [x0, y0, x1, y1];
-      }
-
-      if (line.startsWith("KPX")) {
-        const parts = line.split(/\s+/);
-        const firstChar = parts[1];
-        const secondChar = parts[2];
-        const kerning = parseFloat(parts[3]);
-        // Nested by first glyph, then second. A flat `${a}-${b}` key would have to be BUILT on every
-        // lookup, and getKerning runs once per adjacent character pair - that string allocation was a
-        // quarter of a standard-font render.
-        (this.kerningPairs[firstChar] ??= {})[secondChar] = kerning;
-      }
+  private get data() {
+    if (this.font) return this.font;
+    const raw = metrics?.FONTS[this.fullName];
+    if (!raw) {
+      throw new Error(
+        metrics
+          ? `@jasy/pdf: "${this.fullName}" is not one of the 14 standard fonts.`
+          : "@jasy/pdf: the standard font metrics are not loaded. A render loads them itself; to " +
+              "measure text outside one, await preloadStandardFonts() first.",
+      );
     }
-  }
-
-  private parseCharMetrics(line: string): { charName: string; wx: number } | null {
-    const parts = line.split(";").map((part) => part.trim());
-
-    let charName = "";
-    let wx = 0;
-
-    for (const part of parts) {
-      if (part.startsWith("N ")) {
-        charName = part.split(" ")[1];
+    const kerning = new Map<number, Map<number, number>>();
+    for (let i = 0; i < raw.kerning.length; ) {
+      const first = raw.kerning[i++]!;
+      const pairs = new Map<number, number>();
+      let second = 0;
+      for (let n = raw.kerning[i++]!; n > 0; n--) {
+        second += raw.kerning[i++]!;
+        pairs.set(second, raw.kerning[i++]!);
       }
-
-      if (part.startsWith("WX ")) {
-        wx = parseFloat(part.split(" ")[1]);
-      }
+      kerning.set(first, pairs);
     }
-
-    if (charName && wx) {
-      return { charName, wx };
-    }
-
-    return null;
+    return (this.font = { ...raw, kerning });
   }
 
   /**
@@ -157,7 +128,7 @@ export class AFMParser {
    */
   verticals(): FontVerticals {
     if (this.cachedVerticals) return this.cachedVerticals;
-    const [, yMin, , yMax] = this.bbox;
+    const [, yMin, , yMax] = this.data.bbox;
     this.cachedVerticals = { ascent: yMax / 1000, descent: -yMin / 1000, lineGap: 0 };
     return this.cachedVerticals;
   }
@@ -171,23 +142,31 @@ export class AFMParser {
    */
   decoration(): FontDecoration {
     if (this.cachedDecoration) return this.cachedDecoration;
-    const capHeight = this.capHeight || this.bbox[3];
+    const { bbox, underline, xHeight } = this.data;
+    const capHeight = this.data.capHeight || bbox[3]!;
     this.cachedDecoration = {
-      underlinePosition: -this.underlinePosition / 1000, // AFM writes it negative (below the baseline)
-      underlineThickness: this.underlineThickness / 1000,
+      underlinePosition: -underline[0]! / 1000, // AFM writes it negative (below the baseline)
+      underlineThickness: underline[1]! / 1000,
       capHeight: capHeight / 1000,
-      xHeight: (this.xHeight || capHeight / 2) / 1000,
+      xHeight: (xHeight || capHeight / 2) / 1000,
     };
     return this.cachedDecoration;
   }
 
-  getAdvanceWidth(charName: string): number {
-    return this.advanceWidths[this.getGlyphName(charName)] || 0;
+  /** One character's advance. A string of several characters is not a glyph name here: it measures 0. */
+  getAdvanceWidth(char: string): number {
+    const { widths } = this.data; // first: it throws when the metrics are not loaded
+    const glyph = glyphOf!.get(char);
+    return glyph === undefined ? 0 : widths[glyph]!;
   }
 
-  /** The pair's kerning. The AFM keys its pairs by GLYPH name (`KPX T comma`), like its widths - so the
-   *  characters are named first, or only letter-letter pairs (where the two coincide) would ever hit. */
+  /** The pair's kerning. The AFM keys its pairs by GLYPH, like its widths - so the characters are
+   *  mapped to glyphs first, or only letter-letter pairs (where the two coincide) would ever hit. */
   getKerning(firstChar: string, secondChar: string): number {
-    return this.kerningPairs[this.getGlyphName(firstChar)]?.[this.getGlyphName(secondChar)] ?? 0;
+    const { kerning } = this.data;
+    const first = glyphOf!.get(firstChar);
+    const second = glyphOf!.get(secondChar);
+    if (first === undefined || second === undefined) return 0;
+    return kerning.get(first)?.get(second) ?? 0;
   }
 }

@@ -21,6 +21,8 @@ export default defineConfig({
     },
   },
   test: {
+    // Loads the standard font metrics once, as a render would, for the tests that measure directly.
+    setupFiles: [resolve(rootDir, "tests/setup.ts")],
     // @jasy/nuxt is a Nuxt module with heavy @nuxt/test-utils e2e tests - run those via its own
     // `pnpm --filter @jasy/nuxt test`, not the root suite (which gates every package release).
     exclude: [...configDefaults.exclude, "packages/nuxt/**"],

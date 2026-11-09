@@ -14,6 +14,6 @@ reviews:
     - "!**/coverage/**"
     - "!**/*.afm"
     - "!**/pnpm-lock.yaml"
-    - "!src/lib/assets/font-data.ts"
+    - "!src/lib/assets/standard-fonts.ts"
 chat:
   auto_reply: true
