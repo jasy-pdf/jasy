@@ -1,11 +1,17 @@
 // JasyForms and filledPdfResource against a real Angular injector, in Node (see support.ts).
 // First: it loads the Angular compiler, which the Angular packages below need when they load.
-import { settle, setup } from "./support.ts";
-import { HttpErrorResponse, provideHttpClient, withInterceptors } from "@angular/common/http";
+import { NO_HTTP_CLIENT, settle, setup } from "./support.ts";
+import {
+  HttpClient,
+  HttpErrorResponse,
+  provideHttpClient,
+  withInterceptors,
+} from "@angular/common/http";
 import { HttpTestingController, provideHttpClientTesting } from "@angular/common/http/testing";
 import { PLATFORM_ID, signal } from "@angular/core";
 import { TestBed } from "@angular/core/testing";
 import { Checkbox, Document, Page, TextField, renderToBytes } from "@jasy/pdf";
+import { throwError } from "rxjs";
 import { describe, expect, it, vi } from "vitest";
 import { JasyBrowserOnlyError, JasyForms, JasyPdf, filledPdfResource } from "../src/index.ts";
 
@@ -92,11 +98,35 @@ describe("loading a URL through HttpClient", () => {
     await failed.toThrow("jasy could not load /forms/missing.pdf: HTTP 404 Not Found");
     await read.catch((e: Error) => expect(e.cause).toBeInstanceOf(HttpErrorResponse));
   });
+
+  it("names a network failure, which HttpClient reports as status 0", async () => {
+    setup(provideHttpClient(), provideHttpClientTesting());
+    const failed = expect(TestBed.inject(JasyForms).read("/forms/a.pdf")).rejects;
+    await vi.waitFor(() =>
+      TestBed.inject(HttpTestingController)
+        .expectOne("/forms/a.pdf")
+        .error(new Event("error") as ProgressEvent),
+    );
+    await failed.toThrow(
+      "jasy could not load /forms/a.pdf: network error (offline, or blocked by CORS)",
+    );
+  });
+
+  it("keeps the message of an error that is not an HTTP response", async () => {
+    // Angular 21.0's own HttpClient uses XMLHttpRequest, which a server does not have.
+    const broken = {
+      get: () => throwError(() => new ReferenceError("XMLHttpRequest is not defined")),
+    };
+    setup({ provide: HttpClient, useValue: broken });
+    await expect(TestBed.inject(JasyForms).read("/forms/a.pdf")).rejects.toThrow(
+      "jasy could not load /forms/a.pdf: XMLHttpRequest is not defined",
+    );
+  });
 });
 
 describe("loading a URL without HttpClient", () => {
   it("names the URL when the network fails", async () => {
-    setup();
+    setup(NO_HTTP_CLIENT);
     vi.stubGlobal("fetch", async () => {
       throw new TypeError("Failed to fetch");
     });
@@ -106,7 +136,7 @@ describe("loading a URL without HttpClient", () => {
   });
 
   it("says that HttpClient is missing when the server wants credentials", async () => {
-    setup();
+    setup(NO_HTTP_CLIENT);
     vi.stubGlobal("fetch", async () => new Response("", { status: 401 }));
     await expect(TestBed.inject(JasyForms).read("/forms/a.pdf")).rejects.toThrow(
       /HTTP 401.*add provideHttpClient\(\)/,
@@ -141,7 +171,7 @@ describe("JasyPdf with finished bytes", () => {
 
 describe("filledPdfResource", () => {
   it("fills again when the values change, and reads its source once", async () => {
-    setup({ provide: PLATFORM_ID, useValue: "browser" });
+    setup(NO_HTTP_CLIENT, { provide: PLATFORM_ID, useValue: "browser" });
     const fetched = vi.fn(async () => new Response(FORM as Uint8Array<ArrayBuffer>));
     vi.stubGlobal("fetch", fetched);
     const values = signal<{ full_name: string } | undefined>(undefined);

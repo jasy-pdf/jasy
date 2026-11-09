@@ -6,7 +6,7 @@ set -euo pipefail
 # prereleases. Nothing to do on GitHub or npmjs.com by hand.
 #
 # Usage:   ./scripts/release.sh <package> <version> [<package> <version> ...]
-#   package = pdf | e-invoice | cli | vue | nuxt | react   (pdf is the workspace ROOT)
+#   package = pdf | e-invoice | cli | vue | nuxt | react | angular   (pdf is the workspace ROOT)
 #   version = semver, e.g. 1.0.0 or 1.0.0-beta.7
 # Example: ./scripts/release.sh pdf 1.0.0-beta.7 vue 1.0.0-beta.3 react 1.0.0-beta.3
 #
@@ -14,7 +14,7 @@ set -euo pipefail
 # Needs `gh` (logged in) and `npm` (logged in, for the dist-tag); both are checked before anything is pushed.
 
 # Dependency order: a package is released after everything it builds against.
-ORDER=(pdf e-invoice cli vue react nuxt)
+ORDER=(pdf e-invoice cli vue react nuxt angular)
 
 usage() {
   echo "Usage: ./scripts/release.sh <package> <version> [<package> <version> ...]"
@@ -40,7 +40,7 @@ npm_latest() { npm view "$1" dist-tags.latest --prefer-online 2>/dev/null || tru
 dir_of() {
   case "$1" in
     pdf) echo "." ;;
-    e-invoice | cli | vue | nuxt | react) echo "packages/$1" ;;
+    e-invoice | cli | vue | nuxt | react | angular) echo "packages/$1" ;;
     *) return 1 ;;
   esac
 }

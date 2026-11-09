@@ -1,5 +1,6 @@
 // Angular's own server test platform, so DI, resource() and the sanitizer are the real ones in Node.
 import "@angular/compiler";
+import { HttpClient } from "@angular/common/http";
 import { provideZonelessChangeDetection } from "@angular/core";
 import { TestBed } from "@angular/core/testing";
 import { ServerTestingModule, platformServerTesting } from "@angular/platform-server/testing";
@@ -26,3 +27,7 @@ export const settle = async () => {
 };
 
 export const latin1 = (bytes: Uint8Array) => new TextDecoder("latin1").decode(bytes);
+
+/** An app without HttpClient - Angular 20 without provideHttpClient(); from 21 on there always is one.
+ *  Tests that stub `fetch` need it, or the request would go through HttpClient instead. */
+export const NO_HTTP_CLIENT = { provide: HttpClient, useValue: null };

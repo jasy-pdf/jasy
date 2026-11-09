@@ -1,6 +1,6 @@
 // @jasy/angular against a real Angular injector, in Node (see support.ts).
 // First: it loads the Angular compiler, which the Angular packages below need when they load.
-import { latin1, settle, setup } from "./support.ts";
+import { NO_HTTP_CLIENT, latin1, settle, setup } from "./support.ts";
 import { LOCALE_ID, PLATFORM_ID, inject, signal } from "@angular/core";
 import { TestBed } from "@angular/core/testing";
 import { Document, Page, Text } from "@jasy/pdf";
@@ -63,7 +63,7 @@ describe("JasyPdf", () => {
         return new Response(FONT);
       }),
     );
-    setup(provideJasy({ fonts: { Liberation: "https://example.com/serif.ttf" } }));
+    setup(provideJasy({ fonts: { Liberation: "https://example.com/serif.ttf" } }), NO_HTTP_CLIENT);
     const pdf = TestBed.inject(JasyPdf);
     const doc: PdfDocumentFn = () => Document([Page([Text("Serif", { font: "Liberation" })])]);
 
@@ -95,7 +95,7 @@ describe("preloading", () => {
 
   it("preload() loads the configured fonts before the first PDF needs them", async () => {
     const fetched = fontServer();
-    setup(provideJasy({ fonts }));
+    setup(provideJasy({ fonts }), NO_HTTP_CLIENT);
     const pdf = TestBed.inject(JasyPdf);
     await pdf.preload();
     expect(fetched).toHaveBeenCalledTimes(1);
@@ -105,7 +105,10 @@ describe("preloading", () => {
 
   it("provideJasy({ preload: true }) preloads in the browser once the app is idle", async () => {
     const fetched = fontServer();
-    setup(provideJasy({ fonts, preload: true }), { provide: PLATFORM_ID, useValue: "browser" });
+    setup(provideJasy({ fonts, preload: true }), NO_HTTP_CLIENT, {
+      provide: PLATFORM_ID,
+      useValue: "browser",
+    });
     TestBed.inject(JasyPdf); // starts the app's injector, and with it the initializer
     await settle();
     expect(fetched).toHaveBeenCalledTimes(1);
@@ -113,11 +116,11 @@ describe("preloading", () => {
 
   it("does nothing without the flag, and nothing on the server", async () => {
     const fetched = fontServer();
-    setup(provideJasy({ fonts }), { provide: PLATFORM_ID, useValue: "browser" });
+    setup(provideJasy({ fonts }), NO_HTTP_CLIENT, { provide: PLATFORM_ID, useValue: "browser" });
     TestBed.inject(JasyPdf);
     await settle();
     TestBed.resetTestingModule();
-    setup(provideJasy({ fonts, preload: true }));
+    setup(provideJasy({ fonts, preload: true }), NO_HTTP_CLIENT);
     TestBed.inject(JasyPdf);
     await settle();
     expect(fetched).not.toHaveBeenCalled();
@@ -125,7 +128,10 @@ describe("preloading", () => {
 
   it("stays quiet when a preload fails, and the first render reports it", async () => {
     fontServer(404);
-    setup(provideJasy({ fonts, preload: true }), { provide: PLATFORM_ID, useValue: "browser" });
+    setup(provideJasy({ fonts, preload: true }), NO_HTTP_CLIENT, {
+      provide: PLATFORM_ID,
+      useValue: "browser",
+    });
     const pdf = TestBed.inject(JasyPdf);
     await settle(); // an unhandled rejection here would fail the test run
     await expect(pdf.render(serif, undefined)).rejects.toThrow(/serif\.ttf: HTTP 404/);

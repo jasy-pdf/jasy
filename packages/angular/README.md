@@ -97,14 +97,16 @@ export class InvoicePreview {
 ## Install
 
 ```bash
-pnpm add @jasy/angular @jasy/pdf
+ng add @jasy/angular
 ```
 
-Angular 20 or newer. `pdfResource()` builds on Angular's `resource()`, which Angular marks experimental
-in 20 and 21 and stable from 22. The service does not depend on it.
+That installs `@jasy/pdf` beside it, adds `provideJasy()` to your app config, and allows jasy's three
+CommonJS dependencies in `angular.json`, so `ng build` does not warn about them. Run it twice and nothing
+changes. By hand, it is:
 
-`@jasy/pdf` brings three CommonJS dependencies, and `ng build` warns about them. They work as they
-are. To silence the warnings, add them to `angular.json`:
+```bash
+pnpm add @jasy/angular @jasy/pdf
+```
 
 ```json
 "build": {
@@ -113,6 +115,12 @@ are. To silence the warnings, add them to `angular.json`:
   }
 }
 ```
+
+Angular 20 or newer, tested on 20, 21 and 22, zoneless and with zone.js, with and without SSR.
+`pdfResource()` builds on Angular's `resource()`, which Angular marks experimental in 20 and 21 and
+stable from 22; the service does not depend on it.
+
+A new document: `ng generate @jasy/angular:pdf invoice` creates `invoice.pdf.ts`.
 
 ## Setup
 
@@ -141,14 +149,14 @@ export const appConfig: ApplicationConfig = {
 A font URL is loaded the first time a PDF needs it and kept for the app's lifetime. `.ttf`, `.woff`
 and `.woff2` all work, and bytes (`Uint8Array`) work too. If a request fails, the next PDF tries again.
 
-A URL, here and for a form, goes through your `HttpClient` when the app provides one, so your
-interceptors apply. Without it, jasy uses `fetch`.
+A URL, here and for a form, goes through Angular's `HttpClient`, so your interceptors apply. From
+Angular 21 there always is one; on 20 without `provideHttpClient()`, jasy uses `fetch`.
 
 ## Bundle size
 
 `@jasy/angular` does not put the engine into your start bundle; your documents bring it, wherever they
 are imported. The font data (158 KB, 9 KB over the wire) loads with the first PDF, or earlier with
-`preload`. So put the PDF feature behind `@defer` or a lazy route: a new `ng new` app with
+`preload`. So put the PDF feature behind `@defer` or a lazy route: a new Angular 20 app with
 `provideJasy()` then starts at 231 KB. Rendered straight in the root component, it starts at 522 KB, a
 little over Angular's default 500 KB warning.
 
