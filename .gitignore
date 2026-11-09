@@ -25,3 +25,6 @@ packages/e-invoice/COVERAGE.md
 
 # Angular CLI build cache of the @jasy/angular playground.
 .angular/
+
+# @jasy/angular schematics, compiled next to their .cts source by its build.
+packages/angular/schematics/**/*.js

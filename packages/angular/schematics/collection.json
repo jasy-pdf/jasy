@@ -1,0 +1,16 @@
+{
+  "$schema": "../node_modules/@angular-devkit/schematics/collection-schema.json",
+  "schematics": {
+    "ng-add": {
+      "description": "Adds @jasy/pdf, provideJasy() in the app config, and allows jasy's CommonJS dependencies in the build.",
+      "factory": "./ng-add/index.js#ngAdd",
+      "schema": "./ng-add/schema.json"
+    },
+    "pdf": {
+      "description": "Generates a PDF document: a PdfDocumentFn in <name>.pdf.ts.",
+      "factory": "./pdf/index.js#pdf",
+      "schema": "./pdf/schema.json",
+      "aliases": ["document"]
+    }
+  }
+}
