@@ -1,6 +1,6 @@
 {
   "name": "@jasy/pdf",
-  "version": "1.0.0-beta.6",
+  "version": "1.0.0-beta.7",
   "description": "Create PDFs in TypeScript: declarative, component-based layout with real pagination, in Node or the browser. Its own engine - no headless browser, no Java. Powers ZUGFeRD / XRechnung e-invoices.",
   "keywords": [
     "accessibility",
