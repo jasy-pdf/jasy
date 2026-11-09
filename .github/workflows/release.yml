@@ -10,6 +10,7 @@ on:
       - "vue-v*"
       - "nuxt-v*"
       - "react-v*"
+      - "angular-v*"
 
 jobs:
   release:
@@ -49,6 +50,7 @@ jobs:
             vue-v*)     DIR="packages/vue"      ; NAME="@jasy/vue"     ; VER="${TAG#vue-v}" ;;
             nuxt-v*)    DIR="packages/nuxt"     ; NAME="@jasy/nuxt"    ; VER="${TAG#nuxt-v}" ;;
             react-v*)   DIR="packages/react"    ; NAME="@jasy/react"   ; VER="${TAG#react-v}" ;;
+            angular-v*) DIR="packages/angular"  ; NAME="@jasy/angular" ; VER="${TAG#angular-v}" ;;
             *) echo "Unknown tag: $TAG" ; exit 1 ;;
           esac
           # npm dist-tag: a prerelease (1.0.0-alpha.1) publishes to its channel (alpha) and NEVER to

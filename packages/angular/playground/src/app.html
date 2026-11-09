@@ -1,0 +1,91 @@
+<div class="app" [class.no-code]="!showCode()">
+  <aside>
+    <div class="brand">
+      <img src="logo.png" alt="" />
+      <div>
+        <strong>&#64;jasy/angular</strong>
+        <span>playground</span>
+      </div>
+    </div>
+    @for (group of groups; track group.name) {
+      @if (group.samples.length) {
+        <nav>
+          <h2>{{ group.name }}</h2>
+          @for (s of group.samples; track s.id) {
+            <button [class.active]="s.id === sample().id" (click)="select(s)">
+              <span class="title">{{ s.title }}</span>
+              <span class="look">{{ s.look }}</span>
+            </button>
+          }
+        </nav>
+      }
+    }
+    <p class="footnote">Every PDF is rendered right here, in your browser. No server.</p>
+  </aside>
+
+  <section class="code">
+    <header>
+      <span>{{ sample().file }}</span>
+    </header>
+    @if (sample().controls; as controls) {
+      <div class="controls">
+        @for (c of controls; track c.key) {
+          <label>
+            <span>{{ c.label }}</span>
+            @if (c.type === "text") {
+              <input
+                [value]="values()[c.key]"
+                spellcheck="false"
+                (input)="set(c.key, $any($event.target).value)"
+              />
+            } @else {
+              <input
+                type="range"
+                [min]="c.min"
+                [max]="c.max"
+                [value]="values()[c.key]"
+                (input)="set(c.key, +$any($event.target).value)"
+              />
+              <output>{{ values()[c.key] }}</output>
+            }
+          </label>
+        }
+      </div>
+    }
+    <pre><code>{{ source.hasValue() ? source.value() : "" }}</code></pre>
+  </section>
+
+  <section class="viewer">
+    @let pdf = active();
+    <header>
+      <button class="toggle" (click)="showCode.set(!showCode())">
+        {{ showCode() ? "Hide code" : "Show code" }}
+      </button>
+      @if (stats(); as s) {
+        <span class="stats"><b>{{ s.ms.toFixed(0) }} ms</b> · {{ s.label }}</span>
+      }
+      @if (!sample().fill) {
+        <label class="tagged" title="A structure tree for screen readers (PDF/UA)">
+          <input type="checkbox" [checked]="tagged()" (change)="tagged.set(!tagged())" />
+          Tagged PDF
+        </label>
+      }
+      @if (pdf.hasValue()) {
+        <button class="download" (click)="open()">Open</button>
+        <button class="download" (click)="download()">Download</button>
+      }
+    </header>
+    @if (stats()?.diagnostics?.length) {
+      <ul class="diagnostics">
+        @for (d of stats()!.diagnostics; track $index) {
+          <li><code>{{ d.code }}</code> {{ d.message }}</li>
+        }
+      </ul>
+    }
+    @if (pdf.error(); as e) {
+      <pre class="error">{{ error(e) }}</pre>
+    } @else if (pdf.latest(); as file) {
+      <iframe [src]="file.safeUrl" title="PDF"></iframe>
+    }
+  </section>
+</div>

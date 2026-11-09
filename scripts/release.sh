@@ -6,7 +6,7 @@ set -euo pipefail
 # prereleases. Nothing to do on GitHub or npmjs.com by hand.
 #
 # Usage:   ./scripts/release.sh <package> <version> [<package> <version> ...]
-#   package = pdf | e-invoice | cli | vue | nuxt | react   (pdf is the workspace ROOT)
+#   package = pdf | e-invoice | cli | vue | nuxt | react | angular   (pdf is the workspace ROOT)
 #   version = semver, e.g. 1.0.0 or 1.0.0-beta.7
 # Example: ./scripts/release.sh pdf 1.0.0-beta.7 vue 1.0.0-beta.3 react 1.0.0-beta.3
 #
@@ -14,7 +14,7 @@ set -euo pipefail
 # Needs `gh` (logged in) and `npm` (logged in, for the dist-tag); both are checked before anything is pushed.
 
 # Dependency order: a package is released after everything it builds against.
-ORDER=(pdf e-invoice cli vue react nuxt)
+ORDER=(pdf e-invoice cli vue react nuxt angular)
 
 usage() {
   echo "Usage: ./scripts/release.sh <package> <version> [<package> <version> ...]"
@@ -28,10 +28,19 @@ fail() {
   exit 1
 }
 
+# How long to wait for npm to serve a version CI has published. It is usually a minute, and was five
+# once; after this the script asks whether to keep waiting instead of giving up.
+NPM_WAIT=${JASY_NPM_WAIT:-600}
+NPM_POLL=${JASY_NPM_POLL:-10}
+
+# What the registry serves NOW: --prefer-online skips npm's local cache of the package document.
+npm_version() { npm view "$1" version --prefer-online 2>/dev/null || true; }
+npm_latest() { npm view "$1" dist-tags.latest --prefer-online 2>/dev/null || true; }
+
 dir_of() {
   case "$1" in
     pdf) echo "." ;;
-    e-invoice | cli | vue | nuxt | react) echo "packages/$1" ;;
+    e-invoice | cli | vue | nuxt | react | angular) echo "packages/$1" ;;
     *) return 1 ;;
   esac
 }
@@ -83,7 +92,7 @@ for p in "${RELEASES[@]}"; do
   if git rev-parse -q --verify "refs/tags/$p-v$VERSION" >/dev/null; then
     fail "the tag $p-v$VERSION already exists."
   fi
-  if [ -n "$(npm view "$NAME@$VERSION" version 2>/dev/null)" ]; then fail "$NAME@$VERSION is already on npm."; fi
+  if [ -n "$(npm_version "$NAME@$VERSION")" ]; then fail "$NAME@$VERSION is already on npm."; fi
 done
 
 echo "Release, in this order (npm user: $NPM_USER):"
@@ -139,13 +148,26 @@ for p in "${RELEASES[@]}"; do
   fi
   echo "    CI passed."
 
-  # npm can lag a little behind the publish.
-  for _ in $(seq 1 30); do
-    if [ "$(npm view "$NAME@$VERSION" version 2>/dev/null)" = "$VERSION" ]; then break; fi
-    sleep 5
+  # npm serves a new version a minute or several after the publish.
+  printf "    Waiting for npm to serve it (usually a minute, sometimes five) "
+  WAITED=0
+  until [ "$(npm_version "$NAME@$VERSION")" = "$VERSION" ]; do
+    if [ "$WAITED" -ge "$NPM_WAIT" ]; then
+      echo ""
+      read -r -p "    Not on npm after $((WAITED / 60)) minutes. Keep waiting? [Y/n] " more
+      if [ "$more" = "n" ] || [ "$more" = "N" ]; then
+        fail "stopped. CI published $NAME@$VERSION; once npm shows it (npm view $NAME@$VERSION), run:
+  npm dist-tag add $NAME@$VERSION latest --otp=<code>   (for a prerelease)
+  and this script again for the packages after $p."
+      fi
+      WAITED=0
+      printf "    Waiting "
+    fi
+    printf "."
+    sleep "$NPM_POLL"
+    WAITED=$((WAITED + NPM_POLL))
   done
-  [ "$(npm view "$NAME@$VERSION" version 2>/dev/null)" = "$VERSION" ] ||
-    fail "$NAME@$VERSION is not on npm after 2.5 minutes, although CI passed. Check:  npm view $NAME versions"
+  echo ""
   echo "    On npm."
 
   # A prerelease is published to its own dist-tag (beta, alpha) by CI; `latest` follows below.
@@ -166,7 +188,18 @@ if [ ${#PRERELEASES[@]} -gt 0 ]; then
         fail "stopped. Everything is published; set the rest yourself:  npm dist-tag add $spec latest --otp=<code>"
       fi
       if ERR=$(npm dist-tag add "$spec" latest --otp="$OTP" 2>&1 >/dev/null); then
-        echo "    latest -> $spec"
+        # Read back what the registry says, rather than trusting the success message.
+        LATEST=""
+        for _ in 1 2 3 4 5 6; do
+          LATEST=$(npm_latest "${spec%@*}")
+          if [ "$LATEST" = "${spec##*@}" ]; then break; fi
+          sleep 5
+        done
+        if [ "$LATEST" = "${spec##*@}" ]; then
+          echo "    latest -> $spec (checked on the registry)"
+        else
+          echo "    npm accepted it, but the registry still says latest = ${LATEST:-?}. Check:  npm dist-tag ls ${spec%@*}"
+        fi
         break
       fi
       # A used-up or mistyped code is the usual reason; npm's own message says if it is something else.
@@ -180,5 +213,5 @@ echo ""
 echo "Done."
 for p in "${RELEASES[@]}"; do
   NAME=$(node -p "require('./$(dir_of "$p")/package.json').name")
-  echo "  $NAME: $(npm view "$NAME" dist-tags --json | tr -d '\n ' | sed 's/,/, /g')"
+  echo "  $NAME: $(npm view "$NAME" dist-tags --json --prefer-online | tr -d '\n ' | sed 's/,/, /g')"
 done

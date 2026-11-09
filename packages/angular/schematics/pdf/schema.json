@@ -1,0 +1,27 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema",
+  "$id": "JasyPdf",
+  "title": "A PDF document",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "The document's name, e.g. invoice or reports/monthly.",
+      "$default": { "$source": "argv", "index": 0 },
+      "x-prompt": "What should the PDF be called?"
+    },
+    "path": {
+      "type": "string",
+      "format": "path",
+      "description": "Where to create the file, relative to the workspace.",
+      "$default": { "$source": "workingDirectory" },
+      "visible": false
+    },
+    "project": {
+      "type": "string",
+      "description": "The project to create the file in.",
+      "$default": { "$source": "projectName" }
+    }
+  },
+  "required": ["name"]
+}

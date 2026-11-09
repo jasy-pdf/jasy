@@ -87,6 +87,7 @@ const PATHSPEC = {
   vue: ["packages/vue"],
   nuxt: ["packages/nuxt"],
   react: ["packages/react"],
+  angular: ["packages/angular"],
 };
 // An unknown prefix must fail loudly: an empty pathspec would make `git log` unscoped and pull EVERY
 // commit into this package's changelog.

@@ -81,3 +81,31 @@ jobs:
       # @jasy/react promises every React 19 minor with one reconciler: pin each one and run its suite.
       - run: pnpm --filter @jasy/react add -D react@~${{ matrix.react }}.0 react-dom@~${{ matrix.react }}.0
       - run: pnpm exec vitest run packages/react
+
+  angular:
+    name: Angular ${{ matrix.angular }}
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        angular: ["20", "21", "22"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # @jasy/angular promises Angular 20 and newer: the newest release of each major, with its suite.
+      # From 21 on Angular provides HttpClient in root, which changes how a URL is loaded.
+      - run: >-
+          pnpm --filter @jasy/angular add -D
+          @angular/core@${{ matrix.angular }} @angular/common@${{ matrix.angular }}
+          @angular/compiler@${{ matrix.angular }} @angular/forms@${{ matrix.angular }}
+          @angular/platform-browser@${{ matrix.angular }}
+          @angular/platform-browser-dynamic@${{ matrix.angular }}
+          @angular/platform-server@${{ matrix.angular }}
+          @angular-devkit/schematics@${{ matrix.angular }} @schematics/angular@${{ matrix.angular }}
+      - run: pnpm exec vitest run packages/angular
