@@ -58,8 +58,8 @@ import { invoicePdf, type Invoice } from "./invoice.pdf";
 @Component({
   selector: "app-invoice-preview",
   template: `
-    @if (preview.value(); as pdf) {
-      <iframe [src]="pdf.safeUrl" title="Invoice"></iframe>
+    @if (preview.hasValue()) {
+      <iframe [src]="preview.value().safeUrl" title="Invoice"></iframe>
     }
     <button (click)="download()">Download</button>
   `,
@@ -164,8 +164,10 @@ const SOURCE = "/forms/application.pdf";
       <input formControlName="full_name" />
       <input type="checkbox" formControlName="agree" />
     </form>
-    @if (preview.value(); as pdf) {
-      <iframe [src]="pdf.safeUrl" title="Application"></iframe>
+    @if (preview.hasValue()) {
+      <iframe [src]="preview.value().safeUrl" title="Application"></iframe>
+    } @else if (preview.error(); as error) {
+      <p>{{ error.message }}</p>
     }
     <button (click)="send()">Download</button>
   `,

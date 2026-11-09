@@ -1,4 +1,4 @@
-import { HttpClient } from "@angular/common/http";
+import { HttpClient, type HttpErrorResponse } from "@angular/common/http";
 import { inject } from "@angular/core";
 
 /** A file: its URL, its bytes, or a `Blob` - such as the `File` of an `<input type="file">`. */
@@ -13,16 +13,19 @@ export function bytesLoader(): (source: FileSource) => Promise<Uint8Array> {
   return async (source) => {
     if (source instanceof Uint8Array) return source;
     if (typeof source !== "string") return new Uint8Array(await source.arrayBuffer());
+    const fail = (reason: string, cause?: unknown) =>
+      new Error(`jasy could not load ${source}: ${reason}`, { cause });
     if (http) {
+      // An HttpErrorResponse is not an Error, and resource() would hide it behind a wrapper: it
+      // travels on as the cause, for whoever needs its status.
       const body = await new Promise<ArrayBuffer>((resolve, reject) =>
-        http
-          .get(source, { responseType: "arraybuffer" })
-          .subscribe({ next: resolve, error: reject }),
+        http.get(source, { responseType: "arraybuffer" }).subscribe({
+          next: resolve,
+          error: (e: HttpErrorResponse) => reject(fail(`HTTP ${e.status} ${e.statusText}`, e)),
+        }),
       );
       return new Uint8Array(body);
     }
-    const fail = (reason: string, cause?: unknown) =>
-      new Error(`jasy could not load ${source}: ${reason}`, { cause });
     const response = await fetch(source).catch((e: unknown) => {
       throw fail(e instanceof Error ? e.message : String(e), e);
     });

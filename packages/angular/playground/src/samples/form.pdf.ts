@@ -34,7 +34,7 @@ export const formPdf: PdfDocumentFn<{ name: string }> = ({ name }) =>
         name: "agree",
         checked: true,
         size: 14,
-        label: `I agree to the terms, ${name.split(" ")[0]}`,
+        label: name ? `I agree to the terms, ${name.split(" ")[0]}` : "I agree to the terms",
       }),
 
       label("Plan"),

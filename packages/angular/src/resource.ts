@@ -31,14 +31,15 @@ export interface PdfResourceOptions {
 /**
  * A PDF that follows your signals: `data` is read like `resource({ params })`, and the PDF is rendered
  * again whenever it changes. Return `undefined` from `data` to wait. `value()`, `isLoading()`,
- * `error()` and `reload()` are Angular's own `ResourceRef`.
+ * `error()` and `reload()` are Angular's own `ResourceRef` - read `value()` behind `hasValue()`, since it
+ * throws while the resource is in an error state.
  *
  * Renders only in the browser - on the server it stays idle, since a preview there has nobody to
  * look at it. Use `inject(JasyPdf).render()` on the server.
  *
  * ```ts
  * preview = pdfResource(invoicePdf, () => this.invoice());
- * // <iframe [src]="preview.value()?.safeUrl"></iframe>
+ * // @if (preview.hasValue()) { <iframe [src]="preview.value().safeUrl"></iframe> }
  * ```
  */
 export function pdfResource<T>(

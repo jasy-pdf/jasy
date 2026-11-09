@@ -21,10 +21,14 @@
             "assets": [
               {
                 "glob": "**/*",
+                "input": "public"
+              },
+              {
+                "glob": "**/*",
                 "input": "../../react/playground/public"
               },
               {
-                "glob": "*.pdf.ts",
+                "glob": "*.ts",
                 "input": "src/samples",
                 "output": "samples"
               }

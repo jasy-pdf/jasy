@@ -1,7 +1,7 @@
 // JasyForms and filledPdfResource against a real Angular injector, in Node (see support.ts).
 // First: it loads the Angular compiler, which the Angular packages below need when they load.
 import { settle, setup } from "./support.ts";
-import { provideHttpClient, withInterceptors } from "@angular/common/http";
+import { HttpErrorResponse, provideHttpClient, withInterceptors } from "@angular/common/http";
 import { HttpTestingController, provideHttpClientTesting } from "@angular/common/http/testing";
 import { PLATFORM_ID, signal } from "@angular/core";
 import { TestBed } from "@angular/core/testing";
@@ -76,6 +76,21 @@ describe("JasyForms", () => {
         req.flush(FORM.buffer.slice(FORM.byteOffset, FORM.byteOffset + FORM.byteLength));
       });
     expect((await read)?.fields).toHaveLength(2);
+  });
+});
+
+describe("loading a URL through HttpClient", () => {
+  it("fails with an Error naming the URL, the HttpErrorResponse as its cause", async () => {
+    setup(provideHttpClient(), provideHttpClientTesting());
+    const read = TestBed.inject(JasyForms).read("/forms/missing.pdf");
+    const failed = expect(read).rejects;
+    await vi.waitFor(() =>
+      TestBed.inject(HttpTestingController)
+        .expectOne("/forms/missing.pdf")
+        .flush(null, { status: 404, statusText: "Not Found" }),
+    );
+    await failed.toThrow("jasy could not load /forms/missing.pdf: HTTP 404 Not Found");
+    await read.catch((e: Error) => expect(e.cause).toBeInstanceOf(HttpErrorResponse));
   });
 });
 

@@ -86,7 +86,7 @@ export interface FilledPdfResourceOptions {
  * ```ts
  * values = toSignal(this.form.valueChanges, { initialValue: this.form.value });
  * preview = filledPdfResource("/forms/application.pdf", this.values);
- * // <iframe [src]="preview.value()?.safeUrl"></iframe>
+ * // @if (preview.hasValue()) { <iframe [src]="preview.value().safeUrl"></iframe> }
  * ```
  */
 export function filledPdfResource(

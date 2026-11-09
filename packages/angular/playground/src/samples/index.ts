@@ -1,7 +1,8 @@
-import type { PdfDocumentFn } from "@jasy/angular";
+import type { FormValues, PdfDocumentFn } from "@jasy/angular";
 import type { RenderOptions } from "@jasy/pdf";
 import { drawingPdf } from "./drawing.pdf";
 import { encryptedPdf } from "./encrypted.pdf";
+import { MEMBERSHIP_FORM, membershipFields } from "./fill-form";
 import { fontsAndImagesPdf } from "./fonts-and-images.pdf";
 import { formPdf } from "./form.pdf";
 import { helloPdf } from "./hello.pdf";
@@ -28,8 +29,10 @@ export interface Sample {
   file: string;
   controls?: Control[];
   /** The controls' values are the document's data. */
-  document: PdfDocumentFn<any>;
+  document?: PdfDocumentFn<any>;
   options?: (values: Values) => RenderOptions;
+  /** Instead of a document: an existing PDF, filled from the controls. */
+  fill?: { source: string; fields: (values: Values) => FormValues };
 }
 
 export const GROUPS = ["Start", "Documents", "jasy's power"] as const;
@@ -129,6 +132,19 @@ export const SAMPLES: Sample[] = [
     file: "form.pdf.ts",
     controls: [{ key: "name", label: "Full name", type: "text", initial: "Ada Lovelace" }],
     document: formPdf,
+  },
+  {
+    id: "fill",
+    group: "jasy's power",
+    title: "Fill a PDF",
+    look: "An existing PDF form, filled live as you type.",
+    file: "fill-form.ts",
+    controls: [
+      { key: "name", label: "Full name", type: "text", initial: "Grace Hopper" },
+      { key: "notes", label: "Notes", type: "text", initial: "Filled by @jasy/angular" },
+      { key: "plan", label: "Plan (basic or pro)", type: "text", initial: "basic" },
+    ],
+    fill: { source: MEMBERSHIP_FORM, fields: (v) => membershipFields(v as never) },
   },
   {
     id: "encrypted",

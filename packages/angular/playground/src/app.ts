@@ -1,6 +1,6 @@
 import { httpResource } from "@angular/common/http";
 import { Component, DestroyRef, computed, inject, linkedSignal, signal } from "@angular/core";
-import { JasyPdf, pdfResource, type PdfDocumentFn } from "@jasy/angular";
+import { JasyPdf, filledPdfResource, pdfResource, type PdfDocumentFn } from "@jasy/angular";
 import type { Diagnostic, RenderOptions } from "@jasy/pdf";
 import { GROUPS, SAMPLES, type Sample, type Values } from "./samples";
 
@@ -37,21 +37,40 @@ export class App {
     values,
   }) => {
     this.started = performance.now();
-    return sample.document(values);
+    return sample.document!(values);
   };
 
   private reported: Diagnostic[] = [];
-  readonly preview = pdfResource(this.selected, () => this.input(), {
-    options: () => {
-      // A handler collects what the engine reports; without one, it warns in the console.
-      const reported: Diagnostic[] = (this.reported = []);
-      return { ...this.renderOptions(), onDiagnostic: (d) => reported.push(d) };
+  readonly preview = pdfResource(
+    this.selected,
+    () => (this.sample().document ? this.input() : undefined),
+    {
+      options: () => {
+        // A handler collects what the engine reports; without one, it warns in the console.
+        const reported: Diagnostic[] = (this.reported = []);
+        return { ...this.renderOptions(), onDiagnostic: (d) => reported.push(d) };
+      },
     },
-  });
+  );
+
+  // An existing PDF, filled from the controls. The form is loaded once, not on every keystroke.
+  readonly filled = filledPdfResource(
+    () => this.sample().fill?.source,
+    () => {
+      const fill = this.sample().fill;
+      if (!fill) return undefined;
+      this.started = performance.now();
+      return fill.fields(this.values());
+    },
+  );
+
+  /** Whichever of the two the selected sample uses. */
+  readonly active = computed(() => (this.sample().fill ? this.filled : this.preview));
 
   readonly stats = computed(() => {
-    const file = this.preview.value();
-    if (!file) return undefined;
+    const pdf = this.active();
+    if (!pdf.hasValue()) return undefined;
+    const file = pdf.value();
     const pages = countPages(file.bytes);
     return {
       ms: performance.now() - this.started,
@@ -75,12 +94,17 @@ export class App {
     this.values.update((v) => ({ ...v, [key]: value }));
   }
 
-  // The service, used directly: the same document, saved or opened in a tab.
+  // The service, used directly: a document is rendered again, a filled form is saved as it is.
   download() {
     const name = `${this.sample().id}.pdf`;
+    if (this.sample().fill && this.filled.hasValue()) {
+      return this.pdf.download(this.filled.value().bytes, name);
+    }
     return this.pdf.download(this.selected, this.input(), name, this.renderOptions());
   }
   open() {
+    if (this.sample().fill && this.filled.hasValue())
+      return this.pdf.open(this.filled.value().bytes);
     return this.pdf.open(this.selected, this.input(), this.renderOptions());
   }
 
