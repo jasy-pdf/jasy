@@ -1,9 +1,17 @@
 import type { PdfDocument } from "@jasy/angular";
 import type { RenderOptions } from "@jasy/pdf";
+import { drawingPdf } from "./drawing.pdf";
+import { encryptedPdf } from "./encrypted.pdf";
 import { fontsAndImagesPdf } from "./fonts-and-images.pdf";
 import { formPdf } from "./form.pdf";
 import { helloPdf } from "./hello.pdf";
+import { invitationPdf } from "./invitation.pdf";
 import { invoicePdf } from "./invoice.pdf";
+import { layoutPdf } from "./layout.pdf";
+import { newspaperPdf } from "./newspaper.pdf";
+import { reportPdf } from "./report.pdf";
+import { transparencyPdf } from "./transparency.pdf";
+import { typographyPdf } from "./typography.pdf";
 
 export type Control =
   | { key: string; label: string; type: "text"; initial: string }
@@ -49,12 +57,69 @@ export const SAMPLES: Sample[] = [
     document: invoicePdf,
   },
   {
+    id: "report",
+    group: "Documents",
+    title: "Report",
+    look: "Header and footer repeat; from page 2 the header says so.",
+    file: "report.pdf.ts",
+    controls: [{ key: "sections", label: "Sections", type: "range", initial: 7, min: 1, max: 40 }],
+    document: reportPdf,
+  },
+  {
+    id: "invitation",
+    group: "Documents",
+    title: "Invitation",
+    look: "A5, full bleed: Expanded fills the page.",
+    file: "invitation.pdf.ts",
+    document: invitationPdf,
+  },
+  {
+    id: "newspaper",
+    group: "Documents",
+    title: "Newspaper",
+    look: "Balanced columns, then a Flow through a page layout of your own.",
+    file: "newspaper.pdf.ts",
+    document: newspaperPdf,
+  },
+  {
+    id: "layout",
+    group: "jasy's power",
+    title: "Layout",
+    look: "Flex, wrap, alignSelf, zIndex, a rotated stamp, gradients.",
+    file: "layout.pdf.ts",
+    document: layoutPdf,
+  },
+  {
+    id: "typography",
+    group: "jasy's power",
+    title: "Typography",
+    look: "Kerning, spans, justification, ellipsis, spacing.",
+    file: "typography.pdf.ts",
+    document: typographyPdf,
+  },
+  {
+    id: "drawing",
+    group: "jasy's power",
+    title: "Drawing",
+    look: "A chart painted from data, transforms, inline SVG.",
+    file: "drawing.pdf.ts",
+    document: drawingPdf,
+  },
+  {
     id: "fonts",
     group: "jasy's power",
     title: "Fonts and images",
     look: "A font from provideJasy(), a photo by URL.",
     file: "fonts-and-images.pdf.ts",
     document: fontsAndImagesPdf,
+  },
+  {
+    id: "transparency",
+    group: "jasy's power",
+    title: "Transparency",
+    look: "A PNG's alpha channel over colored panels.",
+    file: "transparency.pdf.ts",
+    document: transparencyPdf,
   },
   {
     id: "form",
@@ -64,5 +129,15 @@ export const SAMPLES: Sample[] = [
     file: "form.pdf.ts",
     controls: [{ key: "name", label: "Full name", type: "text", initial: "Ada Lovelace" }],
     document: formPdf,
+  },
+  {
+    id: "encrypted",
+    group: "jasy's power",
+    title: "Encrypted",
+    look: "AES-256: the viewer asks for the password.",
+    file: "encrypted.pdf.ts",
+    controls: [{ key: "password", label: "Password", type: "text", initial: "secret" }],
+    document: encryptedPdf,
+    options: (v) => ({ encrypt: { userPassword: v["password"] || "secret" } }),
   },
 ];

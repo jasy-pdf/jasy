@@ -1,7 +1,7 @@
 import { httpResource } from "@angular/common/http";
 import { Component, DestroyRef, computed, inject, linkedSignal, signal } from "@angular/core";
 import { JasyPdf, pdfResource, type PdfDocument } from "@jasy/angular";
-import type { Diagnostic } from "@jasy/pdf";
+import type { Diagnostic, RenderOptions } from "@jasy/pdf";
 import { GROUPS, SAMPLES, type Sample, type Values } from "./samples";
 
 const byHash = () => SAMPLES.find((s) => s.id === location.hash.slice(1)) ?? SAMPLES[0];
@@ -11,10 +11,6 @@ const initialValues = (s: Sample): Values =>
 // Page objects are written uncompressed, so counting them is a cheap, honest page count.
 const countPages = (bytes: Uint8Array) =>
   (new TextDecoder("latin1").decode(bytes).match(/\/Type\s*\/Page(?![a-zA-Z])/g) ?? []).length;
-
-// The one document the preview shows: whichever sample is selected, with the controls as its data.
-const selected: PdfDocument<{ sample: Sample; values: Values }> = ({ sample, values }) =>
-  sample.document(values);
 
 @Component({
   selector: "app-root",
@@ -34,23 +30,24 @@ export class App {
 
   readonly source = httpResource.text(() => `samples/${this.sample().file}`);
 
-  private diagnostics: Diagnostic[] = [];
+  // The one document the preview shows: whichever sample is selected, with the controls as its data.
   private started = 0;
-  readonly preview = pdfResource(
-    selected,
-    () => ({ sample: this.sample(), values: this.values() }),
-    {
-      options: () => {
-        this.diagnostics = [];
-        this.started = performance.now();
-        return {
-          ...this.sample().options?.(this.values()),
-          accessible: this.tagged(),
-          onDiagnostic: (d) => this.diagnostics.push(d),
-        };
-      },
+  private readonly selected: PdfDocument<{ sample: Sample; values: Values }> = ({
+    sample,
+    values,
+  }) => {
+    this.started = performance.now();
+    return sample.document(values);
+  };
+
+  private reported: Diagnostic[] = [];
+  readonly preview = pdfResource(this.selected, () => this.input(), {
+    options: () => {
+      // A handler collects what the engine reports; without one, it warns in the console.
+      const reported: Diagnostic[] = (this.reported = []);
+      return { ...this.renderOptions(), onDiagnostic: (d) => reported.push(d) };
     },
-  );
+  });
 
   readonly stats = computed(() => {
     const file = this.preview.value();
@@ -59,7 +56,7 @@ export class App {
     return {
       ms: performance.now() - this.started,
       label: `${pages} ${pages === 1 ? "page" : "pages"} · ${(file.bytes.length / 1024).toFixed(1)} KB`,
-      diagnostics: this.diagnostics,
+      diagnostics: this.reported,
     };
   });
 
@@ -80,25 +77,21 @@ export class App {
 
   // The service, used directly: the same document, saved or opened in a tab.
   download() {
-    return this.pdf.download(
-      selected,
-      this.input(),
-      `${this.sample().id}.pdf`,
-      this.renderOptions(),
-    );
+    const name = `${this.sample().id}.pdf`;
+    return this.pdf.download(this.selected, this.input(), name, this.renderOptions());
   }
   open() {
-    return this.pdf.open(selected, this.input(), this.renderOptions());
+    return this.pdf.open(this.selected, this.input(), this.renderOptions());
+  }
+
+  error(e: unknown) {
+    return String((e as Error)?.stack ?? e);
   }
 
   private input() {
     return { sample: this.sample(), values: this.values() };
   }
-  private renderOptions() {
+  private renderOptions(): RenderOptions {
     return { ...this.sample().options?.(this.values()), accessible: this.tagged() };
-  }
-
-  error(e: unknown) {
-    return String((e as Error)?.stack ?? e);
   }
 }
