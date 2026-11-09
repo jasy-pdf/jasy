@@ -57,9 +57,9 @@
     "typescript": "^5.6.0"
   },
   "peerDependencies": {
-    "@angular/common": ">=20.0.0",
-    "@angular/core": ">=20.0.0",
-    "@angular/platform-browser": ">=20.0.0",
+    "@angular/common": "^20.0.0 || ^21.0.0 || ^22.0.0",
+    "@angular/core": "^20.0.0 || ^21.0.0 || ^22.0.0",
+    "@angular/platform-browser": "^20.0.0 || ^21.0.0 || ^22.0.0",
     "@jasy/pdf": "workspace:^"
   },
   "ng-add": {

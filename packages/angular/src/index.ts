@@ -5,8 +5,13 @@
 export { provideJasy } from "./provide.js";
 export { JASY_CONFIG, type JasyConfig, type FontFile, type FontInput } from "./config.js";
 export type { PdfDocumentFn } from "./document.js";
-export { JasyPdf, JasyBrowserOnlyError } from "./service.js";
-export { pdfResource, type PdfFile, type PdfResourceOptions } from "./resource.js";
+export { JasyPdf, JasyBrowserOnlyError, JasyPopupBlockedError } from "./service.js";
+export {
+  pdfResource,
+  type PdfFile,
+  type PdfResourceOptions,
+  type PdfResourceRef,
+} from "./resource.js";
 export {
   JasyForms,
   filledPdfResource,

@@ -4,7 +4,6 @@ import {
   assertInInjectionContext,
   inject,
   runInInjectionContext,
-  type ResourceRef,
 } from "@angular/core";
 import type {
   FieldValue,
@@ -17,14 +16,18 @@ import type {
 } from "@jasy/pdf/edit";
 import { bytesLoader, type FileSource } from "./load.js";
 
-/** Field name to value. `undefined` leaves a field as it is - an Angular form's value omits a disabled control. */
-export type FormValues = Record<string, FieldValue | undefined>;
-const defined = (values: FormValues) =>
-  Object.fromEntries(Object.entries(values).filter(([, v]) => v !== undefined)) as Record<
-    string,
-    FieldValue
-  >;
-import { previewResource, type PdfFile } from "./resource.js";
+/**
+ * Field name to value. `undefined` leaves a field as it is - an Angular form's value omits a disabled
+ * control - and a number is written as its text, as a number input gives it.
+ */
+export type FormValues = Record<string, FieldValue | number | undefined>;
+const fieldValues = (values: FormValues): Record<string, FieldValue> =>
+  Object.fromEntries(
+    Object.entries(values)
+      .filter(([, v]) => v !== undefined)
+      .map(([k, v]) => [k, typeof v === "number" ? String(v) : (v as FieldValue)]),
+  );
+import { previewResource, type PdfResourceRef } from "./resource.js";
 
 /**
  * Reads, fills and flattens the form of an existing PDF - in the browser and on the server.
@@ -62,7 +65,7 @@ function createJasyForms(): JasyForms {
     },
     async fill(source, values, options) {
       const [{ fillForm }, bytes] = await Promise.all([lib(), load(source)]);
-      return fillForm(bytes, defined(values), options);
+      return fillForm(bytes, fieldValues(values), options);
     },
     async flatten(source, options) {
       const [{ flattenForm }, bytes] = await Promise.all([lib(), load(source)]);
@@ -86,14 +89,14 @@ export interface FilledPdfResourceOptions {
  * ```ts
  * values = toSignal(this.form.valueChanges, { initialValue: this.form.value });
  * preview = filledPdfResource("/forms/application.pdf", this.values);
- * // @if (preview.hasValue()) { <iframe [src]="preview.value().safeUrl"></iframe> }
+ * // @if (preview.latest(); as pdf) { <iframe [src]="pdf.safeUrl"></iframe> }
  * ```
  */
 export function filledPdfResource(
   source: FileSource | (() => FileSource | undefined),
   values: () => FormValues | undefined,
   { options, injector }: FilledPdfResourceOptions = {},
-): ResourceRef<PdfFile | undefined> {
+): PdfResourceRef {
   if (!injector) assertInInjectionContext(filledPdfResource);
   injector ??= inject(Injector);
   const forms = injector.get(JasyForms);

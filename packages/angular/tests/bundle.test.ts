@@ -11,8 +11,10 @@ describe("the engine stays out of the start bundle", () => {
     "%s imports @jasy/pdf only as types or lazily",
     (file) => {
       const source = readFileSync(new URL(file, SRC), "utf-8");
+      // `import x from`, `export x from` and a bare `import "..."` all load the module; `import type` does not.
       const statics = [
-        ...source.matchAll(/^import\s+(?!type\b)[^;]*?from\s+"(@jasy\/pdf[^"]*)"/gms),
+        ...source.matchAll(/^(?:import|export)\s+(?!type\b)[^;]*?from\s+"(@jasy\/pdf[^"]*)"/gms),
+        ...source.matchAll(/^import\s+"(@jasy\/pdf[^"]*)"/gm),
       ].map((m) => m[1]);
       expect(statics).toEqual([]);
     },

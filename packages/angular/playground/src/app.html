@@ -84,8 +84,8 @@
     }
     @if (pdf.error(); as e) {
       <pre class="error">{{ error(e) }}</pre>
-    } @else if (pdf.hasValue()) {
-      <iframe [src]="pdf.value().safeUrl" title="PDF"></iframe>
+    } @else if (pdf.latest(); as file) {
+      <iframe [src]="file.safeUrl" title="PDF"></iframe>
     }
   </section>
 </div>

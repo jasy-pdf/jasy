@@ -107,4 +107,5 @@ jobs:
           @angular/platform-browser@${{ matrix.angular }}
           @angular/platform-browser-dynamic@${{ matrix.angular }}
           @angular/platform-server@${{ matrix.angular }}
+          @angular-devkit/schematics@${{ matrix.angular }} @schematics/angular@${{ matrix.angular }}
       - run: pnpm exec vitest run packages/angular

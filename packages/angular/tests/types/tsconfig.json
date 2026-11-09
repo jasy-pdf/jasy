@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM"],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "types": ["node"],
+    "paths": {
+      "@jasy/pdf": ["../../../../src/lib/index.ts"],
+      "@jasy/pdf/edit": ["../../../../src/lib/edit/index.ts"]
+    }
+  },
+  "files": ["api.ts", "../../../../src/types/brotli.d.ts", "../../../../src/types/bidi-js.d.ts"]
+}

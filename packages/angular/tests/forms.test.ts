@@ -57,6 +57,12 @@ describe("JasyForms", () => {
     expect(filled.filled).toEqual(["full_name"]);
   });
 
+  it("writes a number as its text, as a number input gives it", async () => {
+    setup();
+    const filled = await TestBed.inject(JasyForms).fill(FORM, { full_name: 42 });
+    expect(await valueOf(filled.bytes, "full_name")).toBe("42");
+  });
+
   it("takes a Blob, such as the File of an <input type=file>", async () => {
     setup();
     const file = new Blob([FORM as Uint8Array<ArrayBuffer>], { type: "application/pdf" });

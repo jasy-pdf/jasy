@@ -1,7 +1,7 @@
 // @jasy/angular against a real Angular injector, in Node (see support.ts).
 // First: it loads the Angular compiler, which the Angular packages below need when they load.
 import { NO_HTTP_CLIENT, latin1, settle, setup } from "./support.ts";
-import { LOCALE_ID, PLATFORM_ID, inject, signal } from "@angular/core";
+import { InjectionToken, Injector, LOCALE_ID, PLATFORM_ID, inject, signal } from "@angular/core";
 import { TestBed } from "@angular/core/testing";
 import { Document, Page, Text } from "@jasy/pdf";
 import { readFileSync } from "node:fs";
@@ -9,6 +9,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   JasyBrowserOnlyError,
   JasyPdf,
+  JasyPopupBlockedError,
   pdfResource,
   provideJasy,
   type PdfDocumentFn,
@@ -72,6 +73,16 @@ describe("JasyPdf", () => {
     await pdf.render(doc, undefined);
     await pdf.render(doc, undefined);
     expect(calls).toBe(2);
+  });
+
+  it("throws a named error when the browser blocks the tab, and renders nothing", async () => {
+    setup({ provide: PLATFORM_ID, useValue: "browser" });
+    vi.stubGlobal("window", { open: () => null });
+    const rendered = vi.fn(hello);
+    await expect(TestBed.inject(JasyPdf).open(rendered, "a")).rejects.toThrow(
+      JasyPopupBlockedError,
+    );
+    expect(rendered).not.toHaveBeenCalled();
   });
 
   it("refuses download() and open() on the server, by name", async () => {
@@ -166,6 +177,37 @@ describe("pdfResource", () => {
     await settle();
     expect(preview.value()!.url).not.toBe(first.url);
     expect(revoked).toHaveBeenCalledWith(first.url);
+  });
+
+  it("keeps the last PDF in latest() while the next one renders, where value() is empty", async () => {
+    setup({ provide: PLATFORM_ID, useValue: "browser" });
+    const name = signal("first");
+    const preview = TestBed.runInInjectionContext(() => pdfResource(hello, name));
+    await settle();
+    const first = preview.latest()!;
+    expect(preview.value()).toBe(first);
+
+    name.set("second");
+    TestBed.tick();
+    expect(preview.hasValue()).toBe(false); // Angular drops the value when the params change
+    expect(preview.latest()).toBe(first); // the preview keeps showing the last PDF
+    await settle();
+    expect(preview.latest()).not.toBe(first);
+    expect(preview.latest()).toBe(preview.value());
+  });
+
+  it("runs the document in its own injector, so it sees the component's providers", async () => {
+    setup({ provide: PLATFORM_ID, useValue: "browser" });
+    const CUSTOMER = new InjectionToken<string>("CUSTOMER");
+    const own = Injector.create({
+      providers: [{ provide: CUSTOMER, useValue: "Ada from the component" }],
+      parent: TestBed.inject(Injector),
+    });
+    const letter: PdfDocumentFn = () => Document([Page([Text(`Dear ${inject(CUSTOMER)}`)])]);
+    const preview = pdfResource(letter, undefined, { injector: own, options: { compress: false } });
+    await settle();
+    expect(preview.error()).toBeUndefined();
+    expect(latin1(preview.latest()!.bytes)).toContain("Ada from the component");
   });
 
   it("renders a document without data, and re-renders when its options change", async () => {

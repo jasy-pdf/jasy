@@ -63,6 +63,24 @@ describe("ng add @jasy/angular", () => {
     expect(config.match(/provideJasy\(\)/g)).toHaveLength(1);
   });
 
+  it("in an SSR app, also allows what jimp brings into the server bundle", async () => {
+    const workspace = await runner.runExternalSchematic("@schematics/angular", "workspace", {
+      name: "workspace",
+      newProjectRoot: "projects",
+      version: "20.3.0",
+    });
+    const app = await runner.runExternalSchematic(
+      "@schematics/angular",
+      "application",
+      { name: "shop", standalone: true, ssr: true },
+      workspace,
+    );
+    const tree = await run(ngAdd({}), app);
+    const allowed: string[] = buildOptions(tree).allowedCommonJsDependencies;
+    expect(allowed).toContain("svgpath");
+    expect(allowed).toEqual(expect.arrayContaining(["pngjs", "jpeg-js", "omggif", "mime"]));
+  });
+
   it("names a project that does not exist", async () => {
     await expect(run(ngAdd({ project: "nope" }), await newApp())).rejects.toThrow(
       'There is no project "nope" in this workspace.',

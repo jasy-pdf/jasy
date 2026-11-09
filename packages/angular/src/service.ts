@@ -1,6 +1,7 @@
 import {
   EnvironmentInjector,
   InjectionToken,
+  type Injector,
   LOCALE_ID,
   PLATFORM_ID,
   inject,
@@ -11,13 +12,25 @@ import { JASY_CONFIG, type FontFile, type FontInput } from "./config.js";
 import type { PdfDocumentFn } from "./document.js";
 import { bytesLoader } from "./load.js";
 
-/** Turns your documents into PDFs. `inject(JasyPdf)` anywhere in an injection context. */
+/**
+ * Turns your documents into PDFs. `inject(JasyPdf)` anywhere in an injection context. A document runs
+ * in the app's root injector here; in a `pdfResource`, in the injector of the component that owns it.
+ * A document without data (`PdfDocumentFn` with no type argument) needs none: `render(doc)`.
+ */
 export interface JasyPdf {
   /** The PDF bytes. Works in the browser and on the server. */
+  render(document: PdfDocumentFn, data?: undefined, options?: RenderOptions): Promise<Uint8Array>;
   render<T>(document: PdfDocumentFn<T>, data: T, options?: RenderOptions): Promise<Uint8Array>;
   /** The PDF as a `Blob`, ready for an upload or `URL.createObjectURL`. */
+  blob(document: PdfDocumentFn, data?: undefined, options?: RenderOptions): Promise<Blob>;
   blob<T>(document: PdfDocumentFn<T>, data: T, options?: RenderOptions): Promise<Blob>;
   /** Saves the PDF in the browser under `filename`. */
+  download(
+    document: PdfDocumentFn,
+    data?: undefined,
+    filename?: string,
+    options?: RenderOptions,
+  ): Promise<void>;
   download<T>(
     document: PdfDocumentFn<T>,
     data: T,
@@ -26,9 +39,13 @@ export interface JasyPdf {
   ): Promise<void>;
   /** Saves a finished PDF - a filled form, say - in the browser under `filename`. */
   download(pdf: Uint8Array | Blob, filename?: string): Promise<void>;
-  /** Opens the PDF in a new tab. Call it from a click handler, or the browser blocks the tab. */
+  /**
+   * Opens the PDF in a new tab. Call it from a click handler: a browser blocks a tab opened later, and
+   * then this throws a `JasyPopupBlockedError`.
+   */
+  open(document: PdfDocumentFn, data?: undefined, options?: RenderOptions): Promise<void>;
   open<T>(document: PdfDocumentFn<T>, data: T, options?: RenderOptions): Promise<void>;
-  /** Opens a finished PDF in a new tab. Call it from a click handler, or the browser blocks the tab. */
+  /** Opens a finished PDF in a new tab, under the same rule. */
   open(pdf: Uint8Array | Blob): Promise<void>;
   /**
    * Loads what the first PDF would wait for: the standard font metrics and the fonts of `provideJasy`.
@@ -39,7 +56,8 @@ export interface JasyPdf {
 }
 
 type Pdf = Uint8Array | Blob;
-type DocumentArgs = [document: PdfDocumentFn<unknown>, data: unknown, ...rest: unknown[]];
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- any document, typed by the overloads above
+type DocumentArgs = [document: PdfDocumentFn<any>, data?: unknown, ...rest: unknown[]];
 
 /** Thrown by `download()` and `open()` outside a browser, where there is no tab to save into. */
 export class JasyBrowserOnlyError extends Error {
@@ -51,6 +69,26 @@ export class JasyBrowserOnlyError extends Error {
     this.name = "JasyBrowserOnlyError";
   }
 }
+
+/** Thrown by `open()` when the browser refused the new tab - it was not called from a click. */
+export class JasyPopupBlockedError extends Error {
+  constructor() {
+    super(
+      "The browser blocked the new tab. Call JasyPdf.open() straight from a click handler, " +
+        "or save the PDF with download() instead.",
+    );
+    this.name = "JasyPopupBlockedError";
+  }
+}
+
+/** Renders in a given injector - how a pdfResource runs its document in its component. Internal. */
+export const RENDER_IN = Symbol("jasy.renderIn");
+export type RenderIn = <T>(
+  injector: Injector,
+  document: PdfDocumentFn<T>,
+  data: T,
+  options?: RenderOptions,
+) => Promise<Uint8Array>;
 
 export const JasyPdf = new InjectionToken<JasyPdf>("JasyPdf", {
   providedIn: "root",
@@ -69,8 +107,8 @@ const loadEngine = () =>
     throw e;
   }));
 
-function createJasyPdf(): JasyPdf {
-  const injector = inject(EnvironmentInjector);
+function createJasyPdf(): JasyPdf & { [RENDER_IN]: RenderIn } {
+  const root = inject(EnvironmentInjector);
   const config = inject(JASY_CONFIG);
   const locale = inject(LOCALE_ID);
   const browser = inject(PLATFORM_ID) === "browser";
@@ -105,7 +143,7 @@ function createJasyPdf(): JasyPdf {
       throw e;
     }));
 
-  async function render<T>(document: PdfDocumentFn<T>, data: T, options?: RenderOptions) {
+  const renderIn: RenderIn = async (injector, document, data, options) => {
     const doc = await runInInjectionContext(injector, () => document(data));
     const { renderToBytes } = await loadEngine();
     return renderToBytes(doc, {
@@ -114,7 +152,9 @@ function createJasyPdf(): JasyPdf {
       ...options,
       fonts: { ...(await configuredFonts()), ...options?.fonts },
     });
-  }
+  };
+  const render = <T>(document: PdfDocumentFn<T>, data: T, options?: RenderOptions) =>
+    renderIn(root, document, data, options);
   const blob = async <T>(document: PdfDocumentFn<T>, data: T, options?: RenderOptions) =>
     asBlob(await render(document, data, options));
   const asBlob = (pdf: Pdf) =>
@@ -124,6 +164,7 @@ function createJasyPdf(): JasyPdf {
     typeof args[0] !== "function";
 
   return {
+    [RENDER_IN]: renderIn,
     render,
     blob,
     async preload() {
@@ -146,16 +187,15 @@ function createJasyPdf(): JasyPdf {
       if (!browser) throw new JasyBrowserOnlyError("open");
       // Opened before the render, still inside the click: a tab opened after an await is a popup.
       const tab = window.open("", "_blank");
+      if (!tab) throw new JasyPopupBlockedError();
       try {
         const file = isFinished(args)
           ? asBlob(args[0])
           : await blob(args[0], args[1], args[2] as RenderOptions);
         // Not revoked: the new tab is still loading it. It is freed when this page unloads.
-        const url = URL.createObjectURL(file);
-        if (tab) tab.location.href = url;
-        else window.location.href = url;
+        tab.location.href = URL.createObjectURL(file);
       } catch (e) {
-        tab?.close();
+        tab.close();
         throw e;
       }
     },

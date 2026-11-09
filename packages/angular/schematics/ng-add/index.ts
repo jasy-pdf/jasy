@@ -9,6 +9,27 @@ import {
 
 /** What @jasy/pdf brings as CommonJS; `ng build` warns about each one unless it is allowed. */
 const COMMONJS = ["svgpath", "brotli", "base64-js"];
+/**
+ * The server bundle of an SSR app also holds jimp (images on the server), with these CommonJS modules
+ * of jimp 1.x. Allowing "jimp" alone does not reach them: jasy imports it lazily, so it is a chunk of its
+ * own and Angular checks it from its own entry.
+ */
+const SERVER_COMMONJS = [
+  "any-base",
+  "debug",
+  "exif-parser",
+  "gifwrap",
+  "ieee754",
+  "jpeg-js",
+  "mime",
+  "omggif",
+  "parse-bmfont-ascii",
+  "parse-bmfont-binary",
+  "parse-bmfont-xml",
+  "pixelmatch",
+  "pngjs",
+  "utif2",
+];
 
 /** The @jasy/pdf range this package was released against: its peer dependency. */
 const pdfRange = (): string => {
@@ -42,9 +63,11 @@ export function ngAdd(options: { project?: string }): Rule {
         if (!build) return;
         const options = (build.options ??= {});
         const allowed = (options["allowedCommonJsDependencies"] as string[] | undefined) ?? [];
+        const ssr = options["server"] !== undefined || options["ssr"] !== undefined;
+        const ours = ssr ? [...COMMONJS, ...SERVER_COMMONJS] : COMMONJS;
         options["allowedCommonJsDependencies"] = [
           ...allowed,
-          ...COMMONJS.filter((d) => !allowed.includes(d)),
+          ...ours.filter((d) => !allowed.includes(d)),
         ];
       }),
       providesJasy(tree, project.sourceRoot ?? `${project.root}/src`)

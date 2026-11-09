@@ -68,9 +68,8 @@ export class App {
   readonly active = computed(() => (this.sample().fill ? this.filled : this.preview));
 
   readonly stats = computed(() => {
-    const pdf = this.active();
-    if (!pdf.hasValue()) return undefined;
-    const file = pdf.value();
+    const file = this.active().latest();
+    if (!file) return undefined;
     const pages = countPages(file.bytes);
     return {
       ms: performance.now() - this.started,

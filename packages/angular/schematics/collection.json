@@ -1,5 +1,6 @@
 {
   "$schema": "../node_modules/@angular-devkit/schematics/collection-schema.json",
+  "encapsulation": true,
   "schematics": {
     "ng-add": {
       "description": "Adds @jasy/pdf, provideJasy() in the app config, and allows jasy's CommonJS dependencies in the build.",

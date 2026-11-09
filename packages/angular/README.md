@@ -58,8 +58,8 @@ import { invoicePdf, type Invoice } from "./invoice.pdf";
 @Component({
   selector: "app-invoice-preview",
   template: `
-    @if (preview.hasValue()) {
-      <iframe [src]="preview.value().safeUrl" title="Invoice"></iframe>
+    @if (preview.latest(); as pdf) {
+      <iframe [src]="pdf.safeUrl" title="Invoice"></iframe>
     }
     <button (click)="download()">Download</button>
   `,
@@ -82,7 +82,8 @@ export class InvoicePreview {
 - **Built the way Angular builds.** `provideJasy()` in `app.config.ts`, `inject(JasyPdf)` where you
   need a PDF, and `pdfResource()` on top of Angular's own `resource()`.
 - **Documents run in an injection context**, like functional guards and resolvers. `inject(LOCALE_ID)`
-  gives you the app's language, and `inject()` reaches any of your services. A tagged PDF takes its
+  gives you the app's language, and `inject()` reaches your services - in a `pdfResource`, those of
+  its component and route too. A tagged PDF takes its
   language from `LOCALE_ID` as well.
 - **A preview that follows your signals.** `pdfResource()` renders again when its signals change, and
   drops a result that a newer one replaced. It frees the old `blob:` URL, and `safeUrl` goes straight
@@ -100,9 +101,9 @@ export class InvoicePreview {
 ng add @jasy/angular
 ```
 
-That installs `@jasy/pdf` beside it, adds `provideJasy()` to your app config, and allows jasy's three
-CommonJS dependencies in `angular.json`, so `ng build` does not warn about them. Run it twice and nothing
-changes. By hand, it is:
+That installs `@jasy/pdf` beside it, adds `provideJasy()` to your app config, and allows jasy's CommonJS
+dependencies in `angular.json`, so `ng build` does not warn about them - in an SSR app also those of
+jimp, which the server uses for images. Run it twice and nothing changes. By hand, it is:
 
 ```bash
 pnpm add @jasy/angular @jasy/pdf
@@ -124,7 +125,9 @@ A new document: `ng generate @jasy/angular:pdf invoice` creates `invoice.pdf.ts`
 
 ## Setup
 
-Optional. Without it, `inject(JasyPdf)` works with the standard fonts and the engine's defaults.
+Optional. Without it, `inject(JasyPdf)` works with the standard fonts and the engine's defaults. It
+belongs in `app.config.ts`: jasy is one service for the whole app, so `provideJasy()` in a lazy route's
+providers does not change it.
 
 ```ts
 // app.config.ts
@@ -199,9 +202,10 @@ const SOURCE = "/forms/application.pdf";
       <input formControlName="full_name" />
       <input type="checkbox" formControlName="agree" />
     </form>
-    @if (preview.hasValue()) {
-      <iframe [src]="preview.value().safeUrl" title="Application"></iframe>
-    } @else if (preview.error(); as error) {
+    @if (preview.latest(); as pdf) {
+      <iframe [src]="pdf.safeUrl" title="Application"></iframe>
+    }
+    @if (preview.error(); as error) {
       <p>{{ error.message }}</p>
     }
     <button (click)="send()">Download</button>
@@ -237,26 +241,32 @@ choices. The PDF reader is loaded on first use, so an app that only creates PDFs
 
 ### `inject(JasyPdf)`
 
-| Method                                          | Does                                                                        |
-| ----------------------------------------------- | --------------------------------------------------------------------------- |
-| `render(document, data, options?)`              | The PDF bytes, a `Uint8Array`. Browser and server.                          |
-| `blob(document, data, options?)`                | The PDF as a `Blob`, ready for an upload.                                   |
-| `download(document, data, filename?, options?)` | Saves the PDF in the browser.                                               |
-| `open(document, data, options?)`                | Opens the PDF in a new tab. Call it from a click, or the browser blocks it. |
-| `download(bytes, filename?)` · `open(bytes)`    | The same for a finished PDF, such as a filled form.                         |
-| `preload()`                                     | Loads the font data now, e.g. on a hover, so the next PDF does not wait.    |
+| Method                                          | Does                                                                     |
+| ----------------------------------------------- | ------------------------------------------------------------------------ |
+| `render(document, data, options?)`              | The PDF bytes, a `Uint8Array`. Browser and server.                       |
+| `blob(document, data, options?)`                | The PDF as a `Blob`, ready for an upload.                                |
+| `download(document, data, filename?, options?)` | Saves the PDF in the browser.                                            |
+| `open(document, data, options?)`                | Opens the PDF in a new tab, from a click handler.                        |
+| `download(bytes, filename?)` · `open(bytes)`    | The same for a finished PDF, such as a filled form.                      |
+| `preload()`                                     | Loads the font data now, e.g. on a hover, so the next PDF does not wait. |
 
 `options` are the `@jasy/pdf` `RenderOptions`: `{ encrypt: { userPassword } }` for AES-256,
 `{ accessible: true }` for a tagged PDF (PDF/UA), `onDiagnostic` for what the engine has to say.
-`download()` and `open()` need a browser, and on the server they throw a `JasyBrowserOnlyError`.
+A document without data needs none: `render(doc)`, `download(doc, undefined, "a.pdf")`. It runs in the
+app's root injector here. `download()` and `open()` need a browser and throw a `JasyBrowserOnlyError` on
+the server; when the browser blocks the new tab (`open()` was not called from a click), `open()` throws a
+`JasyPopupBlockedError` and your app stays where it is.
 
 ### `pdfResource(document, data?, { options?, injector? })`
 
-An Angular `ResourceRef`: `value()`, `isLoading()`, `error()`, `reload()`. The value holds the PDF's
-`bytes`, its `url` and `safeUrl`.
+An Angular `ResourceRef` - `value()`, `isLoading()`, `error()`, `reload()` - plus `latest()`: the
+last PDF that rendered. Bind a preview to `latest()`: Angular empties `value()` whenever the data changes,
+so an `<iframe>` behind `hasValue()` would vanish and lose its scroll position on every change. A PDF
+holds its `bytes`, its `url` and `safeUrl`.
 
 - `data` is read like `resource({ params })`. Return `undefined` to wait, for example until an input
-  has a value.
+  has a value. A document without data takes none: `pdfResource(doc)`.
+- The document runs in the resource's injector, so it can inject what its component and route provide.
 - `options` can be a function, and it is tracked like `data`. A signal in it renders the PDF again.
 - On the server it stays idle, since a preview there has nobody to look at it.
 
@@ -269,13 +279,13 @@ An Angular `ResourceRef`: `value()`, `isLoading()`, `error()`, `reload()`. The v
 | `flatten(source, options?)`      | Turns the fields into page content.                                     |
 
 `source` is a URL, a `Blob` or `File`, or a `Uint8Array`. A value that is `undefined` leaves its
-field as it is, the way an Angular form leaves out a disabled control. The options are those of
+field as it is, the way an Angular form leaves out a disabled control; a number is written as its text. The options are those of
 `@jasy/pdf/edit`, e.g. `password` for an encrypted PDF.
 
 ### `filledPdfResource(source, values, { options?, injector? })`
 
-Like `pdfResource`, for an existing form: filled again whenever `values` changes, with the source
-loaded once.
+Like `pdfResource`, `latest()` included, for an existing form: filled again whenever `values` changes,
+with the source loaded once.
 
 ### `PdfDocumentFn<T>`
 
