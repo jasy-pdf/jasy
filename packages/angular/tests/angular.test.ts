@@ -82,6 +82,56 @@ describe("JasyPdf", () => {
   });
 });
 
+describe("preloading", () => {
+  const fontServer = (status = 200) => {
+    const fetched = vi.fn(async () =>
+      status === 200 ? new Response(FONT) : new Response("", { status }),
+    );
+    vi.stubGlobal("fetch", fetched);
+    return fetched;
+  };
+  const fonts = { Liberation: "https://example.com/serif.ttf" };
+  const serif: PdfDocumentFn = () => Document([Page([Text("Serif", { font: "Liberation" })])]);
+
+  it("preload() loads the configured fonts before the first PDF needs them", async () => {
+    const fetched = fontServer();
+    setup(provideJasy({ fonts }));
+    const pdf = TestBed.inject(JasyPdf);
+    await pdf.preload();
+    expect(fetched).toHaveBeenCalledTimes(1);
+    await pdf.render(serif, undefined);
+    expect(fetched).toHaveBeenCalledTimes(1);
+  });
+
+  it("provideJasy({ preload: true }) preloads in the browser once the app is idle", async () => {
+    const fetched = fontServer();
+    setup(provideJasy({ fonts, preload: true }), { provide: PLATFORM_ID, useValue: "browser" });
+    TestBed.inject(JasyPdf); // starts the app's injector, and with it the initializer
+    await settle();
+    expect(fetched).toHaveBeenCalledTimes(1);
+  });
+
+  it("does nothing without the flag, and nothing on the server", async () => {
+    const fetched = fontServer();
+    setup(provideJasy({ fonts }), { provide: PLATFORM_ID, useValue: "browser" });
+    TestBed.inject(JasyPdf);
+    await settle();
+    TestBed.resetTestingModule();
+    setup(provideJasy({ fonts, preload: true }));
+    TestBed.inject(JasyPdf);
+    await settle();
+    expect(fetched).not.toHaveBeenCalled();
+  });
+
+  it("stays quiet when a preload fails, and the first render reports it", async () => {
+    fontServer(404);
+    setup(provideJasy({ fonts, preload: true }), { provide: PLATFORM_ID, useValue: "browser" });
+    const pdf = TestBed.inject(JasyPdf);
+    await settle(); // an unhandled rejection here would fail the test run
+    await expect(pdf.render(serif, undefined)).rejects.toThrow(/serif\.ttf: HTTP 404/);
+  });
+});
+
 describe("pdfResource", () => {
   it("stays idle on the server", async () => {
     setup();

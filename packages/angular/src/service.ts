@@ -6,7 +6,7 @@ import {
   inject,
   runInInjectionContext,
 } from "@angular/core";
-import { renderToBytes, type FontFamily, type RenderOptions } from "@jasy/pdf";
+import type { FontFamily, RenderOptions } from "@jasy/pdf";
 import { JASY_CONFIG, type FontFile, type FontInput } from "./config.js";
 import type { PdfDocumentFn } from "./document.js";
 import { bytesLoader } from "./load.js";
@@ -30,6 +30,12 @@ export interface JasyPdf {
   open<T>(document: PdfDocumentFn<T>, data: T, options?: RenderOptions): Promise<void>;
   /** Opens a finished PDF in a new tab. Call it from a click handler, or the browser blocks the tab. */
   open(pdf: Uint8Array | Blob): Promise<void>;
+  /**
+   * Loads what the first PDF would wait for: the standard font metrics and the fonts of `provideJasy`.
+   * `provideJasy({ preload: true })` calls it once the app is idle; call it yourself to warm up on a
+   * hover, say.
+   */
+  preload(): Promise<void>;
 }
 
 type Pdf = Uint8Array | Blob;
@@ -52,6 +58,16 @@ export const JasyPdf = new InjectionToken<JasyPdf>("JasyPdf", {
 });
 
 const PDF = "application/pdf";
+
+// The engine is imported with the first PDF, not at the top: everything here is reachable from the
+// package index, which app.config.ts imports for provideJasy() - a static import would put the whole
+// engine into the start bundle, @defer or not. A failed load (a chunk lost to a deploy) is retried.
+let engine: Promise<typeof import("@jasy/pdf")> | undefined;
+const loadEngine = () =>
+  (engine ??= import("@jasy/pdf").catch((e) => {
+    engine = undefined;
+    throw e;
+  }));
 
 function createJasyPdf(): JasyPdf {
   const injector = inject(EnvironmentInjector);
@@ -91,6 +107,7 @@ function createJasyPdf(): JasyPdf {
 
   async function render<T>(document: PdfDocumentFn<T>, data: T, options?: RenderOptions) {
     const doc = await runInInjectionContext(injector, () => document(data));
+    const { renderToBytes } = await loadEngine();
     return renderToBytes(doc, {
       lang: locale,
       ...config.defaults,
@@ -109,6 +126,9 @@ function createJasyPdf(): JasyPdf {
   return {
     render,
     blob,
+    async preload() {
+      await Promise.all([loadEngine().then((e) => e.preloadStandardFonts()), configuredFonts()]);
+    },
     async download(...args: [Pdf, string?] | DocumentArgs) {
       if (!browser) throw new JasyBrowserOnlyError("download");
       const [file, filename = "document.pdf"] = isFinished(args)

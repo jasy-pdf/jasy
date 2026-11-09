@@ -131,6 +131,8 @@ export const appConfig: ApplicationConfig = {
       },
       // Applied to every PDF; the options of a single call win.
       defaults: { accessible: true },
+      // Load the font data once the app is idle, so the first PDF does not wait for it.
+      preload: true,
     }),
   ],
 };
@@ -141,6 +143,31 @@ and `.woff2` all work, and bytes (`Uint8Array`) work too. If a request fails, th
 
 A URL, here and for a form, goes through your `HttpClient` when the app provides one, so your
 interceptors apply. Without it, jasy uses `fetch`.
+
+## Bundle size
+
+`@jasy/angular` does not put the engine into your start bundle; your documents bring it, wherever they
+are imported. The font data (158 KB, 9 KB over the wire) loads with the first PDF, or earlier with
+`preload`. So put the PDF feature behind `@defer` or a lazy route: a new `ng new` app with
+`provideJasy()` then starts at 231 KB. Rendered straight in the root component, it starts at 522 KB, a
+little over Angular's default 500 KB warning.
+
+```ts
+@Component({
+  selector: "app-billing",
+  imports: [InvoicePreview],
+  template: `
+    @defer (on interaction) {
+      <app-invoice-preview [invoice]="invoice()" />
+    } @placeholder {
+      <button>Show the invoice</button>
+    }
+  `,
+})
+export class Billing {
+  readonly invoice = input.required<Invoice>();
+}
+```
 
 ## Fill an existing PDF
 
@@ -209,6 +236,7 @@ choices. The PDF reader is loaded on first use, so an app that only creates PDFs
 | `download(document, data, filename?, options?)` | Saves the PDF in the browser.                                               |
 | `open(document, data, options?)`                | Opens the PDF in a new tab. Call it from a click, or the browser blocks it. |
 | `download(bytes, filename?)` · `open(bytes)`    | The same for a finished PDF, such as a filled form.                         |
+| `preload()`                                     | Loads the font data now, e.g. on a hover, so the next PDF does not wait.    |
 
 `options` are the `@jasy/pdf` `RenderOptions`: `{ encrypt: { userPassword } }` for AES-256,
 `{ accessible: true }` for a tagged PDF (PDF/UA), `onDiagnostic` for what the engine has to say.

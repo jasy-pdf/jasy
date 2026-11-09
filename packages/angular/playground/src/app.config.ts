@@ -8,6 +8,6 @@ export const appConfig: ApplicationConfig = {
     provideHttpClient(),
     // Every document can now write `Text("...", { font: "GreatVibes" })`. The file is fetched once,
     // the first time a PDF needs it.
-    provideJasy({ fonts: { GreatVibes: "GreatVibes-Regular.ttf" } }),
+    provideJasy({ fonts: { GreatVibes: "GreatVibes-Regular.ttf" }, preload: true }),
   ],
 };

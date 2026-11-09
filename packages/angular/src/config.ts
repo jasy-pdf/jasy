@@ -1,4 +1,4 @@
-import { InjectionToken, makeEnvironmentProviders, type EnvironmentProviders } from "@angular/core";
+import { InjectionToken } from "@angular/core";
 import type { RenderOptions } from "@jasy/pdf";
 
 /** A font file: its URL (fetched once, on first use) or its bytes. */
@@ -16,21 +16,14 @@ export interface JasyConfig {
   fonts?: Record<string, FontInput>;
   /** Render options applied to every PDF; the options of a single call win over these. */
   defaults?: Omit<RenderOptions, "fonts">;
+  /**
+   * Load what the first PDF would wait for - the standard font metrics and the `fonts` above - once
+   * the app has started and the browser is idle. Without it, they load with the first PDF.
+   */
+  preload?: boolean;
 }
 
 export const JASY_CONFIG = new InjectionToken<JasyConfig>("JASY_CONFIG", {
   providedIn: "root",
   factory: () => ({}),
 });
-
-/**
- * jasy for the whole app, in `app.config.ts`. Optional - without it, `inject(JasyPdf)` works with the
- * standard fonts and the engine's defaults.
- *
- * ```ts
- * providers: [provideJasy({ fonts: { Inter: "/fonts/Inter.woff2" } })]
- * ```
- */
-export function provideJasy(config: JasyConfig = {}): EnvironmentProviders {
-  return makeEnvironmentProviders([{ provide: JASY_CONFIG, useValue: config }]);
-}
