@@ -4,3 +4,5 @@ allowBuilds:
   esbuild: false # esbuild ships its binary via optional deps; the postinstall build is not needed
   unrs-resolver: false
   "@parcel/watcher": false # Nuxt/Vite's dev file-watcher (via @jasy/nuxt's nuxt dep); ships prebuilt binaries
+  lmdb: false # Angular CLI build cache; ships prebuilt binaries
+  msgpackr-extract: false # the same, via lmdb
