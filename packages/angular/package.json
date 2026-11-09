@@ -1,6 +1,6 @@
 {
   "name": "@jasy/angular",
-  "version": "1.0.0-beta.0",
+  "version": "1.0.0-beta.1",
   "description": "PDFs in Angular, the Angular way - a service, provideJasy() and a signal-based pdfResource() over the @jasy/pdf engine. Layout, pagination, fonts, forms; in the browser or on a server.",
   "keywords": [
     "angular",
