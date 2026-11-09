@@ -33,6 +33,8 @@
   "scripts": {
     "build": "tsc",
     "prepack": "pnpm run build",
+    "play": "tsc && cd playground && ng serve --open",
+    "play:build": "tsc && cd playground && ng build",
     "test": "vitest run"
   },
   "devDependencies": {

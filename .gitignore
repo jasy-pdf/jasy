@@ -22,3 +22,6 @@ packages/playground/*.png
 
 # The EN 16931 coverage register - our working document, not part of the package.
 packages/e-invoice/COVERAGE.md
+
+# Angular CLI build cache of the @jasy/angular playground.
+.angular/
