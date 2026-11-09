@@ -1,18 +1,11 @@
-// @jasy/angular against a real Angular injector, in Node: Angular's own server test platform, so DI,
-// resource() and the sanitizer are the real ones and no browser is needed.
-import "@angular/compiler";
-import {
-  LOCALE_ID,
-  PLATFORM_ID,
-  inject,
-  signal,
-  provideZonelessChangeDetection,
-} from "@angular/core";
+// @jasy/angular against a real Angular injector, in Node (see support.ts).
+// First: it loads the Angular compiler, which the Angular packages below need when they load.
+import { latin1, settle, setup } from "./support.ts";
+import { LOCALE_ID, PLATFORM_ID, inject, signal } from "@angular/core";
 import { TestBed } from "@angular/core/testing";
-import { ServerTestingModule, platformServerTesting } from "@angular/platform-server/testing";
 import { Document, Page, Text } from "@jasy/pdf";
 import { readFileSync } from "node:fs";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   JasyBrowserOnlyError,
   JasyPdf,
@@ -24,25 +17,6 @@ import {
 const FONT = readFileSync(
   new URL("../../e-invoice/assets/fonts/LiberationSerif-Regular.ttf", import.meta.url),
 );
-const latin1 = (bytes: Uint8Array) => new TextDecoder("latin1").decode(bytes);
-
-beforeAll(() => TestBed.initTestEnvironment(ServerTestingModule, platformServerTesting()));
-afterEach(() => {
-  TestBed.resetTestingModule();
-  vi.unstubAllGlobals();
-  vi.restoreAllMocks();
-});
-
-const setup = (...providers: unknown[]) =>
-  TestBed.configureTestingModule({
-    providers: [provideZonelessChangeDetection(), ...(providers as never[])],
-  });
-const settle = async () => {
-  for (let i = 0; i < 20; i++) {
-    await new Promise((r) => setTimeout(r, 5));
-    TestBed.tick();
-  }
-};
 
 const hello: PdfDocumentFn<string> = (name) => Document([Page([Text(`Hello ${name}`)])]);
 

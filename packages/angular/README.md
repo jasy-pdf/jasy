@@ -90,6 +90,8 @@ export class InvoicePreview {
 - **Real layout, real pagination.** `Row`/`Column` flex, wrapping, `%` sizes, a table whose header row
   repeats on every page, newspaper columns, form fields, AES-256. Not a drawing API you hand
   absolute coordinates.
+- **Existing PDFs too.** `inject(JasyForms)` reads and fills the form of a PDF you already have, and
+  `filledPdfResource()` fills it live from an Angular form.
 - **Runs in the browser.** The PDF is produced client-side. `render()` works on the server too.
 
 ## Install
@@ -134,8 +136,65 @@ export const appConfig: ApplicationConfig = {
 };
 ```
 
-A font URL is fetched the first time a PDF needs it and kept for the app's lifetime. `.ttf`, `.woff`
-and `.woff2` all work, and bytes (`Uint8Array`) work too. If a fetch fails, the next PDF tries again.
+A font URL is loaded the first time a PDF needs it and kept for the app's lifetime. `.ttf`, `.woff`
+and `.woff2` all work, and bytes (`Uint8Array`) work too. If a request fails, the next PDF tries again.
+
+A URL, here and for a form, goes through your `HttpClient` when the app provides one, so your
+interceptors apply. Without it, jasy uses `fetch`.
+
+## Fill an existing PDF
+
+An application form, a contract with fields: `JasyForms` reads and fills it. The source is a URL, the
+`File` of an `<input type="file">`, or bytes.
+
+```ts
+// application.ts
+import { Component, inject } from "@angular/core";
+import { FormControl, FormGroup, ReactiveFormsModule } from "@angular/forms";
+import { toSignal } from "@angular/core/rxjs-interop";
+import { JasyForms, JasyPdf, filledPdfResource } from "@jasy/angular";
+
+const SOURCE = "/forms/application.pdf";
+
+@Component({
+  selector: "app-application",
+  imports: [ReactiveFormsModule],
+  template: `
+    <form [formGroup]="form">
+      <input formControlName="full_name" />
+      <input type="checkbox" formControlName="agree" />
+    </form>
+    @if (preview.value(); as pdf) {
+      <iframe [src]="pdf.safeUrl" title="Application"></iframe>
+    }
+    <button (click)="send()">Download</button>
+  `,
+})
+export class Application {
+  private readonly forms = inject(JasyForms);
+  private readonly pdf = inject(JasyPdf);
+
+  readonly form = new FormGroup({
+    full_name: new FormControl(""),
+    agree: new FormControl(false),
+  });
+
+  // The PDF fills itself as the user types. The source is loaded once.
+  readonly preview = filledPdfResource(
+    SOURCE,
+    toSignal(this.form.valueChanges, { initialValue: this.form.value }),
+  );
+
+  async send() {
+    // flatten: the values become page content and can no longer be edited.
+    const { bytes } = await this.forms.fill(SOURCE, this.form.value, { flatten: true });
+    await this.pdf.download(bytes, "application.pdf");
+  }
+}
+```
+
+The field names are the PDF's own; `inject(JasyForms).read(source)` lists them, with their types and
+choices. The PDF reader is loaded on first use, so an app that only creates PDFs never downloads it.
 
 ## API
 
@@ -147,6 +206,7 @@ and `.woff2` all work, and bytes (`Uint8Array`) work too. If a fetch fails, the 
 | `blob(document, data, options?)`                | The PDF as a `Blob`, ready for an upload.                                   |
 | `download(document, data, filename?, options?)` | Saves the PDF in the browser.                                               |
 | `open(document, data, options?)`                | Opens the PDF in a new tab. Call it from a click, or the browser blocks it. |
+| `download(bytes, filename?)` · `open(bytes)`    | The same for a finished PDF, such as a filled form.                         |
 
 `options` are the `@jasy/pdf` `RenderOptions`: `{ encrypt: { userPassword } }` for AES-256,
 `{ accessible: true }` for a tagged PDF (PDF/UA), `onDiagnostic` for what the engine has to say.
@@ -162,6 +222,23 @@ An Angular `ResourceRef`: `value()`, `isLoading()`, `error()`, `reload()`. The v
 - `options` can be a function, and it is tracked like `data`. A signal in it renders the PDF again.
 - On the server it stays idle, since a preview there has nobody to look at it.
 
+### `inject(JasyForms)`
+
+| Method                           | Does                                                                    |
+| -------------------------------- | ----------------------------------------------------------------------- |
+| `read(source, options?)`         | The fields: names, types, current values, choices.                      |
+| `fill(source, values, options?)` | Fills the fields by name. `{ flatten: true }` freezes them in one step. |
+| `flatten(source, options?)`      | Turns the fields into page content.                                     |
+
+`source` is a URL, a `Blob` or `File`, or a `Uint8Array`. A value that is `undefined` leaves its
+field as it is, the way an Angular form leaves out a disabled control. The options are those of
+`@jasy/pdf/edit`, e.g. `password` for an encrypted PDF.
+
+### `filledPdfResource(source, values, { options?, injector? })`
+
+Like `pdfResource`, for an existing form: filled again whenever `values` changes, with the source
+loaded once.
+
 ### `PdfDocumentFn<T>`
 
 The type of a document: `(data: T) => Document(...)`, sync or async. `PdfDocumentFn` without a type
@@ -169,7 +246,7 @@ argument is a document that takes no data.
 
 ## Testing
 
-`JasyPdf` is an injection token like any other:
+`JasyPdf` and `JasyForms` are injection tokens like any other:
 
 ```ts
 TestBed.configureTestingModule({

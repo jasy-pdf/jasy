@@ -17,7 +17,7 @@ export interface PdfFile {
   bytes: Uint8Array;
   /** A `blob:` URL of the PDF. Revoked when the next one replaces it, or when its owner is destroyed. */
   url: string;
-  /** The same URL, marked safe for `<iframe [src]>` - Angular blocks a plain one there. */
+  /** The same URL, marked safe for `<iframe [src]>`. */
   safeUrl: SafeResourceUrl;
 }
 
@@ -49,6 +49,29 @@ export function pdfResource<T>(
   if (!injector) assertInInjectionContext(pdfResource);
   injector ??= inject(Injector);
   const pdf = injector.get(JasyPdf);
+
+  return previewResource(
+    injector,
+    // Wrapped in an object: a document without data still renders, where `undefined` would mean "wait".
+    () => {
+      const value = data?.() as T;
+      if (data && value === undefined) return undefined;
+      return { value, options: typeof options === "function" ? options() : options };
+    },
+    ({ value, options }) => pdf.render(document, value, options),
+  );
+}
+
+/**
+ * What every preview shares: idle on the server, the PDF as a `blob:` URL, the previous URL revoked
+ * when a new one replaces it, and the last one when the owner is destroyed. `params` returns
+ * `undefined` to wait.
+ */
+export function previewResource<P extends object>(
+  injector: Injector,
+  params: () => P | undefined,
+  produce: (params: P) => Promise<Uint8Array>,
+): ResourceRef<PdfFile | undefined> {
   const sanitizer = injector.get(DomSanitizer);
   const browser = injector.get(PLATFORM_ID) === "browser";
 
@@ -61,15 +84,9 @@ export function pdfResource<T>(
 
   return resource({
     injector,
-    // Wrapped in an object: a document without data still renders, where `undefined` would mean "wait".
-    params: () => {
-      if (!browser) return undefined;
-      const value = data?.() as T;
-      if (data && value === undefined) return undefined;
-      return { value, options: typeof options === "function" ? options() : options };
-    },
+    params: () => (browser ? params() : undefined),
     loader: async ({ params, abortSignal }) => {
-      const bytes = await pdf.render(document, params.value, params.options);
+      const bytes = await produce(params);
       if (abortSignal.aborted) return undefined;
       const url = URL.createObjectURL(
         new Blob([bytes as Uint8Array<ArrayBuffer>], { type: "application/pdf" }),
