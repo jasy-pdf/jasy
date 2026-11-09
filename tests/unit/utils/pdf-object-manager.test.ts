@@ -1,6 +1,6 @@
 import { describe, it, expect, vitest } from "vitest";
 import { PDFObjectManager, FontStyle } from "../../../src/lib/utils/pdf-object-manager";
-import { AFMParser } from "../../../src/lib/utils/afm-parser";
+import { standardParser } from "../../../src/lib/utils/afm-parser.ts";
 import * as fs from "fs";
 
 describe("PDFObjectManager", () => {
@@ -132,8 +132,7 @@ describe("PDFObjectManager - Object Replacement", () => {
 
 describe("PDFObjectManager - AFM Parsing", () => {
   it("should load an AFM file and correctly parse advance widths and kerning", () => {
-    const afmData = fs.readFileSync("./src/lib/assets/Helvetica.afm", "utf-8");
-    const parser = new AFMParser(afmData);
+    const parser = standardParser("Helvetica");
 
     const advanceWidth = parser.getAdvanceWidth("A");
     expect(advanceWidth).toBeGreaterThan(0);

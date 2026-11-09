@@ -1,4 +1,5 @@
 import { PageSize } from "../constants/page-sizes.ts";
+import { preloadStandardFonts } from "../utils/afm-parser.ts";
 import { PDFDocumentElement } from "../elements/index.ts";
 import { FontStyle, PDFObjectManager } from "../utils/pdf-object-manager.ts";
 import { PDFRenderer } from "./pdf-renderer.ts";
@@ -147,6 +148,8 @@ export abstract class PDFDocument {
   protected beforeRenderer() {}
 
   public static async render<T extends PDFDocument>(this: new () => T): Promise<string> {
+    // Before build(): a subclass may measure text there, through `objectManager`.
+    await preloadStandardFonts();
     const instance = new this();
     instance.child = instance.build();
     return await PDFRenderer.render(instance.child, instance._objectManager);

@@ -1,10 +1,9 @@
 import { pageFormats, PageSize } from "../constants/page-sizes.ts";
 import type { OverflowPolicy } from "../layout/fragmentation.ts";
-import { STANDARD_AFM } from "../assets/font-data.ts";
 import { md5, md5Hex } from "./md5.ts";
 import { zlibSync } from "fflate";
 import { bytesFromLatin1, latin1FromBytes } from "./bytes.ts";
-import { AFMParser, standardParser } from "./afm-parser.ts";
+import { AFMParser, STANDARD_FONT_NAMES, standardParser } from "./afm-parser.ts";
 import { mergeSpans, TTFParser } from "./ttf-parser.ts";
 import { WoffError, isWoff, woffToSfnt } from "./woff.ts";
 import { isWoff2 } from "./woff2.ts";
@@ -776,13 +775,12 @@ endstream`;
     this.verticalsCache.delete(fontName);
     this.decorationCache.delete(fontName);
 
-    const data = STANDARD_AFM[fullName];
-    if (data !== undefined) {
+    if (STANDARD_FONT_NAMES.has(fullName)) {
       this.afmParsers.push({
         fontName,
         fontStyle,
         fullFontName: fullName,
-        parser: standardParser(fullName, data),
+        parser: standardParser(fullName),
       });
     }
 
