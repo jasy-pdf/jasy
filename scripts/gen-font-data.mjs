@@ -1,24 +1,127 @@
-// Generates src/lib/assets/font-data.ts: the standard-14 AFM metrics + the Adobe Glyph List, bundled
-// as data so text layout works WITHOUT fs (browser-ready). Re-run if the assets change:
+// Generates src/lib/assets/standard-fonts.ts: the metrics of the standard-14 fonts, pre-parsed from
+// their *.afm files and the Adobe Glyph List into plain numbers. Re-run if the assets change:
 //   node scripts/gen-font-data.mjs
-import { readFileSync, writeFileSync, readdirSync } from "node:fs";
+// The output is loaded lazily (see utils/afm-parser.ts), so it never sits in an app's start bundle.
+// tests/unit/utils/afm-parser.test.ts holds it to the AFM files, character by character.
+import { execFileSync } from "node:child_process";
+import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 
 const dir = "src/lib/assets";
-const afm = {};
-for (const f of readdirSync(dir).sort()) {
-  if (f.endsWith(".afm")) afm[f.replace(/\.afm$/, "")] = readFileSync(`${dir}/${f}`, "utf-8");
+
+// The AFM keys its metrics by glyph NAME; the engine asks by character. This is the same map
+// AFMParser used to build at runtime: the AGL, plus the Windows-1252 characters it leaves out.
+const glyphOf = new Map();
+for (const line of readFileSync(`${dir}/agl.txt`, "utf-8").split("\n")) {
+  const parts = line.trim().split(";");
+  if (parts.length >= 2) glyphOf.set(String.fromCharCode(parseInt(parts[0], 16)), parts[1]);
 }
-const agl = readFileSync(`${dir}/agl.txt`, "utf-8");
+glyphOf.set(" ", "space");
+glyphOf.set("­", "hyphen");
+glyphOf.set("²", "twosuperior");
+glyphOf.set("³", "threesuperior");
+glyphOf.set("¹", "onesuperior");
+
+/** One AFM file, read the way AFMParser read it at runtime. */
+function parseAfm(text) {
+  const font = { widths: new Map(), kerning: new Map(), bbox: [0, 0, 0, 0], underline: [0, 0] };
+  let inCharMetrics = false;
+  for (let line of text.split("\n")) {
+    line = line.trim();
+    if (line.startsWith("StartCharMetrics")) inCharMetrics = true;
+    else if (line.startsWith("EndCharMetrics")) inCharMetrics = false;
+    else if (inCharMetrics) {
+      let name = "";
+      let wx = 0;
+      for (const part of line.split(";").map((p) => p.trim())) {
+        if (part.startsWith("N ")) name = part.split(" ")[1];
+        if (part.startsWith("WX ")) wx = parseFloat(part.split(" ")[1]);
+      }
+      if (name && wx) font.widths.set(name, wx);
+    }
+    if (line.startsWith("UnderlinePosition ")) font.underline[0] = parseFloat(line.slice(18));
+    if (line.startsWith("UnderlineThickness ")) font.underline[1] = parseFloat(line.slice(19));
+    if (line.startsWith("CapHeight ")) font.capHeight = parseFloat(line.slice(10));
+    if (line.startsWith("XHeight ")) font.xHeight = parseFloat(line.slice(8));
+    if (line.startsWith("FontBBox ")) font.bbox = line.slice(9).trim().split(/\s+/).map(parseFloat);
+    if (line.startsWith("KPX")) {
+      const [, first, second, value] = line.split(/\s+/);
+      if (!font.kerning.has(first)) font.kerning.set(first, new Map());
+      font.kerning.get(first).set(second, parseFloat(value));
+    }
+  }
+  return font;
+}
+
+const fonts = Object.fromEntries(
+  readdirSync(dir)
+    .filter((f) => f.endsWith(".afm"))
+    .sort()
+    .map((f) => [f.replace(/\.afm$/, ""), parseAfm(readFileSync(`${dir}/${f}`, "utf-8"))]),
+);
+
+// Every glyph some font names, numbered. A character the AGL maps to none of them has no metrics in
+// any standard font, so it is left out: it measures 0 and kerns with nothing, as it did before.
+const named = new Set();
+for (const font of Object.values(fonts)) {
+  for (const name of font.widths.keys()) named.add(name);
+  for (const [first, seconds] of font.kerning) {
+    named.add(first);
+    for (const second of seconds.keys()) named.add(second);
+  }
+}
+const glyphs = [...named].sort();
+const index = new Map(glyphs.map((name, i) => [name, i]));
+
+// A character outside the AGL was looked up by itself as the glyph name; keep the ones that hit.
+const chars = [];
+for (const [char, name] of glyphOf) if (index.has(name)) chars.push([char, index.get(name)]);
+for (const name of glyphs)
+  if (name.length === 1 && !glyphOf.has(name)) chars.push([name, index.get(name)]);
+chars.sort((a, b) => a[0].charCodeAt(0) - b[0].charCodeAt(0));
+
+/** [first, count, second - previous second, value, ...]: small numbers, sorted, delta-coded. */
+function kerningOf(font) {
+  const out = [];
+  const firsts = [...font.kerning.keys()].sort((a, b) => index.get(a) - index.get(b));
+  for (const first of firsts) {
+    const seconds = [...font.kerning.get(first)].sort((a, b) => index.get(a[0]) - index.get(b[0]));
+    out.push(index.get(first), seconds.length);
+    let previous = 0;
+    for (const [second, value] of seconds) {
+      out.push(index.get(second) - previous, value);
+      previous = index.get(second);
+    }
+  }
+  return out;
+}
+
+const data = Object.fromEntries(
+  Object.entries(fonts).map(([name, font]) => [
+    name,
+    {
+      bbox: font.bbox,
+      underline: font.underline,
+      capHeight: font.capHeight ?? 0,
+      xHeight: font.xHeight ?? 0,
+      // Indexed by glyph; 0 where the font has none (a zero advance is what a miss measured anyway).
+      widths: glyphs.map((g) => font.widths.get(g) ?? 0),
+      kerning: kerningOf(font),
+    },
+  ]),
+);
 
 const out =
   `// AUTO-GENERATED by scripts/gen-font-data.mjs - do not edit by hand.\n` +
-  `// The standard-14 font metrics (*.afm) + the Adobe Glyph List (agl.txt), bundled as data so text\n` +
-  `// layout works WITHOUT fs (browser-ready). Re-run the generator if the assets change.\n` +
+  `// The standard-14 font metrics, pre-parsed from assets/*.afm and assets/agl.txt. Loaded lazily.\n` +
   `/* eslint-disable */\n` +
-  `export const STANDARD_AFM: Record<string, string> = ${JSON.stringify(afm)};\n\n` +
-  `export const AGL: string = ${JSON.stringify(agl)};\n`;
+  `import type { StandardFontData } from "../utils/afm-parser.ts";\n\n` +
+  `/** [character code, glyph, ...]: which glyph each character draws, in every standard font. */\n` +
+  `export const CHARS: number[] = ${JSON.stringify(chars.flatMap(([c, g]) => [c.charCodeAt(0), g]))};\n\n` +
+  `export const FONTS: Record<string, StandardFontData> = ${JSON.stringify(data)};\n`;
 
-writeFileSync(`${dir}/font-data.ts`, out);
+writeFileSync(`${dir}/standard-fonts.ts`, out);
+// Formatted as the repo formats it, so a fresh run reproduces the committed file exactly.
+execFileSync("node_modules/.bin/oxfmt", [`${dir}/standard-fonts.ts`], { stdio: "inherit" });
 console.log(
-  `wrote ${dir}/font-data.ts (${(out.length / 1024).toFixed(0)} KB, ${Object.keys(afm).length} fonts + agl)`,
+  `wrote ${dir}/standard-fonts.ts (${(out.length / 1024).toFixed(0)} KB: ${Object.keys(fonts).length} fonts, ${glyphs.length} glyphs, ${chars.length} characters)`,
 );

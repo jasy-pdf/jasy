@@ -1,6 +1,6 @@
 {
   "name": "@jasy/pdf",
-  "version": "1.0.0-beta.6",
+  "version": "1.0.0-beta.7",
   "description": "Create PDFs in TypeScript: declarative, component-based layout with real pagination, in Node or the browser. Its own engine - no headless browser, no Java. Powers ZUGFeRD / XRechnung e-invoices.",
   "keywords": [
     "accessibility",
@@ -45,7 +45,6 @@
     "./package.json": "./package.json"
   },
   "scripts": {
-    "copy-assets": "ncp ./src/lib/assets ./dist/assets",
     "cli": "pnpm --filter @jasy/cli dev",
     "cli:watch": "pnpm --filter @jasy/cli watch",
     "play": "pnpm --filter @jasy/playground play",
@@ -53,7 +52,7 @@
     "play:react": "pnpm --filter @jasy/react play",
     "test": "vitest",
     "test:coverage": "vitest --coverage",
-    "build": "tsc && node scripts/fix-dts-ext.mjs && pnpm run copy-assets",
+    "build": "tsc && node scripts/fix-dts-ext.mjs",
     "prepack": "pnpm run build",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
@@ -72,7 +71,6 @@
     "@types/node": "^25.9.3",
     "@vitest/coverage-v8": "^2.1.1",
     "hyphen": "^1.14.1",
-    "ncp": "^2.0.0",
     "oxfmt": "^0.55.0",
     "oxlint": "^1.70.0",
     "typescript": "^5.5.4",

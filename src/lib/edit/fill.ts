@@ -7,6 +7,7 @@ import type { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 import { getArrayBuffer } from "../utils/utf8-to-windows1252-encoder.ts";
 import { get, isDict, isRef, type PdfDict, type PdfObject, type PdfRef } from "./objects.ts";
 import { encodePdfText } from "../text/pdf-text-string.ts";
+import { preloadStandardFonts } from "../utils/afm-parser.ts";
 
 /**
  * Filling the form of an EXISTING PDF.
@@ -327,6 +328,7 @@ export async function fillForm(
   values: Record<string, FieldValue>,
   options: FillOptions = {},
 ): Promise<FillResult> {
+  await preloadStandardFonts(); // a field's new face is measured in Helvetica
   // Two option combinations describe a document nobody wants. Refused before the file is opened, since
   // the answer does not depend on it.
   if (options.fieldAppearances === false && options.needAppearances === false) {

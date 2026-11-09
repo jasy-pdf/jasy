@@ -59,7 +59,7 @@ find it.
 | Layer                                                                    | Hands on                                                                                        | Never                                                                                 |
 | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
 | 1 Build - `api/`, element constructors, Vue/React/Nuxt                   | the element tree; files named by path are read HERE                                             | lays out, draws, knows PDF syntax                                                     |
-| 2 Load - `layout/collect-images.ts`, font registration                   | the tree, every reachable image knowing its size                                                | lays out; the only async step before layout                                           |
+| 2 Load - `layout/collect-images.ts`, font registration, metrics preload  | the tree, every reachable image knowing its size; the standard font metrics                     | lays out; the async steps before layout                                               |
 | 3 Layout + pagination - `elements/`, `layout/`, `text/`, the page driver | sizes and offsets relative to the parent                                                        | file or network I/O, `await`, PDF syntax, the writer other than through `FontMetrics` |
 | 4 Producers - `renderer/*-renderer.ts`                                   | `IRNode[]`, absolute, top-left; the facts of a source file (image type, color space)            | lays out again, reads privates, writes a PDF operator                                 |
 | 5 IR - `ir/display-list.ts`                                              | meaning: geometry, a `Color`, `{ space: "cmyk" }`                                               | PDF names, operators, font indices, object numbers                                    |
@@ -127,9 +127,12 @@ sees a component:
 ### The PDF writer — `PDFObjectManager` (`utils/pdf-object-manager.ts`)
 
 The hand-rolled core. Holds the indirect-object array, tracks byte offsets for the xref table, manages
-fonts and images, and owns config. Also the **font-metrics engine**: parses the 14 standard-font AFM
-files (`assets/*.afm` via `AFMParser`) to compute `getStringWidth` / `getCharWidth` — this is what makes
-text wrapping possible without a browser. **We kern** — on by default (opt out with
+fonts and images, and owns config. Also the **font-metrics engine**: reads the 14 standard-font metrics
+(`AFMParser`) to compute `getStringWidth` / `getCharWidth` — this is what makes text wrapping possible
+without a browser. The metrics ship pre-parsed (`assets/standard-fonts.ts`, generated from `assets/*.afm`
+by `scripts/gen-font-data.mjs` and held to them by `afm-parser.test.ts`) and load lazily: layout is
+synchronous, so `PDFRenderer.render`, `fillForm` and `flattenForm` await `preloadStandardFonts()` first, and
+a parser asked before that THROWS rather than measuring 0. **We kern** — on by default (opt out with
 `renderToBytes(doc, { kerning: false })`). PDF never kerns on its own, so a kerned run is emitted as a `TJ`
 array whose per-gap adjustments come from the font: `AFMParser.getKerning` for the standard-14, the `kern`
 table + `GPOS` for embedded fonts. Measuring uses the SAME adjustments in ONE place (`text/advance.ts`
@@ -394,6 +397,11 @@ the region cannot shrink and we place it whole (clipped), report the overflow, a
 and MEASURE after every single change: the profiler says WHERE time goes, not WHAT helps. Two "fixes"
 were 3x slower.
 
+**tsc rewrites the `.ts` of a static import, not of a dynamic `import()`.** Write a dynamic import with
+`.js` (nodenext resolves it to the source). `import("./x.ts")` survives into `dist` and fails there - and
+a harness that copies the sources next to its build (the gallery does) hides it, since Node 24 loads a
+`.ts` file by itself.
+
 **fflate does not throw on an over-long inflate, it TRUNCATES silently.** `inflateBounded` streams the
 input in slices and checks the total as it grows (`PdfStreamTooLargeError`, 64 MB default); the
 obvious `unzlibSync(data, { out })` would have replaced an OOM with quiet data corruption.
@@ -559,8 +567,10 @@ English and short, do not break the font math.**
   one `react-reconciler` 0.31 for every 19.x - CI pins each minor), `nuxt` (zero-config, client or server),
   `playground`. GitHub org `jasy-pdf`, repo `jasy-pdf/jasy`, public, locked to the maintainer
   (rulesets); CodeRabbit reviews PRs, Renovate opens weekly dependency PRs.
-- **Release**: `scripts/release.sh <pkg> <version>` bumps, commits, tags `<pkg>-v*`; CI publishes and
-  writes the GitHub Release (`scripts/gh-release.mjs`). Siblings depend by RANGE (`workspace:^`) and
+- **Release**: `scripts/release.sh <pkg> <version> [<pkg> <version> ...]` - one command: checks the `gh` +
+  npm logins first, then per package (in dependency order) bumps, commits, tags `<pkg>-v*`, pushes, watches the
+  CI publish run and waits for npm; at the end ONE npm OTP moves `latest` to the prereleases. CI writes the
+  GitHub Release (`scripts/gh-release.mjs`). Siblings depend by RANGE (`workspace:^`) and
   `@jasy/pdf` is a PEER of `vue`, `react` and `nuxt`, so an engine patch needs one release, not five - and a
   consumer cannot end up with two copies. Current versions: npm, not this file. A package's FIRST
   release whose `package.json` already holds the version stops at the empty bump commit: tag by hand.

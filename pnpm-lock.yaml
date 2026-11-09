@@ -36,9 +36,6 @@ importers:
       hyphen:
         specifier: ^1.14.1
         version: 1.14.1
-      ncp:
-        specifier: ^2.0.0
-        version: 2.0.0
       oxfmt:
         specifier: ^0.55.0
         version: 0.55.0
@@ -4974,10 +4971,6 @@ packages:
 
   natural-compare@1.4.0:
     resolution: {integrity: sha512-OWND8ei3VtNC9h7V60qff3SVobHr996CTwgxubgyQYEpg290h9J0buyECNNJexkFm5sOajh5G116RYA1c8ZMSw==}
-
-  ncp@2.0.0:
-    resolution: {integrity: sha512-zIdGUrPRFTUELUvr3Gmc7KZ2Sw/h1PiVM0Af/oHB6zgnV1ikqSfRk+TOufi79aHYCW3NiOXmr1BP5nWbzojLaA==}
-    hasBin: true
 
   negotiator@1.1.0:
     resolution: {integrity: sha512-NMPBRMJgiQHjbd8phG3Vebdx4kZ1H121rbl5IkMqeOsahptB9BKo/d7oJ3zTXqTgagn2bWlNSXkh0QUGM31RYg==}
@@ -11764,8 +11757,6 @@ snapshots:
 
   natural-compare@1.4.0:
     optional: true
-
-  ncp@2.0.0: {}
 
   negotiator@1.1.0:
     dependencies:

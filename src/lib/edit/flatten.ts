@@ -1,3 +1,4 @@
+import { preloadStandardFonts } from "../utils/afm-parser.ts";
 import { PdfDocument } from "./document.ts";
 import { readAcroForm, type ReadField } from "./acroform-reader.ts";
 import { bakeAppearance, bakeButtonStates, readLook } from "./appearance.ts";
@@ -547,6 +548,7 @@ export async function flattenForm(
   bytes: Uint8Array,
   options: FlattenOptions = {},
 ): Promise<FlattenResult> {
+  await preloadStandardFonts(); // a widget without a face gets one, measured in Helvetica
   const doc = await PdfDocument.open(bytes, {
     password: options.password,
     maxStreamSize: options.maxStreamSize,

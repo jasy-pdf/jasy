@@ -63,6 +63,7 @@ import { RotatedElement } from "../elements/layout/rotated-element.ts";
 import { RotatedBoxElement } from "../elements/layout/rotated-box-element.ts";
 import { RotatedRenderer } from "./rotated-renderer.ts";
 import { collectImageElements } from "../layout/collect-images.ts";
+import { preloadStandardFonts } from "../utils/afm-parser.ts";
 import { LayoutContext } from "../elements/pdf-element.ts";
 import { DEFAULT_TEXT_STYLE, mergeTextStyle } from "../text/text-style.ts";
 
@@ -71,6 +72,8 @@ export class PDFRenderer {
     document: PDFDocumentElement,
     objectManager: PDFObjectManager,
   ): Promise<string> {
+    // Layout measures synchronously, so the standard font metrics are loaded before it starts.
+    await preloadStandardFonts();
     // Register all Renderer
     RendererRegistry.register(TextElement, TextRenderer.render);
     RendererRegistry.register(ContainerElement, ContainerRenderer.render);
