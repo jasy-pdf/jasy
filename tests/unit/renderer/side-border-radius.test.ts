@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { Box, Column, Document, Page, renderPdf } from "../../../src/lib/api/index.ts";
-import type { IRNode, Path, Rect } from "../../../src/lib/ir/display-list.ts";
+import type { IRNode, Path, PathCommand, Radii, Rect } from "../../../src/lib/ir/display-list.ts";
 import { drawnNodes } from "../support/drawn.ts";
 import { sideBorderNodes } from "../../../src/lib/renderer/side-borders.ts";
 import { Color } from "../../../src/lib/common/color.ts";
@@ -84,27 +84,36 @@ describe("per-side borders follow the radius", () => {
     expect(paths[0]!.commands.filter((c) => c.op === "z")).toHaveLength(2);
   });
 
-  it("a radius smaller than the band leaves the inner corner sharp, never bulging out", () => {
+  // The hole of a one-color ring, which must stay inside the box shrunk by half the stroke.
+  const holeOf = (w: number, h: number, strokeWidth: number, radius: number | Radii) => {
     const blue = new Color(0, 0, 255);
-    const [ring] = sideBorderNodes(
-      0,
-      0,
-      W,
-      H,
-      10,
-      { top: blue, right: blue, bottom: blue, left: blue },
-      2,
-    );
-    const cmds = (ring as Path).commands;
-    const inner = cmds.slice(cmds.findIndex((c) => c.op === "z") + 1);
-    // The inner edge is the box shrunk by half the stroke; no point of it may leave that rectangle.
-    for (const c of inner) {
+    const all = { top: blue, right: blue, bottom: blue, left: blue };
+    const cmds = (sideBorderNodes(0, 0, w, h, strokeWidth, all, radius)[0] as Path).commands;
+    return cmds.slice(cmds.findIndex((c) => c.op === "z") + 1);
+  };
+  const expectInside = (hole: PathCommand[], x0: number, y0: number, x1: number, y1: number) => {
+    for (const c of hole) {
       if (c.op === "z") continue;
-      expect(c.x).toBeGreaterThanOrEqual(5 - 1e-9);
-      expect(c.x).toBeLessThanOrEqual(W - 5 + 1e-9);
-      expect(c.y).toBeGreaterThanOrEqual(5 - 1e-9);
-      expect(c.y).toBeLessThanOrEqual(H - 5 + 1e-9);
+      expect(c.x).toBeGreaterThanOrEqual(x0 - 1e-9);
+      expect(c.x).toBeLessThanOrEqual(x1 + 1e-9);
+      expect(c.y).toBeGreaterThanOrEqual(y0 - 1e-9);
+      expect(c.y).toBeLessThanOrEqual(y1 + 1e-9);
     }
+  };
+
+  it("a radius smaller than the band leaves the inner corner sharp, never bulging out", () => {
+    expectInside(holeOf(W, H, 10, 2), 5, 5, W - 5, H - 5);
+  });
+
+  it("a large corner is clamped on the inner edge too, so the hole cannot cut into a side", () => {
+    // Outer top-right radius 100 on a 100 box: its inner radius 90 does not fit the 80 inner box.
+    const hole = holeOf(100, 100, 20, { tr: 100 });
+    expect(hole.length).toBeGreaterThan(0);
+    expectInside(hole, 10, 10, 90, 90);
+  });
+
+  it("a band wider than the box fills it, with no hole", () => {
+    expect(holeOf(100, 10, 20, 2)).toHaveLength(0);
   });
 
   it("a sharp corner stays square", async () => {

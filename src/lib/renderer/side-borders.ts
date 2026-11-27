@@ -54,12 +54,37 @@ export function sideBorderNodes(
   const [top, right, bottom, left] = [sides.top, sides.right, sides.bottom, sides.left].map(half);
   const q = Math.PI / 2;
   // Clockwise from the top-left; corner i is the one BEFORE side i (top, right, bottom, left).
-  const corners = [
-    corner({ x, y }, -1, -1, r.tl, left!, top!, 2 * q),
-    corner({ x: x + width, y }, 1, -1, r.tr, right!, top!, 3 * q),
-    corner({ x: x + width, y: y + height }, 1, 1, r.br, right!, bottom!, 0),
-    corner({ x, y: y + height }, -1, 1, r.bl, left!, bottom!, q),
+  const specs = [
+    { k: { x, y }, sx: -1, sy: -1, r: r.tl, v: left!, h: top!, from: 2 * q },
+    { k: { x: x + width, y }, sx: 1, sy: -1, r: r.tr, v: right!, h: top!, from: 3 * q },
+    { k: { x: x + width, y: y + height }, sx: 1, sy: 1, r: r.br, v: right!, h: bottom!, from: 0 },
+    { k: { x, y: y + height }, sx: -1, sy: 1, r: r.bl, v: left!, h: bottom!, from: q },
   ];
+  // The inner edge is a rounded box of its own: each radius shrinks by the band (CSS's inner radius,
+  // 0 where it runs out), and the set is clamped to the inner box as the outer one is to the box -
+  // else a large corner runs past the inner box and the even-odd fill cuts into the straight sides.
+  const innerW = width - left! - right!;
+  const innerH = height - top! - bottom!;
+  const inner = specs.map((c) => ({
+    x: c.r > 0 ? Math.max(0, c.r - c.v) : 0,
+    y: c.r > 0 ? Math.max(0, c.r - c.h) : 0,
+  }));
+  const [itl, itr, ibr, ibl] = inner as [Point, Point, Point, Point];
+  const ratio = (extent: number, a: number, b: number) =>
+    a + b > 0 ? Math.max(0, extent) / (a + b) : Infinity;
+  const scale = Math.min(
+    1,
+    ratio(innerW, itl.x, itr.x),
+    ratio(innerW, ibl.x, ibr.x),
+    ratio(innerH, itl.y, ibl.y),
+    ratio(innerH, itr.y, ibr.y),
+  );
+  const corners = specs.map((c, i) =>
+    corner(c.k, c.sx, c.sy, c.r, c.v, c.h, c.from, {
+      x: inner[i]!.x * scale,
+      y: inner[i]!.y * scale,
+    }),
+  );
   const colors = [sides.top, sides.right, sides.bottom, sides.left];
 
   const same = (a?: Color, b?: Color) =>
@@ -71,7 +96,8 @@ export function sideBorderNodes(
     fillRule: "evenodd",
   });
 
-  // One color all round: the band is a ring - the outer edge, then the inner one as a hole.
+  // One color all round: the band is a ring - the outer edge, then the inner one as a hole. A band
+  // that fills the whole box has no hole.
   if (colors.every((c) => same(c, colors[0]))) {
     const ring = (edge: "outer" | "inner"): PathCommand[] => {
       const p = corners[0]![edge].at(corners[0]!.to);
@@ -82,7 +108,8 @@ export function sideBorderNodes(
       }
       return [...cmds, { op: "z" }];
     };
-    return [fill(colors[0]!, [...ring("outer"), ...ring("inner")])];
+    const hole = innerW > 0 && innerH > 0 ? ring("inner") : [];
+    return [fill(colors[0]!, [...ring("outer"), ...hole])];
   }
 
   // Runs of sides in one color; a run starts where the side before it is unset or another color.
@@ -127,7 +154,8 @@ export function sideBorderNodes(
 /**
  * The corner at box point `k`, `sx`/`sy` pointing out of the box (-1 left/top, 1 right/bottom).
  * `v` and `h` are how far the band reaches out of (and into) the box on the vertical and the
- * horizontal side here - half the stroke, or 0 for an unset side. `from` is where its quarter starts.
+ * horizontal side here - half the stroke, or 0 for an unset side. `from` is where its quarter starts;
+ * `innerRadius` the inner edge's radii, already clamped.
  */
 function corner(
   k: Point,
@@ -137,23 +165,21 @@ function corner(
   v: number,
   h: number,
   from: number,
+  innerRadius: Point,
 ): Corner {
   const rounded = r > 0;
-  // Outer edge: the radius grows by the band, round the same center. Inner edge: it shrinks, and
-  // stops at 0 (CSS's inner radius), where the inner corner turns sharp.
+  // Outer edge: the radius grows by the band, round the same center.
   const out = { x: k.x + sx * v, y: k.y + sy * h };
   const inn = { x: k.x - sx * v, y: k.y - sy * h };
   const ox = rounded ? r + v : 0;
   const oy = rounded ? r + h : 0;
-  const ix = rounded ? Math.max(0, r - v) : 0;
-  const iy = rounded ? Math.max(0, r - h) : 0;
   const ellipse = (corner: Point, rx: number, ry: number): Ellipse => {
     const cx = corner.x - sx * rx;
     const cy = corner.y - sy * ry;
     return { rx, ry, at: (t) => ({ x: cx + rx * Math.cos(t), y: cy + ry * Math.sin(t) }) };
   };
   const outer = ellipse(out, ox, oy);
-  const inner = ellipse(inn, ix, iy);
+  const inner = ellipse(inn, innerRadius.x, innerRadius.y);
   const to = from + Math.PI / 2;
   // The two sides meet on the line from the band's outer corner to its inner one.
   const onSplit = (p: Point) => (inn.x - out.x) * (p.y - out.y) - (inn.y - out.y) * (p.x - out.x);
