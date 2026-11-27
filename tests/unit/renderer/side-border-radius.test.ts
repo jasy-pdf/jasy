@@ -44,6 +44,30 @@ const bounds = (p: Path) => {
 const hasPoint = (p: Path, x: number, y: number) =>
   points(p).some((q) => Math.abs(q.x - x) < 1e-6 && Math.abs(q.y - y) < 1e-6);
 
+/** Even-odd point test on the path's polygon (curve end points only - fine for small corners). */
+const covers = (p: Path, px: number, py: number) => {
+  let inside = false;
+  let start: { x: number; y: number } | undefined;
+  let prev: { x: number; y: number } | undefined;
+  const edge = (a: { x: number; y: number }, b: { x: number; y: number }) => {
+    if (a.y > py !== b.y > py && px < ((b.x - a.x) * (py - a.y)) / (b.y - a.y) + a.x)
+      inside = !inside;
+  };
+  for (const c of p.commands) {
+    if (c.op === "z") {
+      if (prev && start) edge(prev, start);
+      prev = start = undefined;
+      continue;
+    }
+    const q = { x: c.x, y: c.y };
+    if (c.op === "m") start = q;
+    else if (prev) edge(prev, q);
+    prev = q;
+  }
+  if (prev && start) edge(prev, start);
+  return inside;
+};
+
 describe("per-side borders follow the radius", () => {
   it("one side runs round both corners and tapers out on the box edge", async () => {
     const { nodes, box, paths } = await draw({ borderBottom: "red", radius: R });
@@ -114,6 +138,36 @@ describe("per-side borders follow the radius", () => {
 
   it("a band wider than the box fills it, with no hole", () => {
     expect(holeOf(100, 10, 20, 2)).toHaveLength(0);
+  });
+
+  it("next to an unset side the band still tapers to one point, even with a clamped inner edge", () => {
+    // Top and right set, left unset: the inner top-left radius is clamped along the top edge only,
+    // so the band still closes on the box's left edge at (0, 100), never with a straight sliver.
+    const red = new Color(255, 0, 0);
+    const [band] = sideBorderNodes(0, 0, 100, 100, 20, { top: red, right: red }, { tl: 100 });
+    const onLeftEdge = points(band as Path).filter((q) => Math.abs(q.x) < 1e-9);
+    expect(onLeftEdge.length).toBeGreaterThan(0);
+    for (const q of onLeftEdge) expect(q.y).toBeCloseTo(100, 9);
+  });
+
+  it("bands wider than the box meet in its middle, in several colors too", () => {
+    const blue = new Color(0, 0, 255);
+    const red = new Color(255, 0, 0);
+    const sides = { top: blue, right: red, bottom: blue, left: blue };
+    const ps = sideBorderNodes(0, 0, 100, 10, 20, sides, 2) as Path[];
+    // Every point of the box is painted by some band (even-odd, as the backend fills them).
+    for (const [px, py] of [
+      [50, 5],
+      [5, 5],
+      [95, 5],
+      [50, 1],
+      [50, 9],
+    ] as const) {
+      expect(
+        ps.some((p) => covers(p, px, py)),
+        `(${px}, ${py})`,
+      ).toBe(true);
+    }
   });
 
   it("a sharp corner stays square", async () => {
