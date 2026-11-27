@@ -290,14 +290,14 @@ inputs to it, and the drawing is scaled uniformly and centred (SVG's own default
 animation. Filters and masks are PIXEL operations, so no vector backend can express them: anything
 that renders SVG _completely_ owns a rasterizer, which is why every PDF library ships a subset. Ours:
 
-| resolved                                                                                    | named error, never a silent skip                            |
-| ------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| `path` (incl. arcs, shorthands), `rect`, `circle`, `ellipse`, `line`, `polyline`, `polygon` | `<text>` / `<tspan>` - convert to outlines                  |
-| `g`, `defs`, `use`-free nesting, `viewBox`, all `transform` functions                       | `<use>`, `<symbol>`                                         |
-| presentation attributes, `style=""`, and `<style>` blocks with flat selectors               | a combinator, pseudo-class or `!important` in CSS           |
-| `fill`, `stroke` (+ width, cap, join, miter, dasharray), `fill-rule`, opacity               | `filter`, `<mask>` - pixel operations                       |
-| `<clipPath>` (`userSpaceOnUse`, `clip-rule`, a child's own transform)                       | `clipPathUnits="objectBoundingBox"`                         |
-| `<linearGradient>` / `<radialGradient>`, `href` chains, both unit systems                   | a gradient on a STROKE; stops with DIFFERING `stop-opacity` |
+| resolved                                                                                    | named error, never a silent skip                  |
+| ------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `path` (incl. arcs, shorthands), `rect`, `circle`, `ellipse`, `line`, `polyline`, `polygon` | `<text>` / `<tspan>` - convert to outlines        |
+| `g`, `defs`, `use`-free nesting, `viewBox`, all `transform` functions                       | `<use>`, `<symbol>`                               |
+| presentation attributes, `style=""`, and `<style>` blocks with flat selectors               | a combinator, pseudo-class or `!important` in CSS |
+| `fill`, `stroke` (+ width, cap, join, miter, dasharray), `fill-rule`, opacity               | `filter`, `<mask>` - pixel operations             |
+| `<clipPath>` (`userSpaceOnUse`, `clip-rule`, a child's own transform)                       | `clipPathUnits="objectBoundingBox"`               |
+| `<linearGradient>` / `<radialGradient>`, `href` chains, both unit systems, `stop-opacity`   | a gradient on a STROKE                            |
 
 **The edge of the subset is a named error with a fix, never a silent skip.** Two reasons, and the
 second is the one that matters: a dropped element leaves a logo that renders and is quietly wrong,
