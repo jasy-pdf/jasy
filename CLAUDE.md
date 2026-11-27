@@ -558,8 +558,9 @@ enforces it (`skonto.ts` for "Skonto is not an allowance"), and everywhere else 
 ## Roadmap, packages, repo
 
 The plan and its order live in **`todo.md`** (gitignored, repo root) - read it first. Working
-agreement: **phase by phase, Flo approves each gate, Claude never commits or pushes, comments in
-English and short, do not break the font math.**
+agreement: **phase by phase, Flo approves each gate, comments in English and short, do not break the
+font math.** Claude commits on its own feature branch (one line, Conventional Commits, no body, no
+trailers, the purpose and not the way); pushing, merging and releasing stay Flo's.
 
 - **pnpm monorepo.** `@jasy/pdf` is the root (`src/lib/`); `packages/`: `e-invoice` (ZUGFeRD /
   XRechnung, **own CLAUDE.md there**), `cli` (the `jasy` TUI: validate, read, export), `vue` (PDFs
@@ -577,7 +578,7 @@ English and short, do not break the font math.**
 - **Docs carry version badges from beta.4 on** (only NEW: "since beta.4", or BREAKING: "changed in beta.4"; maintained on superseded/2.0) - the
   rule lives in the landing's CLAUDE.md; a new feature or a breaking change built here gets one.
 - **The landing is a separate repo**, `~/projects/jasy-landing` → jasy.dev (Nuxt 4). Own CLAUDE.md,
-  HARD RULES: its dev server (3001) is Flo's - restart only via the takeover flag the Nuxt CLI names, never pattern-kill; only Flo commits. Package links use npmx.dev.
+  HARD RULES: its dev server (3001) is Flo's - restart only via the takeover flag the Nuxt CLI names, never pattern-kill; Claude may commit on `main` there, Flo pushes. Package links use npmx.dev.
 - **`@jasy/vue`'s typed props are held to the engine by a test** (`packages/vue/tests/props.test.ts`
   reads every component's option names out of `src/lib/api/`, and names each extra or skipped prop with
   its reason); the components forward `{ ...attrs, ...props }`,

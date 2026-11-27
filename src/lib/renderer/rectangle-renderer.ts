@@ -1,11 +1,11 @@
 import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 
-import { RectangleElement, SideBorders } from "../elements/rectangle-element.ts";
+import { RectangleElement } from "../elements/rectangle-element.ts";
 import type { RenderScope } from "../utils/renderer-registry.ts";
-import { IRNode, Rect, Line } from "../ir/display-list.ts";
+import { IRNode, Rect } from "../ir/display-list.ts";
+import { sideBorderNodes } from "./side-borders.ts";
 import { PositionedRenderer } from "./positioned-renderer.ts";
 import { isGradientInput, resolveGradient } from "../common/gradient.ts";
-import { Color } from "../common/color.ts";
 
 export class RectangleRenderer {
   static async render(
@@ -42,12 +42,20 @@ export class RectangleRenderer {
         : backgroundColor;
 
     if (sideBorders) {
-      // Per-side borders: a fill-only box (no stroke), then a line per present side
-      // (sharp corners). This is what lets cells draw grid lines.
+      // Per-side borders: a fill-only box (no stroke), then the present sides on their own.
       if (backgroundColor) {
-        nodes.push({ type: "rect", x, y, width, height: h, strokeWidth: 0, fill });
+        nodes.push({
+          type: "rect",
+          x,
+          y,
+          width,
+          height: h,
+          strokeWidth: 0,
+          fill,
+          ...(radius ? { radius } : {}),
+        });
       }
-      nodes.push(...RectangleRenderer.sideLines(x, y, width, h, borderWidth!, sideBorders));
+      nodes.push(...sideBorderNodes(x, y, width, h, borderWidth!, sideBorders, radius));
     } else {
       // The box itself becomes a display-list primitive. A background means a filled box;
       // otherwise it is stroked only. (Unchanged path - byte-identical.)
@@ -89,25 +97,5 @@ export class RectangleRenderer {
     if (clip) nodes.push({ type: "clip-pop" });
 
     return nodes;
-  }
-
-  /** One `line` node per present side, along the box edges (top-left coordinates). */
-  private static sideLines(
-    x: number,
-    y: number,
-    width: number,
-    height: number,
-    strokeWidth: number,
-    sides: SideBorders,
-  ): Line[] {
-    const lines: Line[] = [];
-    const add = (x1: number, y1: number, x2: number, y2: number, stroke?: Color) => {
-      if (stroke) lines.push({ type: "line", x1, y1, x2, y2, stroke, strokeWidth });
-    };
-    add(x, y, x + width, y, sides.top); // top
-    add(x, y + height, x + width, y + height, sides.bottom); // bottom
-    add(x, y, x, y + height, sides.left); // left
-    add(x + width, y, x + width, y + height, sides.right); // right
-    return lines;
   }
 }

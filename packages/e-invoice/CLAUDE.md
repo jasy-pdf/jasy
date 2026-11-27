@@ -138,7 +138,7 @@ A demo render goes to `claude-data/out/<topic>/` and its path is named in the re
 
 ## Working here
 
-Same agreement as the root: phase by phase, Flo approves each gate, Claude never commits. Comments in
+Same agreement as the root: phase by phase, Flo approves each gate, Claude commits on its own branch. Comments in
 English, short, and about what breaks on the NEXT grab - not about what broke on the last one. The
 landing docs (`~/projects/jasy-landing/content/docs/4.invoicing/`) describe this package in English;
 every example there is verified against the real library before it goes out.
