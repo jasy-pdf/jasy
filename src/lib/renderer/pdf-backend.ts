@@ -1,6 +1,7 @@
 import {
   IRNode,
   Radii,
+  clampRadii,
   isRounded,
   type PathCommand,
   type StrokeStyle,
@@ -292,7 +293,7 @@ export class PdfBackend {
   ): string {
     // Per corner, in PDF coordinates (y up). With all four equal this emits exactly the operators the
     // single-radius version did - the byte-identity guard for every document that never asks for one.
-    const r = PdfBackend.clampRadii(radius, w, h);
+    const r = clampRadii(radius, w, h);
     const k = 0.5523; // control-point offset that approximates a quarter circle
     const f = (n: number) => n.toFixed(3);
     const xw = x + w;
@@ -309,35 +310,6 @@ export class PdfBackend {
       `${f(x)} ${f(y + r.bl - r.bl * k)} ${f(x + r.bl - r.bl * k)} ${f(y)} ${f(x + r.bl)} ${f(y)} c\n` +
       `h`
     );
-  }
-
-  /**
-   * Clamp the four radii into the box: two radii sharing an edge are scaled down together when they
-   * would overlap - the CSS rule (css-backgrounds-3, corner overlap), and what keeps the path from
-   * folding back on itself. A single corner is NOT capped at half the box: on a 200x40 box a lone
-   * 30pt corner stays 30, as in CSS; equal corners still end at half the short side.
-   */
-  private static clampRadii(radius: number | Radii, w: number, h: number): Required<Radii> {
-    const n = typeof radius === "number" ? radius : 0;
-    const at = (v: number | undefined) => Math.max(0, v ?? n);
-    const r =
-      typeof radius === "number"
-        ? { tl: at(radius), tr: at(radius), br: at(radius), bl: at(radius) }
-        : { tl: at(radius.tl), tr: at(radius.tr), br: at(radius.br), bl: at(radius.bl) };
-    // Per-edge overlap: scale the whole set by the tightest edge, so the corners stay proportional.
-    // An edge whose two corners are both 0 constrains NOTHING - it must not contribute a ratio of 0,
-    // which would scale every other corner away with it.
-    const ratio = (extent: number, a: number, b: number) =>
-      a + b > 0 ? extent / (a + b) : Infinity;
-    const scale = Math.min(
-      1,
-      ratio(w, r.tl, r.tr),
-      ratio(w, r.bl, r.br),
-      ratio(h, r.tl, r.bl),
-      ratio(h, r.tr, r.br),
-    );
-    if (scale >= 1) return r;
-    return { tl: r.tl * scale, tr: r.tr * scale, br: r.br * scale, bl: r.bl * scale };
   }
 
   /**
