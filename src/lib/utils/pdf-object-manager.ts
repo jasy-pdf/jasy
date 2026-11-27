@@ -33,6 +33,7 @@ import { getArrayBuffer, isWindows1252 } from "./utf8-to-windows1252-encoder.ts"
 import { encodePdfText, isPlainPdfText } from "../text/pdf-text-string.ts";
 import type { SecurityHandler } from "../crypto/security-handler.ts";
 import type { Gradient, GradientStop } from "../ir/display-list.ts";
+import { premultipliedSamples, stopAlphas } from "./gradient-shading.ts";
 import { isEmojiCodePoint } from "../text/emoji-codepoints.ts";
 import type { FontVerticals } from "../text/line-metrics.ts";
 import type { FontDecoration } from "../text/text-decoration.ts";
@@ -705,11 +706,65 @@ endstream`;
     return this.extGStates.getAll();
   }
 
-  // Registers a gradient as a PDF shading (+ its color-stop function) and returns the resource name
-  // (e.g. "Sh1"). Used to fill a color-glyph layer with a COLR v1 gradient. Not deduped: each layer
-  // carries page-absolute coordinates, so two calls rarely match.
-  registerShading(g: Gradient): string {
-    const fn = this.buildShadingFunction(g.stops);
+  /**
+   * Registers a gradient as a PDF shading and returns its resource name (e.g. "Sh1"), plus the
+   * transparency state that gives it its opacity, if it has one. A shading is DeviceRGB and has no
+   * alpha channel: one opacity on every stop is the plain fill alpha; stops that DIFFER paint their
+   * color premultiplied (as CSS) under a luminosity soft mask whose gray is the alpha. Not deduped:
+   * each carries page-absolute coordinates, so two calls rarely match.
+   */
+  registerGradient(g: Gradient): { shading: string; gs?: string } {
+    const alphas = stopAlphas(g);
+    const uniform = alphas.every((a) => a === alphas[0]);
+    const color = uniform
+      ? this.buildShadingFunction(
+          g.stops,
+          g.stops.map((s) => s.color.toPDFColorString()),
+        )
+      : this.addObject(
+          this.stream(
+            "/FunctionType 0 /Domain [0 1] /Range [0 1 0 1 0 1] /Size [256] /BitsPerSample 8",
+            premultipliedSamples(g.stops),
+          ),
+        );
+    const objectNumber = this.addObject(this.shadingDict(g, "DeviceRGB", color));
+    const shading = `Sh${this.shadings.size + 1}`;
+    this.shadings.set(shading, objectNumber);
+
+    if (uniform) {
+      const alpha = alphas[0] ?? 1;
+      return alpha < 1 ? { shading, gs: this.registerExtGState(alpha, 1) } : { shading };
+    }
+    // The mask paints the same shading in gray, alpha as the value; the group is drawn in the space
+    // the `gs` is set in, which is the one the color shading is painted in.
+    const alpha = this.addObject(
+      this.shadingDict(
+        g,
+        "DeviceGray",
+        this.buildShadingFunction(
+          g.stops,
+          alphas.map((a) => a.toFixed(3)),
+        ),
+      ),
+    );
+    const group = this.addObject(
+      this.stream(
+        "/Type /XObject /Subtype /Form /BBox [-32000 -32000 32000 32000] " +
+          "/Group << /Type /Group /S /Transparency /CS /DeviceGray >> " +
+          `/Resources << /Shading << /Sh0 ${alpha} 0 R >> >>`,
+        bytesFromLatin1("/Sh0 sh"),
+      ),
+    );
+    const name = `GS${this.extGStates.size() + 1}`;
+    const state = this.addObject(
+      `<< /Type /ExtGState /SMask << /Type /Mask /S /Luminosity /G ${group} 0 R >> >>`,
+    );
+    this.extGStates.add(`smask:${state}`, name, state);
+    return { shading, gs: name };
+  }
+
+  // The shading dictionary: axial or radial, over the gradient's page-absolute coordinates.
+  private shadingDict(g: Gradient, space: "DeviceRGB" | "DeviceGray", fn: number): string {
     const n = (x: number): string => x.toFixed(3);
     const coords =
       g.type === "linear"
@@ -718,19 +773,17 @@ endstream`;
     const shadingType = g.type === "linear" ? 2 : 3;
     // PDF shadings extend by clamping the end colors; "repeat"/"reflect" would need a tiling pattern,
     // so we approximate them as clamp (pad) for now - correct for the common pad case.
-    const objectNumber = this.addObject(
-      `<< /ShadingType ${shadingType} /ColorSpace /DeviceRGB /Coords [${coords}] ` +
-        `/Function ${fn} 0 R /Extend [true true] >>`,
+    return (
+      `<< /ShadingType ${shadingType} /ColorSpace /${space} /Coords [${coords}] ` +
+      `/Function ${fn} 0 R /Extend [true true] >>`
     );
-    const name = `Sh${this.shadings.size + 1}`;
-    this.shadings.set(name, objectNumber);
-    return name;
   }
 
-  // Builds the PDF function mapping t in [0,1] to a color along the stops. Two stops collapse to one
-  // exponential (linear) function; more stops stitch one linear piece per interval (FunctionType 3).
-  private buildShadingFunction(stops: GradientStop[]): number {
-    const c = (i: number): string => stops[i].color.toPDFColorString(); // "r g b" in 0..1
+  // Builds the PDF function mapping t in [0,1] along the stops to `values` (one "r g b" or one gray
+  // per stop). Two stops collapse to one exponential (linear) function; more stops stitch one linear
+  // piece per interval (FunctionType 3).
+  private buildShadingFunction(stops: GradientStop[], values: string[]): number {
+    const c = (i: number): string => values[i]!;
     // Malformed / empty color line: fall back to opaque black instead of indexing an empty array.
     if (stops.length === 0) {
       return this.addObject("<< /FunctionType 2 /Domain [0 1] /C0 [0 0 0] /C1 [0 0 0] /N 1 >>");

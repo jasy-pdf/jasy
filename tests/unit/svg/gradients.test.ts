@@ -77,14 +77,27 @@ describe("stop-opacity", () => {
     expect(g.alpha).toBeCloseTo(0.25, 5);
   });
 
-  it("names stops that DIFFER, which a DeviceRGB shading cannot express", () => {
-    expect(() =>
-      gradientOf(
-        `<linearGradient id="g"><stop stop-color="#000"/>` +
-          `<stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>` +
-          `<rect width="9" height="9" fill="url(#g)"/>`,
-      ),
-    ).toThrow(/DIFFERENT stop-opacity/);
+  it("stops that DIFFER carry their own alpha, which the writer masks", () => {
+    const g = gradientOf(
+      `<linearGradient id="g"><stop stop-color="#000"/>` +
+        `<stop offset="1" stop-color="#fff" stop-opacity=".25"/></linearGradient>` +
+        `<rect width="9" height="9" fill="url(#g)"/>`,
+    );
+    expect(g.alpha ?? 1).toBe(1);
+    expect(g.stops.map((s) => s.color.getAlpha())).toEqual([1, 0.25]);
+  });
+
+  it("a gradient used twice is resolved the same both times (its stops are not changed)", () => {
+    const defs =
+      `<linearGradient id="g"><stop stop-color="#000"/>` +
+      `<stop offset="1" stop-color="#fff" stop-opacity=".5"/></linearGradient>`;
+    const fills = svgToIr(
+      `<svg viewBox="0 0 100 100">${defs}<rect width="9" height="9" fill="url(#g)"/>` +
+        `<rect y="20" width="9" height="9" fill="url(#g)"/></svg>`,
+      BOX,
+    ).flatMap((n) => (n.type === "path" ? [n.fill as Gradient] : []));
+    expect(fills).toHaveLength(2);
+    for (const g of fills) expect(g.stops.map((s) => s.color.getAlpha())).toEqual([1, 0.5]);
   });
 });
 
