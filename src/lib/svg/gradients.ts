@@ -142,24 +142,23 @@ export function resolveSvgGradient(
   defs: ReadonlyMap<string, GradientDef>,
   commands: readonly PathCommand[],
 ): Gradient {
-  const { attributes, stops, opacities } = inherited(def, defs);
-  if (stops.length === 0) {
+  const { attributes, stops: shared, opacities } = inherited(def, defs);
+  if (shared.length === 0) {
     throw new SvgUnsupportedError(
       "a gradient with no <stop> of its own or inherited",
       "Add stops, or replace the fill with a solid colour.",
     );
   }
-  // A PDF shading is DeviceRGB and has no alpha channel. One opacity across all stops IS
-  // expressible - it is just the shape's fill alpha - and 87 of the 125 real files that use
-  // `stop-opacity` at all are that case. Stops with DIFFERENT opacities would need a soft-mask
-  // luminosity group, so that stays named rather than drawn opaque.
-  const alpha = opacities[0] ?? 1;
-  if (opacities.some((o) => o !== alpha)) {
-    throw new SvgUnsupportedError(
-      "a gradient whose stops have DIFFERENT stop-opacity values",
-      "A PDF shading has no alpha channel; only one opacity for the whole gradient is expressible.",
-    );
-  }
+  // One opacity across all stops is the gradient's own alpha (87 of the 125 real files that use
+  // `stop-opacity` are that case); stops that differ carry it each, and the writer masks them.
+  const uniform = opacities.every((o) => o === (opacities[0] ?? 1));
+  const alpha = uniform ? (opacities[0] ?? 1) : 1;
+  // Copies: the stops belong to the definition, which every shape using it resolves again.
+  const stops = shared.map((stop, i) => {
+    if (uniform) return { ...stop };
+    const [r, g, b] = stop.color.toArray();
+    return { ...stop, color: new Color(r, g, b, stop.color.getAlpha() * (opacities[i] ?? 1)) };
+  });
 
   // SVG says an offset lower than the one before it is raised to match; a decreasing pair would
   // otherwise become an invalid Domain in the shading function.
