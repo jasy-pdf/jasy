@@ -209,6 +209,22 @@ describe("what review found", () => {
     ]);
   });
 
+  it("a justified line may squeeze its spaces to keep a hyphen at a span's end", () => {
+    // Spaces as wide as letters here: "Hi abc-" is 7, its one space may give up half of itself.
+    const spaced = testMetrics({
+      getStringWidth: (text, _family, fontSize) => [...text].length * fontSize,
+      getCharWidth: (_char, fontSize) => fontSize,
+    });
+    const parts = (w: string) => (w === "abcdefgh" ? ["abc", "defgh"] : [w]);
+    const lines = breakSegmentsIntoLines(
+      [{ content: "Hi abc" }, { content: "defgh" }],
+      { ...unit, shrink: 0.5, splitting: { hyphenate: parts } },
+      6.5,
+      spaced,
+    ).map((l) => l.segments.map((s) => s.content).join(""));
+    expect(lines).toEqual(["Hi abc-", "defgh"]);
+  });
+
   it("with breakWord, a piece too wide for an empty line is split anywhere, with no hyphen", () => {
     const parts = (w: string) => (w === "abcdefgh" ? ["abcdef", "gh"] : [w]);
     expect(broken([{ content: "abcdefgh" }], 3, { hyphenate: parts, breakWord: true })).toEqual([

@@ -362,14 +362,15 @@ export function breakSegmentsIntoLines(
     const from = origin.get(piece);
     return from !== undefined && hyphenation.at(from.segment, from.offset + piece.content.length);
   };
-  /** Whether `keep`, ended with the hyphen a point adds, still fits the line. */
+  /** Whether `keep`, ended with the hyphen a point adds, still fits the line - a justified one squeezed
+   *  as far as `fitsHere` lets it. */
   const fitsWithHyphen = (keep: TextSegment[]): boolean => {
     const last = keep[keep.length - 1]!;
     const run = runStyleOf(last, defaults);
     const room = lines.length === 0 ? maxWidth - indent : maxWidth;
-    return (
-      measure(keep).ink + hyphenAdvance(metrics, last.content, run.font, run.letterSpacing) <= room
-    );
+    const squeeze = shrink > 0 ? lineGaps(keep, defaults, metrics).width * shrink : 0;
+    const hyphen = hyphenAdvance(metrics, last.content, run.font, run.letterSpacing);
+    return measure(keep).ink + hyphen - squeeze <= room;
   };
 
   /** The width and ink of `pieces`, summed exactly as `placeWord` builds a line: word by word, a space
