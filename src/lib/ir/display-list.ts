@@ -1,6 +1,6 @@
-import type { ImageColor, Orientation } from "../utils/image-helper.ts";
+import type { ImageColor, Orientation } from "../common/image-facts.ts";
 import { Color } from "../common/color.ts";
-import { FontStyle } from "../utils/pdf-object-manager.ts";
+import { FontStyle } from "../common/font-style.ts";
 import type { FormFieldSpec, FieldStyle } from "../forms/field.ts";
 
 /**

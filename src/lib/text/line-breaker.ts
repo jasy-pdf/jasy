@@ -1,4 +1,4 @@
-import type { FontStyle } from "../utils/pdf-object-manager.ts";
+import type { FontStyle } from "../common/font-style.ts";
 import type { FontMetrics } from "../utils/font-metrics.ts";
 import type { TextSegment } from "../elements/text-element.ts";
 import { runAdvance, type RunFont, SOFT_HYPHEN, withoutSoftHyphens } from "./advance.ts";

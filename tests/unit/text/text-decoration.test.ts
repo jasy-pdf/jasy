@@ -4,7 +4,8 @@ import {
   strikethroughStroke,
   underlineStroke,
 } from "../../../src/lib/text/text-decoration";
-import { PDFObjectManager, FontStyle } from "../../../src/lib/utils/pdf-object-manager";
+import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager";
+import { FontStyle } from "../../../src/lib/common/font-style";
 
 // Every number an underline or a strikethrough uses comes out of the font. Verified against
 // `google-chrome --headless --print-to-pdf` on the SAME font (FreeSans): Chrome's strikethrough

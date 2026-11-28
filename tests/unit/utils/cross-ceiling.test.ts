@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { FlexLayoutHelper, VERTICAL_AXIS } from "../../../src/lib/utils/flex-layout.ts";
+import { FlexLayoutHelper, VERTICAL_AXIS } from "../../../src/lib/layout/flex-layout.ts";
 import { LayoutContext, PDFElement } from "../../../src/lib/elements/pdf-element.ts";
 import { BoxConstraints, Offset, Size } from "../../../src/lib/layout/box-constraints.ts";
 

@@ -7,13 +7,8 @@ import {
   extentSpecs,
   resolveSize,
 } from "../layout/box-constraints.ts";
-import {
-  FlexLayoutHelper,
-  HORIZONTAL_AXIS,
-  MainAlign,
-  CrossAlign,
-  type FlexMode,
-} from "../utils/flex-layout.ts";
+import { FlexLayoutHelper, HORIZONTAL_AXIS, type FlexMode } from "../layout/flex-layout.ts";
+import type { MainAlign, CrossAlign } from "../layout/alignment.ts";
 import { stackMinIntrinsic, withDeclaredExtent } from "../layout/min-intrinsic.ts";
 import { diagnose, pageOf } from "../common/diagnostics.ts";
 import {

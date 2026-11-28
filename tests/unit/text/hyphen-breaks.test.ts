@@ -6,7 +6,8 @@ import {
 import { hyphenBreaks, hyphenPieces } from "../../../src/lib/text/hyphen-breaks.ts";
 import { TextElement } from "../../../src/lib/elements/text-element.ts";
 import type { LayoutContext } from "../../../src/lib/elements/pdf-element.ts";
-import { FontStyle, PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager.ts";
+import { FontStyle } from "../../../src/lib/common/font-style.ts";
+import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager.ts";
 import { testMetrics } from "../support/metrics.ts";
 import { drawnTextRuns } from "../support/drawn.ts";
 import { runAdvance } from "../../../src/lib/text/advance.ts";

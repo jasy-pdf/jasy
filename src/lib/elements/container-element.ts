@@ -1,12 +1,7 @@
 import { widthRules } from "../layout/box-constraints.ts";
 import { flexibleOf } from "../layout/flex-item.ts";
-import {
-  FlexLayoutHelper,
-  VERTICAL_AXIS,
-  MainAlign,
-  CrossAlign,
-  type FlexMode,
-} from "../utils/flex-layout.ts";
+import { FlexLayoutHelper, VERTICAL_AXIS, type FlexMode } from "../layout/flex-layout.ts";
+import type { MainAlign, CrossAlign } from "../layout/alignment.ts";
 import { stackMinIntrinsic, withDeclaredExtent } from "../layout/min-intrinsic.ts";
 import {
   BoxConstraints,

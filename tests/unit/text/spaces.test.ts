@@ -3,7 +3,7 @@ import {
   breakSegmentsIntoLines,
   breakStringIntoLines,
 } from "../../../src/lib/text/line-breaker.ts";
-import { FontStyle } from "../../../src/lib/utils/pdf-object-manager.ts";
+import { FontStyle } from "../../../src/lib/common/font-style.ts";
 import { testMetrics } from "../support/metrics.ts";
 
 // Spaces count as written - a leading one and every one of a double space. Only the spaces that end a

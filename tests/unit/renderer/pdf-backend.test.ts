@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { PdfBackend } from "../../../src/lib/renderer/pdf-backend";
-import { PDFObjectManager, FontStyle } from "../../../src/lib/utils/pdf-object-manager";
+import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager";
+import { FontStyle } from "../../../src/lib/common/font-style";
 import { TextRun, Path, TransformPush, TransformPop } from "../../../src/lib/ir/display-list";
 import { Color } from "../../../src/lib/common/color";
 

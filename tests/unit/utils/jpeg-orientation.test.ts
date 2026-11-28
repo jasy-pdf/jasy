@@ -3,8 +3,8 @@ import {
   readImageDimensions,
   naturalSize,
   ORIENTATION_MATRIX,
-  type Orientation,
 } from "../../../src/lib/utils/image-helper.ts";
+import { type Orientation } from "../../../src/lib/common/image-facts.ts";
 import { Document, Image, Page, renderToBytes } from "../../../src/lib/api/index.ts";
 import { drawnNodes } from "../support/drawn.ts";
 

@@ -6,7 +6,7 @@ import { PageElement } from "../../../src/lib/elements/page-element.ts";
 import { RectangleRenderer } from "../../../src/lib/renderer/rectangle-renderer.ts";
 import { LayoutContext, PDFElement } from "../../../src/lib/elements/pdf-element.ts";
 import { BoxConstraints } from "../../../src/lib/layout/box-constraints.ts";
-import { Orientation } from "../../../src/lib/renderer/pdf-config.ts";
+import { Orientation } from "../../../src/lib/common/pdf-config.ts";
 import { PageSize } from "../../../src/lib/constants/page-sizes.ts";
 import type { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager.ts";
 import { testMetrics } from "../support/metrics.ts";

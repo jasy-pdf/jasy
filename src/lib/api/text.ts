@@ -5,7 +5,7 @@ import {
   type VerticalTextAlign,
 } from "../elements/text-element.ts";
 import { HorizontalAlignment } from "../elements/pdf-element.ts";
-import { FontStyle } from "../utils/pdf-object-manager.ts";
+import { FontStyle } from "../common/font-style.ts";
 import { TextOverflow } from "../text/line-breaker.ts";
 import type { Direction } from "../text/bidi.ts";
 import { ResolvedTextStyle, type TextTransform } from "../text/text-style.ts";

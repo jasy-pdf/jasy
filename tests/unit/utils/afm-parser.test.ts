@@ -117,7 +117,7 @@ describe("loading the metrics", () => {
   it("are loaded before PDFDocument.build(), which may measure", async () => {
     vi.resetModules(); // a fresh engine: nothing loaded, as in an app's first render
     const { PDFDocument } = await import("../../../src/lib/renderer/pdf-document-class.ts");
-    const { FontStyle } = await import("../../../src/lib/utils/pdf-object-manager.ts");
+    const { FontStyle } = await import("../../../src/lib/common/font-style.ts");
     const { Document, Page, Text } = await import("../../../src/lib/api/index.ts");
     let measured = 0;
     class Sized extends PDFDocument {

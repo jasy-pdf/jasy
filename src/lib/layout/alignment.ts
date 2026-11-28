@@ -1,5 +1,5 @@
 /**
- * Flex alignment vocabulary. It lives here rather than in `utils/flex-layout.ts` because the base
+ * Flex alignment vocabulary. It lives here rather than in `flex-layout.ts` because the base
  * `PDFElement` needs `CrossAlign` for `alignSelf`, and flex-layout imports the elements - defining it
  * there would close a cycle.
  */

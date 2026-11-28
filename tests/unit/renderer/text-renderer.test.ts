@@ -1,6 +1,7 @@
 import { TextRenderer } from "../../../src/lib/renderer/text-renderer.ts";
 import { PdfBackend } from "../../../src/lib/renderer/pdf-backend.ts";
-import { FontStyle, PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager.ts";
+import { FontStyle } from "../../../src/lib/common/font-style.ts";
+import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager.ts";
 import { describe, it, vi, expect } from "vitest";
 import { TextElement } from "../../../src/lib/elements/index.ts";
 import { HorizontalAlignment } from "../../../src/lib/elements/pdf-element.ts";

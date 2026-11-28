@@ -5,7 +5,7 @@ import { PageElement } from "../../../src/lib/elements/page-element";
 import { ContainerElement } from "../../../src/lib/elements/container-element";
 import { TextElement } from "../../../src/lib/elements/text-element";
 import { PageSize } from "../../../src/lib/constants/page-sizes";
-import { Orientation } from "../../../src/lib/renderer/pdf-config";
+import { Orientation } from "../../../src/lib/common/pdf-config";
 import { BoxConstraints, Offset, Size } from "../../../src/lib/layout/box-constraints";
 import type { LayoutContext } from "../../../src/lib/elements/pdf-element";
 import type { FragmentResult } from "../../../src/lib/layout/fragmentation";

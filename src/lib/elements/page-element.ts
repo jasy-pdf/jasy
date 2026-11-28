@@ -1,6 +1,10 @@
 import { pageFormats, PageSize } from "../constants/page-sizes.ts";
-import { Orientation } from "../renderer/pdf-config.ts";
-import type { ColorMode, DefaultFont, Margin } from "../renderer/index.ts";
+import {
+  Orientation,
+  type ColorMode,
+  type DefaultFont,
+  type Margin,
+} from "../common/pdf-config.ts";
 import { BoxConstraints, Offset, Size } from "../layout/box-constraints.ts";
 import { LayoutContext, PDFElement, PositioningFrame, WithChildren } from "./pdf-element.ts";
 import { TextElement } from "./text-element.ts";

@@ -1,4 +1,5 @@
-import type { FontStyle, PDFObjectManager } from "../utils/pdf-object-manager.ts";
+import type { FontStyle } from "../common/font-style.ts";
+import type { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 import type { FormFieldNode } from "../ir/display-list.ts";
 import { coverText } from "../text/glyph-coverage.ts";
 import { NORMAL_STYLE, escName, num2, pdfColor } from "./pdf.ts";

@@ -1,6 +1,7 @@
 import { zlibSync } from "fflate";
 import { latin1FromBytes } from "./bytes.ts";
 import { pngToRgba } from "../platform/node-image.ts";
+import type { ImageColor, Orientation } from "../common/image-facts.ts";
 
 // Declare the new method in the DataView interface
 declare global {
@@ -35,12 +36,6 @@ export interface ImageDimensions {
   /** How the stored pixels turn upright (EXIF, a JPEG only); absent when they already are. */
   orientation?: Orientation;
 }
-
-/**
- * EXIF orientation: 2 mirrored, 3 turned half, 4 flipped, 5 transposed, 6 turned a quarter clockwise,
- * 7 transversed, 8 turned a quarter counterclockwise. 5-8 swap width and height.
- */
-export type Orientation = 2 | 3 | 4 | 5 | 6 | 7 | 8;
 
 /**
  * The matrix that turns the image's unit square upright, inside it - PDF's image space, y up, the first
@@ -230,16 +225,6 @@ export class JpegFormatError extends Error {
 
 /** Baseline, extended sequential and progressive: the codings a PDF viewer's DCTDecode reads. */
 const DCT_CODINGS = new Set([0xffc0, 0xffc1, 0xffc2]);
-
-/** The colors an image's samples are in. */
-export type ImageColorSpace = "gray" | "rgb" | "cmyk";
-
-/** What an image's samples mean: their color space, and whether they are stored inverted. */
-export interface ImageColor {
-  space: ImageColorSpace;
-  /** Photoshop stores CMYK inverted (an Adobe `APP14` segment). */
-  inverted?: boolean;
-}
 
 /** The color of a JPEG as it is embedded (`DCTDecode`): the space it was saved in. */
 export function jpegColor(bytes: Uint8Array): ImageColor {

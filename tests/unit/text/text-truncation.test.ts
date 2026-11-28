@@ -3,7 +3,7 @@ import { wrapStringIntoLines } from "../../../src/lib/text/line-breaker";
 import { TextElement } from "../../../src/lib/elements/text-element";
 import { BoxConstraints } from "../../../src/lib/layout/box-constraints";
 import { LayoutContext } from "../../../src/lib/elements/pdf-element";
-import { FontStyle } from "../../../src/lib/utils/pdf-object-manager";
+import { FontStyle } from "../../../src/lib/common/font-style";
 import { FontMetrics } from "../../../src/lib/utils/font-metrics";
 import { Text } from "../../../src/lib/api";
 import { testMetrics } from "../support/metrics.ts";

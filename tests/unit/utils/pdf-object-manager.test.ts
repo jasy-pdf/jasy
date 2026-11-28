@@ -1,5 +1,6 @@
 import { describe, it, expect, vitest } from "vitest";
-import { PDFObjectManager, FontStyle } from "../../../src/lib/utils/pdf-object-manager";
+import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager";
+import { FontStyle } from "../../../src/lib/common/font-style";
 import { standardParser } from "../../../src/lib/utils/afm-parser.ts";
 import * as fs from "fs";
 

@@ -1,4 +1,4 @@
-import type { FontStyle } from "../utils/pdf-object-manager.ts";
+import type { FontStyle } from "../common/font-style.ts";
 import type { FontMetrics } from "../utils/font-metrics.ts";
 
 /**

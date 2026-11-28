@@ -1,5 +1,5 @@
 import type { LayoutContext } from "../pdf-element.ts";
-import type { FontStyle } from "../../utils/pdf-object-manager.ts";
+import type { FontStyle } from "../../common/font-style.ts";
 import { DEFAULT_TEXT_STYLE } from "../../text/text-style.ts";
 
 /** The font a field's text inherits, like any text: `Document({ font })` or a `DefaultTextStyle`. */

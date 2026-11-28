@@ -1,10 +1,14 @@
 import { Color } from "../common/color.ts";
-import { FontStyle } from "../utils/pdf-object-manager.ts";
-import { DEFAULT_TEXT_STYLE, ResolvedTextStyle } from "../text/text-style.ts";
+import { FontStyle } from "../common/font-style.ts";
+import {
+  DEFAULT_TEXT_STYLE,
+  ResolvedTextStyle,
+  applyTextTransform,
+  type TextTransform,
+} from "../text/text-style.ts";
 import type { FontMetrics } from "../utils/font-metrics.ts";
 import { BoxConstraints, Offset, Size } from "../layout/box-constraints.ts";
 import type { Direction } from "../text/bidi.ts";
-import { applyTextTransform, type TextTransform } from "../text/text-style.ts";
 import { splitByFont } from "../text/font-fallback.ts";
 import { runAdvance } from "../text/advance.ts";
 import { Fragmentable, FragmentResult } from "../layout/fragmentation.ts";

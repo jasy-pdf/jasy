@@ -7,7 +7,7 @@ import {
 import { LayoutContext, PDFElement } from "../../../src/lib/elements/pdf-element";
 import { BoxConstraints, Offset, Size } from "../../../src/lib/layout/box-constraints";
 import { PageSize } from "../../../src/lib/constants/page-sizes";
-import { Orientation } from "../../../src/lib/renderer/pdf-config";
+import { Orientation } from "../../../src/lib/common/pdf-config";
 import { PDFDocument } from "../../../src/lib/renderer/pdf-document-class";
 import { PDFDocumentElement } from "../../../src/lib/elements/pdf-document-element";
 import { PageElement } from "../../../src/lib/elements/page-element";

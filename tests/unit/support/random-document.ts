@@ -19,7 +19,8 @@ import { ColumnBreak, Flow, Region, SplitView } from "../../../src/lib/api/flow.
 import type { FlowTemplate } from "../../../src/lib/elements/layout/flow-element.ts";
 import type { PDFElement } from "../../../src/lib/elements/pdf-element.ts";
 import { renderToBytes } from "../../../src/lib/api/index.ts";
-import { FontStyle, PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager.ts";
+import { FontStyle } from "../../../src/lib/common/font-style.ts";
+import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager.ts";
 import type { Diagnostic } from "../../../src/lib/common/diagnostics.ts";
 import type { TextRun } from "../../../src/lib/ir/display-list.ts";
 import { runAdvance } from "../../../src/lib/text/advance.ts";

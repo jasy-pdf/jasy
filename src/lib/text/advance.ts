@@ -19,7 +19,7 @@
  * to before. Folding kerning into the measurement while the output ignored it was the 2026-07-10 bug.
  */
 
-import type { FontStyle } from "../utils/pdf-object-manager.ts";
+import type { FontStyle } from "../common/font-style.ts";
 import type { FontMetrics } from "../utils/font-metrics.ts";
 
 /** The font a run is set in. */

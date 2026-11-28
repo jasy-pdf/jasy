@@ -3,7 +3,7 @@
 // then read again through a metrics object that has measured all the others in between.
 import { describe, it, expect } from "vitest";
 import { runAdvance } from "../../../src/lib/text/advance.ts";
-import { FontStyle } from "../../../src/lib/utils/pdf-object-manager.ts";
+import { FontStyle } from "../../../src/lib/common/font-style.ts";
 import type { FontMetrics } from "../../../src/lib/utils/font-metrics.ts";
 import { testMetrics } from "../support/metrics.ts";
 

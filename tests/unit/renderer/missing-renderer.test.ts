@@ -4,7 +4,7 @@ import { PDFDocumentElement } from "../../../src/lib/elements/pdf-document-eleme
 import { PageElement } from "../../../src/lib/elements/page-element.ts";
 import { TextElement } from "../../../src/lib/elements/text-element.ts";
 import { PageSize } from "../../../src/lib/constants/page-sizes.ts";
-import { Orientation } from "../../../src/lib/renderer/pdf-config.ts";
+import { Orientation } from "../../../src/lib/common/pdf-config.ts";
 import { MissingRendererError } from "../../../src/lib/utils/renderer-registry.ts";
 
 // ISSUE-11: two loaded copies of @jasy/pdf give every element class a SECOND constructor, and the

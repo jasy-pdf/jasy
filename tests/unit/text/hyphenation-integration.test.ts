@@ -1,7 +1,7 @@
 import { createRequire } from "node:module";
 import { describe, it, expect } from "vitest";
 import { wrapStringIntoLines } from "../../../src/lib/text/line-breaker.ts";
-import { FontStyle } from "../../../src/lib/utils/pdf-object-manager.ts";
+import { FontStyle } from "../../../src/lib/common/font-style.ts";
 import { testMetrics } from "../support/metrics.ts";
 
 // `hyphenate` is a HOOK: no pattern data ships in @jasy/pdf, because 732 KB for German alone is against

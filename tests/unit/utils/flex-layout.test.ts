@@ -3,7 +3,7 @@ import {
   FlexLayoutHelper,
   VERTICAL_AXIS,
   HORIZONTAL_AXIS,
-} from "../../../src/lib/utils/flex-layout.ts";
+} from "../../../src/lib/layout/flex-layout.ts";
 import {
   PDFElement,
   LayoutContext,

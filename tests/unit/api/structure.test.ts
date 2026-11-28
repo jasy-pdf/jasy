@@ -13,7 +13,7 @@ import { PDFDocumentElement } from "../../../src/lib/elements/pdf-document-eleme
 import { PageElement } from "../../../src/lib/elements/page-element";
 import { ContainerElement } from "../../../src/lib/elements/container-element";
 import { PageSize } from "../../../src/lib/constants/page-sizes";
-import { Orientation } from "../../../src/lib/renderer/pdf-config";
+import { Orientation } from "../../../src/lib/common/pdf-config";
 
 describe("Page factory", () => {
   it("builds a PageElement, children-only form, A4 portrait 56pt by default", () => {
