@@ -2,11 +2,21 @@ import type { Color } from "../common/color.ts";
 import type { Gradient, GradientStop } from "../ir/display-list.ts";
 
 /**
- * Where each stop sits on the shading's 0..1 domain, as the stitched function places it: the first
- * at 0, the last at 1, the ones between at their offsets.
+ * Where each stop sits on the shading's 0..1 domain, at the precision `/Bounds` is written with: the
+ * first at 0, the last at 1, the ones between at their offsets. An inner stop ON an end is moved in by
+ * one step: the shading extends its end values, which must be the outermost stop's, so a hard edge
+ * there needs a piece of its own.
  */
 export function stopPositions(stops: GradientStop[]): number[] {
-  return stops.map((s, i) => (i === 0 ? 0 : i === stops.length - 1 ? 1 : s.offset));
+  const step = 1e-4;
+  const last = stops.length - 1;
+  return stops.map((s, i) =>
+    i === 0
+      ? 0
+      : i === last
+        ? 1
+        : Math.min(1 - step, Math.max(step, Math.round(s.offset / step) * step)),
+  );
 }
 
 /** Each stop's opacity, times the gradient's own. */

@@ -3,13 +3,13 @@ import { linearGradient, radialGradient, resolveGradient } from "../../../src/li
 import { Box, Column, Document, Page, renderPdf } from "../../../src/lib/api/index.ts";
 
 // Gradients are written BOX-RELATIVE (an angle and stops) and resolved against the box by the
-// renderer. Two things are worth pinning down: the angle convention, and that a solid colour still
+// renderer. Two things are worth pinning down: the angle convention, and that a solid color still
 // takes the old path - `sh` floods the clip, so a gradient box is painted completely differently.
 
 const box = (g: unknown) => resolveGradient(g as never, 0, 0, 200, 100);
 
 describe("the angle follows CSS: 0 points up, clockwise", () => {
-  it("90 runs left to right, along the horizontal centre line", () => {
+  it("90 runs left to right, along the horizontal center line", () => {
     const g = box(linearGradient({ angle: 90, stops: ["#000", "#fff"] })) as {
       x0: number;
       y0: number;
@@ -67,8 +67,8 @@ describe("stops", () => {
     expect(g.stops.map((s) => s.offset)).toEqual([0, 0.8, 1]);
   });
 
-  it("refuses a gradient with fewer than two colours", () => {
-    expect(() => box(linearGradient("#000"))).toThrow(/two colour stops/);
+  it("refuses a gradient with fewer than two colors", () => {
+    expect(() => box(linearGradient("#000"))).toThrow(/two color stops/);
   });
 
   it("refuses a position outside 0..1, or one that is not a number", () => {
@@ -81,28 +81,29 @@ describe("stops", () => {
     }
   });
 
-  it("refuses stops that do not move forward", () => {
-    // /Bounds must be STRICTLY increasing. Equal offsets are a hard colour edge in CSS and cannot be
-    // expressed in one PDF shading, so they are named rather than drawn wrongly.
-    expect(() =>
-      box(
-        linearGradient({
-          stops: ["#000", { color: "#f00", at: 0.5 }, { color: "#0f0", at: 0.5 }, "#fff"],
-        }),
-      ),
-    ).toThrow(/must move forward/);
+  it("refuses a stop placed before the one ahead of it", () => {
+    // CSS would silently raise it to match; here that is almost always a typo, so it is named.
     expect(() =>
       box(
         linearGradient({
           stops: ["#000", { color: "#f00", at: 0.8 }, { color: "#0f0", at: 0.3 }, "#fff"],
         }),
       ),
-    ).toThrow(/must move forward/);
+    ).toThrow(/must not move backwards/);
   });
 
-  it("carries the edge colour outwards when the first or last stop is pinned inside", () => {
+  it("two stops at one position are a hard edge, as in CSS", () => {
+    const g = box(
+      linearGradient({
+        stops: ["#f00", { color: "#f00", at: 0.5 }, { color: "#00f", at: 0.5 }, "#00f"],
+      }),
+    ) as { stops: { offset: number }[] };
+    expect(g.stops.map((s) => s.offset)).toEqual([0, 0.5, 0.5, 1]);
+  });
+
+  it("carries the edge color outwards when the first or last stop is pinned inside", () => {
     // Only the INTERIOR offsets reach /Bounds - the domain is always 0..1 - so a first stop pinned at
-    // 0.3 would silently do nothing. CSS extends the edge colour instead, and so do we.
+    // 0.3 would silently do nothing. CSS extends the edge color instead, and so do we.
     const g = box(
       linearGradient({
         stops: [
@@ -118,7 +119,7 @@ describe("stops", () => {
 });
 
 describe("radial", () => {
-  it("is centred and reaches the edges by default", () => {
+  it("is centered and reaches the edges by default", () => {
     const g = box(radialGradient("#fff", "#000")) as {
       x0: number;
       y0: number;
@@ -130,7 +131,7 @@ describe("radial", () => {
     expect(g.r1).toBe(100); // half the larger side
   });
 
-  it("takes a centre and radius of its own", () => {
+  it("takes a center and radius of its own", () => {
     const g = box(
       radialGradient({ center: [0.25, 0.25], radius: 0.8, stops: ["#fff", "#000"] }),
     ) as { x0: number; y0: number; r1: number };
@@ -150,14 +151,14 @@ describe("what reaches the page", () => {
       { compress: false },
     );
 
-  it("paints a gradient as a clip plus a shading, never as a fill colour", async () => {
+  it("paints a gradient as a clip plus a shading, never as a fill color", async () => {
     // PDF has no gradient FILL - `sh` floods the current clip - so the box becomes the clip.
     const pdf = await draw(linearGradient("#000000", "#ffffff"));
     expect(pdf).toMatch(/W n\n\/Sh\d+ sh/);
     expect(pdf).toContain("/Shading");
   });
 
-  it("leaves a solid colour on the old path", async () => {
+  it("leaves a solid color on the old path", async () => {
     const pdf = await draw("#dddddd");
     expect(pdf).toContain("re f");
     expect(pdf).not.toContain(" sh\n");
@@ -172,6 +173,44 @@ describe("what reaches the page", () => {
     const [, y0, , y1] = coords![1].trim().split(/\s+/).map(Number);
     // The box sits at y 701.89..801.89 in PDF space; "downwards" means from the HIGH y to the low.
     expect(y0).toBeGreaterThan(y1);
+  });
+
+  it("draws a hard edge as two flat pieces with one bound between them", async () => {
+    const pdf = await draw(
+      linearGradient({
+        angle: 90,
+        stops: ["#ff0000", { color: "#ff0000", at: 0.5 }, { color: "#0000ff", at: 0.5 }, "#0000ff"],
+      }),
+    );
+    expect(pdf).toContain("/Bounds [0.5000]");
+    expect(pdf).toContain("/C0 [1.000 0.000 0.000] /C1 [1.000 0.000 0.000]");
+    expect(pdf).toContain("/C0 [0.000 0.000 1.000] /C1 [0.000 0.000 1.000]");
+  });
+
+  it("a hard edge at the end keeps the last color beyond it", async () => {
+    // Past the last stop the shading extends its end value, which must be the LAST stop's color.
+    const pdf = await draw(
+      radialGradient("#ff0000", { color: "#ff0000", at: 1 }, { color: "#0000ff", at: 1 }),
+    );
+    expect(pdf).toMatch(/\/Bounds \[0\.9999\]/);
+    expect(pdf).toMatch(/\/C1 \[0\.000 0\.000 1\.000\]/);
+  });
+
+  it("a hard edge at the start keeps the first color before it", async () => {
+    const pdf = await draw(
+      linearGradient({
+        stops: [{ color: "#ff0000", at: 0 }, { color: "#0000ff", at: 0 }, "#00ff00"],
+      }),
+    );
+    expect(pdf).toMatch(/\/Bounds \[0\.0001\]/);
+    expect(pdf).toMatch(/\/C0 \[1\.000 0\.000 0\.000\]/);
+  });
+
+  it("the opacity past a hard edge at the end is the last stop's too", async () => {
+    const pdf = await draw(
+      radialGradient("#ff0000", { color: "#ff0000", at: 1 }, { color: "rgba(0,0,255,0.5)", at: 1 }),
+    );
+    expect(pdf).toContain("/C0 [1.000] /C1 [0.500]");
   });
 
   it("still strokes a border around a gradient box", async () => {

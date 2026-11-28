@@ -9,7 +9,7 @@ import type { Gradient, GradientStop } from "../ir/display-list.ts";
  * resolves one against the box it is painting; see `resolveGradient`.
  */
 
-/** A stop as written: a colour, optionally pinned to a position 0..1 along the axis. */
+/** A stop as written: a color, optionally pinned to a position 0..1 along the axis. */
 export type StopInput = ColorInput | { color: ColorInput; at: number };
 
 export interface LinearGradientInput {
@@ -21,7 +21,7 @@ export interface LinearGradientInput {
 
 export interface RadialGradientInput {
   kind: "radial";
-  /** Centre as a fraction of the box, `[0.5, 0.5]` being the middle (the default). */
+  /** Center as a fraction of the box, `[0.5, 0.5]` being the middle (the default). */
   center: [number, number];
   /** Outer radius as a fraction of the box's larger side (default 0.5, i.e. it touches the edges). */
   radius: number;
@@ -47,7 +47,7 @@ export function linearGradient(
   return { kind: "linear", angle: 180, stops: args as StopInput[] };
 }
 
-/** A radial gradient, centred by default and reaching the edges. */
+/** A radial gradient, centered by default and reaching the edges. */
 export function radialGradient(
   ...args: [...StopInput[]] | [{ center?: [number, number]; radius?: number; stops: StopInput[] }]
 ): RadialGradientInput {
@@ -65,13 +65,12 @@ export function radialGradient(
 
 /**
  * Spread the stops that carry no `at` evenly, first to last, the way CSS does - and check the pinned
- * ones, because they end up in a PDF stitching function's `/Bounds`, which the format requires to be
- * strictly increasing inside the domain. A bad offset there is not a wrong-looking gradient, it is a
- * malformed file, so it is refused by name here rather than emitted.
+ * ones: outside 0..1 or before the stop ahead is refused by name (CSS would silently clamp a typo).
+ * Two stops at one position are a hard edge, as in CSS.
  */
 function toStops(stops: StopInput[]): GradientStop[] {
   if (stops.length < 2) {
-    throw new Error("A gradient needs at least two colour stops.");
+    throw new Error("A gradient needs at least two color stops.");
   }
   const last = stops.length - 1;
   const out: GradientStop[] = stops.map((s, i) => {
@@ -87,17 +86,16 @@ function toStops(stops: StopInput[]): GradientStop[] {
   });
 
   for (let i = 1; i < out.length; i++) {
-    if (out[i].offset <= out[i - 1].offset) {
+    if (out[i].offset < out[i - 1].offset) {
       throw new Error(
-        `Gradient stops must move forward: stop ${i} sits at ${out[i].offset}, which is not after ` +
-          `${out[i - 1].offset}. (Two stops at the SAME position would be a hard colour edge in CSS; ` +
-          `PDF cannot express that in one shading, so it is refused rather than drawn wrongly.)`,
+        `Gradient stops must not move backwards: stop ${i} sits at ${out[i].offset}, before ` +
+          `${out[i - 1].offset}. (Two stops at the SAME position are allowed: a hard edge.)`,
       );
     }
   }
 
   // A pinned first or last stop would otherwise be IGNORED - the shading's domain is always 0..1 and
-  // only the INTERIOR offsets reach /Bounds. Carrying the edge colour outwards is what CSS does.
+  // only the INTERIOR offsets reach /Bounds. Carrying the edge color outwards is what CSS does.
   if (out[0].offset > 0) out.unshift({ offset: 0, color: out[0].color });
   if (out[out.length - 1].offset < 1) out.push({ offset: 1, color: out[out.length - 1].color });
   return out;
@@ -108,7 +106,7 @@ function toStops(stops: StopInput[]): GradientStop[] {
  * IR wants. Called by the renderer, which is the first place the box's geometry is known.
  *
  * The angle follows CSS: 0 points to the top and it turns clockwise, so 90 goes to the right. The
- * axis runs through the box centre and is scaled so it spans the box on that diagonal - which is why
+ * axis runs through the box center and is scaled so it spans the box on that diagonal - which is why
  * a 45-degree gradient reaches the corners rather than stopping short of them.
  */
 export function resolveGradient(
