@@ -1,3 +1,4 @@
+import type { Color } from "../common/color.ts";
 import type { Gradient, GradientStop } from "../ir/display-list.ts";
 
 /**
@@ -15,21 +16,16 @@ export function stopAlphas(g: Gradient): number[] {
 }
 
 /**
- * The color at `n` even steps along the stops, interpolated PREMULTIPLIED as CSS does: a stop counts
- * by its alpha, so a fade to `transparent` keeps the other stop's color instead of passing through
- * black. 8-bit RGB triples, for a sampled function; the alpha itself goes into the soft mask.
+ * The color at `n` even steps from one stop to the next, interpolated PREMULTIPLIED as CSS does: a
+ * stop counts by its alpha, so a fade to `transparent` keeps the other stop's color instead of
+ * passing through black. 8-bit RGB triples, for one sampled piece; the alpha goes into the soft mask.
  */
-export function premultipliedSamples(stops: GradientStop[], n = 256): Uint8Array {
-  const pos = stopPositions(stops);
+export function premultipliedSamples(from: Color, to: Color, n = 256): Uint8Array {
   const out = new Uint8Array(n * 3);
+  const c0 = from.toArray();
+  const c1 = to.toArray();
   for (let k = 0; k < n; k++) {
-    const t = k / (n - 1);
-    let i = 0;
-    while (i < stops.length - 2 && t > pos[i + 1]!) i++;
-    const span = pos[i + 1]! - pos[i]!;
-    const u = span > 0 ? Math.min(1, Math.max(0, (t - pos[i]!) / span)) : 0;
-    const from = stops[i]!.color;
-    const to = stops[i + 1]!.color;
+    const u = k / (n - 1);
     let w0 = from.getAlpha() * (1 - u);
     let w1 = to.getAlpha() * u;
     // On a transparent stop itself both weights vanish: take the color it fades into (the limit), and
@@ -37,8 +33,6 @@ export function premultipliedSamples(stops: GradientStop[], n = 256): Uint8Array
     if (w0 + w1 === 0)
       [w0, w1] =
         from.getAlpha() + to.getAlpha() > 0 ? [from.getAlpha(), to.getAlpha()] : [1 - u, u];
-    const c0 = from.toArray();
-    const c1 = to.toArray();
     for (let ch = 0; ch < 3; ch++) {
       out[k * 3 + ch] = Math.round((c0[ch]! * w0 + c1[ch]! * w1) / (w0 + w1));
     }

@@ -33,7 +33,7 @@ import { getArrayBuffer, isWindows1252 } from "./utf8-to-windows1252-encoder.ts"
 import { encodePdfText, isPlainPdfText } from "../text/pdf-text-string.ts";
 import type { SecurityHandler } from "../crypto/security-handler.ts";
 import type { Gradient, GradientStop } from "../ir/display-list.ts";
-import { premultipliedSamples, stopAlphas } from "./gradient-shading.ts";
+import { premultipliedSamples, stopAlphas, stopPositions } from "./gradient-shading.ts";
 import { isEmojiCodePoint } from "../text/emoji-codepoints.ts";
 import type { FontVerticals } from "../text/line-metrics.ts";
 import type { FontDecoration } from "../text/text-decoration.ts";
@@ -716,17 +716,17 @@ endstream`;
   registerGradient(g: Gradient): { shading: string; gs?: string } {
     const alphas = stopAlphas(g);
     const uniform = alphas.every((a) => a === alphas[0]);
-    const color = uniform
-      ? this.buildShadingFunction(
-          g.stops,
-          g.stops.map((s) => s.color.toPDFColorString()),
-        )
-      : this.addObject(
-          this.stream(
-            "/FunctionType 0 /Domain [0 1] /Range [0 1 0 1 0 1] /Size [256] /BitsPerSample 8",
-            premultipliedSamples(g.stops),
+    const rgb = g.stops.map((s) => s.color.toPDFColorString());
+    const color = this.buildShadingFunction(g.stops, (i, j) =>
+      uniform
+        ? this.linearFunction(rgb[i]!, rgb[j]!)
+        : this.addObject(
+            this.stream(
+              "/FunctionType 0 /Domain [0 1] /Range [0 1 0 1 0 1] /Size [256] /BitsPerSample 8",
+              premultipliedSamples(g.stops[i]!.color, g.stops[j]!.color),
+            ),
           ),
-        );
+    );
     const objectNumber = this.addObject(this.shadingDict(g, "DeviceRGB", color));
     const shading = `Sh${this.shadings.size + 1}`;
     this.shadings.set(shading, objectNumber);
@@ -741,9 +741,8 @@ endstream`;
       this.shadingDict(
         g,
         "DeviceGray",
-        this.buildShadingFunction(
-          g.stops,
-          alphas.map((a) => a.toFixed(3)),
+        this.buildShadingFunction(g.stops, (i, j) =>
+          this.linearFunction(alphas[i]!.toFixed(3), alphas[j]!.toFixed(3)),
         ),
       ),
     );
@@ -779,35 +778,32 @@ endstream`;
     );
   }
 
-  // Builds the PDF function mapping t in [0,1] along the stops to `values` (one "r g b" or one gray
-  // per stop). Two stops collapse to one exponential (linear) function; more stops stitch one linear
-  // piece per interval (FunctionType 3).
-  private buildShadingFunction(stops: GradientStop[], values: string[]): number {
-    const c = (i: number): string => values[i]!;
+  // Builds the PDF function mapping t in [0,1] along the stops, one `piece(i, j)` from stop i to stop
+  // j per interval, stitched (FunctionType 3) when there is more than one. An interval of zero width
+  // (two stops at one offset, a hard edge) is skipped: /Bounds must strictly increase.
+  private buildShadingFunction(
+    stops: GradientStop[],
+    piece: (from: number, to: number) => number,
+  ): number {
     // Malformed / empty color line: fall back to opaque black instead of indexing an empty array.
-    if (stops.length === 0) {
-      return this.addObject("<< /FunctionType 2 /Domain [0 1] /C0 [0 0 0] /C1 [0 0 0] /N 1 >>");
-    }
-    if (stops.length <= 2) {
-      const c0 = c(0);
-      const c1 = c(stops.length - 1);
-      return this.addObject(`<< /FunctionType 2 /Domain [0 1] /C0 [${c0}] /C1 [${c1}] /N 1 >>`);
-    }
-    const pieces: number[] = [];
-    for (let i = 0; i < stops.length - 1; i++) {
-      pieces.push(
-        this.addObject(`<< /FunctionType 2 /Domain [0 1] /C0 [${c(i)}] /C1 [${c(i + 1)}] /N 1 >>`),
-      );
-    }
-    const functions = pieces.map((p) => `${p} 0 R`).join(" ");
-    const bounds = stops
-      .slice(1, -1)
-      .map((s) => s.offset.toFixed(4))
+    if (stops.length === 0) return this.linearFunction("0 0 0", "0 0 0");
+    if (stops.length === 1) return piece(0, 0);
+    const at = stopPositions(stops).map((p) => p.toFixed(4));
+    const starts = at.slice(0, -1).flatMap((p, i) => (Number(at[i + 1]) > Number(p) ? [i] : []));
+    if (starts.length === 1) return piece(starts[0]!, starts[0]! + 1);
+    const functions = starts.map((i) => `${piece(i, i + 1)} 0 R`).join(" ");
+    const bounds = starts
+      .slice(1)
+      .map((i) => at[i])
       .join(" ");
-    const encode = pieces.map(() => "0 1").join(" ");
+    const encode = starts.map(() => "0 1").join(" ");
     return this.addObject(
       `<< /FunctionType 3 /Domain [0 1] /Functions [${functions}] /Bounds [${bounds}] /Encode [${encode}] >>`,
     );
+  }
+
+  private linearFunction(c0: string, c1: string): number {
+    return this.addObject(`<< /FunctionType 2 /Domain [0 1] /C0 [${c0}] /C1 [${c1}] /N 1 >>`);
   }
 
   // Returns all registered gradient shadings (name -> object number) for the page /Resources.
