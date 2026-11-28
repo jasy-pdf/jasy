@@ -14,7 +14,8 @@ import { BoxConstraints } from "../../../src/lib/layout/box-constraints.ts";
 import type { LayoutContext } from "../../../src/lib/elements/pdf-element.ts";
 import { testMetrics } from "../support/metrics.ts";
 import { drawnTextRuns, runOf } from "../support/drawn.ts";
-import { PDFObjectManager, FontStyle } from "../../../src/lib/utils/pdf-object-manager.ts";
+import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager.ts";
+import { FontStyle } from "../../../src/lib/common/font-style.ts";
 import { Box } from "../../../src/lib/api/layout.ts";
 
 // Tables now wrap the table / rows / cells in layout-transparent StructGroups (accessibility). These

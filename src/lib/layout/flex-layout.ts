@@ -1,6 +1,6 @@
-import { alignSelfOf, flexibleOf, flexShrinkOf, orderOf } from "../layout/flex-item.ts";
+import { alignSelfOf, flexibleOf, flexShrinkOf, orderOf } from "./flex-item.ts";
 import { PDFElement, LayoutContext, type FlexiblePDFElement } from "../elements/pdf-element.ts";
-import { BoxConstraints, Offset, Size } from "../layout/box-constraints.ts";
+import { BoxConstraints, Offset, Size } from "./box-constraints.ts";
 
 /** `layout` places every child (one `calculateLayout` each); `measure` only sizes, with no side effects. */
 export type FlexMode = "layout" | "measure";
@@ -11,9 +11,7 @@ const sameConstraints = (a: BoxConstraints, b: BoxConstraints) =>
   a.minHeight === b.minHeight &&
   a.maxHeight === b.maxHeight;
 
-// Re-exported so every existing import keeps working; the definitions live in layout/alignment.ts.
-export type { MainAlign, CrossAlign } from "../layout/alignment.ts";
-import type { CrossAlign, MainAlign } from "../layout/alignment.ts";
+import type { CrossAlign, MainAlign } from "./alignment.ts";
 
 /**
  * Maps the abstract MAIN/CROSS axes onto concrete width/height + x/y, so one flex

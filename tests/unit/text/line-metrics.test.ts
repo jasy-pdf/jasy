@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { lineBoxFor, textHeight } from "../../../src/lib/text/line-metrics.ts";
-import { PDFObjectManager, FontStyle } from "../../../src/lib/utils/pdf-object-manager.ts";
+import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager.ts";
+import { FontStyle } from "../../../src/lib/common/font-style.ts";
 import { testMetrics } from "../support/metrics.ts";
 
 // ISSUE-5: the baseline used to be a hard-coded 683/1000 - Times-Roman's `Ascender`, applied to

@@ -1,6 +1,7 @@
 import { pageFormats, PageSize } from "../constants/page-sizes.ts";
 import type { OverflowPolicy } from "../layout/fragmentation.ts";
 import { md5, md5Hex } from "./md5.ts";
+import { FontStyle } from "../common/font-style.ts";
 import { zlibSync } from "fflate";
 import { bytesFromLatin1, latin1FromBytes } from "./bytes.ts";
 import { AFMParser, STANDARD_FONT_NAMES, standardParser } from "./afm-parser.ts";
@@ -43,11 +44,12 @@ import { DestRegistry } from "./dest-registry.ts";
 import { AcroFormCollector } from "../forms/acroform.ts";
 // Enums come from the leaf config module (never in a cycle); the config type is
 // erased at runtime so it can come from the cyclic module safely.
-import { ColorMode, Orientation } from "../renderer/pdf-config.ts";
-import type { PDFConfig } from "../renderer/pdf-document-class.ts";
+import { ColorMode, Orientation } from "../common/pdf-config.ts";
+import type { PDFConfig } from "../common/pdf-config.ts";
 import type { FontMetrics } from "./font-metrics.ts";
 import { Diagnostics } from "../common/diagnostics.ts";
-import { JpegFormatError, type ImageColor } from "./image-helper.ts";
+import { JpegFormatError } from "./image-helper.ts";
+import { type ImageColor } from "../common/image-facts.ts";
 
 /** The PDF color space of each image color space, and its channel count (for `/Decode`). */
 const IMAGE_COLOR_SPACE = {
@@ -61,13 +63,6 @@ interface FontIndexes {
   resourceIndex: number;
   fontStyle: FontStyle;
   fullName: string;
-}
-
-export enum FontStyle {
-  Normal = "normal",
-  Bold = "bold",
-  Italic = "italic",
-  BoldItalic = "boldItalic",
 }
 
 // Escapes a string into a valid PDF /Name token. A raw space or delimiter in a /Name (e.g. a font

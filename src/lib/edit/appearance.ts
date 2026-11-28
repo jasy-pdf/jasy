@@ -1,4 +1,5 @@
-import { PDFObjectManager, FontStyle } from "../utils/pdf-object-manager.ts";
+import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
+import { FontStyle } from "../common/font-style.ts";
 import {
   HELV,
   checkboxOff,

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { Text, Paragraph, span } from "../../../src/lib/api/text";
 import { TextElement, TextSegment } from "../../../src/lib/elements/text-element";
 import { HorizontalAlignment } from "../../../src/lib/elements/pdf-element";
-import { FontStyle } from "../../../src/lib/utils/pdf-object-manager";
+import { FontStyle } from "../../../src/lib/common/font-style";
 
 const props = (t: TextElement) => t.getProps();
 

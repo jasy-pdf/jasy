@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { PDFObjectManager, FontStyle } from "../../../src/lib/utils/pdf-object-manager";
+import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager";
+import { FontStyle } from "../../../src/lib/common/font-style";
 import { buildTestTtf } from "./ttf-fixture";
 
 // "Inter" family: regular (A=500) + a wider bold (A=600); no italic registered.

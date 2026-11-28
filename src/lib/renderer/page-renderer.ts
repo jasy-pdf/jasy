@@ -2,7 +2,7 @@ import { pageFormats, PageSize } from "../constants/page-sizes.ts";
 import { PageElement, resolvePageContentBox } from "../elements/page-element.ts";
 import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 import { RendererRegistry, type RenderScope } from "../utils/renderer-registry.ts";
-import { Orientation } from "./pdf-config.ts";
+import { Orientation } from "../common/pdf-config.ts";
 import { IRNode } from "../ir/display-list.ts";
 import { PdfBackend } from "./pdf-backend.ts";
 import { PositionedRenderer } from "./positioned-renderer.ts";

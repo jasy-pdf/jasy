@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { PDFObjectManager, FontStyle } from "../../../src/lib/utils/pdf-object-manager.ts";
+import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager.ts";
+import { FontStyle } from "../../../src/lib/common/font-style.ts";
 
 // Five Windows-1252 characters have no name in the Adobe Glyph List For New Fonts: NBSP, the soft
 // hyphen, and the superscripts one, two, three. Unnamed, a standard-14 font MEASURED them as "?"

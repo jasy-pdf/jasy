@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { PDFObjectManager, FontStyle } from "../../../src/lib/utils/pdf-object-manager.ts";
+import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager.ts";
+import { FontStyle } from "../../../src/lib/common/font-style.ts";
 import { runAdvance } from "../../../src/lib/text/advance.ts";
 import { buildLigatureTtf } from "../utils/ttf-fixture.ts";
 import {

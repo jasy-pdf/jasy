@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { coverText } from "../../../src/lib/text/glyph-coverage.ts";
-import { FontStyle } from "../../../src/lib/utils/pdf-object-manager.ts";
+import { FontStyle } from "../../../src/lib/common/font-style.ts";
 import { testMetrics } from "../support/metrics.ts";
 
 // A code point the chosen font cannot draw becomes glyph 0, which IS `.notdef` - and referencing it is

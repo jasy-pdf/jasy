@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { breakSegmentsIntoLines, wrapStringIntoLines } from "../../../src/lib/text/line-breaker";
-import { FontStyle } from "../../../src/lib/utils/pdf-object-manager";
+import { FontStyle } from "../../../src/lib/common/font-style";
 import { testMetrics } from "../support/metrics.ts";
 import { lineBoxForSegmentLine } from "../../../src/lib/text/line-metrics";
 

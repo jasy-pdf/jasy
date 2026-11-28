@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { PDFObjectManager, FontStyle } from "../../../src/lib/utils/pdf-object-manager";
+import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager";
+import { FontStyle } from "../../../src/lib/common/font-style";
 import { buildTestTtf, buildAstralTtf } from "./ttf-fixture";
 
 describe("PDFObjectManager - custom font metric routing (slice 2.1)", () => {

@@ -1,7 +1,8 @@
 import { testMetrics } from "../support/metrics.ts";
 import { describe, it, expect } from "vitest";
 import { codePointCount, runAdvance } from "../../../src/lib/text/advance";
-import { PDFObjectManager, FontStyle } from "../../../src/lib/utils/pdf-object-manager";
+import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager";
+import { FontStyle } from "../../../src/lib/common/font-style";
 import type { FontMetrics } from "../../../src/lib/utils/font-metrics";
 
 // The one canonical run advance. letterSpacing is added after EVERY code point (the `Tc` operator),

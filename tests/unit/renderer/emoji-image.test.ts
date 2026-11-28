@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { emojiImageUrl } from "../../../src/lib/renderer/emoji-image";
 import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager";
-import { FontStyle } from "../../../src/lib/utils/pdf-object-manager";
+import { FontStyle } from "../../../src/lib/common/font-style";
 import { buildTestTtf } from "../utils/ttf-fixture";
 
 // A valid 1x1 PNG (jimp-encoded), for stubbing an emoji-image fetch without hitting the network.

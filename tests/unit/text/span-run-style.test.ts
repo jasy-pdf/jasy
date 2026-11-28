@@ -4,7 +4,8 @@
 // The fixture font merges A+B into glyph 4 (600 units); apart A is 500, B 700, a space 250. At 10pt:
 // "AB" merged 6, apart 12, a space 2.5.
 import { describe, it, expect } from "vitest";
-import { PDFObjectManager, FontStyle } from "../../../src/lib/utils/pdf-object-manager.ts";
+import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager.ts";
+import { FontStyle } from "../../../src/lib/common/font-style.ts";
 import { buildLigatureTtf } from "../utils/ttf-fixture.ts";
 import { TextElement, type TextSegment } from "../../../src/lib/elements/text-element.ts";
 import { HorizontalAlignment } from "../../../src/lib/elements/pdf-element.ts";

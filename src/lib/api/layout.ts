@@ -13,7 +13,7 @@ import { RotatedElement } from "../elements/layout/rotated-element.ts";
 import { RotatedBoxElement } from "../elements/layout/rotated-box-element.ts";
 import { PDFElement } from "../elements/pdf-element.ts";
 import { flexibleOf } from "../layout/flex-item.ts";
-import { MainAlign, CrossAlign } from "../utils/flex-layout.ts";
+import type { MainAlign, CrossAlign } from "../layout/alignment.ts";
 import { ColorInput, toColor } from "./color.ts";
 import { isGradientInput, type GradientInput } from "./gradient.ts";
 import { Insets, toEdges } from "./insets.ts";

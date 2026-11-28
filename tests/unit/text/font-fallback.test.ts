@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { splitByFont } from "../../../src/lib/text/font-fallback.ts";
-import { FontStyle } from "../../../src/lib/utils/pdf-object-manager.ts";
+import { FontStyle } from "../../../src/lib/common/font-style.ts";
 import { testMetrics } from "../support/metrics.ts";
 
 // A fallback stack picks, per CODE POINT, the first family that can draw it. The stand-in below says

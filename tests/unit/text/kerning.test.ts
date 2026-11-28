@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { PDFObjectManager, FontStyle } from "../../../src/lib/utils/pdf-object-manager";
+import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager";
+import { FontStyle } from "../../../src/lib/common/font-style";
 import { runAdvance } from "../../../src/lib/text/advance";
 import { Document, Page, Text, renderToBytes } from "../../../src/lib/api";
 import { buildKernTtf, buildGposKernTtf, buildGposExtensionKernTtf } from "../utils/ttf-fixture";

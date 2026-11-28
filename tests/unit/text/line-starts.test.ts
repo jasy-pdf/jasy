@@ -7,7 +7,8 @@ import {
 } from "../../../src/lib/text/line-breaker.ts";
 import type { TextSegment } from "../../../src/lib/elements/text-element.ts";
 import { HYPHEN } from "../../../src/lib/text/word-splitting.ts";
-import { FontStyle, PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager.ts";
+import { FontStyle } from "../../../src/lib/common/font-style.ts";
+import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager.ts";
 import { testMetrics } from "../support/metrics.ts";
 
 // A broken line knows where it starts in the source and how it ends. A paragraph split across pages

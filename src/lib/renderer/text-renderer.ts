@@ -2,7 +2,8 @@ import type { RenderScope } from "../utils/renderer-registry.ts";
 import { Color } from "../common/color.ts";
 import { HorizontalAlignment } from "../elements/pdf-element.ts";
 import { VERTICAL_TEXT_SHIFT, TextElement, TextSegment } from "../elements/text-element.ts";
-import { FontStyle, PDFObjectManager } from "../utils/pdf-object-manager.ts";
+import { FontStyle } from "../common/font-style.ts";
+import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 import type {
   GlyphPathCommand,
   Paint,

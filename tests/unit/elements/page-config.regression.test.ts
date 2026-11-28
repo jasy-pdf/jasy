@@ -7,9 +7,9 @@ import { LayoutContext } from "../../../src/lib/elements/pdf-element";
 import { PdfBackend } from "../../../src/lib/renderer/pdf-backend";
 import { TextRun } from "../../../src/lib/ir/display-list";
 import { Color } from "../../../src/lib/common/color";
-import { FontStyle } from "../../../src/lib/utils/pdf-object-manager";
+import { FontStyle } from "../../../src/lib/common/font-style";
 import { PageSize, pageFormats } from "../../../src/lib/constants/page-sizes";
-import { Orientation } from "../../../src/lib/renderer/pdf-config";
+import { Orientation } from "../../../src/lib/common/pdf-config";
 import { BoxConstraints } from "../../../src/lib/layout/box-constraints";
 
 // Regression for the per-page-config bug: before Phase 2 the page config was a global

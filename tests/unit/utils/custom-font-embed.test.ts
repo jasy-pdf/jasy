@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { FontStyle, PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager";
+import { FontStyle } from "../../../src/lib/common/font-style";
+import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager";
 import { buildTestTtf } from "./ttf-fixture";
 
 describe("PDFObjectManager - custom font embedding (slice 2.2a)", () => {

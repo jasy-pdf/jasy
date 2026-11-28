@@ -6,7 +6,7 @@ import { ContainerElement } from "../../../src/lib/elements/container-element";
 import { TextElement } from "../../../src/lib/elements/text-element";
 import { ExpandedElement } from "../../../src/lib/elements/layout/expanded-element";
 import { PageSize } from "../../../src/lib/constants/page-sizes";
-import { Orientation } from "../../../src/lib/renderer/pdf-config";
+import { Orientation } from "../../../src/lib/common/pdf-config";
 
 // Counts physical PDF pages: one /MediaBox is emitted per page object.
 const countPages = (pdf: string) => pdf.split("/MediaBox").length - 1;

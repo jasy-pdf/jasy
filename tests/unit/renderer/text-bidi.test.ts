@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { TextRenderer } from "../../../src/lib/renderer/text-renderer.ts";
-import { FontStyle, PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager.ts";
+import { FontStyle } from "../../../src/lib/common/font-style.ts";
+import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager.ts";
 import { TextElement } from "../../../src/lib/elements/text-element.ts";
 import { HorizontalAlignment } from "../../../src/lib/elements/pdf-element.ts";
 import { testMetrics } from "../support/metrics.ts";

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { splitLongWord } from "../../../src/lib/text/word-splitting.ts";
 import { wrapStringIntoLines, breakSegmentsIntoLines } from "../../../src/lib/text/line-breaker.ts";
 import { runAdvance } from "../../../src/lib/text/advance.ts";
-import { FontStyle } from "../../../src/lib/utils/pdf-object-manager.ts";
+import { FontStyle } from "../../../src/lib/common/font-style.ts";
 import { testMetrics } from "../support/metrics.ts";
 import { Document, Page, Box, Text, Paragraph, span } from "../../../src/lib/api/index.ts";
 import { renderPdf } from "../../../src/lib/api/structure.ts";

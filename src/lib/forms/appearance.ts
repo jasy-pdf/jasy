@@ -2,7 +2,7 @@ import type { FieldAlign, FieldStyle } from "./field.ts";
 import { escPdf, num2, pdfColor } from "./pdf.ts";
 import { wrapStringIntoLines } from "../text/line-breaker.ts";
 import type { FontMetrics } from "../utils/font-metrics.ts";
-import type { FontStyle } from "../utils/pdf-object-manager.ts";
+import type { FontStyle } from "../common/font-style.ts";
 
 /**
  * The font an appearance draws its text in: its resource name inside the appearance stream's own

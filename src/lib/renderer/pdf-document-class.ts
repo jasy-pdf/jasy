@@ -1,43 +1,9 @@
-import { PageSize } from "../constants/page-sizes.ts";
 import { preloadStandardFonts } from "../utils/afm-parser.ts";
 import { PDFDocumentElement } from "../elements/index.ts";
-import { FontStyle, PDFObjectManager } from "../utils/pdf-object-manager.ts";
+import { FontStyle } from "../common/font-style.ts";
+import { PDFObjectManager } from "../utils/pdf-object-manager.ts";
 import { PDFRenderer } from "./pdf-renderer.ts";
-import { ColorMode, Orientation } from "./pdf-config.ts";
-
-// Re-exported so existing `../renderer` consumers keep importing these from here.
-export { ColorMode, Orientation } from "./pdf-config.ts";
-
-export interface Margin {
-  left: number;
-  top: number;
-  right: number;
-  bottom: number;
-}
-
-export interface DefaultFont {
-  fontFamily: string;
-  fontSize: number;
-  fontStyle: FontStyle;
-}
-
-export interface MetaData {
-  title?: string;
-  author?: string;
-  keywords: string[];
-}
-
-export interface PDFConfig {
-  pageSize?: PageSize;
-  orientation?: Orientation;
-  margin?: Margin;
-  colorMode?: ColorMode;
-  defaultFont?: DefaultFont;
-  metaData?: MetaData;
-  /** Register the 14 standard fonts (default true). Set false for PDF/A, where every font must be
-   *  embedded - the non-embeddable standard-14 must not appear in the document at all. */
-  registerStandardFonts?: boolean;
-}
+import type { PDFConfig } from "../common/pdf-config.ts";
 
 export abstract class PDFDocument {
   // One object manager per document instance - no global singleton. Threaded

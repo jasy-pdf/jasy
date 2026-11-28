@@ -7,9 +7,9 @@ import type { OverflowPolicy } from "../layout/fragmentation.ts";
 import type { DiagnosticHandler } from "../common/diagnostics.ts";
 import { PageSize, pageFormats } from "../constants/page-sizes.ts";
 import { resolveEdges } from "../layout/insets.ts";
-import { Orientation } from "../renderer/pdf-config.ts";
-import { PDFDocument, PDFConfig } from "../renderer/pdf-document-class.ts";
-import { FontStyle } from "../utils/pdf-object-manager.ts";
+import { Orientation, PDFConfig } from "../common/pdf-config.ts";
+import { PDFDocument } from "../renderer/pdf-document-class.ts";
+import { FontStyle } from "../common/font-style.ts";
 import { getArrayBuffer } from "../utils/utf8-to-windows1252-encoder.ts";
 import { createSecurityHandler, type EncryptOptions } from "../crypto/security-handler.ts";
 // Public types so users can name the encryption options.

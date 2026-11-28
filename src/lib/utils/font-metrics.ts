@@ -1,4 +1,4 @@
-import type { FontStyle } from "./pdf-object-manager.ts";
+import type { FontStyle } from "../common/font-style.ts";
 import type { FontVerticals } from "../text/line-metrics.ts";
 import type { FontDecoration } from "../text/text-decoration.ts";
 

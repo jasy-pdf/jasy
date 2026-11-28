@@ -1,5 +1,5 @@
 import { Color } from "../common/color.ts";
-import { FontStyle } from "../utils/pdf-object-manager.ts";
+import { FontStyle } from "../common/font-style.ts";
 import { HorizontalAlignment } from "../elements/pdf-element.ts";
 import type { Direction } from "./bidi.ts";
 import type { Hyphenator } from "./word-splitting.ts";

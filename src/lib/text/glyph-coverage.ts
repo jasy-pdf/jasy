@@ -1,5 +1,5 @@
 import type { FontMetrics } from "../utils/font-metrics.ts";
-import type { FontStyle } from "../utils/pdf-object-manager.ts";
+import type { FontStyle } from "../common/font-style.ts";
 
 /**
  * A code point the chosen font cannot draw becomes glyph 0 - which IS `.notdef`, and referencing it is

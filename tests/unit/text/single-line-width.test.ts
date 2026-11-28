@@ -4,7 +4,7 @@ import {
   singleLineWidth,
   wrapStringIntoLines,
 } from "../../../src/lib/text/line-breaker.ts";
-import { FontStyle } from "../../../src/lib/utils/pdf-object-manager.ts";
+import { FontStyle } from "../../../src/lib/common/font-style.ts";
 import { testMetrics } from "../support/metrics.ts";
 
 // The invariant: a box sized by `singleLineWidth` always holds that line. It reads as arithmetic, but

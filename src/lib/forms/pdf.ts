@@ -1,5 +1,5 @@
 import type { Color } from "../common/color.ts";
-import type { FontStyle } from "../utils/pdf-object-manager.ts";
+import type { FontStyle } from "../common/font-style.ts";
 
 // Small PDF-writer helpers shared across the forms module (widget dicts + appearance streams).
 //

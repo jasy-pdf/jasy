@@ -88,7 +88,7 @@ BoxConstraints, offset: Offset, ctx: LayoutContext): Size` — constraints (min/
   (constraints via `sizeInputs`, metrics/fontEpoch/kerning, inherited style, the page only where
   `dependsOnPage()`); a table keeps its built rows under the same key (`BuiltFromContext`). Elements
   implement `computeSize`. A new context field that can change a size goes into that key, nowhere else.
-- `FlexLayoutHelper` (`utils/flex-layout.ts`) is axis-generic: it measures **and** places both `Column`
+- `FlexLayoutHelper` (`layout/flex-layout.ts`) is axis-generic: it measures **and** places both `Column`
   (`VERTICAL_AXIS`) and `Row` (`HORIZONTAL_AXIS`), distributing leftover main-axis space to
   `ExpandedElement`s by `flex` and offsetting children per `main`/`cross` alignment.
 - **Pagination is real.** A `fragment(maxHeight, width, ctx) → { fitted, remainder }` protocol
