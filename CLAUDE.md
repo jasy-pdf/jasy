@@ -363,6 +363,8 @@ yourself computing an advance, a baseline or a fit anywhere else, stop.
   metrics and would draw everything in the first family.
 - Arabic is shaped on the LOGICAL text and its glyphs reversed after; shaping the visual order gives a
   word 42.5 pt where 34.4 is right, and both passes agree so nothing looks wrong.
+- A hyphenator knows WORDS: asked about the rest of a split word ("nungsnummer") it finds nothing, so
+  the points come once from the whole word (`text/hyphenation.ts`), never from what is left of it.
 - Kerning is OFF for a shaped run (pairs are keyed by unshaped glyphs); `letterSpacing` counts DRAWN
   glyphs, since a ligature is one glyph for two code points. `PdfBackend.kernedArray` THROWS on a
   length mismatch - a short list once silently dropped the last glyph of "Verpflichtung".
@@ -476,7 +478,9 @@ enforces it (`skonto.ts` for "Skonto is not an allowance"), and everywhere else 
 - **`breakWord` and `hyphenate` OFF by default**, as CSS. Hyphenation is a **hook**, not bundled data
   (German patterns alone are 732 KB); the `hyphen` adapter is one line and is EXECUTED by a test. No
   `@jasy/hyphenation` package. We do not hyphenate until you name the language; react-pdf hyphenates
-  German by English rules.
+  German by English rules. `hyphenate` breaks like CSS `hyphens: auto`: its points are break
+  opportunities at the line's end (the soft-hyphen path), from the WHOLE word across spans, allowed by
+  the span of the character before; `breakWord` is the floor. Asked lazily, cached per word.
 - **A hyphen and a soft hyphen in the text ARE break opportunities, always** - as browsers do (UAX #14
   for `-`: never before a digit; U+00AD as `hyphens: manual`: invisible and zero-width unless broken at,
   then a real hyphen). Taken only when the whole word does not fit, so text that fits never moves.
@@ -549,11 +553,7 @@ enforces it (`skonto.ts` for "Skonto is not an allowance"), and everywhere else 
 6. **Bidi mirroring SUBSTITUTES the character** (as react-pdf does) where Chrome mirrors the glyph, so
    extracted text has swapped brackets. **GPOS mark positioning** and GSUB type 6 are not built;
    react-pdf does neither either (measured).
-7. **`hyphenate` sees only a span's piece of a word** that runs across spans (#113): with
-   `span("Rech")` and `span("nung")` it is asked for each piece, where Chrome hyphenates the whole
-   word. `breakWord` across spans matches Chrome: a break after a character is allowed by THAT
-   character's span, and the line is filled first.
-8. `manual-test` has machine-specific paths.
+7. `manual-test` has machine-specific paths.
 
 ## Roadmap, packages, repo
 

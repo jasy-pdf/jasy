@@ -1,9 +1,23 @@
 import type { FontStyle } from "../common/font-style.ts";
 import type { FontMetrics } from "../utils/font-metrics.ts";
 import type { TextSegment } from "../elements/text-element.ts";
-import { runAdvance, type RunFont, SOFT_HYPHEN, withoutSoftHyphens } from "./advance.ts";
+import {
+  hyphenAdvance,
+  runAdvance,
+  type RunFont,
+  SOFT_HYPHEN,
+  withoutSoftHyphens,
+} from "./advance.ts";
 import { HYPHEN, splitLongWord, type WordSplitting } from "./word-splitting.ts";
-import { headAt, hyphenBreaks, mayBreak, NO_BREAKS } from "./hyphen-breaks.ts";
+import {
+  addsHyphen,
+  headAt,
+  hyphenBreaks,
+  mayBreak,
+  NO_BREAKS,
+  wordBreaks,
+} from "./hyphen-breaks.ts";
+import { spanHyphenation } from "./hyphenation.ts";
 
 /**
  * How far a JUSTIFIED line's spaces may be squeezed to keep one more word on it.
@@ -56,6 +70,10 @@ export interface RunStyle {
   splitting: WordSplitting;
 }
 
+/** A span's hyphenator: its own, else the paragraph's. `runStyleOf` reads it from here too. */
+export const hyphenatorOf = (seg: TextSegment, defaults: SegmentDefaults) =>
+  seg.hyphenate ?? defaults.splitting?.hyphenate;
+
 /**
  * A span's run style: what it sets itself, else what the paragraph sets. The ONE place a span inherits
  * it, so breaking, drawing and the element's own sizing ask the same question.
@@ -72,7 +90,7 @@ export function runStyleOf(seg: TextSegment, defaults: SegmentDefaults): RunStyl
     wordSpacing: seg.wordSpacing ?? defaults.wordSpacing ?? 0,
     splitting: {
       breakWord: seg.breakWord ?? defaults.splitting?.breakWord,
-      hyphenate: seg.hyphenate ?? defaults.splitting?.hyphenate,
+      hyphenate: hyphenatorOf(seg, defaults),
     },
   };
 }
@@ -211,9 +229,10 @@ export interface BrokenLine {
   end: LineEnd;
 }
 
-/** How a line that ends at break `k` of `word` ends: a soft hyphen adds a hyphen the source lacks. */
-const endAt = (word: string, k: number): LineEnd =>
-  word[k - 1] === SOFT_HYPHEN && word[k - 2] !== "-" ? "hyphen" : "soft";
+/** How a line that ends at break `k` of `word` ends: a soft hyphen or a hyphenation point adds a hyphen
+ *  the source lacks. */
+const endAt = (word: string, k: number, points: readonly number[]): LineEnd =>
+  addsHyphen(word, k, points) ? "hyphen" : "soft";
 
 /**
  * `wrapStringIntoLines`, with each line's source offset and ending. The ONE breaking pass both share,
@@ -293,11 +312,12 @@ export function breakSegmentsIntoLines(
     const last = segs[lastIndex];
     if (
       glued &&
-      last?.content.endsWith(SOFT_HYPHEN) &&
-      !withoutSoftHyphens(last.content).endsWith("-")
+      last !== undefined &&
+      ((last.content.endsWith(SOFT_HYPHEN) && !withoutSoftHyphens(last.content).endsWith("-")) ||
+        endsAtPoint(last))
     ) {
       const run = runStyleOf(last, defaults);
-      width += runAdvance(metrics, HYPHEN, run.font, run.letterSpacing);
+      width += hyphenAdvance(metrics, last.content, run.font, run.letterSpacing);
       segs = segs.map((seg, i) =>
         i === lastIndex ? { ...seg, content: withoutSoftHyphens(seg.content) + HYPHEN } : seg,
       );
@@ -334,6 +354,23 @@ export function breakSegmentsIntoLines(
   const started = (piece: TextSegment, from: SegmentPosition): TextSegment => {
     origin.set(piece, from);
     return piece;
+  };
+
+  const hyphenation = spanHyphenation(segments, (i) => hyphenatorOf(segments[i]!, defaults));
+  /** Whether `piece` ends at a hyphenation point, its word continuing after it. */
+  const endsAtPoint = (piece: TextSegment): boolean => {
+    const from = origin.get(piece);
+    return from !== undefined && hyphenation.at(from.segment, from.offset + piece.content.length);
+  };
+  /** Whether `keep`, ended with the hyphen a point adds, still fits the line - a justified one squeezed
+   *  as far as `fitsHere` lets it. */
+  const fitsWithHyphen = (keep: TextSegment[]): boolean => {
+    const last = keep[keep.length - 1]!;
+    const run = runStyleOf(last, defaults);
+    const room = lines.length === 0 ? maxWidth - indent : maxWidth;
+    const squeeze = shrink > 0 ? lineGaps(keep, defaults, metrics).width * shrink : 0;
+    const hyphen = hyphenAdvance(metrics, last.content, run.font, run.letterSpacing);
+    return measure(keep).ink + hyphen - squeeze <= room;
   };
 
   /** The width and ink of `pieces`, summed exactly as `placeWord` builds a line: word by word, a space
@@ -380,13 +417,35 @@ export function breakSegmentsIntoLines(
       const piece = pieces[i]!;
       const c = piece.content;
       const soft = c.endsWith(SOFT_HYPHEN);
-      if (c.endsWith(" ") || soft || (c.endsWith("-") && !/^\d/.test(following))) {
+      const point = endsAtPoint(piece) && fitsWithHyphen(pieces.slice(0, i + 1));
+      if (c.endsWith(" ") || soft || point || (c.endsWith("-") && !/^\d/.test(following))) {
         const keep = pieces.slice(0, i + 1);
         return inks(keep)
-          ? { keep, moved, from: moved[0] && origin.get(moved[0]), hyphen: soft }
+          ? { keep, moved, from: moved[0] && origin.get(moved[0]), hyphen: soft || point }
           : null;
       }
       const space = c.lastIndexOf(" ");
+      // The latest break inside the piece: a hyphenation point after its last space, if the hyphen fits.
+      const from = origin.get(piece);
+      const inner = from
+        ? hyphenation
+            .within(from.segment, from.offset + space + 1, c.length - space - 1)
+            .map((k) => k + space + 1)
+        : NO_BREAKS;
+      for (let p = inner.length - 1; p >= 0; p--) {
+        const k = inner[p]!;
+        if (k <= space) break;
+        const head = started({ ...piece, content: c.slice(0, k) }, from!);
+        const keep = [...pieces.slice(0, i), head];
+        if (!fitsWithHyphen(keep)) continue;
+        const tail = started(
+          { ...piece, content: c.slice(k) },
+          { segment: from!.segment, offset: from!.offset + k },
+        );
+        return inks(keep)
+          ? { keep, moved: [tail, ...moved], from: origin.get(tail), hyphen: true }
+          : null;
+      }
       if (space >= 0) {
         const from = origin.get(piece)!;
         const head = started({ ...piece, content: c.slice(0, space + 1) }, from);
@@ -478,9 +537,7 @@ export function breakSegmentsIntoLines(
           before !== undefined && runStyleOf(before, defaults).splitting.breakWord === true;
         let head: number | null = null; // how much of the word's source stays on this line
         if (splitting.breakWord) {
-          const split = splitLongWord(word, room - width, font, metrics, letterSpacing, {
-            breakWord: true,
-          });
+          const split = splitLongWord(word, room - width, font, metrics, letterSpacing);
           // A glyph forced on past the edge is the last resort, below a break at the span boundary.
           const fits =
             split && runAdvance(metrics, split[0]!.text, font, letterSpacing) <= room - width;
@@ -543,15 +600,22 @@ export function breakSegmentsIntoLines(
         // here - the same test, squeeze included, as below.
         const fitsHere = (w: number): boolean =>
           !open ? w <= room : width + ((joins ? spaceWidth : 0) + w) - squeeze <= room;
-        const breaks = mayBreak(word) ? hyphenBreaks(word) : NO_BREAKS;
+        const own = mayBreak(word) ? hyphenBreaks(word) : NO_BREAKS;
+        // Hyphenation points are asked for only here, for a word that does not fit: text that fits never
+        // moves, and the hyphenator is never called for it. Without a hyphenator this is the plain path.
+        const points =
+          hyphenation.active && word !== "" && !fitsHere(wordWidth)
+            ? hyphenation.within(segmentIndex, wordAt, word.length)
+            : NO_BREAKS;
+        const breaks = points.length === 0 ? own : wordBreaks(word, points);
         if (breaks.length > 0 && !fitsHere(wordWidth)) {
           let head = 0;
           for (const k of breaks) {
-            if (!fitsHere(runAdvance(metrics, headAt(word, k), font, letterSpacing))) break;
+            if (!fitsHere(runAdvance(metrics, headAt(word, k, points), font, letterSpacing))) break;
             head = k;
           }
           if (head > 0) {
-            const part = headAt(word, head);
+            const part = headAt(word, head, points);
             const joiner = joins ? spaceWidth : 0;
             if (!open) lineStart = at(wordAt);
             width += joiner + runAdvance(metrics, part, font, letterSpacing);
@@ -562,7 +626,7 @@ export function breakSegmentsIntoLines(
                 started({ ...segment, fontFamily: family, content: "" }, at(wordAt)),
               );
             lineSegments[lineSegments.length - 1]!.content = combined;
-            close(lineSegments, ink, endAt(word, head));
+            close(lineSegments, ink, endAt(word, head, points));
             startLine(wordAt + head);
             placeWord(word.slice(head), wordAt + head, false);
             return;
@@ -581,11 +645,24 @@ export function breakSegmentsIntoLines(
               return;
             }
           }
-          placeWord(headAt(word, breaks[0]!), wordAt, joined);
-          close(lineSegments, ink, endAt(word, breaks[0]!));
-          startLine(wordAt + breaks[0]!);
-          placeWord(word.slice(breaks[0]), wordAt + breaks[0]!, false);
-          return;
+          // Not even the first piece fits: it overflows on a line of its own. A hyphenation point's hyphen
+          // is not in the source, so the piece is placed as written and the hyphen added after it.
+          const first = breaks[0]!;
+          // With break-word on, the word is split anywhere below instead: no line overflows, and a
+          // break-word split adds no hyphen.
+          if (!(points.includes(first) && splitting.breakWord)) {
+            if (points.includes(first)) {
+              placeWord(word.slice(0, first), wordAt, joined);
+              width += hyphenAdvance(metrics, combined, font, letterSpacing);
+              combined += HYPHEN;
+              ink = width;
+              lineSegments[lineSegments.length - 1]!.content = combined;
+            } else placeWord(headAt(word, first), wordAt, joined);
+            close(lineSegments, ink, endAt(word, first, points));
+            startLine(wordAt + first);
+            placeWord(word.slice(first), wordAt + first, false);
+            return;
+          }
         }
         // A word glued to the line - it continues one from an earlier span - that does not fit here.
         if (!joined && !afterSpace && inked && word !== "" && !fitsHere(wordWidth)) {
@@ -599,10 +676,12 @@ export function breakSegmentsIntoLines(
         }
         const splitRoom = lines.length === 0 && !open ? room : maxWidth;
 
-        // A word too wide for the box is split into pieces that fit (hyphenation first, break-word as
-        // the floor). Each finished piece closes the line it sits on, keeping this segment's style. Off
-        // by default, so a document that asks for neither never gets here.
-        const split = splitLongWord(word, splitRoom, font, metrics, letterSpacing, splitting);
+        // A word too wide for the box, with no break that helps, is split anywhere (break-word, the floor
+        // under hyphenation). Each finished piece closes the line it sits on, keeping this segment's
+        // style. Off by default, so a document that does not ask for it never gets here.
+        const split = splitting.breakWord
+          ? splitLongWord(word, splitRoom, font, metrics, letterSpacing)
+          : null;
         if (split) {
           // Close whatever is already on the line FIRST: the pieces were measured against the full box,
           // not against what is left of this line.
@@ -617,11 +696,7 @@ export function breakSegmentsIntoLines(
             lineSegments[lineSegments.length - 1]!.content = piece.text;
             lineStart = at(pieceAt);
             // The width a line REPORTS is what alignment and line-metrics work from: measure it.
-            close(
-              lineSegments,
-              runAdvance(metrics, piece.text, font, letterSpacing),
-              piece.hyphen ? "hyphen" : "split",
-            );
+            close(lineSegments, runAdvance(metrics, piece.text, font, letterSpacing), "split");
             pieceAt += piece.source;
             lineSegments = [started({ ...segment, fontFamily: family, content: "" }, at(pieceAt))];
           }

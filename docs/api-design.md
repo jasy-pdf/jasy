@@ -242,9 +242,9 @@ there is room, because it is an instruction and not wrapping. `\r\n`, a lone `\r
 into it; a tab becomes a space. (CSS would collapse `\n` to a space; a text COMPONENT breaks on it, as
 Flutter's `Text` and react-pdf do.)
 
-A word **wider than its box** used to stay on its line and draw over whatever was beside it. Two layers
-handle it now, stacked the way CSS stacks them, and **both are off by default** - without them a too-wide
-word still overflows, exactly as in CSS.
+A word that does not fit stays whole by default and moves to the next line; a word **wider than its box**
+overflows, exactly as in CSS. Two layers break words, stacked the way CSS stacks them, and **both are off
+by default**.
 
 ```ts
 // The floor: split where the box ends, no hyphen. This is what an e-mail address, an IBAN or an
@@ -253,7 +253,8 @@ Text(customer.email, { breakWord: true });
 ```
 
 ```ts
-// Language-aware splitting, with a hyphen drawn at the break. Bring your own patterns:
+// Hyphenation as CSS `hyphens: auto`: a word that does not fit at a line's end breaks at its last
+// point that still fits, with a hyphen drawn. Bring your own patterns:
 import { hyphenateSync } from "hyphen/de";
 
 const german = (word: string) => hyphenateSync(word).split("\u00AD");
@@ -270,8 +271,9 @@ that sells on "no headless browser, no JVM". And hyphenating without being told 
 than not hyphenating: react-pdf does it with the patterns it bundles, which means German split by
 English rules. The default is a position, not a gap - _we do not hyphenate until you name the language._
 
-With both set, hyphenation is tried first and `breakWord` catches what it cannot split. Known deviation
-from CSS: both are read per `Text`, not per `span` (todo.md, ISSUE-13).
+The points come from the whole word, across spans too (`span("Rech") + span("nung")` is one word), and a
+point is allowed by the span of the character before it, the hyphen drawn in that span's style - Chrome's
+rules. With both set, hyphenation is tried first and `breakWord` catches what it cannot split.
 
 ## 6d. SVG — `Svg()` and `Image("logo.svg")` (2026-09-04)
 

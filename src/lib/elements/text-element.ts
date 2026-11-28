@@ -16,6 +16,7 @@ import {
   type LineOptions,
   type RunStyle,
   runStyleOf,
+  hyphenatorOf,
   type SegmentDefaults,
   type SegmentLine,
   singleLineWidth,
@@ -24,6 +25,7 @@ import {
   TextOverflow,
 } from "../text/line-breaker.ts";
 import { hyphenPieces } from "../text/hyphen-breaks.ts";
+import { spanHyphenation } from "../text/hyphenation.ts";
 import {
   adjustForOrphansWidows,
   DEFAULT_ORPHANS,
@@ -34,7 +36,7 @@ import { lineBoxForSegmentLine, linesHeight } from "../text/line-metrics.ts";
 import { HorizontalAlignment, LayoutContext, SizedPDFElement } from "./pdf-element.ts";
 import { normalizeContent } from "../text/whitespace.ts";
 import { coverText } from "../text/glyph-coverage.ts";
-import type { Hyphenator } from "../text/word-splitting.ts";
+import { HYPHEN, type Hyphenator } from "../text/word-splitting.ts";
 import { diagnose, pageOf } from "../common/diagnostics.ts";
 import { BuiltFromContext } from "../layout/layout-cache.ts";
 export interface TextSegment {
@@ -627,8 +629,9 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
    * parent floors the width it hands us here, so a squeezed paragraph stops at its longest word
    * instead of becoming one word per line.
    *
-   * With `breakWord` or `hyphenate` on, the text may be cut mid-word, so the unbreakable piece is a
-   * single character - the same reasoning CSS applies to `word-break: break-all`.
+   * With `breakWord` on, the text may be cut anywhere, so the unbreakable piece is a single character -
+   * the same reasoning CSS applies to `word-break: break-all`. With `hyphenate` it is the widest piece
+   * between the hyphenator's points, its hyphen included.
    */
   override minIntrinsicMain(horizontal: boolean, ctx: LayoutContext): number {
     // Only the width is a question here: the height of a text is whatever its lines add up to, and a
@@ -638,27 +641,36 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     const metrics = ctx.metrics;
     // The run style is the FONT a piece is measured in: `ligatures` decides which glyphs are drawn and
     // therefore how wide it is. Leaving it out would measure a floor the drawing never matches.
-    const widest = (text: string, run: RunStyle): number => {
+    const defaults = this.segmentDefaults();
+    const content = this.display(metrics);
+    // Hyphenation points come from the whole word, across spans, as the breaker takes them.
+    const hyphenation = spanHyphenation(content, (i) => hyphenatorOf(content[i]!, defaults));
+    const widest = (segment: number, run: RunStyle): number => {
+      const text = content[segment]!.content;
       // Split on the same boundaries the breaker uses - a hard break ends a line too, and so may a
       // hyphen inside a word. A run that may split its words may split them anywhere.
-      const pieces =
-        run.splitting.breakWord || run.splitting.hyphenate
-          ? [...text]
-          : text.split(/[ \n]/).flatMap(hyphenPieces);
+      let pieces: string[];
+      if (run.splitting.breakWord) pieces = [...text];
+      else {
+        pieces = [];
+        let at = 0;
+        for (const word of text.split(/[ \n]/)) {
+          const own = hyphenPieces(word, hyphenation.within(segment, at, word.length));
+          // A point at the span's end, the word going on in the next: this piece ends in a hyphen.
+          if (hyphenation.at(segment, at + word.length)) own[own.length - 1] += HYPHEN;
+          pieces.push(...own);
+          at += word.length + 1;
+        }
+      }
       return pieces.reduce(
         (max, piece) => Math.max(max, runAdvance(metrics, piece, run.font, run.letterSpacing)),
         0,
       );
     };
-    const defaults = this.segmentDefaults();
-    const content = this.display(metrics);
-    // Segments join without a space, so a word may straddle two of them; taking the widest piece per
+    // Segments join without a space, so a piece may straddle two of them; taking the widest piece per
     // segment can therefore UNDER-estimate. That errs towards squeezing a little too far, which lands
     // back on the old overflow behaviour rather than on something new.
-    return content.reduce(
-      (max, seg) => Math.max(max, widest(seg.content, runStyleOf(seg, defaults))),
-      0,
-    );
+    return content.reduce((max, seg, i) => Math.max(max, widest(i, runStyleOf(seg, defaults))), 0);
   }
 
   override getProps() {

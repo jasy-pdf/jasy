@@ -48,8 +48,9 @@ export interface TextStyle {
   /** The ligatures the font's designer drew (`fi`, `fl`, `ffi`). ON by default, like kerning -
    *  `false` opts this text out. Embedded fonts only; the standard-14 have no GSUB. */
   ligatures?: boolean;
-  /** Language-aware splitting: given a word, return its parts. A hyphen is drawn at the break.
-   *  Pluggable, so no pattern data ships here: pass `hyphen`, `hyphenopoly`, or your own. */
+  /** Language-aware hyphenation, as CSS `hyphens: auto`: given a word, return its parts. A word that
+   *  does not fit at a line's end breaks at its last part that still fits, with a hyphen drawn. Pluggable,
+   *  so no pattern data ships here: pass `hyphen`, `hyphenopoly`, or your own. */
   hyphenate?: Hyphenator;
   /** CSS `vertical-align` for a SPAN: raises a footnote marker or lowers an index. It shifts the
    *  baseline only - pass a smaller `size` too if you want the browser's `<sup>` look. */
@@ -252,8 +253,9 @@ export interface TextDefaults {
   /** The ligatures the font's designer drew (`fi`, `fl`, `ffi`). ON by default, like kerning -
    *  `false` opts this text out. Embedded fonts only; the standard-14 have no GSUB. */
   ligatures?: boolean;
-  /** Language-aware splitting: given a word, return its parts. A hyphen is drawn at the break.
-   *  Pluggable, so no pattern data ships here: pass `hyphen`, `hyphenopoly`, or your own. */
+  /** Language-aware hyphenation, as CSS `hyphens: auto`: given a word, return its parts. A word that
+   *  does not fit at a line's end breaks at its last part that still fits, with a hyphen drawn. Pluggable,
+   *  so no pattern data ships here: pass `hyphen`, `hyphenopoly`, or your own. */
   hyphenate?: Hyphenator;
 }
 
