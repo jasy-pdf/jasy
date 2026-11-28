@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { splitLongWord } from "../../../src/lib/text/word-splitting.ts";
-import { wrapStringIntoLines, breakSegmentsIntoLines } from "../../../src/lib/text/line-breaker.ts";
+import {
+  wrapStringIntoLines,
+  breakSegmentsIntoLines,
+  breakStringIntoLines,
+} from "../../../src/lib/text/line-breaker.ts";
 import { runAdvance } from "../../../src/lib/text/advance.ts";
 import { FontStyle } from "../../../src/lib/common/font-style.ts";
 import { testMetrics } from "../support/metrics.ts";
@@ -22,77 +26,86 @@ const width = (s: string) => runAdvance(metrics, s, FONT, 0);
 const chunks = (size: number) => (word: string) =>
   word.match(new RegExp(`.{1,${size}}`, "g")) ?? [word];
 
-const split = (word: string, room: number, options: object) =>
-  splitLongWord(word, room, FONT, metrics, 0, options)?.map((piece) => piece.text) ?? null;
+const broken = (word: string, room: number, splitting: object) =>
+  breakStringIntoLines(
+    word,
+    FONT.fontFamily,
+    FONT.fontSize,
+    FONT.fontStyle,
+    room,
+    metrics,
+    undefined,
+    undefined,
+    0,
+    { splitting },
+  );
+const split = (word: string, room: number) =>
+  splitLongWord(word, room, FONT, metrics, 0)?.map((piece) => piece.text) ?? null;
 
 describe("when nothing applies", () => {
-  it("returns null with neither layer on - the old behaviour, untouched", () => {
-    expect(split("abcdefghijkl", 50, {})).toBeNull();
+  it("leaves the word whole with neither layer on - the old behaviour, untouched", () => {
+    expect(broken("abcdefghijkl", 50, {}).map((l) => l.text)).toEqual(["abcdefghijkl"]);
   });
 
   it("returns null for a word that already fits", () => {
-    expect(split("ab", 50, { breakWord: true })).toBeNull();
+    expect(split("ab", 50)).toBeNull();
   });
 
   it("narrower than one character: one per line, as Chrome sets `overflow-wrap` - and it ends", () => {
-    expect(split("Wort", 1, { breakWord: true })).toEqual(["W", "o", "r", "t"]);
-    expect(split("W", 1, { breakWord: true })).toBeNull();
+    expect(split("Wort", 1)).toEqual(["W", "o", "r", "t"]);
+    expect(split("W", 1)).toBeNull();
   });
 });
 
 describe("break-word", () => {
   it("splits into pieces that each fit", () => {
-    const pieces = split("abcdefghijkl", 50, { breakWord: true })!;
+    const pieces = split("abcdefghijkl", 50)!;
     expect(pieces).toEqual(["abcd", "efgh", "ijkl"]);
     for (const piece of pieces) expect(width(piece)).toBeLessThanOrEqual(50);
   });
 
   it("keeps an astral character whole - it iterates code points, not code units", () => {
-    const pieces = split("a\u{1F600}\u{1F600}\u{1F600}b", 30, { breakWord: true });
+    const pieces = split("a\u{1F600}\u{1F600}\u{1F600}b", 30);
     // Whatever the split, no piece may contain half a surrogate pair.
     for (const piece of pieces ?? []) expect(piece).toBe([...piece].join(""));
   });
 });
 
+// Hyphenation is no longer a way to split a word the box cannot hold: its points are break opportunities
+// of the breaker itself (hyphenate-like-chrome.test.ts). The layering stays: points first, break-word as
+// the floor.
+
 describe("hyphenation", () => {
-  it("splits only at offered points, and draws the hyphen", () => {
-    expect(split("aaaabbbbcccc", 60, { hyphenate: chunks(4) })).toEqual(["aaaa-", "bbbb-", "cccc"]);
-    // Each piece says whether the hyphen was ADDED: the source holds "aaaa", not "aaaa-".
-    expect(
-      splitLongWord("aaaabbbbcccc", 60, FONT, metrics, 0, { hyphenate: chunks(4) })?.map(
-        (p) => p.hyphen,
-      ),
-    ).toEqual([true, true, false]);
-    expect(
-      splitLongWord("abcdefghijkl", 50, FONT, metrics, 0, { breakWord: true })?.map(
-        (p) => p.hyphen,
-      ),
-    ).toEqual([false, false, false]);
+  it("splits only at offered points, and draws the hyphen it adds", () => {
+    const lines = broken("aaaabbbbcccc", 60, { hyphenate: chunks(4) });
+    expect(lines.map((l) => l.text)).toEqual(["aaaa-", "bbbb-", "cccc"]);
+    // The source holds "aaaa", not "aaaa-": the line says the hyphen was ADDED, and where the next begins.
+    expect(lines.map((l) => l.end)).toEqual(["hyphen", "hyphen", "end"]);
+    expect(lines.map((l) => l.start)).toEqual([0, 4, 8]);
   });
 
   it("counts the hyphen against the box, or the line overflows by exactly that hyphen", () => {
-    const pieces = split("aaaabbbbcccc", 60, { hyphenate: chunks(4) })!;
-    for (const piece of pieces) expect(width(piece)).toBeLessThanOrEqual(60);
+    for (const line of broken("aaaabbbbcccc", 60, { hyphenate: chunks(4) }))
+      expect(width(line.text)).toBeLessThanOrEqual(60);
   });
 
-  it("gives up when the hyphenator offers nothing, leaving the word whole", () => {
-    expect(split("abcdefghijkl", 50, { hyphenate: (w: string) => [w] })).toBeNull();
+  it("leaves the word whole when the hyphenator offers nothing", () => {
+    expect(
+      broken("abcdefghijkl", 50, { hyphenate: (w: string) => [w] }).map((l) => l.text),
+    ).toEqual(["abcdefghijkl"]);
   });
 });
 
 describe("the two layers together", () => {
   it("falls back to break-word for what hyphenation cannot split", () => {
     // An e-mail has no valid hyphenation point anywhere - this is the case the invoice hits.
-    const pieces = split("abcdefghijkl", 50, {
-      hyphenate: (w: string) => [w],
-      breakWord: true,
-    })!;
-    expect(pieces).toEqual(["abcd", "efgh", "ijkl"]);
+    const lines = broken("abcdefghijkl", 50, { hyphenate: (w: string) => [w], breakWord: true });
+    expect(lines.map((l) => l.text)).toEqual(["abcd", "efgh", "ijkl"]);
   });
 
   it("prefers a valid point over a blunt one when both could apply", () => {
-    const pieces = split("aaaabbbbcccc", 60, { hyphenate: chunks(4), breakWord: true })!;
-    expect(pieces[0]).toBe("aaaa-");
+    const lines = broken("aaaabbbbcccc", 60, { hyphenate: chunks(4), breakWord: true });
+    expect(lines[0]!.text).toBe("aaaa-");
   });
 });
 

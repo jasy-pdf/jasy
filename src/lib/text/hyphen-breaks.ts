@@ -35,22 +35,44 @@ export function hyphenBreaks(word: string): number[] {
 const NO_BREAK_BEFORE = new Set(")]}!?,.:;/\"'«»‘’“”");
 
 /**
- * What the line ending at break `k` draws of `word`: everything before it, and at a soft hyphen a REAL
- * hyphen in its place - the only time a soft hyphen shows. The breaker draws this; measuring it measures
- * what is drawn.
+ * Every break of `word`, in order: after its own hyphens and soft hyphens, and at the hyphenator's
+ * `points` (`text/hyphenation.ts`).
  */
-export function headAt(word: string, k: number): string {
-  if (word[k - 1] !== SOFT_HYPHEN) return word.slice(0, k);
-  // A soft hyphen right after a real one adds nothing: "ab-" + "cd", not "ab--".
-  return word[k - 2] === "-" ? word.slice(0, k - 1) : word.slice(0, k - 1) + HYPHEN;
+export function wordBreaks(word: string, points: readonly number[] = NO_BREAKS): readonly number[] {
+  const own = mayBreak(word) ? hyphenBreaks(word) : NO_BREAKS;
+  if (points.length === 0) return own;
+  if (own.length === 0) return points;
+  return [...new Set([...own, ...points])].sort((a, b) => a - b);
+}
+
+/**
+ * What the line ending at break `k` draws of `word`: everything before it, with a REAL hyphen at a soft
+ * hyphen (the only time one shows) and at a hyphenation point. The breaker draws this; measuring it
+ * measures what is drawn.
+ */
+export function headAt(word: string, k: number, points: readonly number[] = NO_BREAKS): string {
+  if (word[k - 1] === SOFT_HYPHEN)
+    // A soft hyphen right after a real one adds nothing: "ab-" + "cd", not "ab--".
+    return word[k - 2] === "-" ? word.slice(0, k - 1) : word.slice(0, k - 1) + HYPHEN;
+  return points.includes(k) ? word.slice(0, k) + HYPHEN : word.slice(0, k);
+}
+
+/** Whether the line ending at break `k` of `word` draws a hyphen its source does not hold. */
+export function addsHyphen(
+  word: string,
+  k: number,
+  points: readonly number[] = NO_BREAKS,
+): boolean {
+  if (word[k - 1] === SOFT_HYPHEN) return word[k - 2] !== "-";
+  return points.includes(k);
 }
 
 /** A word cut at its break opportunities: the pieces no line can split, as they are drawn. */
-export function hyphenPieces(word: string): string[] {
-  const breaks = mayBreak(word) ? hyphenBreaks(word) : NO_BREAKS;
+export function hyphenPieces(word: string, points: readonly number[] = NO_BREAKS): string[] {
+  const breaks = wordBreaks(word, points);
   if (breaks.length === 0) return [word];
   return [0, ...breaks].map((from, k) => {
     const to = breaks[k];
-    return to === undefined ? word.slice(from) : headAt(word, to).slice(from);
+    return to === undefined ? word.slice(from) : headAt(word, to, points).slice(from);
   });
 }

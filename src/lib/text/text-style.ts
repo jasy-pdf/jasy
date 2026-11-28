@@ -84,9 +84,10 @@ export interface ResolvedTextStyle {
    *  The floor under `hyphenate` - it is what handles an e-mail, an IBAN or an invoice number, which
    *  have no valid hyphenation point anywhere. Default off: a too-wide word overflows, as in CSS. */
   breakWord: boolean;
-  /** Language-aware word splitting: given a word, return its parts (`["Rechts", "schutz", ...]`). A
-   *  hyphen is drawn at the break. Pluggable on purpose - no pattern data ships in this package, so
-   *  there is no licence question and nothing is added to a bundle that never asks for it. */
+  /** Language-aware hyphenation, as CSS `hyphens: auto`: given a word, return its parts (`["Rechts",
+   *  "schutz", ...]`); a word that does not fit at a line's end breaks at its last part that still fits.
+   *  Pluggable on purpose - no pattern data ships in this package, so there is no license question and
+   *  nothing is added to a bundle that never asks for it. */
   hyphenate?: Hyphenator;
 }
 

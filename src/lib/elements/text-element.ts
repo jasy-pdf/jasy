@@ -24,6 +24,7 @@ import {
   TextOverflow,
 } from "../text/line-breaker.ts";
 import { hyphenPieces } from "../text/hyphen-breaks.ts";
+import { hyphenationPoints } from "../text/hyphenation.ts";
 import {
   adjustForOrphansWidows,
   DEFAULT_ORPHANS,
@@ -627,8 +628,9 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
    * parent floors the width it hands us here, so a squeezed paragraph stops at its longest word
    * instead of becoming one word per line.
    *
-   * With `breakWord` or `hyphenate` on, the text may be cut mid-word, so the unbreakable piece is a
-   * single character - the same reasoning CSS applies to `word-break: break-all`.
+   * With `breakWord` on, the text may be cut anywhere, so the unbreakable piece is a single character -
+   * the same reasoning CSS applies to `word-break: break-all`. With `hyphenate` it is the widest piece
+   * between the hyphenator's points, its hyphen included.
    */
   override minIntrinsicMain(horizontal: boolean, ctx: LayoutContext): number {
     // Only the width is a question here: the height of a text is whatever its lines add up to, and a
@@ -641,10 +643,14 @@ export class TextElement extends SizedPDFElement implements Fragmentable {
     const widest = (text: string, run: RunStyle): number => {
       // Split on the same boundaries the breaker uses - a hard break ends a line too, and so may a
       // hyphen inside a word. A run that may split its words may split them anywhere.
-      const pieces =
-        run.splitting.breakWord || run.splitting.hyphenate
-          ? [...text]
-          : text.split(/[ \n]/).flatMap(hyphenPieces);
+      const hyphenate = run.splitting.hyphenate;
+      const pieces = run.splitting.breakWord
+        ? [...text]
+        : text
+            .split(/[ \n]/)
+            .flatMap((word) =>
+              hyphenPieces(word, hyphenate ? hyphenationPoints(word, hyphenate) : undefined),
+            );
       return pieces.reduce(
         (max, piece) => Math.max(max, runAdvance(metrics, piece, run.font, run.letterSpacing)),
         0,
