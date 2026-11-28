@@ -156,6 +156,30 @@ function measureAndStore(
   return advance;
 }
 
+/**
+ * What a hyphen drawn after `text` adds to the line: its advance and, with kerning on, its pair with the
+ * last letter (Helvetica kerns "T-" by -140), as the run is drawn. Without a pair it is exactly the
+ * hyphen's own advance.
+ */
+export function hyphenAdvance(
+  metrics: FontMetrics,
+  text: string,
+  font: RunFont,
+  letterSpacing = 0,
+): number {
+  const plain = runAdvance(metrics, "-", font, letterSpacing);
+  if (!metrics.kerningEnabled) return plain;
+  const last = [...withoutSoftHyphens(text)].pop();
+  if (last === undefined) return plain;
+  const [kern = 0] = metrics.getKernPairs(
+    last + "-",
+    font.fontFamily,
+    font.fontStyle,
+    font.ligatures,
+  );
+  return kern === 0 ? plain : plain + (kern / 1000) * font.fontSize;
+}
+
 /** U+00AD: "a line may break here, with a hyphen". Invisible wherever it does not. */
 export const SOFT_HYPHEN = "\u00AD";
 

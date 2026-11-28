@@ -5,6 +5,11 @@ import { Box } from "../../../src/lib/api/layout.ts";
 import { Text, span } from "../../../src/lib/api/text.ts";
 import { drawnTextRuns } from "../support/drawn.ts";
 import { testMetrics } from "../support/metrics.ts";
+import { breakSegmentsIntoLines } from "../../../src/lib/text/line-breaker.ts";
+import { runAdvance } from "../../../src/lib/text/advance.ts";
+import { PDFObjectManager } from "../../../src/lib/utils/pdf-object-manager.ts";
+import { preloadStandardFonts } from "../../../src/lib/utils/afm-parser.ts";
+import { FontStyle } from "../../../src/lib/common/font-style.ts";
 
 // `hyphenate` breaks like CSS `hyphens: auto`: its points are break opportunities at the line's end,
 // taken only when the word does not fit, and they come from the WHOLE word - across spans too, where a
@@ -157,5 +162,97 @@ describe("the narrowest a hyphenated text gets (min-content)", () => {
     );
     // "nungs-" and "nummer", six glyphs - every test glyph as wide as the font size.
     expect(floor).toBe(6 * 12);
+  });
+});
+
+describe("what review found", () => {
+  const unit = { fontFamily: "Helvetica", fontSize: 1, fontStyle: FontStyle.Normal };
+  const broken = (segments: { content: string }[], width: number, splitting: object) =>
+    breakSegmentsIntoLines(segments, { ...unit, splitting }, width, testMetrics()).map((l) =>
+      l.segments.map((s) => s.content).join(""),
+    );
+  const ctx = {
+    metrics: testMetrics(),
+    pageConfig: { width: 595, height: 842, margin: 0 },
+  } as never;
+
+  it("min-content takes its points from the whole word across spans", () => {
+    const wordsOnly = (w: string) => (w === "Rechnungsnummer" ? german(w) : [w]);
+    const floor = Text([span("Rech"), span("nungsnummer")], {
+      ...mono,
+      hyphenate: wordsOnly,
+    }).minIntrinsicMain(true, ctx);
+    expect(floor).toBe(6 * 12);
+  });
+
+  it("min-content counts the hyphen at a point on a span's end", () => {
+    // "Rech-nungs|-num-mer" across "Rechnungs" + "nummer": the widest piece is "nungs-", whose hyphen
+    // stands at the span's end.
+    const wordsOnly = (w: string) => (w === "Rechnungsnummer" ? german(w) : [w]);
+    const floor = Text([span("Rechnungs"), span("nummer")], {
+      ...mono,
+      hyphenate: wordsOnly,
+    }).minIntrinsicMain(true, ctx);
+    expect(floor).toBe(6 * 12);
+  });
+
+  it("min-content adds no second hyphen after a literal one", () => {
+    const parts = (w: string) => (w === "ab-cd" ? ["ab-", "cd"] : [w]);
+    expect(Text("ab-cd", { ...mono, hyphenate: parts }).minIntrinsicMain(true, ctx)).toBe(3 * 12);
+  });
+
+  it("finds a point in the LAST word of an earlier span", () => {
+    const parts = (w: string) => (w === "abcdefgh" ? ["abc", "defgh"] : [w]);
+    expect(broken([{ content: "Hi abcd" }, { content: "efgh" }], 8, { hyphenate: parts })).toEqual([
+      "Hi abc-",
+      "defgh",
+    ]);
+  });
+
+  it("with breakWord, a piece too wide for an empty line is split anywhere, with no hyphen", () => {
+    const parts = (w: string) => (w === "abcdefgh" ? ["abcdef", "gh"] : [w]);
+    expect(broken([{ content: "abcdefgh" }], 3, { hyphenate: parts, breakWord: true })).toEqual([
+      "abc",
+      "def",
+      "gh",
+    ]);
+  });
+
+  it("measures the hyphen it adds with its kern pair, as it is drawn", async () => {
+    // Helvetica kerns "T-" by -140/1000: a line ending in "T-" is narrower than "T" plus "-".
+    await preloadStandardFonts();
+    const om = new PDFObjectManager();
+    om.registerFont("Helvetica", FontStyle.Normal);
+    om.setKerning(true);
+    const font = { fontFamily: "Helvetica", fontSize: 20, fontStyle: FontStyle.Normal };
+    const drawn = (t: string) => runAdvance(om, t, font, 0);
+    expect(drawn("aaT-")).toBeLessThan(drawn("aaT") + drawn("-") - 1); // the pair is really there
+    for (const splitting of [
+      {},
+      { hyphenate: (w: string) => (w === "aaTbbbbbbbb" ? ["aaT", "bbbbbbbb"] : [w]) },
+    ]) {
+      const segments = [
+        { content: "hyphenate" in splitting ? "aaT" : "aaT\u00AD" },
+        { content: "bbbbbbbb" },
+      ];
+      const [first] = breakSegmentsIntoLines(
+        segments,
+        { ...font, splitting },
+        drawn("aaT-") + 1,
+        om,
+      );
+      expect(first!.segments.map((s) => s.content).join("")).toBe("aaT-");
+      expect(first!.width).toBeCloseTo(drawn("aaT-"), 9);
+    }
+    // The first piece too wide even for an empty line: it overflows with its hyphen, measured as drawn.
+    const points = (w: string) => (w === "aaTbb" ? ["aaT", "bb"] : [w]);
+    const [forced] = breakSegmentsIntoLines(
+      [{ content: "aaTbb" }],
+      { ...font, splitting: { hyphenate: points } },
+      drawn("a"),
+      om,
+    );
+    expect(forced!.segments.map((s) => s.content).join("")).toBe("aaT-");
+    expect(forced!.width).toBeCloseTo(drawn("aaT-"), 9);
   });
 });

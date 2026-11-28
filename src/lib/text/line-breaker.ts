@@ -1,7 +1,13 @@
 import type { FontStyle } from "../common/font-style.ts";
 import type { FontMetrics } from "../utils/font-metrics.ts";
 import type { TextSegment } from "../elements/text-element.ts";
-import { runAdvance, type RunFont, SOFT_HYPHEN, withoutSoftHyphens } from "./advance.ts";
+import {
+  hyphenAdvance,
+  runAdvance,
+  type RunFont,
+  SOFT_HYPHEN,
+  withoutSoftHyphens,
+} from "./advance.ts";
 import { HYPHEN, splitLongWord, type WordSplitting } from "./word-splitting.ts";
 import {
   addsHyphen,
@@ -311,7 +317,7 @@ export function breakSegmentsIntoLines(
         endsAtPoint(last))
     ) {
       const run = runStyleOf(last, defaults);
-      width += runAdvance(metrics, HYPHEN, run.font, run.letterSpacing);
+      width += hyphenAdvance(metrics, last.content, run.font, run.letterSpacing);
       segs = segs.map((seg, i) =>
         i === lastIndex ? { ...seg, content: withoutSoftHyphens(seg.content) + HYPHEN } : seg,
       );
@@ -361,7 +367,9 @@ export function breakSegmentsIntoLines(
     const last = keep[keep.length - 1]!;
     const run = runStyleOf(last, defaults);
     const room = lines.length === 0 ? maxWidth - indent : maxWidth;
-    return measure(keep).ink + runAdvance(metrics, HYPHEN, run.font, run.letterSpacing) <= room;
+    return (
+      measure(keep).ink + hyphenAdvance(metrics, last.content, run.font, run.letterSpacing) <= room
+    );
   };
 
   /** The width and ink of `pieces`, summed exactly as `placeWord` builds a line: word by word, a space
@@ -418,7 +426,11 @@ export function breakSegmentsIntoLines(
       const space = c.lastIndexOf(" ");
       // The latest break inside the piece: a hyphenation point after its last space, if the hyphen fits.
       const from = origin.get(piece);
-      const inner = from ? hyphenation.within(from.segment, from.offset, c.length) : NO_BREAKS;
+      const inner = from
+        ? hyphenation
+            .within(from.segment, from.offset + space + 1, c.length - space - 1)
+            .map((k) => k + space + 1)
+        : NO_BREAKS;
       for (let p = inner.length - 1; p >= 0; p--) {
         const k = inner[p]!;
         if (k <= space) break;
@@ -635,17 +647,21 @@ export function breakSegmentsIntoLines(
           // Not even the first piece fits: it overflows on a line of its own. A hyphenation point's hyphen
           // is not in the source, so the piece is placed as written and the hyphen added after it.
           const first = breaks[0]!;
-          if (points.includes(first)) {
-            placeWord(word.slice(0, first), wordAt, joined);
-            combined += HYPHEN;
-            width += runAdvance(metrics, HYPHEN, font, letterSpacing);
-            ink = width;
-            lineSegments[lineSegments.length - 1]!.content = combined;
-          } else placeWord(headAt(word, first), wordAt, joined);
-          close(lineSegments, ink, endAt(word, first, points));
-          startLine(wordAt + first);
-          placeWord(word.slice(first), wordAt + first, false);
-          return;
+          // With break-word on, the word is split anywhere below instead: no line overflows, and a
+          // break-word split adds no hyphen.
+          if (!(points.includes(first) && splitting.breakWord)) {
+            if (points.includes(first)) {
+              placeWord(word.slice(0, first), wordAt, joined);
+              width += hyphenAdvance(metrics, combined, font, letterSpacing);
+              combined += HYPHEN;
+              ink = width;
+              lineSegments[lineSegments.length - 1]!.content = combined;
+            } else placeWord(headAt(word, first), wordAt, joined);
+            close(lineSegments, ink, endAt(word, first, points));
+            startLine(wordAt + first);
+            placeWord(word.slice(first), wordAt + first, false);
+            return;
+          }
         }
         // A word glued to the line - it continues one from an earlier span - that does not fit here.
         if (!joined && !afterSpace && inked && word !== "" && !fitsHere(wordWidth)) {
