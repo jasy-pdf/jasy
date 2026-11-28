@@ -3,6 +3,8 @@
 Numbers anyone can reproduce. No claim on the site should exist that you cannot re-derive here.
 
 ```bash
+pnpm install        # at the repo root, then
+pnpm run build      # the bench measures this checkout's dist
 cd bench
 pnpm install        # pins the versions it compares against
 pnpm bench          # every case

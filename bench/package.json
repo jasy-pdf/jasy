@@ -7,7 +7,7 @@
     "bench": "node run.mjs"
   },
   "dependencies": {
-    "@jasy/pdf": "file:..",
+    "@jasy/pdf": "link:..",
     "@react-pdf/renderer": "4.9.0",
     "jspdf": "4.2.1",
     "pdfmake": "0.3.11",
