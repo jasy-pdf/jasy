@@ -187,6 +187,32 @@ describe("what reaches the page", () => {
     expect(pdf).toContain("/C0 [0.000 0.000 1.000] /C1 [0.000 0.000 1.000]");
   });
 
+  it("a hard edge at the end keeps the last color beyond it", async () => {
+    // Past the last stop the shading extends its end value, which must be the LAST stop's color.
+    const pdf = await draw(
+      radialGradient("#ff0000", { color: "#ff0000", at: 1 }, { color: "#0000ff", at: 1 }),
+    );
+    expect(pdf).toMatch(/\/Bounds \[0\.9999\]/);
+    expect(pdf).toMatch(/\/C1 \[0\.000 0\.000 1\.000\]/);
+  });
+
+  it("a hard edge at the start keeps the first color before it", async () => {
+    const pdf = await draw(
+      linearGradient({
+        stops: [{ color: "#ff0000", at: 0 }, { color: "#0000ff", at: 0 }, "#00ff00"],
+      }),
+    );
+    expect(pdf).toMatch(/\/Bounds \[0\.0001\]/);
+    expect(pdf).toMatch(/\/C0 \[1\.000 0\.000 0\.000\]/);
+  });
+
+  it("the opacity past a hard edge at the end is the last stop's too", async () => {
+    const pdf = await draw(
+      radialGradient("#ff0000", { color: "#ff0000", at: 1 }, { color: "rgba(0,0,255,0.5)", at: 1 }),
+    );
+    expect(pdf).toContain("/C0 [1.000] /C1 [0.500]");
+  });
+
   it("still strokes a border around a gradient box", async () => {
     const pdf = await renderPdf(
       Document([
